@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { recallItems, getAvatarColor, formatDate } from '../data/mockData';
+import { IconMessage, IconPhone, IconSmartRecall, IconCheck, IconWarning, IconCash, IconPlus, IconArrowRight, IconClose } from '../components/Icons';
 
 interface RecallStep {
   stepNumber: number;
@@ -115,7 +116,9 @@ export default function RecallPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon info">📱</div>
+          <div className="stat-icon info">
+            <IconMessage size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">WhatsApp/SMS Otomatik</div>
             <div className="stat-value">12 Gönderim</div>
@@ -123,7 +126,9 @@ export default function RecallPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon success">📞</div>
+          <div className="stat-icon success">
+            <IconPhone size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Arama Sırasına Düşen</div>
             <div className="stat-value">2 Arama</div>
@@ -131,7 +136,9 @@ export default function RecallPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon warning">💰</div>
+          <div className="stat-icon warning">
+            <IconCash size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Kazanılan Ciro Hedefi</div>
             <div className="stat-value">₺180.000</div>
@@ -158,7 +165,7 @@ export default function RecallPage() {
 
       <div className="card">
         <div className="table-container">
-          <table>
+          <table className="mobile-cards">
             <thead>
               <tr>
                 <th>Hasta</th>
@@ -174,7 +181,7 @@ export default function RecallPage() {
                 const lastStep = [...item.steps].reverse().find(s => s.status === 'Tamamlandı');
                 return (
                   <tr key={item.id}>
-                    <td>
+                    <td data-label="Hasta">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className="avatar" style={{ background: getAvatarColor(item.patientName) }}>
                           {item.patientName.split(' ').map(n => n[0]).join('')}
@@ -182,16 +189,16 @@ export default function RecallPage() {
                         <span className="td-primary">{item.patientName}</span>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Sebep">
                       <span className={`badge badge-${
                         item.reason === 'SGK Yenileme' ? 'success' :
                         item.reason === 'Pil Siparişi' ? 'warning' : 'info'
                       }`}>{item.reason}</span>
                     </td>
-                    <td>{formatDate(item.dueDate)}</td>
-                    <td>
+                    <td data-label="Hedef Tarih">{formatDate(item.dueDate)}</td>
+                    <td data-label="Adımlar">
                       {/* Interactive Visual Step Indicators */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         {item.steps.map((step, idx) => {
                           const isDone = step.status === 'Tamamlandı';
                           const isCurrent = item.currentStep === step.stepNumber;
@@ -209,7 +216,14 @@ export default function RecallPage() {
                                 }}
                                 title={step.messagePreview || step.channel}
                               >
-                                {step.channel === 'WhatsApp' ? '📱' : step.channel === 'SMS' ? '✉️' : '📞'} {step.stepNumber}. Adım
+                                {step.channel === 'WhatsApp' ? (
+                                  <IconMessage size={12} strokeWidth={2} />
+                                ) : step.channel === 'SMS' ? (
+                                  <IconMessage size={12} strokeWidth={2} />
+                                ) : (
+                                  <IconPhone size={12} strokeWidth={2} />
+                                )}
+                                {step.stepNumber}. Adım
                               </span>
                               {idx < item.steps.length - 1 && <span style={{ color: 'var(--gray-300)' }}>➔</span>}
                             </div>
@@ -217,12 +231,12 @@ export default function RecallPage() {
                         })}
                       </div>
                     </td>
-                    <td style={{ color: 'var(--gray-500)' }}>
-                      {lastStep && lastStep.date ? formatDate(lastStep.date) : 'Henüz Başlamadı'}
-                    </td>
-                    <td>
-                      <button className="btn btn-sm btn-ghost" onClick={() => setSelectedChain(item)}>
-                        Zincir Detayı →
+                    <td data-label="Son İşlem">{lastStep && lastStep.date ? formatDate(lastStep.date) : 'Henüz Başlamadı'}</td>
+                    <td data-label="">
+                      <button className="btn btn-sm btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => setSelectedChain(item)}>
+                        Zincir Detayı <IconArrowRight size={13} strokeWidth={1.8} />
                       </button>
                     </td>
                   </tr>
@@ -238,8 +252,13 @@ export default function RecallPage() {
         <div className="modal-overlay" onClick={() => setSelectedChain(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
             <div className="modal-header">
-              <span className="modal-title">🤖 Otomasyon Zincir Detayı — {selectedChain.patientName}</span>
-              <button className="modal-close" onClick={() => setSelectedChain(null)}>✕</button>
+              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <IconSmartRecall size={18} strokeWidth={1.8} />
+                Otomasyon Zincir Detayı — {selectedChain.patientName}
+              </span>
+              <button className="modal-close" onClick={() => setSelectedChain(null)} aria-label="Kapat">
+                <IconClose size={16} strokeWidth={2} />
+              </button>
             </div>
             <div className="modal-body">
               <div style={{ marginBottom: 20 }}>

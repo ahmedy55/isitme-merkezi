@@ -6,6 +6,7 @@ import {
   patients, getAvatarColor, getInitials, formatDate, calculateAge,
   type Patient,
 } from '../data/mockData';
+import { IconPlus, IconSearch, IconArrowRight, IconClose } from '../components/Icons';
 
 type SortKey = 'name' | 'tc' | 'phone' | 'age' | 'hearingLoss' | 'device' | 'sgkStatus' | 'lastVisit';
 type SortDir = 'asc' | 'desc';
@@ -110,19 +111,22 @@ export default function PatientsPage() {
           <p>{patients.length} kayıtlı hasta</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            ➕ Yeni Hasta Ekle
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={16} strokeWidth={2} /> Yeni Hasta Ekle
           </button>
         </div>
       </div>
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div className="header-search" style={{ flex: 1 }}>
-            <span className="header-search-icon">🔍</span>
+        <div className="card-body" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="header-search" style={{ flex: 1, minWidth: 200 }}>
+            <span className="header-search-icon">
+              <IconSearch size={15} strokeWidth={1.7} />
+            </span>
             <input
-              type="text"
+              type="search"
               placeholder="Ad, TC veya telefon ile ara..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -146,7 +150,7 @@ export default function PatientsPage() {
       {/* Patient Table */}
       <div className="card">
         <div className="table-container">
-          <table>
+          <table className="mobile-cards">
             <thead>
               <tr>
                 <th style={thStyle} onClick={() => handleSort('name')}>Hasta <SortIcon column="name" sortKey={sortKey} sortDir={sortDir} /></th>
@@ -167,12 +171,9 @@ export default function PatientsPage() {
                   style={{ cursor: 'pointer' }}
                   onClick={() => handlePatientClick(patient.id)}
                 >
-                  <td>
+                  <td data-label="Hasta">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div
-                        className="avatar"
-                        style={{ background: getAvatarColor(patient.firstName) }}
-                      >
+                      <div className="avatar" style={{ background: getAvatarColor(patient.firstName) }}>
                         {getInitials(patient.firstName, patient.lastName)}
                       </div>
                       <div>
@@ -183,20 +184,19 @@ export default function PatientsPage() {
                       </div>
                     </div>
                   </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{patient.tc}</td>
-                  <td>{patient.phone}</td>
-                  <td>{calculateAge(patient.birthDate)}</td>
-                  <td>
+                  <td data-label="TC Kimlik" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{patient.tc}</td>
+                  <td data-label="Telefon">{patient.phone}</td>
+                  <td data-label="Yaş">{calculateAge(patient.birthDate)}</td>
+                  <td data-label="İşitme Kaybı">
                     <span className={`badge badge-${
                       patient.hearingLoss === 'Hafif' ? 'success' :
-                      patient.hearingLoss === 'Orta' ? 'warning' :
-                      patient.hearingLoss === 'İleri' ? 'danger' : 'danger'
+                      patient.hearingLoss === 'Orta' ? 'warning' : 'danger'
                     }`}>
                       {patient.hearingLoss} · {patient.hearingLossSide}
                     </span>
                   </td>
-                  <td>{patient.currentDevice || <span style={{ color: 'var(--gray-400)' }}>—</span>}</td>
-                  <td>
+                  <td data-label="Cihaz">{patient.currentDevice || <span style={{ color: 'var(--gray-400)' }}>—</span>}</td>
+                  <td data-label="SGK Durumu">
                     <span className={`badge badge-${
                       patient.sgkStatus === 'Aktif' ? 'success' :
                       patient.sgkStatus === 'Yenileme Hakkı Var' ? 'warning' : 'neutral'
@@ -208,10 +208,12 @@ export default function PatientsPage() {
                       {patient.sgkStatus}
                     </span>
                   </td>
-                  <td>{formatDate(patient.lastVisit)}</td>
-                  <td>
-                    <button className="btn btn-sm btn-ghost" onClick={(e) => { e.stopPropagation(); handlePatientClick(patient.id); }}>
-                      Detay →
+                  <td data-label="Son Ziyaret">{formatDate(patient.lastVisit)}</td>
+                  <td data-label="">
+                    <button className="btn btn-sm btn-ghost"
+                      style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                      onClick={(e) => { e.stopPropagation(); handlePatientClick(patient.id); }}>
+                      Detay <IconArrowRight size={13} strokeWidth={1.8} />
                     </button>
                   </td>
                 </tr>
@@ -221,7 +223,7 @@ export default function PatientsPage() {
         </div>
         {filtered.length === 0 && (
           <div className="empty-state">
-            <div className="empty-state-icon">🔍</div>
+            <div className="empty-state-icon"><IconSearch size={40} strokeWidth={1.2} /></div>
             <h3>Sonuç bulunamadı</h3>
             <p>Arama kriterlerinizi değiştirmeyi deneyin.</p>
           </div>
@@ -234,8 +236,10 @@ export default function PatientsPage() {
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
             <div className="modal-header">
-              <span className="modal-title">➕ Yeni Hasta Ekle</span>
-              <button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button>
+              <span className="modal-title">Yeni Hasta Ekle</span>
+              <button className="modal-close" onClick={() => setShowAddModal(false)} aria-label="Kapat">
+                <IconClose size={16} strokeWidth={2} />
+              </button>
             </div>
             <div className="modal-body">
               <div className="form-row">
@@ -305,7 +309,7 @@ export default function PatientsPage() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={() => setShowAddModal(false)}>💾 Kaydet</button>
+              <button className="btn btn-primary" onClick={() => setShowAddModal(false)}>Kaydet</button>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { sales, formatCurrency, formatDate } from '../data/mockData';
+import { IconPlus, IconDownload, IconCash, IconCheck, IconRecall, IconShield } from '../components/Icons';
 
 export default function CashPage() {
   const [filterStatus, setFilterStatus] = useState('Tümü');
@@ -24,9 +25,12 @@ export default function CashPage() {
           <p>Satış, tahsilat ve prim takibi</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary">📊 Rapor İndir</button>
-          <button className="btn btn-primary" onClick={() => setShowSaleModal(true)}>
-            ➕ Yeni Satış
+          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconDownload size={15} strokeWidth={1.7} /> Rapor İndir
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowSaleModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={15} strokeWidth={2} /> Yeni Satış
           </button>
         </div>
       </div>
@@ -34,28 +38,36 @@ export default function CashPage() {
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon success">💰</div>
+          <div className="stat-icon success">
+            <IconCash size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Toplam Ciro</div>
             <div className="stat-value">{formatCurrency(totalRevenue)}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon primary">✅</div>
+          <div className="stat-icon primary">
+            <IconCheck size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Tahsil Edilen</div>
             <div className="stat-value">{formatCurrency(collected)}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon warning">⏳</div>
+          <div className="stat-icon warning">
+            <IconRecall size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Bekleyen Tahsilat</div>
             <div className="stat-value">{formatCurrency(pending)}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon info">🏥</div>
+          <div className="stat-icon info">
+            <IconShield size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">SGK Hak Ediş</div>
             <div className="stat-value">{formatCurrency(sgkTotal)}</div>
@@ -88,7 +100,7 @@ export default function CashPage() {
       {/* Sales Table */}
       <div className="card">
         <div className="table-container">
-          <table>
+          <table className="mobile-cards">
             <thead>
               <tr>
                 <th>Tarih</th>
@@ -104,24 +116,24 @@ export default function CashPage() {
             <tbody>
               {filtered.map((sale) => (
                 <tr key={sale.id}>
-                  <td className="td-primary">{formatDate(sale.date)}</td>
-                  <td style={{ fontWeight: 600 }}>{sale.patientName}</td>
-                  <td>
+                  <td data-label="Tarih" className="td-primary">{formatDate(sale.date)}</td>
+                  <td data-label="Hasta" style={{ fontWeight: 600 }}>{sale.patientName}</td>
+                  <td data-label="Ürünler">
                     {sale.items.map((item, i) => (
                       <div key={i} style={{ fontSize: '0.78rem', color: 'var(--gray-600)' }}>
                         {item.name}
                       </div>
                     ))}
                   </td>
-                  <td style={{ fontWeight: 700 }}>{formatCurrency(sale.total)}</td>
-                  <td style={{ color: sale.sgkAmount > 0 ? 'var(--success-600)' : 'var(--gray-400)' }}>
+                  <td data-label="Toplam" style={{ fontWeight: 700 }}>{formatCurrency(sale.total)}</td>
+                  <td data-label="SGK" style={{ color: sale.sgkAmount > 0 ? 'var(--success-600)' : 'var(--gray-400)' }}>
                     {sale.sgkAmount > 0 ? formatCurrency(sale.sgkAmount) : '—'}
                   </td>
-                  <td style={{ fontWeight: 600 }}>{formatCurrency(sale.patientAmount)}</td>
-                  <td>
+                  <td data-label="Hasta Payı" style={{ fontWeight: 600 }}>{formatCurrency(sale.patientAmount)}</td>
+                  <td data-label="Ödeme">
                     <span className="badge badge-neutral">{sale.paymentMethod}</span>
                   </td>
-                  <td>
+                  <td data-label="Durum">
                     <span className={`badge badge-${
                       sale.status === 'Tahsil Edildi' ? 'success' :
                       sale.status === 'Taksitli' ? 'info' : 'warning'

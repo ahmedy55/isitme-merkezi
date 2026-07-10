@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
+import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye } from '../components/Icons';
 
 interface ServiceRecord {
   id: string;
@@ -151,8 +152,9 @@ export default function ServicePage() {
           <p>{serviceRecords.length} servis kaydı</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            ➕ Yeni Servis Kaydı
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={15} strokeWidth={2} /> Yeni Servis Kaydı
           </button>
         </div>
       </div>
@@ -160,28 +162,36 @@ export default function ServicePage() {
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon warning">🔧</div>
+          <div className="stat-icon warning">
+            <IconService size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Serviste Bekleyen</div>
             <div className="stat-value">{activeCount}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon success">✅</div>
+          <div className="stat-icon success">
+            <IconCheck size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Teslime Hazır</div>
             <div className="stat-value">{waitingCount}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon primary">💰</div>
+          <div className="stat-icon primary">
+            <IconCash size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Toplam Servis Geliri</div>
             <div className="stat-value">{formatCurrency(totalRevenue)}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon info">🛡️</div>
+          <div className="stat-icon info">
+            <IconShield size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Garanti Kapsamında</div>
             <div className="stat-value">{warrantyCount}</div>
@@ -209,7 +219,7 @@ export default function ServicePage() {
       {/* Service Table */}
       <div className="card">
         <div className="table-container">
-          <table>
+          <table className="mobile-cards">
             <thead>
               <tr>
                 <th>Hasta</th>
@@ -229,7 +239,7 @@ export default function ServicePage() {
                 const cfg = statusConfig[record.status];
                 return (
                   <tr key={record.id}>
-                    <td>
+                    <td data-label="Hasta">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className="avatar" style={{ background: getAvatarColor(record.patientName) }}>
                           {record.patientName.split(' ').map(n => n[0]).join('')}
@@ -237,44 +247,47 @@ export default function ServicePage() {
                         <span className="td-primary">{record.patientName}</span>
                       </div>
                     </td>
-                    <td style={{ fontWeight: 600, fontSize: '0.85rem' }}>{record.deviceName}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{record.serialNo}</td>
-                    <td style={{ maxWidth: 200, fontSize: '0.82rem', color: 'var(--gray-600)' }}>
+                    <td data-label="Cihaz" style={{ fontWeight: 600, fontSize: '0.85rem' }}>{record.deviceName}</td>
+                    <td data-label="Seri No" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{record.serialNo}</td>
+                    <td data-label="Arıza" style={{ maxWidth: 200, fontSize: '0.82rem', color: 'var(--gray-600)' }}>
                       {record.problem}
                     </td>
-                    <td>{formatDate(record.receivedDate)}</td>
-                    <td>
+                    <td data-label="Alım Tarihi">{formatDate(record.receivedDate)}</td>
+                    <td data-label="Tahmini Teslim">
                       {record.returnedDate ? (
-                        <span style={{ color: 'var(--success-600)', fontSize: '0.82rem' }}>
-                          ✓ {formatDate(record.returnedDate)}
+                        <span style={{ color: 'var(--success-600)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <IconCheck size={12} strokeWidth={2} /> {formatDate(record.returnedDate)}
                         </span>
                       ) : (
                         formatDate(record.estimatedDate)
                       )}
                     </td>
-                    <td>
+                    <td data-label="İşlemler">
                       <span style={{ fontSize: '0.78rem', color: 'var(--gray-600)' }}>
                         {record.operations.length} işlem
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Tutar">
                       {record.warrantyRepair ? (
-                        <span className="badge badge-info">🛡️ Garanti</span>
+                        <span className="badge badge-info" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <IconShield size={11} strokeWidth={1.7} /> Garanti
+                        </span>
                       ) : (
                         <span style={{ fontWeight: 700 }}>{formatCurrency(record.totalCost)}</span>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Durum">
                       <span className={`badge badge-${cfg.color}`}>
-                        {cfg.icon} {record.status}
+                        {record.status}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="">
                       <button
                         className="btn btn-sm btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
                         onClick={() => setSelectedRecord(record)}
                       >
-                        Detay →
+                        Detay <IconArrowRight size={13} strokeWidth={1.8} />
                       </button>
                     </td>
                   </tr>

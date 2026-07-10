@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { stockItems, formatCurrency } from '../data/mockData';
+import { IconPlus, IconUpload, IconEdit } from '../components/Icons';
 
 export default function StockPage() {
   const [filterCategory, setFilterCategory] = useState('Tümü');
@@ -25,9 +26,12 @@ export default function StockPage() {
           <p>{stockItems.length} ürün kayıtlı</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary">📥 İçe Aktar</button>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            ➕ Yeni Ürün Ekle
+          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconUpload size={15} strokeWidth={1.7} /> İçe Aktar
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={15} strokeWidth={2} /> Yeni Ürün Ekle
           </button>
         </div>
       </div>
@@ -95,7 +99,7 @@ export default function StockPage() {
       {/* Stock Table */}
       <div className="card">
         <div className="table-container">
-          <table>
+          <table className="mobile-cards">
             <thead>
               <tr>
                 <th>Ürün</th>
@@ -116,8 +120,8 @@ export default function StockPage() {
                 const isCritical = item.quantity <= item.criticalLevel / 2;
                 return (
                   <tr key={item.id}>
-                    <td className="td-primary">{item.name}</td>
-                    <td>
+                    <td data-label="Ürün" className="td-primary">{item.name}</td>
+                    <td data-label="Kategori">
                       <span className={`badge badge-${
                         item.category === 'Cihaz' ? 'info' :
                         item.category === 'Pil' ? 'warning' :
@@ -126,9 +130,9 @@ export default function StockPage() {
                         {item.category}
                       </span>
                     </td>
-                    <td>{item.brand} {item.model}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{item.serialNo}</td>
-                    <td>
+                    <td data-label="Marka / Model">{item.brand} {item.model}</td>
+                    <td data-label="Seri No" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{item.serialNo}</td>
+                    <td data-label="Adet">
                       <span style={{
                         fontWeight: 700,
                         color: isCritical ? 'var(--danger-600)' : isLow ? 'var(--warning-600)' : 'var(--gray-800)',
@@ -136,20 +140,22 @@ export default function StockPage() {
                         {item.quantity}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Durum">
                       {isCritical ? (
-                        <span className="badge badge-danger">🔴 Kritik</span>
+                        <span className="badge badge-danger">Kritik</span>
                       ) : isLow ? (
-                        <span className="badge badge-warning">🟡 Düşük</span>
+                        <span className="badge badge-warning">Düşük</span>
                       ) : (
-                        <span className="badge badge-success">🟢 Yeterli</span>
+                        <span className="badge badge-success">Yeterli</span>
                       )}
                     </td>
-                    <td style={{ fontWeight: 600 }}>{formatCurrency(item.price)}</td>
-                    <td>{item.sgkPrice > 0 ? formatCurrency(item.sgkPrice) : '—'}</td>
-                    <td style={{ fontSize: '0.78rem' }}>{item.location}</td>
-                    <td>
-                      <button className="btn btn-sm btn-ghost">✏️</button>
+                    <td data-label="Fiyat" style={{ fontWeight: 600 }}>{formatCurrency(item.price)}</td>
+                    <td data-label="SGK Fiyatı">{item.sgkPrice > 0 ? formatCurrency(item.sgkPrice) : '—'}</td>
+                    <td data-label="Lokasyon" style={{ fontSize: '0.78rem' }}>{item.location}</td>
+                    <td data-label="">
+                      <button className="btn btn-sm btn-ghost btn-icon" aria-label="Düzenle">
+                        <IconEdit size={15} strokeWidth={1.7} />
+                      </button>
                     </td>
                   </tr>
                 );

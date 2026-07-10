@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { IconSearch, IconCheck, IconWarning, IconSGK, IconRefresh } from '../components/Icons';
 
 export default function SGKPage() {
   const [tc, setTc] = useState('');
@@ -25,7 +26,10 @@ export default function SGKPage() {
       {/* SGK Query */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header">
-          <span className="card-title">🔍 Hasta Hak Sahipliği Sorgulama</span>
+          <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <IconSearch size={16} strokeWidth={1.7} />
+            Hasta Hak Sahipliği Sorgulama
+          </span>
         </div>
         <div className="card-body">
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
@@ -46,9 +50,9 @@ export default function SGKPage() {
               className="btn btn-primary btn-lg"
               onClick={handleQuery}
               disabled={tc.length !== 11}
-              style={{ opacity: tc.length !== 11 ? 0.5 : 1 }}
+              style={{ opacity: tc.length !== 11 ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 7 }}
             >
-              🔍 Sorgula
+              <IconSearch size={16} strokeWidth={1.8} /> Sorgula
             </button>
           </div>
 
@@ -59,7 +63,9 @@ export default function SGKPage() {
               textAlign: 'center',
               color: 'var(--gray-500)',
             }}>
-              <div style={{ fontSize: '2rem', animation: 'pulse 1.5s infinite' }}>⏳</div>
+              <div style={{ fontSize: '2rem', animation: 'pulse 1.5s infinite', display: 'flex', justifyContent: 'center' }}>
+                <IconRefresh size={36} strokeWidth={1.4} />
+              </div>
               <p style={{ marginTop: 8 }}>Medula sistemi sorgulanıyor...</p>
             </div>
           )}
@@ -76,7 +82,9 @@ export default function SGKPage() {
                 alignItems: 'center',
                 gap: 10,
               }}>
-                <span style={{ fontSize: '1.3rem' }}>✅</span>
+                <span style={{ color: 'var(--success-600)', flexShrink: 0 }}>
+                  <IconCheck size={20} strokeWidth={2} />
+                </span>
                 <div>
                   <div style={{ fontWeight: 700, color: 'var(--success-700)' }}>Hak Sahipliği Doğrulandı</div>
                   <div style={{ fontSize: '0.82rem', color: 'var(--success-600)' }}>SGK Genel Sağlık Sigortası aktif</div>

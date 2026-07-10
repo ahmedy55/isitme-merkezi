@@ -5,6 +5,7 @@ import {
   appointments, audiologists, branches,
   getAvatarColor, statusColors,
 } from '../data/mockData';
+import { IconPlus, IconSGK, IconCalendar, IconCheck, IconClose } from '../components/Icons';
 
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
@@ -26,11 +27,12 @@ export default function AppointmentsPage() {
         </div>
         <div className="page-header-actions">
           <div className="tabs">
-            <button className={`tab ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>📋 Liste</button>
-            <button className={`tab ${view === 'calendar' ? 'active' : ''}`} onClick={() => setView('calendar')}>📅 Takvim</button>
+            <button className={`tab ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>Liste</button>
+            <button className={`tab ${view === 'calendar' ? 'active' : ''}`} onClick={() => setView('calendar')}>Takvim</button>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            ➕ Yeni Randevu
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={15} strokeWidth={2} /> Yeni Randevu
           </button>
         </div>
       </div>
@@ -64,7 +66,7 @@ export default function AppointmentsPage() {
       {view === 'list' ? (
         <div className="card">
           <div className="table-container">
-            <table>
+            <table className="mobile-cards">
               <thead>
                 <tr>
                   <th>Saat</th>
@@ -79,10 +81,11 @@ export default function AppointmentsPage() {
               <tbody>
                 {filtered.map((apt) => (
                   <tr key={apt.id}>
-                    <td className="td-primary" style={{ fontSize: '1rem', color: 'var(--primary-600)' }}>
+                    <td data-label="Saat" className="td-primary"
+                      style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)' }}>
                       {apt.time}
                     </td>
-                    <td>
+                    <td data-label="Hasta">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div className="avatar" style={{ background: getAvatarColor(apt.patientName) }}>
                           {apt.patientName.split(' ').map(n => n[0]).join('')}
@@ -93,7 +96,7 @@ export default function AppointmentsPage() {
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Tür">
                       <span className={`badge badge-${
                         apt.type === 'İşitme Testi' ? 'info' :
                         apt.type === 'Cihaz Denemesi' ? 'info' :
@@ -101,26 +104,36 @@ export default function AppointmentsPage() {
                         apt.type === 'SGK Yenileme' ? 'success' : 'neutral'
                       }`}>{apt.type}</span>
                     </td>
-                    <td>{apt.audiologist}</td>
-                    <td style={{ fontSize: '0.78rem' }}>{apt.branch}</td>
-                    <td>
+                    <td data-label="Odyolog">{apt.audiologist}</td>
+                    <td data-label="Ŝube" style={{ fontSize: '0.78rem' }}>{apt.branch}</td>
+                    <td data-label="Durum">
                       <span className={`badge badge-${statusColors[apt.status] || 'neutral'}`}>
                         {apt.status}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="">
                       <div style={{ display: 'flex', gap: 4 }}>
                         {apt.status === 'Bekliyor' && (
                           <>
-                            <button className="btn btn-sm btn-primary">✓ Geldi</button>
-                            <button className="btn btn-sm btn-ghost">✕</button>
+                            <button className="btn btn-sm btn-primary"
+                              style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <IconCheck size={12} strokeWidth={2} /> Geldi
+                            </button>
+                            <button className="btn btn-sm btn-ghost btn-icon" aria-label="İptal">
+                              <IconClose size={13} strokeWidth={2} />
+                            </button>
                           </>
                         )}
                         {apt.status === 'Hatırlatıldı' && (
-                          <button className="btn btn-sm btn-primary">✓ Geldi</button>
+                          <button className="btn btn-sm btn-primary"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <IconCheck size={12} strokeWidth={2} /> Geldi
+                          </button>
                         )}
                         {apt.status === 'Geldi' && (
-                          <span style={{ fontSize: '0.78rem', color: 'var(--success-600)' }}>✓ Tamamlandı</span>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--success-600)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <IconCheck size={12} strokeWidth={2} /> Tamamlandı
+                          </span>
                         )}
                       </div>
                     </td>

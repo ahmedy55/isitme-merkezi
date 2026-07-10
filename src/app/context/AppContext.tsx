@@ -16,6 +16,12 @@ type Page =
   | 'branches'
   | 'settings';
 
+interface Toast {
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  message: string;
+}
+
 interface AppContextType {
   currentPage: Page;
   setCurrentPage: (page: Page) => void;
@@ -26,12 +32,10 @@ interface AppContextType {
   toasts: Toast[];
   addToast: (toast: Omit<Toast, 'id'>) => void;
   removeToast: (id: string) => void;
-}
-
-interface Toast {
-  id: string;
-  type: 'success' | 'error' | 'warning' | 'info';
-  message: string;
+  /** Mobil/tablet sidebar açık mı */
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  toggleSidebar: () => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -41,6 +45,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [showModal, setShowModal] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
   const addToast = (toast: Omit<Toast, 'id'>) => {
     const id = Date.now().toString();
@@ -52,12 +59,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  /** Sayfa değişiminde mobil menüyü kapat */
+  const handleSetCurrentPage = (page: Page) => {
+    setCurrentPage(page);
+    setSidebarOpen(false);
+  };
+
   return (
     <AppContext.Provider value={{
-      currentPage, setCurrentPage,
+      currentPage, setCurrentPage: handleSetCurrentPage,
       selectedPatientId, setSelectedPatientId,
       showModal, setShowModal,
       toasts, addToast, removeToast,
+      sidebarOpen, setSidebarOpen, toggleSidebar,
     }}>
       {children}
     </AppContext.Provider>
