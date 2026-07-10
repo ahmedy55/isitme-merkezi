@@ -1556,8 +1556,9 @@ tbody tr:hover { background: var(--gray-25); }
 @media (min-width: 768px) {
   .page { padding: 22px 24px; }
 
-  .sidebar { transform: translateX(0); }
+  .sidebar { transform: translateX(0); width: var(--sidebar-width); }
 
+  /* Sidebar collapsed durumu */
   .sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-width); }
   .sidebar-collapsed .sidebar-logo-text,
   .sidebar-collapsed .sidebar-section-title,
@@ -1571,9 +1572,13 @@ tbody tr:hover { background: var(--gray-25); }
   .sidebar-collapsed .sidebar-footer { padding: 8px; }
   .sidebar-collapsed .sidebar-user { justify-content: center; }
 
+  /* Main content margin'i sidebar genişliğine uyum sağlamalı */
   .main-content {
-    margin-left: var(--sidebar-collapsed-width);
+    margin-left: var(--sidebar-width);
     padding-bottom: 0;
+  }
+  .sidebar-collapsed .main-content {
+    margin-left: var(--sidebar-collapsed-width);
   }
 
   .bottom-nav { display: none; }
@@ -1582,12 +1587,15 @@ tbody tr:hover { background: var(--gray-25); }
   .header-hamburger { display: none; }
   .header-subtitle { display: block; }
 
-  .header-search input { width: 200px; }
-  .header-search input:focus { width: 260px; }
+  /* Dar ekranlarda arama alanının sığması için */
+  .header-search input { width: 130px; }
+  .header-search input:focus { width: 180px; }
 
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .dashboard-grid { grid-template-columns: 1fr 1fr; }
-  .quick-actions { grid-template-columns: repeat(4, 1fr); }
+  
+  /* Tablet aralığında (768px-1023px) dashboard yan yana çok sıkıştığı için tek sütun daha ferah */
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .quick-actions { grid-template-columns: repeat(2, 1fr); }
 
   .form-row   { grid-template-columns: 1fr 1fr; }
   .form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
@@ -1606,21 +1614,18 @@ tbody tr:hover { background: var(--gray-25); }
 /* ── Desktop: 1024px+ ── */
 @media (min-width: 1024px) {
   .main-content { margin-left: var(--sidebar-width); }
+  .sidebar-collapsed .main-content { margin-left: var(--sidebar-collapsed-width); }
 
-  /* Tablet collapsed kaldırılır, tam sidebar */
-  .sidebar-collapsed .sidebar { width: var(--sidebar-width); }
-  .sidebar-collapsed .sidebar-logo-text,
-  .sidebar-collapsed .sidebar-section-title,
-  .sidebar-collapsed .sidebar-link span:not(.sidebar-link-icon),
-  .sidebar-collapsed .sidebar-link-badge,
-  .sidebar-collapsed .sidebar-user-info { display: flex; }
-  .sidebar-collapsed .sidebar-logo  { justify-content: flex-start; padding: 20px 18px 14px; }
-  .sidebar-collapsed .sidebar-section { padding: 10px 10px 2px; }
-  .sidebar-collapsed .sidebar-link  { justify-content: flex-start; padding: 9px 10px; }
-  .sidebar-collapsed .sidebar-link.active::before { display: block; }
-  .sidebar-collapsed .sidebar-user  { justify-content: flex-start; }
-
+  /* 1024px+ ekranlarda sidebar genelde tam açık kalır */
+  .sidebar { width: var(--sidebar-width); }
+  
+  /* Dashboard yan yana 2 kolon */
+  .dashboard-grid { grid-template-columns: 1.2fr 1fr; }
   .stats-grid { grid-template-columns: repeat(4, 1fr); }
+  .quick-actions { grid-template-columns: repeat(4, 1fr); }
+
+  .header-search input { width: 200px; }
+  .header-search input:focus { width: 260px; }
 
   .page { padding: 26px 32px; }
   .header { padding: 0 32px; }
@@ -1635,8 +1640,8 @@ tbody tr:hover { background: var(--gray-25); }
 /* ── Mobil: Form row'ları tek kolon ── */
 @media (max-width: 767px) {
   .form-row, .form-row-3 { grid-template-columns: 1fr; }
-  .page-header { flex-direction: column; align-items: stretch; }
-  .page-header-actions { justify-content: flex-end; }
+  .page-header { flex-direction: column; align-items: stretch; gap: 8px; }
+  .page-header-actions { justify-content: flex-start; flex-wrap: wrap; }
   .tabs { max-width: 100%; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .quick-actions { grid-template-columns: repeat(2, 1fr); }
