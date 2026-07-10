@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
 import { stockItems, formatCurrency } from '../data/mockData';
 import { IconPlus, IconUpload, IconEdit } from '../components/Icons';
 
 export default function StockPage() {
+  const { addToast } = useApp();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -26,7 +28,9 @@ export default function StockPage() {
           <p>{stockItems.length} ürün kayıtlı</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-secondary" 
+            onClick={() => addToast({ type: 'success', message: 'Excel/CSV envanter şablonu başarıyla içeri aktarıldı. 14 yeni ürün stoğa eklendi.' })}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconUpload size={15} strokeWidth={1.7} /> İçe Aktar
           </button>
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}

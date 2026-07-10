@@ -14,7 +14,7 @@ import {
 } from '../components/Icons';
 
 export default function DashboardPage() {
-  const { setCurrentPage } = useApp();
+  const { setCurrentPage, addToast } = useApp();
 
   const todayAppointments = appointments.filter(a => a.date === '2026-07-09');
   const pendingRecalls = recallItems.filter(r => r.status === 'Bekliyor');
@@ -189,7 +189,10 @@ export default function DashboardPage() {
                   <div className="recall-reason">{item.reason}</div>
                 </div>
                 {item.status === 'Bekliyor' ? (
-                  <button className="btn btn-sm btn-primary">Gönder</button>
+                   <button className="btn btn-sm btn-primary"
+                     onClick={() => addToast({ type: 'success', message: `${item.patientName} için otomatik ${item.reason === 'Pil Siparişi' ? 'Pil Sipariş' : item.reason} hatırlatma mesajı WhatsApp üzerinden başarıyla gönderildi.` })}>
+                     Gönder
+                   </button>
                 ) : (
                   <span className={`badge badge-${item.status === 'Randevu Alındı' ? 'success' : 'info'}`}>
                     {item.status}

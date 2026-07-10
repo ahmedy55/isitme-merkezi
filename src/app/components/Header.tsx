@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconMenu, IconSearch, IconBell } from './Icons';
 
@@ -21,6 +21,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 
 export default function Header() {
   const { currentPage, toggleSidebar } = useApp();
+  const [showNotifications, setShowNotifications] = useState(false);
   const pageInfo = pageTitles[currentPage] || pageTitles.dashboard;
 
   return (
@@ -54,10 +55,55 @@ export default function Header() {
             aria-label="Arama"
           />
         </div>
-        <button className="header-btn" title="Bildirimler" aria-label="Bildirimler">
-          <IconBell size={18} strokeWidth={1.7} />
-          <span className="header-btn-badge" aria-hidden="true" />
-        </button>
+        <div style={{ position: 'relative' }} onMouseLeave={() => setShowNotifications(false)}>
+          <button 
+            className="header-btn" 
+            title="Bildirimler" 
+            aria-label="Bildirimler"
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
+            <IconBell size={18} strokeWidth={1.7} />
+            <span className="header-btn-badge" aria-hidden="true" />
+          </button>
+
+          {showNotifications && (
+            <div style={{
+              position: 'absolute',
+              top: '46px',
+              right: '0',
+              width: '320px',
+              backgroundColor: 'var(--surface-white)',
+              border: '1px solid var(--surface-border-light)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-lg)',
+              zIndex: 1000,
+              padding: '12px 16px',
+              textAlign: 'left'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid var(--surface-border-light)', paddingBottom: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--gray-800)' }}>Bildirimler</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--primary-600)', cursor: 'pointer' }} onClick={() => setShowNotifications(false)}>Tümünü Oku</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: '0.8rem', borderBottom: '1px solid var(--gray-50)', paddingBottom: 8 }}>
+                  <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>SGK Yenileme Hakkı</div>
+                  <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>Ayşe Yılmaz&apos;ın SGK yenileme hakkı açıldı.</div>
+                  <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>1 saat önce</div>
+                </div>
+                <div style={{ fontSize: '0.8rem', borderBottom: '1px solid var(--gray-50)', paddingBottom: 8 }}>
+                  <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>Pil Yenileme Uyarısı</div>
+                  <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>Hasan Çelik&apos;in pil bitişi (15 Temmuz) yaklaşıyor.</div>
+                  <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>3 saat önce</div>
+                </div>
+                <div style={{ fontSize: '0.8rem' }}>
+                  <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>Kritik Stok Uyarısı</div>
+                  <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>Mikrofon stok seviyesi kritik düzeyde (2 adet kaldı).</div>
+                  <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>Dün</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

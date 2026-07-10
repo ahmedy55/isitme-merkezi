@@ -644,7 +644,7 @@ export default function PatientDetailPage() {
               {/* Sol Kolon: Pil Abonelik Tanımları */}
               <div className="card">
                 <div className="card-header">
-                  <span className="card-title">🔋 Pil Abonelik Kartı</span>
+                  <span className="card-title">Pil Abonelik Kartı</span>
                 </div>
                 <div className="card-body">
                   <div className="form-group">
@@ -678,8 +678,14 @@ export default function PatientDetailPage() {
                     <input 
                       type="date" 
                       className="form-input"
-                      value={lastPurchaseDate}
-                      onChange={(e) => setLastPurchaseDate(e.target.value)}
+                      key={patient.id + '_' + (patient.lastBatteryPurchaseDate || '')}
+                      defaultValue={lastPurchaseDate}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val || val.length === 10) {
+                          setLastPurchaseDate(val);
+                        }
+                      }}
                     />
                   </div>
 

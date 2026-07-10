@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
 import { IconSearch, IconCheck, IconWarning, IconSGK, IconRefresh } from '../components/Icons';
 
 export default function SGKPage() {
+  const { addToast, setCurrentPage } = useApp();
   const [tc, setTc] = useState('');
   const [queryResult, setQueryResult] = useState<null | 'success' | 'loading'>(null);
 
@@ -141,11 +143,17 @@ export default function SGKPage() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-                <button className="btn btn-primary">📋 Reçete Oluştur</button>
-                <button className="btn btn-secondary">📅 Randevu Oluştur</button>
-                <button className="btn btn-secondary">💾 Hastaya Kaydet</button>
-              </div>
+               <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                 <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'Medula sisteminde e-reçete kaydı başarıyla oluşturuldu.' })}>
+                   Reçete Oluştur
+                 </button>
+                 <button className="btn btn-secondary" onClick={() => setCurrentPage('appointments')}>
+                   Randevu Oluştur
+                 </button>
+                 <button className="btn btn-secondary" onClick={() => addToast({ type: 'success', message: 'Doğrulanan Medula bilgileri hastanın profiline başarıyla kaydedildi.' })}>
+                   Hastaya Kaydet
+                 </button>
+               </div>
             </div>
           )}
         </div>

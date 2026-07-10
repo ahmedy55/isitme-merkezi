@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
 
 export default function SettingsPage() {
+  const { addToast } = useApp();
   const [activeSection, setActiveSection] = useState('firma');
 
   return (
@@ -20,20 +22,19 @@ export default function SettingsPage() {
           <div className="card-body">
             <nav className="settings-nav">
               {[
-                { id: 'firma', icon: '🏢', label: 'Firma Bilgileri' },
-                { id: 'medula', icon: '🏥', label: 'Medula (SGK)' },
-                { id: 'uts', icon: '📦', label: 'ÜTS Entegrasyonu' },
-                { id: 'fatura', icon: '🧾', label: 'E-Fatura / E-Arşiv' },
-                { id: 'bildirim', icon: '🔔', label: 'Bildirimler' },
-                { id: 'whatsapp', icon: '📱', label: 'WhatsApp / SMS' },
-                { id: 'guvenlik', icon: '🔒', label: 'Güvenlik' },
+                { id: 'firma', label: 'Firma Bilgileri' },
+                { id: 'medula', label: 'Medula (SGK)' },
+                { id: 'uts', label: 'ÜTS Entegrasyonu' },
+                { id: 'fatura', label: 'E-Fatura / E-Arşiv' },
+                { id: 'bildirim', label: 'Bildirimler' },
+                { id: 'whatsapp', label: 'WhatsApp / SMS' },
+                { id: 'guvenlik', label: 'Güvenlik' },
               ].map(item => (
                 <button
                   key={item.id}
                   className={`settings-nav-item ${activeSection === item.id ? 'active' : ''}`}
                   onClick={() => setActiveSection(item.id)}
                 >
-                  <span>{item.icon}</span>
                   {item.label}
                 </button>
               ))}
@@ -73,7 +74,9 @@ export default function SettingsPage() {
                     <label className="form-label">Adres</label>
                     <textarea className="form-textarea" defaultValue="Caferağa Mah. Moda Cad. No:42, Kadıköy / İstanbul" />
                   </div>
-                  <button className="btn btn-primary">💾 Kaydet</button>
+                  <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'Firma ayarları başarıyla güncellendi.' })}>
+                    Kaydet
+                  </button>
                 </div>
               </div>
             </div>
@@ -127,10 +130,14 @@ export default function SettingsPage() {
                       <input className="form-input" type="file" style={{ padding: '8px 12px' }} />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-secondary">🔄 Bağlantıyı Test Et</button>
-                    <button className="btn btn-primary">💾 Kaydet</button>
-                  </div>
+                   <div style={{ display: 'flex', gap: 8 }}>
+                     <button className="btn btn-secondary" onClick={() => addToast({ type: 'success', message: 'Medula WSDL bağlantı testi başarılı. (Test ortamı)' })}>
+                       Bağlantıyı Test Et
+                     </button>
+                     <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'Medula entegrasyon ayarları başarıyla kaydedildi.' })}>
+                       Kaydet
+                     </button>
+                   </div>
                 </div>
               </div>
             </div>
@@ -170,10 +177,14 @@ export default function SettingsPage() {
                       <input className="form-input" placeholder="ÜTS firma kodu" />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-secondary">🔄 Bağlantıyı Test Et</button>
-                    <button className="btn btn-primary">💾 Kaydet</button>
-                  </div>
+                   <div style={{ display: 'flex', gap: 8 }}>
+                     <button className="btn btn-secondary" onClick={() => addToast({ type: 'success', message: 'ÜTS API bağlantı testi başarılı. (Test ortamı)' })}>
+                       Bağlantıyı Test Et
+                     </button>
+                     <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'ÜTS entegrasyon ayarları başarıyla kaydedildi.' })}>
+                       Kaydet
+                     </button>
+                   </div>
                 </div>
               </div>
             </div>
@@ -205,7 +216,9 @@ export default function SettingsPage() {
                       <input className="form-input" type="password" placeholder="••••••••" />
                     </div>
                   </div>
-                  <button className="btn btn-primary">💾 Kaydet</button>
+                   <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'E-Fatura entegrasyon ayarları başarıyla kaydedildi.' })}>
+                     Kaydet
+                   </button>
                 </div>
               </div>
             </div>
@@ -293,7 +306,9 @@ export default function SettingsPage() {
                       <input className="form-input" placeholder="Gönderim yapılacak numara" />
                     </div>
                   </div>
-                  <button className="btn btn-primary">💾 Kaydet</button>
+                   <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'WhatsApp & SMS entegrasyon ayarları başarıyla kaydedildi.' })}>
+                     Kaydet
+                   </button>
                 </div>
               </div>
             </div>
@@ -320,14 +335,16 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                    <button className="btn btn-primary">🔑 Şifreyi Güncelle</button>
+                    <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'Şifreniz başarıyla güncellendi.' })}>
+                      Şifreyi Güncelle
+                    </button>
                   </div>
                 </div>
               </div>
 
               <div className="card" style={{ marginTop: 16 }}>
                 <div className="card-header">
-                  <span className="card-title">🗄️ Otomatik Yedekleme</span>
+                  <span className="card-title">Otomatik Yedekleme</span>
                 </div>
                 <div className="card-body">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -335,7 +352,7 @@ export default function SettingsPage() {
                       <div style={{ fontWeight: 600 }}>Günlük otomatik yedekleme</div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Son yedek: 09.07.2026, 03:00</div>
                     </div>
-                    <span className="badge badge-success">✓ Aktif</span>
+                    <span className="badge badge-success">Aktif</span>
                   </div>
                 </div>
               </div>

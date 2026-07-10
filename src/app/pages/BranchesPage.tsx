@@ -1,8 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
+import { IconPlus, IconClose } from '../components/Icons';
 
 export default function BranchesPage() {
+  const { addToast } = useApp();
+  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+
   const branches = [
     { name: 'Merkez 1 - Kadıköy', address: 'Caferağa Mah. Moda Cad. No:42, Kadıköy', staff: 3, patients: 142, status: 'Aktif' },
     { name: 'Merkez 2 - Beşiktaş', address: 'Sinanpaşa Mah. Çelebioğlu Sok. No:15, Beşiktaş', staff: 2, patients: 86, status: 'Aktif' },
@@ -32,8 +38,14 @@ export default function BranchesPage() {
           <p>Tüm şubelerinizi tek panelden yönetin</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary">➕ Yeni Şube</button>
-          <button className="btn btn-primary">👤 Kullanıcı Ekle</button>
+          <button className="btn btn-secondary" onClick={() => setShowAddBranchModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={15} strokeWidth={1.8} /> Yeni Şube
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowAddUserModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={15} strokeWidth={2} /> Kullanıcı Ekle
+          </button>
         </div>
       </div>
 
@@ -121,13 +133,108 @@ export default function BranchesPage() {
                       Aktif
                     </span>
                   </td>
-                  <td><button className="btn btn-sm btn-ghost">✏️ Düzenle</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
+                   <td>
+                     <button className="btn btn-sm btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                       Düzenle
+                     </button>
+                   </td>
+                 </tr>
+               ))}
+             </tbody>
+           </table>
+         </div>
+       </div>
+
+       {/* Yeni Şube Modal */}
+       {showAddBranchModal && (
+         <div className="modal-overlay" onClick={() => setShowAddBranchModal(false)}>
+           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+             <div className="modal-header">
+               <span className="modal-title">Yeni Şube Ekle</span>
+               <button className="modal-close" onClick={() => setShowAddBranchModal(false)} aria-label="Kapat">
+                 <IconClose size={16} strokeWidth={2} />
+               </button>
+             </div>
+             <div className="modal-body">
+               <div className="form-group">
+                 <label className="form-label">Şube Adı</label>
+                 <input className="form-input" placeholder="Örn: Kadıköy Şubesi" />
+               </div>
+               <div className="form-group">
+                 <label className="form-label">Telefon</label>
+                 <input className="form-input" placeholder="Örn: 0216 555 00 00" />
+               </div>
+               <div className="form-group">
+                 <label className="form-label">Adres</label>
+                 <textarea className="form-textarea" placeholder="Şube açık adresi..." rows={3} />
+               </div>
+             </div>
+             <div className="modal-footer">
+               <button className="btn btn-secondary" onClick={() => setShowAddBranchModal(false)}>İptal</button>
+               <button className="btn btn-primary" onClick={() => {
+                 setShowAddBranchModal(false);
+                 addToast({ type: 'success', message: 'Yeni şube kaydı başarıyla oluşturuldu.' });
+               }}>Şubeyi Kaydet</button>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* Kullanıcı Ekle Modal */}
+       {showAddUserModal && (
+         <div className="modal-overlay" onClick={() => setShowAddUserModal(false)}>
+           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+             <div className="modal-header">
+               <span className="modal-title">Sisteme Kullanıcı Ekle</span>
+               <button className="modal-close" onClick={() => setShowAddUserModal(false)} aria-label="Kapat">
+                 <IconClose size={16} strokeWidth={2} />
+               </button>
+             </div>
+             <div className="modal-body">
+               <div className="form-row">
+                 <div className="form-group">
+                   <label className="form-label">Ad Soyad</label>
+                   <input className="form-input" placeholder="Kullanıcı adı" />
+                 </div>
+                 <div className="form-group">
+                   <label className="form-label">Rolü</label>
+                   <select className="form-select">
+                     <option>Odyolog</option>
+                     <option>Sekreter</option>
+                     <option>Yönetici</option>
+                     <option>Muhasebe</option>
+                   </select>
+                 </div>
+               </div>
+               <div className="form-row">
+                 <div className="form-group">
+                   <label className="form-label">E-posta</label>
+                   <input className="form-input" type="email" placeholder="kullanici@isitmecihazi.com" />
+                 </div>
+                 <div className="form-group">
+                   <label className="form-label">Atanacak Şube</label>
+                   <select className="form-select">
+                     <option>Tüm Şubeler</option>
+                     <option>Merkez 1 - Kadıköy</option>
+                     <option>Merkez 2 - Beşiktaş</option>
+                   </select>
+                 </div>
+               </div>
+               <div className="form-group">
+                 <label className="form-label">Geçici Şifre</label>
+                 <input className="form-input" type="password" placeholder="••••••••" />
+               </div>
+             </div>
+             <div className="modal-footer">
+               <button className="btn btn-secondary" onClick={() => setShowAddUserModal(false)}>İptal</button>
+               <button className="btn btn-primary" onClick={() => {
+                 setShowAddUserModal(false);
+                 addToast({ type: 'success', message: 'Yeni personel kaydı oluşturuldu ve aktivasyon e-postası gönderildi.' });
+               }}>Kullanıcıyı Kaydet</button>
+             </div>
+           </div>
+         </div>
+       )}
+     </div>
+   );
+ }
