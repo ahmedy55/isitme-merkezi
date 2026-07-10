@@ -6,19 +6,48 @@ import { stockItems, formatCurrency } from '../data/mockData';
 import { IconPlus, IconUpload, IconEdit } from '../components/Icons';
 
 export default function StockPage() {
-  const { addToast } = useApp();
+  const { stockList, updateStockItem, patientsList, updatePatient, addToast } = useApp();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const filtered = stockItems.filter(item => {
+  const filtered = stockList.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) || item.brand.toLowerCase().includes(search.toLowerCase());
     const matchCategory = filterCategory === 'Tümü' || item.category === filterCategory;
     return matchSearch && matchCategory;
   });
 
-  const totalValue = stockItems.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-  const lowStockCount = stockItems.filter(s => s.quantity <= s.criticalLevel).length;
+  const totalValue = stockList.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+  const lowStockCount = stockList.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel).length;
+
+  const handleUtsNotification = (item: any) => {
+    if (!item.assignedPatientId) return;
+
+    // 1. ÜTS durumunu bildirildi yap
+    const updatedItem = {
+      ...item,
+      utsStatus: 'Bildirildi' as const
+    };
+    updateStockItem(updatedItem);
+
+    // 2. Hastanın timeline'ına log ekle
+    const p = patientsList.find(pt => pt.id === item.assignedPatientId);
+    if (p) {
+      const updatedPatient = {
+        ...p,
+        timeline: [
+          { date: '10.07.2026', action: `Sağlık Bakanlığı ÜTS Bildirimi Başarılı. Cihaz: ${item.name}, Seri No: ${item.serialNo}`, icon: 'Check' },
+          ...(p.timeline || [])
+        ]
+      };
+      updatePatient(updatedPatient);
+    }
+
+    addToast({
+      type: 'success',
+      message: `${item.name} (${item.serialNo}) için ÜTS bildirim kaydı Sağlık Bakanlığı'na başarıyla iletildi.`
+    });
+  };
 
   return (
     <div className="page">
@@ -108,58 +137,78 @@ export default function StockPage() {
               <tr>
                 <th>Ürün</th>
                 <th>Kategori</th>
-                <th>Marka / Model</th>
-                <th>Seri No</th>
-                <th>Adet</th>
-                <th>Durum</th>
+                <th>Seri No / Şube</th>
+                <th>Cihaz Durumu</th>
+                <th>ÜTS Durumu</th>
                 <th>Fiyat</th>
-                <th>SGK Fiyatı</th>
-                <th>Lokasyon</th>
-                <th></th>
+                <th>Hasta (Alıcı)</th>
+                <th>İşlem</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((item) => {
-                const isLow = item.quantity <= item.criticalLevel;
-                const isCritical = item.quantity <= item.criticalLevel / 2;
                 return (
                   <tr key={item.id}>
-                    <td data-label="Ürün" className="td-primary">{item.name}</td>
+                    <td data-label="Ürün" className="td-primary">
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{item.name}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{item.brand} {item.model}</div>
+                      </div>
+                    </td>
                     <td data-label="Kategori">
                       <span className={`badge badge-${
                         item.category === 'Cihaz' ? 'info' :
-                        item.category === 'Pil' ? 'warning' :
-                        item.category === 'Kalıp' ? 'success' : 'neutral'
+                        item.category === 'Pil' ? 'warning' : 'neutral'
                       }`}>
                         {item.category}
                       </span>
                     </td>
-                    <td data-label="Marka / Model">{item.brand} {item.model}</td>
-                    <td data-label="Seri No" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{item.serialNo}</td>
-                    <td data-label="Adet">
-                      <span style={{
-                        fontWeight: 700,
-                        color: isCritical ? 'var(--danger-600)' : isLow ? 'var(--warning-600)' : 'var(--gray-800)',
-                      }}>
-                        {item.quantity}
+                    <td data-label="Seri No / Şube">
+                      <div>
+                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', fontWeight: 600 }}>{item.serialNo}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{item.branch}</div>
+                      </div>
+                    </td>
+                    <td data-label="Cihaz Durumu">
+                      <span className={`badge badge-${
+                        item.status === 'Stokta' ? 'success' :
+                        item.status === 'Hastaya Ayrıldı' ? 'warning' :
+                        item.status === 'Satıldı' ? 'info' : 'danger'
+                      }`}>
+                        {item.status}
                       </span>
                     </td>
-                    <td data-label="Durum">
-                      {isCritical ? (
-                        <span className="badge badge-danger">Kritik</span>
-                      ) : isLow ? (
-                        <span className="badge badge-warning">Düşük</span>
-                      ) : (
-                        <span className="badge badge-success">Yeterli</span>
-                      )}
+                    <td data-label="ÜTS Durumu">
+                      <span className={`badge badge-${
+                        item.utsStatus === 'Bildirildi' ? 'success' :
+                        item.utsStatus === 'Bekliyor' ? 'warning' : 'neutral'
+                      }`}>
+                        {item.utsStatus}
+                      </span>
                     </td>
                     <td data-label="Fiyat" style={{ fontWeight: 600 }}>{formatCurrency(item.price)}</td>
-                    <td data-label="SGK Fiyatı">{item.sgkPrice > 0 ? formatCurrency(item.sgkPrice) : '—'}</td>
-                    <td data-label="Lokasyon" style={{ fontSize: '0.78rem' }}>{item.location}</td>
-                    <td data-label="">
-                      <button className="btn btn-sm btn-ghost btn-icon" aria-label="Düzenle">
-                        <IconEdit size={15} strokeWidth={1.7} />
-                      </button>
+                    <td data-label="Hasta (Alıcı)">
+                      <div style={{ fontWeight: 500, fontSize: '0.84rem' }}>
+                        {item.assignedPatientName || '—'}
+                      </div>
+                    </td>
+                    <td data-label="İşlem">
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {item.category === 'Cihaz' && item.utsStatus === 'Bekliyor' && (
+                          <button 
+                            className="btn btn-sm btn-primary"
+                            disabled={!item.assignedPatientId}
+                            title={!item.assignedPatientId ? "ÜTS bildirimi için önce cihaza hasta atanmalıdır." : ""}
+                            onClick={() => handleUtsNotification(item)}
+                            style={{ fontSize: '0.72rem', padding: '4px 8px' }}
+                          >
+                            ÜTS Bildirimi Yap
+                          </button>
+                        )}
+                        <button className="btn btn-sm btn-ghost btn-icon" aria-label="Düzenle">
+                          <IconEdit size={14} strokeWidth={1.7} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

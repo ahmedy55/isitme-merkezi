@@ -27,6 +27,17 @@ export interface Patient {
   dailyUsageHours?: number;
   lastBatteryPurchaseDate?: string;
   batteryPackCount?: number;
+
+  // CRM Yeni Alanları
+  source?: 'Doktor' | 'Sosyal Medya' | 'Tavsiye' | 'Yürüyerek' | 'Web';
+  salesStage?: 'İlk Görüşme' | 'Test Yapıldı' | 'Cihaz Denendi' | 'Teklif Verildi' | 'Satış Yapıldı' | 'Kaybedildi';
+  doctorName?: string;
+  prescriptionStatus?: 'Yok' | 'Reçete Yazıldı' | 'SGK Onaylı';
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+  nextAction?: string;
+  timeline?: { date: string; action: string; icon: string }[];
 }
 
 export interface Appointment {
@@ -55,6 +66,13 @@ export interface StockItem {
   sgkPrice: number;
   warrantyExpiry: string;
   location: string;
+  
+  // ÜTS ve Satış Ayrımı Yeni Alanları
+  status: 'Stokta' | 'Hastaya Ayrıldı' | 'Satıldı' | 'Serviste';
+  utsStatus: 'Bekliyor' | 'Bildirildi' | 'Hata' | 'Gerekli Değil';
+  assignedPatientId?: string;
+  assignedPatientName?: string;
+  branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş';
 }
 
 export interface SaleRecord {
@@ -62,24 +80,67 @@ export interface SaleRecord {
   patientId: string;
   patientName: string;
   date: string;
-  items: { name: string; quantity: number; price: number }[];
+  items: { name: string; quantity: number; price: number; type?: 'Cihaz' | 'Pil' | 'Servis Geliri' | 'Aksesuar' }[];
   total: number;
   sgkAmount: number;
   patientAmount: number;
   paymentMethod: 'Nakit' | 'Kredi Kartı' | 'Havale' | 'Taksit';
   status: 'Tahsil Edildi' | 'Bekliyor' | 'Taksitli';
   installments?: { amount: number; dueDate: string; paid: boolean }[];
+  audiologist?: string;
 }
 
 export interface RecallItem {
   id: string;
   patientId: string;
   patientName: string;
-  reason: 'SGK Yenileme' | 'Yıllık Kontrol' | 'Pil Siparişi' | 'Garanti Süresi';
+  reason: 'SGK Yenileme' | 'Yıllık Kontrol' | 'Pil Siparişi' | 'Garanti Süresi' | 'Cihaz Denedi Almadı' | 'Teklif Verildi';
   dueDate: string;
   status: 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı';
   lastContact: string | null;
+  
+  // Gelir Fırsatı Yeni Alanları
+  estimatedRevenue: number;
+  probability: 'Yüksek Olasılık' | 'Orta Olasılık' | 'Düşük Olasılık';
 }
+
+export const getAvatarColor = (name: string) => {
+  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const colors = [
+    '#1f6059', // Lagün Petrol/Teal
+    '#e07e2c', // Bakır/Rose-gold
+    '#2d547a', // Soft Mavi
+    '#825136', // Çikolata/Bronz
+    '#4b5842', // Haki/Zeytin
+  ];
+  return colors[hash % colors.length];
+};
+
+export const getInitials = (first: string, last: string) => {
+  return `${first[0] || ''}${last[0] || ''}`.toUpperCase();
+};
+
+export const formatDate = (dateStr: string) => {
+  if (!dateStr) return '—';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+};
+
+export const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0 }).format(value);
+};
+
+export const calculateAge = (birthDate: string) => {
+  const today = new Date('2026-07-10'); // Demo günü
+  const birth = new Date(birthDate);
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+};
 
 // ── Patients ──
 export const patients: Patient[] = [
@@ -109,7 +170,21 @@ export const patients: Patient[] = [
     batterySize: '312',
     dailyUsageHours: 12,
     lastBatteryPurchaseDate: '2026-07-01',
-    batteryPackCount: 2
+    batteryPackCount: 2,
+    source: 'Tavsiye',
+    salesStage: 'Teklif Verildi',
+    doctorName: 'Dr. Serkan Koç',
+    prescriptionStatus: 'Reçete Yazıldı',
+    emergencyContactName: 'Ahmet Yılmaz',
+    emergencyContactPhone: '0532 222 3344',
+    emergencyContactRelation: 'Oğlu',
+    nextAction: 'SGK yenileme evrakları Medula üzerinden kontrol edilecek.',
+    timeline: [
+      { date: '10.02.2019', action: 'İlk hasta kaydı oluşturuldu.', icon: 'Patients' },
+      { date: '20.06.2021', action: 'Phonak Audéo P90 cihaz satışı yapıldı.', icon: 'Cash' },
+      { date: '15.05.2026', action: 'Yıllık cihaz kontrol randevusu tamamlandı.', icon: 'Check' },
+      { date: '01.07.2026', action: '2 paket 312 numara pil sipariş edildi.', icon: 'Plus' }
+    ]
   },
   {
     id: 'p2',
@@ -137,7 +212,20 @@ export const patients: Patient[] = [
     batterySize: '13',
     dailyUsageHours: 10,
     lastBatteryPurchaseDate: '2026-05-10',
-    batteryPackCount: 1
+    batteryPackCount: 1,
+    source: 'Doktor',
+    salesStage: 'Satış Yapıldı',
+    doctorName: 'Prof. Dr. Levent Acar',
+    prescriptionStatus: 'SGK Onaylı',
+    emergencyContactName: 'Merve Kaya',
+    emergencyContactPhone: '0544 333 4455',
+    emergencyContactRelation: 'Eşi',
+    nextAction: '6 ay sonra rutin kontrol araması yapılacak.',
+    timeline: [
+      { date: '05.11.2022', action: 'İlk muayene kaydı yapıldı.', icon: 'Patients' },
+      { date: '10.01.2023', action: 'Oticon More 1 cihaz satışı ve ÜTS bildirimi tamamlandı.', icon: 'Check' },
+      { date: '28.06.2026', action: 'Sol cihaz hoparlör değişimi için teknik servise alındı.', icon: 'Warning' }
+    ]
   },
   {
     id: 'p3',
@@ -160,73 +248,18 @@ export const patients: Patient[] = [
     lastVisit: '2026-07-01',
     audiogramLeft: [10, 10, 15, 15, 20, 20, 25, 25],
     audiogramRight: [15, 20, 25, 30, 35, 40, 45, 45],
-  },
-  {
-    id: 'p4',
-    tc: '56789012345',
-    firstName: 'Ali',
-    lastName: 'Demir',
-    phone: '0532 444 5566',
-    email: 'ali.demir@email.com',
-    birthDate: '1950-07-18',
-    gender: 'Erkek',
-    address: 'Maltepe, İstanbul',
-    hearingLoss: 'Çok İleri',
-    hearingLossSide: 'Her İki Kulak',
-    currentDevice: 'Phonak Naída P70',
-    deviceDate: '2021-03-05',
-    sgkStatus: 'Yenileme Hakkı Var',
-    sgkRenewalDate: '2026-03-05',
-    notes: 'SGK yenileme görüşmesi yapılacak.',
-    createdAt: '2018-06-20',
-    lastVisit: '2026-06-10',
-    audiogramLeft: [45, 55, 65, 75, 85, 90, 95, 100],
-    audiogramRight: [40, 50, 60, 70, 80, 85, 90, 95],
-  },
-  {
-    id: 'p5',
-    tc: '67890123456',
-    firstName: 'Fatma',
-    lastName: 'Özkan',
-    phone: '0543 555 6677',
-    email: 'fatma.ozkan@email.com',
-    birthDate: '1980-01-30',
-    gender: 'Kadın',
-    address: 'Ataşehir, İstanbul',
-    hearingLoss: 'Orta',
-    hearingLossSide: 'Her İki Kulak',
-    currentDevice: 'Signia Pure 7Nx',
-    deviceDate: '2022-09-12',
-    sgkStatus: 'Aktif',
-    sgkRenewalDate: '2027-09-12',
-    notes: '',
-    createdAt: '2022-08-01',
-    lastVisit: '2026-04-20',
-    audiogramLeft: [20, 25, 35, 45, 50, 55, 55, 60],
-    audiogramRight: [25, 30, 40, 45, 50, 55, 60, 60],
-  },
-  {
-    id: 'p6',
-    tc: '78901234567',
-    firstName: 'Hasan',
-    lastName: 'Çelik',
-    phone: '0535 666 7788',
-    email: 'hasan.celik@email.com',
-    birthDate: '1945-05-10',
-    gender: 'Erkek',
-    address: 'Bakırköy, İstanbul',
-    hearingLoss: 'İleri',
-    hearingLossSide: 'Her İki Kulak',
-    currentDevice: 'ReSound ONE 9',
-    deviceDate: '2023-11-28',
-    sgkStatus: 'Aktif',
-    sgkRenewalDate: '2028-11-28',
-    notes: 'Pil siparişi zamanı geldi.',
-    createdAt: '2020-03-15',
-    lastVisit: '2026-07-05',
-    audiogramLeft: [35, 45, 55, 65, 70, 75, 80, 85],
-    audiogramRight: [30, 40, 50, 60, 65, 70, 75, 80],
-  },
+    source: 'Sosyal Medya',
+    salesStage: 'İlk Görüşme',
+    doctorName: 'Uzm. Dr. Aylin Kaya',
+    prescriptionStatus: 'Yok',
+    emergencyContactName: 'Can Saraç',
+    emergencyContactPhone: '0555 444 5566',
+    emergencyContactRelation: 'Kardeşi',
+    nextAction: 'Cihaz denemesi için randevu verilecek.',
+    timeline: [
+      { date: '01.07.2026', action: 'Hasta kliniğe ilk kez gelerek işitme testi yaptırdı.', icon: 'Patients' }
+    ]
+  }
 ];
 
 // ── Appointments ──
@@ -235,205 +268,220 @@ export const appointments: Appointment[] = [
     id: 'a1',
     patientId: 'p1',
     patientName: 'Ayşe Yılmaz',
-    date: '2026-07-09',
-    time: '09:30',
-    type: 'Kontrol',
+    date: '2026-07-10',
+    time: '10:00',
+    type: 'SGK Yenileme',
     audiologist: 'Dr. Elif Arslan',
-    status: 'Geldi',
+    status: 'Bekliyor',
     branch: 'Merkez 1 - Kadıköy',
-    notes: 'Sağ kulak kontrol',
+    notes: 'Medula sorgusu ve cihaz denemesi yapılacak.'
   },
   {
     id: 'a2',
     patientId: 'p2',
     patientName: 'Mehmet Kaya',
-    date: '2026-07-09',
-    time: '10:15',
-    type: 'Cihaz Denemesi',
-    audiologist: 'Dr. Elif Arslan',
-    status: 'Bekliyor',
-    branch: 'Merkez 1 - Kadıköy',
-    notes: '',
+    date: '2026-07-10',
+    time: '11:30',
+    type: 'Kontrol',
+    audiologist: 'Dr. Can Yılmaz',
+    status: 'Hatırlatıldı',
+    branch: 'Merkez 2 - Beşiktaş',
+    notes: 'Teknik servisten çıkan cihaz teslim edilecek.'
   },
   {
     id: 'a3',
     patientId: 'p3',
     patientName: 'Hanım Saraç',
-    date: '2026-07-09',
-    time: '11:00',
-    type: 'İşitme Testi',
-    audiologist: 'Dr. Can Yılmaz',
-    status: 'Hatırlatıldı',
-    branch: 'Merkez 1 - Kadıköy',
-    notes: 'İlk test',
-  },
-  {
-    id: 'a4',
-    patientId: 'p4',
-    patientName: 'Ali Demir',
-    date: '2026-07-09',
+    date: '2026-07-10',
     time: '14:00',
-    type: 'SGK Yenileme',
-    audiologist: 'Dr. Elif Arslan',
-    status: 'Hatırlatıldı',
-    branch: 'Merkez 1 - Kadıköy',
-    notes: 'SGK yenileme görüşmesi',
-  },
-  {
-    id: 'a5',
-    patientId: 'p5',
-    patientName: 'Fatma Özkan',
-    date: '2026-07-10',
-    time: '09:00',
-    type: 'Kontrol',
-    audiologist: 'Dr. Can Yılmaz',
-    status: 'Bekliyor',
-    branch: 'Merkez 2 - Beşiktaş',
-    notes: '',
-  },
-  {
-    id: 'a6',
-    patientId: 'p6',
-    patientName: 'Hasan Çelik',
-    date: '2026-07-10',
-    time: '10:30',
-    type: 'Pil Değişimi',
+    type: 'Cihaz Denemesi',
     audiologist: 'Dr. Elif Arslan',
     status: 'Bekliyor',
     branch: 'Merkez 1 - Kadıköy',
-    notes: '',
-  },
+    notes: 'Hafif işitme kaybına uygun RIC kasa tipi denenecek.'
+  }
 ];
 
-// ── Stock ──
+// ── Stock Items ──
 export const stockItems: StockItem[] = [
-  { id: 's1', name: 'Phonak Audéo P90', category: 'Cihaz', brand: 'Phonak', model: 'Audéo P90', serialNo: 'PH-2024-00142', quantity: 4, criticalLevel: 2, price: 85000, sgkPrice: 6200, warrantyExpiry: '2028-06-01', location: 'Merkez 1' },
-  { id: 's2', name: 'Phonak Naída P70', category: 'Cihaz', brand: 'Phonak', model: 'Naída P70', serialNo: 'PH-2024-00215', quantity: 3, criticalLevel: 2, price: 72000, sgkPrice: 6200, warrantyExpiry: '2028-08-15', location: 'Merkez 1' },
-  { id: 's3', name: 'Oticon More 1', category: 'Cihaz', brand: 'Oticon', model: 'More 1', serialNo: 'OT-2024-00089', quantity: 2, criticalLevel: 2, price: 92000, sgkPrice: 6200, warrantyExpiry: '2028-04-20', location: 'Merkez 1' },
-  { id: 's4', name: 'Signia Pure 7Nx', category: 'Cihaz', brand: 'Signia', model: 'Pure 7Nx', serialNo: 'SG-2024-00176', quantity: 5, criticalLevel: 3, price: 68000, sgkPrice: 6200, warrantyExpiry: '2028-09-10', location: 'Merkez 2' },
-  { id: 's5', name: 'Phonak Pil 312', category: 'Pil', brand: 'Phonak', model: 'ZA312', serialNo: '-', quantity: 8, criticalLevel: 15, price: 120, sgkPrice: 0, warrantyExpiry: '-', location: 'Merkez 1' },
-  { id: 's6', name: 'Rayovac Pil 13', category: 'Pil', brand: 'Rayovac', model: 'ZA13', serialNo: '-', quantity: 45, criticalLevel: 20, price: 100, sgkPrice: 0, warrantyExpiry: '-', location: 'Merkez 1' },
-  { id: 's7', name: 'Standart Kulak Kalıbı', category: 'Kalıp', brand: 'Genel', model: 'Standart Akrilik', serialNo: '-', quantity: 30, criticalLevel: 10, price: 350, sgkPrice: 0, warrantyExpiry: '-', location: 'Merkez 1' },
-  { id: 's8', name: 'Kurutma Tableti', category: 'Aksesuar', brand: 'Phonak', model: 'D-Dry', serialNo: '-', quantity: 12, criticalLevel: 5, price: 450, sgkPrice: 0, warrantyExpiry: '-', location: 'Merkez 1' },
-  { id: 's9', name: 'ReSound ONE 9', category: 'Cihaz', brand: 'ReSound', model: 'ONE 9', serialNo: 'RS-2024-00331', quantity: 1, criticalLevel: 2, price: 88000, sgkPrice: 6200, warrantyExpiry: '2028-11-01', location: 'Merkez 2' },
+  {
+    id: 's1',
+    name: 'Phonak Audéo P90',
+    category: 'Cihaz',
+    brand: 'Phonak',
+    model: 'Audéo P90-R',
+    serialNo: 'PH-2024-00142',
+    quantity: 1,
+    criticalLevel: 0,
+    price: 48000,
+    sgkPrice: 6200,
+    warrantyExpiry: '2028-07-10',
+    location: 'A-Rafı, Kutu 4',
+    status: 'Stokta',
+    utsStatus: 'Bekliyor',
+    branch: 'Merkez 1 - Kadıköy'
+  },
+  {
+    id: 's2',
+    name: 'Oticon More 1',
+    category: 'Cihaz',
+    brand: 'Oticon',
+    model: 'More 1 miniRITE',
+    serialNo: 'OT-2024-00089',
+    quantity: 1,
+    criticalLevel: 0,
+    price: 52000,
+    sgkPrice: 6200,
+    warrantyExpiry: '2028-05-15',
+    location: 'B-Rafı, Kutu 2',
+    status: 'Hastaya Ayrıldı',
+    assignedPatientId: 'p1',
+    assignedPatientName: 'Ayşe Yılmaz',
+    utsStatus: 'Bekliyor',
+    branch: 'Merkez 1 - Kadıköy'
+  },
+  {
+    id: 's3',
+    name: 'Phonak Naída P70',
+    category: 'Cihaz',
+    brand: 'Phonak',
+    model: 'Naída P70-UP',
+    serialNo: 'PH-2024-00215',
+    quantity: 1,
+    criticalLevel: 0,
+    price: 36000,
+    sgkPrice: 6200,
+    warrantyExpiry: '2027-11-20',
+    location: 'A-Rafı, Kutu 9',
+    status: 'Stokta',
+    utsStatus: 'Bekliyor',
+    branch: 'Merkez 2 - Beşiktaş'
+  },
+  {
+    id: 's4',
+    name: 'Rayovac 312 Numara Pil',
+    category: 'Pil',
+    brand: 'Rayovac',
+    model: 'Active Core 312',
+    serialNo: 'RY-312-BATCH12',
+    quantity: 120,
+    criticalLevel: 50,
+    price: 150,
+    sgkPrice: 0,
+    warrantyExpiry: '2029-12-31',
+    location: 'Pil Kutusu A',
+    status: 'Stokta',
+    utsStatus: 'Gerekli Değil',
+    branch: 'Merkez 1 - Kadıköy'
+  },
+  {
+    id: 's5',
+    name: 'Rayovac 13 Numara Pil',
+    category: 'Pil',
+    brand: 'Rayovac',
+    model: 'Active Core 13',
+    serialNo: 'RY-13-BATCH08',
+    quantity: 15,
+    criticalLevel: 40,
+    price: 150,
+    sgkPrice: 0,
+    warrantyExpiry: '2029-10-30',
+    location: 'Pil Kutusu B',
+    status: 'Stokta',
+    utsStatus: 'Gerekli Değil',
+    branch: 'Merkez 1 - Kadıköy' // Kadıköy stok kritik (15 adet var, kritik seviye 40), Beşiktaş'ta fazla olabilir
+  },
+  {
+    id: 's6',
+    name: 'Rayovac 13 Numara Pil (Beşiktaş)',
+    category: 'Pil',
+    brand: 'Rayovac',
+    model: 'Active Core 13',
+    serialNo: 'RY-13-BATCH09',
+    quantity: 80,
+    criticalLevel: 10,
+    price: 150,
+    sgkPrice: 0,
+    warrantyExpiry: '2029-10-30',
+    location: 'Pil Kutusu B',
+    status: 'Stokta',
+    utsStatus: 'Gerekli Değil',
+    branch: 'Merkez 2 - Beşiktaş' // Beşiktaş'ta fazla stok var, transfer önerilebilir
+  }
 ];
 
-// ── Sales ──
+// ── Sales Records ──
 export const sales: SaleRecord[] = [
   {
     id: 'sl1',
-    patientId: 'p2',
-    patientName: 'Mehmet Kaya',
-    date: '2026-07-05',
+    patientId: 'p1',
+    patientName: 'Ayşe Yılmaz',
+    date: '2026-07-01',
     items: [
-      { name: 'Oticon More 1 (Sol)', quantity: 1, price: 92000 },
-      { name: 'Kulak Kalıbı', quantity: 1, price: 350 },
+      { name: 'Rayovac 312 Numara Pil (60 adet)', quantity: 10, price: 150, type: 'Pil' }
     ],
-    total: 92350,
-    sgkAmount: 6200,
-    patientAmount: 86150,
-    paymentMethod: 'Taksit',
-    status: 'Taksitli',
-    installments: [
-      { amount: 21537, dueDate: '2026-07-05', paid: true },
-      { amount: 21537, dueDate: '2026-08-05', paid: false },
-      { amount: 21537, dueDate: '2026-09-05', paid: false },
-      { amount: 21539, dueDate: '2026-10-05', paid: false },
-    ],
+    total: 1500,
+    sgkAmount: 0,
+    patientAmount: 1500,
+    paymentMethod: 'Kredi Kartı',
+    status: 'Tahsil Edildi',
+    audiologist: 'Dr. Elif Arslan'
   },
   {
     id: 'sl2',
-    patientId: 'p5',
-    patientName: 'Fatma Özkan',
-    date: '2026-07-03',
+    patientId: 'p2',
+    patientName: 'Mehmet Kaya',
+    date: '2023-01-10',
     items: [
-      { name: 'Phonak Pil 312 (x6)', quantity: 6, price: 720 },
+      { name: 'Oticon More 1 miniRITE', quantity: 1, price: 52000, type: 'Cihaz' }
     ],
-    total: 720,
-    sgkAmount: 0,
-    patientAmount: 720,
-    paymentMethod: 'Nakit',
-    status: 'Tahsil Edildi',
-  },
+    total: 52000,
+    sgkAmount: 6200,
+    patientAmount: 45800,
+    paymentMethod: 'Taksit',
+    status: 'Taksitli',
+    installments: [
+      { amount: 15266, dueDate: '2026-06-10', paid: true },
+      { amount: 15267, dueDate: '2026-07-10', paid: false }, // Vadesi Bugün olan taksit
+      { amount: 15267, dueDate: '2026-08-10', paid: false }
+    ],
+    audiologist: 'Dr. Can Yılmaz'
+  }
+];
+
+// ── Recall Items ──
+export const recallItems: RecallItem[] = [
   {
-    id: 'sl3',
+    id: 'r1',
     patientId: 'p1',
     patientName: 'Ayşe Yılmaz',
-    date: '2026-06-28',
-    items: [
-      { name: 'Kurutma Tableti', quantity: 1, price: 450 },
-      { name: 'Phonak Pil 312 (x4)', quantity: 4, price: 480 },
-    ],
-    total: 930,
-    sgkAmount: 0,
-    patientAmount: 930,
-    paymentMethod: 'Kredi Kartı',
-    status: 'Tahsil Edildi',
+    reason: 'SGK Yenileme',
+    dueDate: '2026-06-20',
+    status: 'Bekliyor',
+    lastContact: null,
+    estimatedRevenue: 75000,
+    probability: 'Yüksek Olasılık'
   },
-];
-
-// ── Recall ──
-export const recallItems: RecallItem[] = [
-  { id: 'r1', patientId: 'p1', patientName: 'Ayşe Yılmaz', reason: 'SGK Yenileme', dueDate: '2026-06-20', status: 'Bekliyor', lastContact: null },
-  { id: 'r2', patientId: 'p4', patientName: 'Ali Demir', reason: 'SGK Yenileme', dueDate: '2026-03-05', status: 'Randevu Alındı', lastContact: '2026-07-08' },
-  { id: 'r3', patientId: 'p6', patientName: 'Hasan Çelik', reason: 'Pil Siparişi', dueDate: '2026-07-15', status: 'Bekliyor', lastContact: null },
-  { id: 'r4', patientId: 'p5', patientName: 'Fatma Özkan', reason: 'Yıllık Kontrol', dueDate: '2026-08-01', status: 'Bekliyor', lastContact: null },
-  { id: 'r5', patientId: 'p2', patientName: 'Mehmet Kaya', reason: 'Yıllık Kontrol', dueDate: '2026-07-28', status: 'Gönderildi', lastContact: '2026-07-07' },
-];
-
-// ── Helpers ──
-export const audiologists = ['Dr. Elif Arslan', 'Dr. Can Yılmaz'];
-export const branches = ['Merkez 1 - Kadıköy', 'Merkez 2 - Beşiktaş'];
-
-export const appointmentTypeColors: Record<string, string> = {
-  'İşitme Testi': 'info',
-  'Cihaz Denemesi': 'primary',
-  'Kontrol': 'warning',
-  'SGK Yenileme': 'success',
-  'Kalıp Alma': 'neutral',
-  'Pil Değişimi': 'neutral',
-};
-
-export const statusColors: Record<string, string> = {
-  'Bekliyor': 'warning',
-  'Geldi': 'success',
-  'Gelmedi': 'danger',
-  'İptal': 'neutral',
-  'Hatırlatıldı': 'info',
-};
-
-export function getAvatarColor(name: string): string {
-  const colors = [
-    'linear-gradient(135deg, #667eea, #764ba2)',
-    'linear-gradient(135deg, #f093fb, #f5576c)',
-    'linear-gradient(135deg, #4facfe, #00f2fe)',
-    'linear-gradient(135deg, #43e97b, #38f9d7)',
-    'linear-gradient(135deg, #fa709a, #fee140)',
-    'linear-gradient(135deg, #a18cd1, #fbc2eb)',
-  ];
-  const index = name.charCodeAt(0) % colors.length;
-  return colors[index];
-}
-
-export function getInitials(firstName: string, lastName: string): string {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`;
-}
-
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0 }).format(amount);
-}
-
-export function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-export function calculateAge(birthDate: string): number {
-  const today = new Date();
-  const birth = new Date(birthDate);
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
+  {
+    id: 'r2',
+    patientId: 'p2',
+    patientName: 'Mehmet Kaya',
+    reason: 'Pil Siparişi',
+    dueDate: '2026-07-21',
+    status: 'Bekliyor',
+    lastContact: null,
+    estimatedRevenue: 1200,
+    probability: 'Yüksek Olasılık'
+  },
+  {
+    id: 'r3',
+    patientId: 'p3',
+    patientName: 'Hanım Saraç',
+    reason: 'Cihaz Denedi Almadı',
+    dueDate: '2026-07-05',
+    status: 'Bekliyor',
+    lastContact: null,
+    estimatedRevenue: 85000,
+    probability: 'Orta Olasılık'
   }
-  return age;
-}
+];

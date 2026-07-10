@@ -1,20 +1,28 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  appointments, audiologists, branches,
-  getAvatarColor, statusColors,
-} from '../data/mockData';
+import { useApp } from '../context/AppContext';
+import { getAvatarColor } from '../data/mockData';
 import { IconPlus, IconSGK, IconCalendar, IconCheck, IconClose } from '../components/Icons';
+
+const branches = ['Merkez 1 - Kadıköy', 'Merkez 2 - Beşiktaş'];
+const audiologists = ['Dr. Elif Arslan', 'Dr. Can Yılmaz'];
+const statusColors: Record<string, string> = {
+  'Bekliyor': 'warning',
+  'Geldi': 'success',
+  'Gelmedi': 'danger',
+  'İptal': 'neutral'
+};
 
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 export default function AppointmentsPage() {
+  const { appointmentsList, addAppointment, updateAppointmentStatus } = useApp();
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [filterAudiologist, setFilterAudiologist] = useState('Tümü');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const filtered = appointments.filter(a =>
+  const filtered = appointmentsList.filter(a =>
     filterAudiologist === 'Tümü' || a.audiologist === filterAudiologist
   );
 
@@ -23,7 +31,7 @@ export default function AppointmentsPage() {
       <div className="page-header">
         <div className="page-header-left">
           <h2>Randevu Takvimi</h2>
-          <p>{appointments.length} randevu kayıtlı</p>
+          <p>{appointmentsList.length} randevu kayıtlı</p>
         </div>
         <div className="page-header-actions">
           <div className="tabs">
@@ -156,7 +164,7 @@ export default function AppointmentsPage() {
                 const isCurrentMonth = dateNum >= 1 && dateNum <= 31;
                 const isToday = dateNum === 9;
                 const dayAppointments = isCurrentMonth
-                  ? appointments.filter(a => {
+                  ? appointmentsList.filter(a => {
                       const d = new Date(a.date).getDate();
                       return d === dateNum;
                     })

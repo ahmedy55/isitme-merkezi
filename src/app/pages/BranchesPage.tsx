@@ -5,9 +5,32 @@ import { useApp } from '../context/AppContext';
 import { IconPlus, IconClose } from '../components/Icons';
 
 export default function BranchesPage() {
-  const { addToast } = useApp();
+  const { stockList, updateStockItem, addToast } = useApp();
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
   const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [transferCompleted, setTransferCompleted] = useState(false);
+
+  const handleConfirmTransfer = () => {
+    // Find device in Beşiktaş (Merkez 2 - Beşiktaş)
+    const matchedDevice = stockList.find(s => s.branch === 'Merkez 2 - Beşiktaş' && s.category === 'Cihaz');
+    if (matchedDevice) {
+      const updated = {
+        ...matchedDevice,
+        branch: 'Merkez 1 - Kadıköy' as const
+      };
+      updateStockItem(updated);
+      addToast({
+        type: 'success',
+        message: `${matchedDevice.name} (${matchedDevice.serialNo}) başarıyla Beşiktaş şubesinden Kadıköy şubesine transfer edildi.`
+      });
+      setTransferCompleted(true);
+    } else {
+      addToast({
+        type: 'info',
+        message: 'Transfer edilecek uygun cihaz bulunamadı.'
+      });
+    }
+  };
 
   const branches = [
     { name: 'Merkez 1 - Kadıköy', address: 'Caferağa Mah. Moda Cad. No:42, Kadıköy', staff: 3, patients: 142, status: 'Aktif' },
@@ -46,6 +69,39 @@ export default function BranchesPage() {
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconPlus size={15} strokeWidth={2} /> Kullanıcı Ekle
           </button>
+        </div>
+      </div>
+
+      {/* Akıllı Stok Transfer Önerisi Banner'ı */}
+      <div className="card" style={{
+        marginBottom: 24,
+        background: 'linear-gradient(to right, var(--primary-50), white)',
+        border: '1px solid var(--primary-200)',
+        padding: '16px 20px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 16
+      }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <h4 style={{ color: 'var(--primary-700)', fontWeight: 700, margin: '0 0 4px 0', fontSize: '0.95rem' }}>
+            Akıllı Şubeler Arası Stok Transfer Önerisi
+          </h4>
+          <p style={{ color: 'var(--gray-600)', fontSize: '0.84rem', margin: 0 }}>
+            Kadıköy şubesinde cihaz stoğu kritik düzeye düştü. Beşiktaş şubesinde ihtiyaç fazlası 1 adet cihaz tespit edildi. Transfer öneriliyor.
+          </p>
+        </div>
+        <div>
+          {transferCompleted ? (
+            <span className="badge badge-success" style={{ padding: '8px 12px', fontSize: '0.82rem', fontWeight: 600 }}>
+              Transfer Başarıyla Tamamlandı
+            </span>
+          ) : (
+            <button className="btn btn-primary" onClick={handleConfirmTransfer} style={{ fontSize: '0.84rem' }}>
+              Transferi Onayla ve Stokları Güncelle
+            </button>
+          )}
         </div>
       </div>
 

@@ -13,12 +13,26 @@ import {
 const FREQUENCIES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
 
 export default function PatientDetailPage() {
-  const { selectedPatientId, setCurrentPage, addToast } = useApp();
+  const { 
+    selectedPatientId, 
+    setCurrentPage, 
+    addToast, 
+    activeDetailTab, 
+    setActiveDetailTab, 
+    patientsList, 
+    updatePatient,
+    stockList,
+    updateStockItem,
+    addSale,
+    appointmentsList,
+    salesList
+  } = useApp();
+
   const [activeTab, setActiveTab] = useState('genel');
   const [comparePast, setComparePast] = useState(false);
   const [isParsingXml, setIsParsingXml] = useState(false);
 
-  const patient = patients.find(p => p.id === selectedPatientId);
+  const patient = patientsList.find(p => p.id === selectedPatientId);
 
   const [audioLeft, setAudioLeft] = useState<number[]>([]);
   const [audioRight, setAudioRight] = useState<number[]>([]);
@@ -27,6 +41,13 @@ export default function PatientDetailPage() {
   const [dailyUsage, setDailyUsage] = useState<number>(8);
   const [lastPurchaseDate, setLastPurchaseDate] = useState<string>('');
   const [packCount, setPackCount] = useState<number>(1);
+
+  // Sync tab status with context redirects
+  useEffect(() => {
+    if (activeDetailTab) {
+      setActiveTab(activeDetailTab);
+    }
+  }, [activeDetailTab]);
 
   useEffect(() => {
     if (patient) {
@@ -84,8 +105,67 @@ export default function PatientDetailPage() {
     );
   }
 
-  const patientAppointments = appointments.filter(a => a.patientId === patient.id);
-  const patientSales = sales.filter(s => s.patientId === patient.id);
+  const handleStartSale = (deviceName: string, price: number) => {
+    // Find matching device in stock
+    const matchedStockItem = stockList.find(s => s.name.toLowerCase().includes(deviceName.split(' ')[0].toLowerCase()) && (s.status === 'Stokta' || s.status === 'Hastaya Ayrıldı')) 
+      || stockList[0];
+      
+    if (matchedStockItem) {
+      const updatedStockItem = {
+        ...matchedStockItem,
+        status: 'Satıldı' as const,
+        utsStatus: 'Bekliyor' as const, // Wait for ÜTS notification
+        assignedPatientId: patient.id,
+        assignedPatientName: `${patient.firstName} ${patient.lastName}`
+      };
+      updateStockItem(updatedStockItem);
+    }
+
+    const sgkAmount = patient.sgkStatus === 'Yenileme Hakkı Var' ? 6200 : 0;
+    const patientAmount = price - sgkAmount;
+    const newSale = {
+      id: `sl-${Date.now()}`,
+      patientId: patient.id,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      date: '2026-07-10',
+      items: [
+        { name: deviceName, quantity: 1, price, type: 'Cihaz' as const }
+      ],
+      total: price,
+      sgkAmount,
+      patientAmount,
+      paymentMethod: 'Kredi Kartı' as const,
+      status: 'Tahsil Edildi' as const,
+      audiologist: 'Dr. Elif Arslan'
+    };
+    addSale(newSale);
+
+    const updatedPatient = {
+      ...patient,
+      salesStage: 'Satış Yapıldı' as const,
+      currentDevice: deviceName,
+      deviceDate: '2026-07-10',
+      sgkStatus: 'Aktif' as const, // SGK used
+      timeline: [
+        { date: '10.07.2026', action: `Cihaz satışı tamamlandı. ${deviceName} kasaya işlendi. Fatura oluşturulabilir.`, icon: 'Cash' },
+        { date: '10.07.2026', action: `SGK yenileme hakkı kullanıldı. Medula reçete kaydı tamamlandı.`, icon: 'Check' },
+        ...(patient.timeline || [])
+      ]
+    };
+    updatePatient(updatedPatient);
+
+    addToast({
+      type: 'success',
+      message: `${deviceName} cihaz satışı başarıyla tamamlandı! Kasa kaydı oluşturuldu. ÜTS bildirimi yapmak için Stok sayfasına yönlendiriliyorsunuz.`
+    });
+
+    setTimeout(() => {
+      setCurrentPage('stock');
+    }, 2000);
+  };
+
+  const patientAppointments = appointmentsList.filter(a => a.patientId === patient.id);
+  const patientSales = salesList.filter(s => s.patientId === patient.id);
 
   return (
     <div className="page">
@@ -162,89 +242,296 @@ export default function PatientDetailPage() {
 
       {/* Tab Content */}
       <div className="patient-tabs-content">
-        {activeTab === 'genel' && (
-          <div className="dashboard-grid">
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">👤 Kişisel Bilgiler</span>
-              </div>
-              <div className="card-body">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Ad Soyad</div>
-                    <div style={{ fontWeight: 600 }}>{patient.firstName} {patient.lastName}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>TC Kimlik</div>
-                    <div style={{ fontWeight: 600, fontFamily: 'monospace' }}>{patient.tc}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Doğum Tarihi</div>
-                    <div style={{ fontWeight: 600 }}>{formatDate(patient.birthDate)} ({calculateAge(patient.birthDate)} yaş)</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Cinsiyet</div>
-                    <div style={{ fontWeight: 600 }}>{patient.gender}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Telefon</div>
-                    <div style={{ fontWeight: 600 }}>{patient.phone}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>E-posta</div>
-                    <div style={{ fontWeight: 600 }}>{patient.email}</div>
-                  </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Adres</div>
-                    <div style={{ fontWeight: 600 }}>{patient.address}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+         {activeTab === 'genel' && (
+           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+               {/* Sol Taraf: Kişisel ve Tıbbi Bilgiler */}
+               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                 <div className="card">
+                   <div className="card-header">
+                     <span className="card-title">Kişisel Bilgiler</span>
+                   </div>
+                   <div className="card-body">
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Ad Soyad</div>
+                         <div style={{ fontWeight: 600 }}>{patient.firstName} {patient.lastName}</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>TC Kimlik</div>
+                         <div style={{ fontWeight: 600, fontFamily: 'monospace' }}>{patient.tc}</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Doğum Tarihi</div>
+                         <div style={{ fontWeight: 600 }}>{formatDate(patient.birthDate)} ({calculateAge(patient.birthDate)} yaş)</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Cinsiyet</div>
+                         <div style={{ fontWeight: 600 }}>{patient.gender}</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Telefon</div>
+                         <div style={{ fontWeight: 600 }}>{patient.phone}</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>E-posta</div>
+                         <div style={{ fontWeight: 600 }}>{patient.email}</div>
+                       </div>
+                       <div style={{ gridColumn: '1 / -1' }}>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Adres</div>
+                         <div style={{ fontWeight: 600 }}>{patient.address}</div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
 
-            <div className="card">
-              <div className="card-header">
-                <span className="card-title">🦻 Cihaz Bilgileri</span>
-              </div>
-              <div className="card-body">
-                <div style={{ display: 'grid', gap: '14px' }}>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>İşitme Kaybı</div>
-                    <div style={{ fontWeight: 600 }}>{patient.hearingLoss} · {patient.hearingLossSide}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Mevcut Cihaz</div>
-                    <div style={{ fontWeight: 600 }}>{patient.currentDevice || 'Cihaz yok'}</div>
-                  </div>
-                  {patient.deviceDate && (
-                    <div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Cihaz Alım Tarihi</div>
-                      <div style={{ fontWeight: 600 }}>{formatDate(patient.deviceDate)}</div>
-                    </div>
-                  )}
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>SGK Durumu</div>
-                    <div style={{ fontWeight: 600 }}>{patient.sgkStatus}</div>
-                  </div>
-                  {patient.sgkRenewalDate && (
-                    <div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>SGK Yenileme Tarihi</div>
-                      <div style={{ fontWeight: 600 }}>{formatDate(patient.sgkRenewalDate)}</div>
-                    </div>
-                  )}
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Kayıt Tarihi</div>
-                    <div style={{ fontWeight: 600 }}>{formatDate(patient.createdAt)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Son Ziyaret</div>
-                    <div style={{ fontWeight: 600 }}>{formatDate(patient.lastVisit)}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+                 <div className="card">
+                   <div className="card-header">
+                     <span className="card-title">Cihaz Bilgileri</span>
+                   </div>
+                   <div className="card-body">
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>İşitme Kaybı</div>
+                         <div style={{ fontWeight: 600 }}>{patient.hearingLoss} · {patient.hearingLossSide}</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Mevcut Cihaz</div>
+                         <div style={{ fontWeight: 600 }}>{patient.currentDevice || 'Cihaz yok'}</div>
+                       </div>
+                       {patient.deviceDate && (
+                         <div>
+                           <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Cihaz Alım Tarihi</div>
+                           <div style={{ fontWeight: 600 }}>{formatDate(patient.deviceDate)}</div>
+                         </div>
+                       )}
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>SGK Durumu</div>
+                         <div style={{ fontWeight: 600 }}>{patient.sgkStatus}</div>
+                       </div>
+                       {patient.sgkRenewalDate && (
+                         <div>
+                           <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>SGK Yenileme Tarihi</div>
+                           <div style={{ fontWeight: 600 }}>{formatDate(patient.sgkRenewalDate)}</div>
+                         </div>
+                       )}
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Kayıt Tarihi</div>
+                         <div style={{ fontWeight: 600 }}>{formatDate(patient.createdAt)}</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Son Ziyaret</div>
+                         <div style={{ fontWeight: 600 }}>{formatDate(patient.lastVisit)}</div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+               {/* Sağ Taraf: CRM & Satış Süreci Takibi */}
+               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                 <div className="card">
+                   <div className="card-header">
+                     <span className="card-title">CRM & Satış Süreci</span>
+                   </div>
+                   <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                       <div className="form-group">
+                         <label className="form-label">Hasta Kaynağı</label>
+                         <select 
+                           className="form-select"
+                           value={patient.source || 'Tavsiye'}
+                           onChange={(e) => {
+                             const val = e.target.value;
+                             const updated = {
+                               ...patient,
+                               source: val as any,
+                               timeline: [
+                                 { date: '10.07.2026', action: `Hasta kaynağı "${val}" olarak güncellendi.`, icon: 'Edit' },
+                                 ...(patient.timeline || [])
+                               ]
+                             };
+                             updatePatient(updated);
+                             addToast({ type: 'info', message: 'Hasta kaynağı güncellendi.' });
+                           }}
+                         >
+                           <option value="Doktor">Doktor Yönlendirmesi</option>
+                           <option value="Sosyal Medya">Sosyal Medya</option>
+                           <option value="Tavsiye">Hasta Tavsiyesi</option>
+                           <option value="Yürüyerek">Yürüyerek (Walk-in)</option>
+                           <option value="Web">Web Sitesi</option>
+                         </select>
+                       </div>
+
+                       <div className="form-group">
+                         <label className="form-label">Satış Aşaması</label>
+                         <select 
+                           className="form-select"
+                           value={patient.salesStage || 'İlk Görüşme'}
+                           onChange={(e) => {
+                             const val = e.target.value;
+                             const updated = {
+                               ...patient,
+                               salesStage: val as any,
+                               timeline: [
+                                 { date: '10.07.2026', action: `Satış süreci "${val}" aşamasına taşındı.`, icon: 'Check' },
+                                 ...(patient.timeline || [])
+                               ]
+                             };
+                             updatePatient(updated);
+                             addToast({ type: 'info', message: `Satış aşaması güncellendi: ${val}` });
+                           }}
+                         >
+                           <option value="İlk Görüşme">İlk Görüşme / Arama</option>
+                           <option value="Test Yapıldı">İşitme Testi Yapıldı</option>
+                           <option value="Cihaz Denendi">Cihaz Denemesi Yapıldı</option>
+                           <option value="Teklif Verildi">Teklif Sunuldu</option>
+                           <option value="Satış Yapıldı">Satış Gerçekleşti (Kapandı)</option>
+                           <option value="Kaybedildi">Fırsat Kaybedildi</option>
+                         </select>
+                       </div>
+                     </div>
+
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                       <div className="form-group">
+                         <label className="form-label">Sevk Eden Doktor</label>
+                         <input 
+                           className="form-input" 
+                           defaultValue={patient.doctorName || ''} 
+                           placeholder="Doktor Adı"
+                           onBlur={(e) => {
+                             const val = e.target.value;
+                             if (val !== patient.doctorName) {
+                               const updated = {
+                                 ...patient,
+                                 doctorName: val,
+                                 timeline: [
+                                   { date: '10.07.2026', action: `Muayene doktoru "${val}" olarak eklendi.`, icon: 'Edit' },
+                                   ...(patient.timeline || [])
+                                 ]
+                               };
+                               updatePatient(updated);
+                               addToast({ type: 'info', message: 'Sevk eden doktor bilgisi güncellendi.' });
+                             }
+                           }}
+                         />
+                       </div>
+
+                       <div className="form-group">
+                         <label className="form-label">Reçete / Evrak Durumu</label>
+                         <select 
+                           className="form-select"
+                           value={patient.prescriptionStatus || 'Yok'}
+                           onChange={(e) => {
+                             const val = e.target.value;
+                             const updated = {
+                               ...patient,
+                               prescriptionStatus: val as any,
+                               timeline: [
+                                 { date: '10.07.2026', action: `Reçete durumu "${val}" olarak güncellendi.`, icon: 'Check' },
+                                 ...(patient.timeline || [])
+                               ]
+                             };
+                             updatePatient(updated);
+                             addToast({ type: 'info', message: 'Evrak durumu güncellendi.' });
+                           }}
+                         >
+                           <option value="Yok">Reçete Yok / Bekleniyor</option>
+                           <option value="Reçete Yazıldı">KBB Reçetesi Yazıldı</option>
+                           <option value="SGK Onaylı">Medula / SGK Hak Onaylı</option>
+                         </select>
+                       </div>
+                     </div>
+
+                     <div className="form-group">
+                       <label className="form-label">Sonraki Aksiyon Planı</label>
+                       <input 
+                         className="form-input"
+                         defaultValue={patient.nextAction || ''}
+                         placeholder="Arayıp teklife dönüş alınacak..."
+                         onBlur={(e) => {
+                           const val = e.target.value;
+                           if (val !== patient.nextAction) {
+                             const updated = {
+                               ...patient,
+                               nextAction: val,
+                               timeline: [
+                                 { date: '10.07.2026', action: `Gelecek aksiyon güncellendi: "${val}"`, icon: 'Calendar' },
+                                 ...(patient.timeline || [])
+                               ]
+                             };
+                             updatePatient(updated);
+                             addToast({ type: 'info', message: 'Sonraki aksiyon güncellendi.' });
+                           }
+                         }}
+                       />
+                     </div>
+                   </div>
+                 </div>
+
+                 <div className="card">
+                   <div className="card-header">
+                     <span className="card-title">Refakatçi & Yakın Bilgisi</span>
+                   </div>
+                   <div className="card-body">
+                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Yakın Ad Soyad</div>
+                         <div style={{ fontWeight: 600 }}>{patient.emergencyContactName || '—'}</div>
+                       </div>
+                       <div>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Yakınlık Derecesi</div>
+                         <div style={{ fontWeight: 600 }}>{patient.emergencyContactRelation || '—'}</div>
+                       </div>
+                       <div style={{ gridColumn: '1 / -1' }}>
+                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Telefon Numarası</div>
+                         <div style={{ fontWeight: 600, fontFamily: 'monospace' }}>{patient.emergencyContactPhone || '—'}</div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+             </div>
+
+             {/* Alt Kısım: Zaman Tüneli / Timeline */}
+             <div className="card">
+               <div className="card-header">
+                 <span className="card-title">Hasta İşlem Zaman Çizelgesi (Timeline)</span>
+               </div>
+               <div className="card-body">
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', paddingLeft: 20, borderLeft: '2px solid var(--surface-border-light)', marginLeft: 8 }}>
+                   {patient.timeline && patient.timeline.length > 0 ? (
+                     patient.timeline.map((event, idx) => (
+                       <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                         {/* Timeline Dot */}
+                         <div style={{
+                           position: 'absolute',
+                           left: -27,
+                           top: 2,
+                           width: 12,
+                           height: 12,
+                           borderRadius: '50%',
+                           backgroundColor: 'var(--primary-600)',
+                           border: '2px solid var(--surface-white)',
+                         }} />
+                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-600)', fontFamily: 'var(--font-mono)' }}>{event.date}</span>
+                           <span style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>•</span>
+                           <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)', fontWeight: 500 }}>Sistem Logu</span>
+                         </div>
+                         <div style={{ fontSize: '0.84rem', color: 'var(--gray-800)', fontWeight: 500 }}>
+                           {event.action}
+                         </div>
+                       </div>
+                     ))
+                   ) : (
+                     <div style={{ color: 'var(--gray-500)', fontSize: '0.8rem' }}>Hasta için henüz bir sistem hareketi kaydedilmemiş.</div>
+                   )}
+                 </div>
+               </div>
+             </div>
+           </div>
+         )}
 
         {activeTab === 'odyogram' && (
           <div className="card">
@@ -544,7 +831,7 @@ export default function PatientDetailPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div className="card">
                   <div className="card-header">
-                    <span className="card-title">🤖 Uyuşan En İyi Modeller</span>
+                    <span className="card-title">Uyuşan En İyi Modeller</span>
                   </div>
                   <div className="card-body" style={{ display: 'grid', gap: 14 }}>
                     {matchingBrands.map((brand, idx) => (
@@ -557,7 +844,7 @@ export default function PatientDetailPage() {
                       }}>
                         {idx === 0 && (
                           <span className="badge badge-success" style={{ position: 'absolute', top: 12, right: 12 }}>
-                            ⭐ En Yüksek Eşleşme
+                            En Yüksek Eşleşme
                           </span>
                         )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -572,17 +859,22 @@ export default function PatientDetailPage() {
                             <span key={f} className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>✓ {f}</span>
                           ))}
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--gray-100)', paddingTop: 10 }}>
-                          <div>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Brüt Fiyat: </span>
-                            <span style={{ fontWeight: 600 }}>{formatCurrency(brand.price)}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--gray-100)', paddingTop: 10, flexWrap: 'wrap', gap: 12 }}>
+                          <div style={{ display: 'flex', gap: 16 }}>
+                            <div>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Brüt: </span>
+                              <span style={{ fontWeight: 600 }}>{formatCurrency(brand.price)}</span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>SGK Sonrası Hasta Payı: </span>
+                              <span style={{ fontWeight: 700, color: 'var(--primary-600)', fontSize: '1.05rem' }}>
+                                {patient.sgkStatus === 'Yenileme Hakkı Var' ? formatCurrency(brand.price - 6200) : formatCurrency(brand.price)}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>SGK Sonrası Hasta Payı: </span>
-                            <span style={{ fontWeight: 700, color: 'var(--primary-600)', fontSize: '1.05rem' }}>
-                              {patient.sgkStatus === 'Yenileme Hakkı Var' ? formatCurrency(brand.price - 6200) : formatCurrency(brand.price)}
-                            </span>
-                          </div>
+                          <button className="btn btn-sm btn-primary" onClick={() => handleStartSale(brand.name, brand.price)}>
+                            Satışı Başlat
+                          </button>
                         </div>
                       </div>
                     ))}
