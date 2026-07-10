@@ -80,6 +80,17 @@ const enhancedRecallData: EnhancedRecallItem[] = [
       { stepNumber: 2, channel: 'SMS', status: 'Bekliyor', date: null, messagePreview: 'Mehmet Bey, yarınki kontrol randevunuzu onaylıyor musunuz?' },
       { stepNumber: 3, channel: 'Arama', status: 'Bekliyor', date: null },
     ]
+  },
+  {
+    id: 'r6',
+    patientName: 'Mehmet Kaya',
+    reason: 'Pil Siparişi',
+    dueDate: '2026-07-21',
+    currentStep: 1,
+    steps: [
+      { stepNumber: 1, channel: 'WhatsApp', status: 'Bekliyor', date: null, messagePreview: 'Merhaba Mehmet Bey, işitme cihazı pillerinizin tahmini bitiş tarihi (21 Temmuz) yaklaşmaktadır. Yeni pil paketlerinizi adresinize kargolayalım mı?' },
+      { stepNumber: 2, channel: 'SMS', status: 'Bekliyor', date: null },
+    ]
   }
 ];
 
@@ -91,6 +102,7 @@ export default function RecallPage() {
     if (filterStatus === 'Tümü') return true;
     if (filterStatus === 'Bekleyenler') return r.steps.some(s => s.status === 'Bekliyor');
     if (filterStatus === 'Tamamlanan Adımlar') return r.steps.some(s => s.status === 'Tamamlandı');
+    if (filterStatus === 'Pil Yenileme') return r.reason === 'Pil Siparişi';
     return true;
   });
 
@@ -99,17 +111,21 @@ export default function RecallPage() {
       <div className="page-header">
         <div className="page-header-left">
           <h2>Akıllı Hatırlatma Zinciri</h2>
-          <p>Yapay zeka destekli çok kanallı otomatik geri kazanım takibi</p>
+          <p>Çok kanallı otomatik geri kazanım ve pil abonelik takibi</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-primary">🤖 Otomatik Zinciri Başlat</button>
+          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconSmartRecall size={16} strokeWidth={1.8} /> Otomatik Zinciri Başlat
+          </button>
         </div>
       </div>
 
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon primary">🤖</div>
+          <div className="stat-icon primary">
+            <IconSmartRecall size={20} strokeWidth={1.6} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Aktif Otomasyon Zinciri</div>
             <div className="stat-value">{enhancedRecallData.length} Hasta</div>
@@ -150,7 +166,7 @@ export default function RecallPage() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ display: 'flex', gap: 12 }}>
           <div className="tabs">
-            {['Tümü', 'Bekleyenler', 'Tamamlanan Adımlar'].map(s => (
+            {['Tümü', 'Bekleyenler', 'Pil Yenileme', 'Tamamlanan Adımlar'].map(s => (
               <button
                 key={s}
                 className={`tab ${filterStatus === s ? 'active' : ''}`}

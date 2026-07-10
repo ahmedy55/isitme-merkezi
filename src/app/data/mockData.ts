@@ -21,6 +21,12 @@ export interface Patient {
   lastVisit: string;
   audiogramLeft: number[];
   audiogramRight: number[];
+  pastAudiogramLeft?: number[];
+  pastAudiogramRight?: number[];
+  batterySize?: '10' | '312' | '13' | '675';
+  dailyUsageHours?: number;
+  lastBatteryPurchaseDate?: string;
+  batteryPackCount?: number;
 }
 
 export interface Appointment {
@@ -98,6 +104,12 @@ export const patients: Patient[] = [
     lastVisit: '2026-05-15',
     audiogramLeft: [20, 25, 35, 45, 55, 60, 65, 70],
     audiogramRight: [15, 20, 30, 40, 50, 55, 60, 65],
+    pastAudiogramLeft: [15, 20, 25, 35, 45, 50, 55, 60],
+    pastAudiogramRight: [10, 15, 20, 30, 40, 45, 50, 55],
+    batterySize: '312',
+    dailyUsageHours: 12,
+    lastBatteryPurchaseDate: '2026-07-01',
+    batteryPackCount: 2
   },
   {
     id: 'p2',
@@ -120,6 +132,12 @@ export const patients: Patient[] = [
     lastVisit: '2026-06-28',
     audiogramLeft: [30, 40, 55, 65, 75, 80, 85, 90],
     audiogramRight: [10, 15, 15, 20, 25, 25, 30, 35],
+    pastAudiogramLeft: [25, 30, 45, 55, 65, 70, 75, 80],
+    pastAudiogramRight: [10, 10, 15, 15, 20, 20, 25, 30],
+    batterySize: '13',
+    dailyUsageHours: 10,
+    lastBatteryPurchaseDate: '2026-05-10',
+    batteryPackCount: 1
   },
   {
     id: 'p3',

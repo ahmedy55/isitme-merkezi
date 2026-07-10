@@ -1,27 +1,83 @@
-'use client';
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   patients, appointments, sales,
   getAvatarColor, getInitials, formatDate, formatCurrency, calculateAge,
 } from '../data/mockData';
+import {
+  IconBack, IconEdit, IconCalendar, IconCheck, IconWarning,
+  IconMessage, IconDevice, IconUpload, IconClose, IconPlus, IconArrowRight,
+  IconPatients
+} from '../components/Icons';
 
 const FREQUENCIES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
 
 export default function PatientDetailPage() {
-  const { selectedPatientId, setCurrentPage } = useApp();
+  const { selectedPatientId, setCurrentPage, addToast } = useApp();
   const [activeTab, setActiveTab] = useState('genel');
+  const [comparePast, setComparePast] = useState(false);
+  const [isParsingXml, setIsParsingXml] = useState(false);
 
   const patient = patients.find(p => p.id === selectedPatientId);
+
+  const [audioLeft, setAudioLeft] = useState<number[]>([]);
+  const [audioRight, setAudioRight] = useState<number[]>([]);
+
+  const [batterySize, setBatterySize] = useState<'10' | '312' | '13' | '675'>('312');
+  const [dailyUsage, setDailyUsage] = useState<number>(8);
+  const [lastPurchaseDate, setLastPurchaseDate] = useState<string>('');
+  const [packCount, setPackCount] = useState<number>(1);
+
+  useEffect(() => {
+    if (patient) {
+      setAudioLeft(patient.audiogramLeft);
+      setAudioRight(patient.audiogramRight);
+      setComparePast(false);
+      setBatterySize(patient.batterySize || '312');
+      setDailyUsage(patient.dailyUsageHours || 8);
+      setLastPurchaseDate(patient.lastBatteryPurchaseDate || '');
+      setPackCount(patient.batteryPackCount || 1);
+    }
+  }, [selectedPatientId, patient]);
+
+  const handleXmlDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsParsingXml(true);
+    setTimeout(() => {
+      setAudioLeft([25, 35, 45, 55, 65, 70, 75, 80]);
+      setAudioRight([20, 30, 40, 50, 60, 65, 70, 75]);
+      setIsParsingXml(false);
+      addToast({
+        type: 'success',
+        message: 'Noah XML dosyası başarıyla ayrıştırıldı. Odyogram güncellendi.'
+      });
+    }, 1200);
+  };
+
+  const handleXmlClick = () => {
+    setIsParsingXml(true);
+    setTimeout(() => {
+      setAudioLeft([30, 40, 50, 60, 70, 75, 80, 85]);
+      setAudioRight([25, 35, 45, 55, 65, 70, 75, 80]);
+      setIsParsingXml(false);
+      addToast({
+        type: 'success',
+        message: 'Noah XML simülasyon verisi başarıyla yüklendi.'
+      });
+    }, 1200);
+  };
+
   if (!patient) {
     return (
       <div className="page">
         <div className="empty-state">
-          <div className="empty-state-icon">👤</div>
+          <div className="empty-state-icon">
+            <IconPatients size={44} />
+          </div>
           <h3>Hasta bulunamadı</h3>
-          <button className="btn btn-primary" onClick={() => setCurrentPage('patients')}>
-            ← Hasta Listesine Dön
+          <button className="btn btn-primary" onClick={() => setCurrentPage('patients')}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconBack size={15} strokeWidth={2} /> Hasta Listesine Dön
           </button>
         </div>
       </div>
@@ -37,9 +93,9 @@ export default function PatientDetailPage() {
       <button
         className="btn btn-ghost"
         onClick={() => setCurrentPage('patients')}
-        style={{ marginBottom: 16 }}
+        style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}
       >
-        ← Hasta Listesine Dön
+        <IconBack size={16} strokeWidth={1.8} /> Hasta Listesine Dön
       </button>
 
       {/* Patient Header */}
@@ -53,10 +109,10 @@ export default function PatientDetailPage() {
         <div className="patient-header-info">
           <h2>{patient.firstName} {patient.lastName}</h2>
           <div className="patient-header-meta">
-            <span>🪪 {patient.tc}</span>
-            <span>📞 {patient.phone}</span>
-            <span>🎂 {calculateAge(patient.birthDate)} yaşında</span>
-            <span>📍 {patient.address}</span>
+            <span style={{ fontFamily: 'var(--font-mono)' }}>{patient.tc}</span>
+            <span>{patient.phone}</span>
+            <span>{calculateAge(patient.birthDate)} yaşında</span>
+            <span>{patient.address}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <span className={`badge badge-${
@@ -74,20 +130,25 @@ export default function PatientDetailPage() {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary">✏️ Düzenle</button>
-          <button className="btn btn-primary">📅 Randevu Oluştur</button>
+          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconEdit size={15} strokeWidth={1.8} /> Düzenle
+          </button>
+          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconCalendar size={15} strokeWidth={1.8} /> Randevu Oluştur
+          </button>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="tabs">
         {[
-          { id: 'genel', label: '📋 Genel Bilgiler' },
-          { id: 'odyogram', label: '🎧 Odyogram' },
-          { id: 'cihaz-onerisi', label: '🤖 Akıllı Cihaz Önerisi' },
-          { id: 'randevular', label: '📅 Randevular' },
-          { id: 'satis', label: '💰 Satışlar' },
-          { id: 'notlar', label: '📝 Notlar' },
+          { id: 'genel', label: 'Genel Bilgiler' },
+          { id: 'odyogram', label: 'Odyogram' },
+          { id: 'cihaz-onerisi', label: 'Akıllı Cihaz Önerisi' },
+          { id: 'pil-takip', label: 'Pil Aboneliği & Takip' },
+          { id: 'randevular', label: 'Randevular' },
+          { id: 'satis', label: 'Satışlar' },
+          { id: 'notlar', label: 'Notlar' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -188,13 +249,138 @@ export default function PatientDetailPage() {
         {activeTab === 'odyogram' && (
           <div className="card">
             <div className="card-header">
-              <span className="card-title">🎧 Odyogram Sonuçları</span>
-              <button className="btn btn-sm btn-primary">📤 Yeni Test Ekle</button>
+              <span className="card-title">Odyogram Test Sonuçları</span>
+              {patient.pastAudiogramLeft && patient.pastAudiogramRight && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    id="compare-past"
+                    checked={comparePast}
+                    onChange={(e) => setComparePast(e.target.checked)}
+                    style={{ cursor: 'pointer', width: 16, height: 16 }}
+                  />
+                  <label htmlFor="compare-past" style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--gray-700)', cursor: 'pointer' }}>
+                    1 Yıl Önceki Testle Karşılaştır
+                  </label>
+                </div>
+              )}
             </div>
             <div className="card-body">
-              {/* Simple Audiogram Visualization */}
-              <div style={{ overflowX: 'auto' }}>
-                <table>
+              {/* SVG Odyogram Grafiği */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, overflowX: 'auto' }}>
+                <svg width="500" height="350" style={{ background: 'var(--surface-white)', border: '1px solid var(--surface-border-light)', borderRadius: 'var(--radius-lg)' }}>
+                  {/* Grid Yatay Çizgiler (dB - 0'dan 120'ye) */}
+                  {Array.from({ length: 13 }).map((_, idx) => {
+                    const db = idx * 10;
+                    const y = 30 + (db / 120) * 280;
+                    return (
+                      <g key={idx}>
+                        <line x1="50" y1={y} x2="470" y2={y} stroke="var(--gray-100)" strokeWidth="1" />
+                        <text x="40" y={y + 4} fontSize="10" fill="var(--gray-400)" textAnchor="end" style={{ fontFamily: 'var(--font-mono)' }}>
+                          {db}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Grid Dikey Çizgiler (Frekanslar) */}
+                  {FREQUENCIES.map((f, idx) => {
+                    const x = 50 + idx * 60;
+                    return (
+                      <g key={idx}>
+                        <line x1={x} y1="30" x2={x} y2="310" stroke="var(--gray-100)" strokeWidth="1" />
+                        <text x={x} y="330" fontSize="10" fill="var(--gray-400)" textAnchor="middle" style={{ fontFamily: 'var(--font-mono)' }}>
+                          {f}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* X ve Y eksen etiketleri */}
+                  <text x="260" y="345" fontSize="11" fill="var(--gray-500)" textAnchor="middle" fontWeight="600">
+                    Frekans (Hz)
+                  </text>
+                  <text x="15" y="170" fontSize="11" fill="var(--gray-500)" textAnchor="middle" fontWeight="600" transform="rotate(-90 15 170)">
+                    İşitme Eşiği (dB)
+                  </text>
+
+                  {/* Geçmiş Odyogram Çizgileri */}
+                  {comparePast && patient.pastAudiogramRight && (
+                    <polyline
+                      points={patient.pastAudiogramRight.map((val, i) => `${50 + i * 60},${30 + (val / 120) * 280}`).join(' ')}
+                      fill="none"
+                      stroke="var(--danger-200)"
+                      strokeWidth="1.5"
+                      strokeDasharray="4,4"
+                    />
+                  )}
+                  {comparePast && patient.pastAudiogramLeft && (
+                    <polyline
+                      points={patient.pastAudiogramLeft.map((val, i) => `${50 + i * 60},${30 + (val / 120) * 280}`).join(' ')}
+                      fill="none"
+                      stroke="var(--info-200)"
+                      strokeWidth="1.5"
+                      strokeDasharray="4,4"
+                    />
+                  )}
+
+                  {/* Güncel Odyogram Çizgileri */}
+                  {audioRight.length > 0 && (
+                    <polyline
+                      points={audioRight.map((val, i) => `${50 + i * 60},${30 + (val / 120) * 280}`).join(' ')}
+                      fill="none"
+                      stroke="var(--danger-500)"
+                      strokeWidth="2.2"
+                    />
+                  )}
+                  {audioLeft.length > 0 && (
+                    <polyline
+                      points={audioLeft.map((val, i) => `${50 + i * 60},${30 + (val / 120) * 280}`).join(' ')}
+                      fill="none"
+                      stroke="var(--info-500)"
+                      strokeWidth="2.2"
+                    />
+                  )}
+
+                  {/* Geçmiş Noktalar (Daire ve Çarpılar) */}
+                  {comparePast && patient.pastAudiogramRight && patient.pastAudiogramRight.map((val, i) => {
+                    const cx = 50 + i * 60;
+                    const cy = 30 + (val / 120) * 280;
+                    return <circle key={`past-r-${i}`} cx={cx} cy={cy} r="4" fill="none" stroke="var(--danger-300)" strokeWidth="1.5" />;
+                  })}
+                  {comparePast && patient.pastAudiogramLeft && patient.pastAudiogramLeft.map((val, i) => {
+                    const cx = 50 + i * 60;
+                    const cy = 30 + (val / 120) * 280;
+                    return (
+                      <g key={`past-l-${i}`}>
+                        <line x1={cx - 3.5} y1={cy - 3.5} x2={cx + 3.5} y2={cy + 3.5} stroke="var(--info-300)" strokeWidth="1.5" />
+                        <line x1={cx + 3.5} y1={cy - 3.5} x2={cx - 3.5} y2={cy + 3.5} stroke="var(--info-300)" strokeWidth="1.5" />
+                      </g>
+                    );
+                  })}
+
+                  {/* Güncel Noktalar (Daire ve Çarpılar) */}
+                  {audioRight.map((val, i) => {
+                    const cx = 50 + i * 60;
+                    const cy = 30 + (val / 120) * 280;
+                    return <circle key={`r-${i}`} cx={cx} cy={cy} r="5" fill="var(--surface-white)" stroke="var(--danger-500)" strokeWidth="2.5" />;
+                  })}
+                  {audioLeft.map((val, i) => {
+                    const cx = 50 + i * 60;
+                    const cy = 30 + (val / 120) * 280;
+                    return (
+                      <g key={`l-${i}`}>
+                        <line x1={cx - 5} y1={cy - 5} x2={cx + 5} y2={cy + 5} stroke="var(--info-500)" strokeWidth="2.5" />
+                        <line x1={cx + 5} y1={cy - 5} x2={cx - 5} y2={cy + 5} stroke="var(--info-500)" strokeWidth="2.5" />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+
+              {/* Sayısal Tablo Görünümü */}
+              <div style={{ overflowX: 'auto', marginBottom: 24 }}>
+                <table className="mobile-cards">
                   <thead>
                     <tr>
                       <th>Frekans (Hz)</th>
@@ -205,73 +391,71 @@ export default function PatientDetailPage() {
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="td-primary">
-                        <span style={{ color: 'var(--danger-500)' }}>● </span>Sağ Kulak (dB)
+                      <td className="td-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', border: '2.5px solid var(--danger-500)', display: 'inline-block' }} />
+                        Sağ Kulak (dB)
                       </td>
-                      {patient.audiogramRight.map((val, i) => (
-                        <td key={i} style={{ textAlign: 'center', fontWeight: 600 }}>{val}</td>
+                      {audioRight.map((val, i) => (
+                        <td key={i} data-label={`${FREQUENCIES[i]} Hz`} style={{ textAlign: 'center', fontWeight: 600 }}>{val}</td>
                       ))}
                     </tr>
                     <tr>
-                      <td className="td-primary">
-                        <span style={{ color: 'var(--info-500)' }}>✕ </span>Sol Kulak (dB)
+                      <td className="td-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: 'var(--info-500)', fontWeight: 800, fontSize: '14px', lineHeight: '10px' }}>✕</span>
+                        Sol Kulak (dB)
                       </td>
-                      {patient.audiogramLeft.map((val, i) => (
-                        <td key={i} style={{ textAlign: 'center', fontWeight: 600 }}>{val}</td>
+                      {audioLeft.map((val, i) => (
+                        <td key={i} data-label={`${FREQUENCIES[i]} Hz`} style={{ textAlign: 'center', fontWeight: 600 }}>{val}</td>
                       ))}
                     </tr>
                   </tbody>
                 </table>
               </div>
 
-              {/* Visual Bar Representation */}
-              <div style={{ marginTop: 24 }}>
-                <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 12, color: 'var(--gray-700)' }}>Görsel Temsil</h4>
-                <div style={{ display: 'flex', gap: 24 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--danger-500)', marginBottom: 8 }}>● Sağ Kulak</div>
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 120 }}>
-                      {patient.audiogramRight.map((val, i) => (
-                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                          <div style={{
-                            width: '100%',
-                            height: `${(val / 120) * 100}%`,
-                            background: `linear-gradient(180deg, ${val > 60 ? 'var(--danger-400)' : val > 40 ? 'var(--warning-400)' : 'var(--success-400)'}, ${val > 60 ? 'var(--danger-200)' : val > 40 ? 'var(--warning-200)' : 'var(--success-200)'})`,
-                            borderRadius: '3px 3px 0 0',
-                            minHeight: 4,
-                          }} />
-                          <span style={{ fontSize: '0.6rem', color: 'var(--gray-500)' }}>{FREQUENCIES[i]}</span>
-                        </div>
-                      ))}
-                    </div>
+              {/* Noah XML Sürükle Bırak Simülatörü */}
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleXmlDrop}
+                onClick={handleXmlClick}
+                style={{
+                  border: '2px dashed var(--surface-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '24px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  background: isParsingXml ? 'var(--primary-50)' : 'var(--gray-50)',
+                  borderColor: isParsingXml ? 'var(--primary-400)' : 'var(--surface-border)',
+                  color: isParsingXml ? 'var(--primary-700)' : 'var(--gray-600)',
+                  transition: 'all 200ms ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <IconUpload size={32} strokeWidth={1.5} className={isParsingXml ? 'animate-pulse' : ''} />
+                {isParsingXml ? (
+                  <div>
+                    <h4 style={{ fontWeight: 600, color: 'var(--primary-700)' }}>Noah XML Ayrıştırılıyor...</h4>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--primary-500)' }}>Frekans verileri grafik eğrisine aktarılıyor</p>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--info-500)', marginBottom: 8 }}>✕ Sol Kulak</div>
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 120 }}>
-                      {patient.audiogramLeft.map((val, i) => (
-                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                          <div style={{
-                            width: '100%',
-                            height: `${(val / 120) * 100}%`,
-                            background: `linear-gradient(180deg, ${val > 60 ? 'var(--danger-400)' : val > 40 ? 'var(--warning-400)' : 'var(--info-400)'}, ${val > 60 ? 'var(--danger-200)' : val > 40 ? 'var(--warning-200)' : 'var(--info-200)'})`,
-                            borderRadius: '3px 3px 0 0',
-                            minHeight: 4,
-                          }} />
-                          <span style={{ fontSize: '0.6rem', color: 'var(--gray-500)' }}>{FREQUENCIES[i]}</span>
-                        </div>
-                      ))}
-                    </div>
+                ) : (
+                  <div>
+                    <h4 style={{ fontWeight: 600, color: 'var(--gray-800)' }}>Noah XML / Test Sonucu Yükle</h4>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginTop: 2 }}>
+                      Dosyayı buraya sürükleyin veya simülasyonu çalıştırmak için tıklayın
+                    </p>
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* Hearing Loss Legend */}
-              <div style={{ marginTop: 20, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {/* Lejant */}
+              <div style={{ marginTop: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <span className="badge badge-success">0–25 dB: Normal</span>
-                <span className="badge badge-warning">26–40 dB: Hafif Kayıp</span>
-                <span className="badge badge-warning" style={{ background: 'var(--accent-50)', color: 'var(--accent-600)' }}>41–60 dB: Orta Kayıp</span>
-                <span className="badge badge-danger">61–80 dB: İleri Kayıp</span>
-                <span className="badge badge-danger" style={{ background: '#4a0404', color: '#fecaca' }}>80+ dB: Çok İleri</span>
+                <span className="badge badge-warning">26–40 dB: Hafif</span>
+                <span className="badge badge-warning" style={{ background: 'var(--accent-50)', color: 'var(--accent-700)' }}>41–60 dB: Orta</span>
+                <span className="badge badge-danger">61–80 dB: İleri</span>
+                <span className="badge badge-danger" style={{ background: 'var(--accent-900)', color: 'white' }}>80+ dB: Çok İleri</span>
               </div>
             </div>
           </div>
@@ -404,6 +588,210 @@ export default function PatientDetailPage() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {activeTab === 'pil-takip' && (() => {
+          const batteryLifePerHour = { '10': 60, '312': 90, '13': 120, '675': 180 };
+          const singleLife = batteryLifePerHour[batterySize] || 90;
+          const isDoubleEar = patient.hearingLossSide === 'Her İki Kulak';
+          const pillsPerChange = isDoubleEar ? 2 : 1;
+          const totalPills = packCount * 6;
+          
+          const totalDays = dailyUsage > 0 
+            ? (totalPills * singleLife) / (dailyUsage * pillsPerChange)
+            : 0;
+
+          let passedDays = 0;
+          if (lastPurchaseDate) {
+            const purchase = new Date(lastPurchaseDate);
+            const today = new Date('2026-07-10'); // Sistem tarihi simülasyonu
+            const diff = today.getTime() - purchase.getTime();
+            passedDays = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+          }
+
+          const remainingDays = Math.max(0, Math.round(totalDays - passedDays));
+          const remainingPercent = totalDays > 0 
+            ? Math.max(0, Math.min(100, Math.round((remainingDays / totalDays) * 100)))
+            : 0;
+
+          // Son kullanma tarihi hesaplama
+          let expiryDateString = '—';
+          if (lastPurchaseDate && totalDays > 0) {
+            const expDate = new Date(lastPurchaseDate);
+            expDate.setDate(expDate.getDate() + Math.round(totalDays));
+            expiryDateString = expDate.toISOString().split('T')[0];
+          }
+
+          const handleSendWhatsApp = () => {
+            addToast({
+              type: 'success',
+              message: `${patient.firstName} ${patient.lastName} adına WhatsApp hatırlatma mesajı gönderildi: "Değerli hastamız, pillerinizin tahmini bitiş tarihi ${expiryDateString} yaklaşıyor..."`
+            });
+          };
+
+          const handleCreateShipping = () => {
+            addToast({
+              type: 'success',
+              message: `MNG Kargo entegrasyonu ile kargo takip fişi oluşturuldu. Takip No: MN-${Date.now().toString().slice(-8)}`
+            });
+          };
+
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 20 }}>
+              {/* Sol Kolon: Pil Abonelik Tanımları */}
+              <div className="card">
+                <div className="card-header">
+                  <span className="card-title">🔋 Pil Abonelik Kartı</span>
+                </div>
+                <div className="card-body">
+                  <div className="form-group">
+                    <label className="form-label">Pil Boyutu (Cihaza Göre)</label>
+                    <select 
+                      className="form-select"
+                      value={batterySize}
+                      onChange={(e) => setBatterySize(e.target.value as any)}
+                    >
+                      <option value="10">10 Numara (Sarı)</option>
+                      <option value="312">312 Numara (Kahverengi)</option>
+                      <option value="13">13 Numara (Turuncu)</option>
+                      <option value="675">675 Numara (Mavi)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Günlük Kullanım Süresi (Saat)</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      min="1" 
+                      max="24"
+                      value={dailyUsage}
+                      onChange={(e) => setDailyUsage(Math.max(1, Math.min(24, parseInt(e.target.value) || 8)))}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Son Satın Alma Tarihi</label>
+                    <input 
+                      type="date" 
+                      className="form-input"
+                      value={lastPurchaseDate}
+                      onChange={(e) => setLastPurchaseDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Satın Alınan Paket Sayısı (6'lı)</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      min="1" 
+                      max="10"
+                      value={packCount}
+                      onChange={(e) => setPackCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sağ Kolon: Tahminleme ve Aksiyonlar */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">📊 Pil Tüketim Analizi</span>
+                  </div>
+                  <div className="card-body">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginBottom: 20 }}>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Cihaz Kullanım Tarafı</div>
+                        <div style={{ fontWeight: 700, color: 'var(--primary-600)' }}>
+                          {patient.hearingLossSide} ({isDoubleEar ? 'Aynı Anda 2 Pil Tüketimi' : 'Tek Pil Tüketimi'})
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Toplam Pil Adedi</div>
+                        <div style={{ fontWeight: 700, color: 'var(--gray-800)' }}>
+                          {totalPills} Adet Pil ({packCount} Paket)
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Tahmini Pil Ömrü</div>
+                        <div style={{ fontWeight: 700, color: 'var(--gray-800)' }}>
+                          {Math.round(totalDays)} Gün Kullanım
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Kalan Pil Süresi</div>
+                        <div style={{ fontWeight: 700, color: remainingDays <= 7 ? 'var(--danger-500)' : 'var(--success-500)' }}>
+                          {remainingDays} Gün kaldı
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-600)', marginBottom: 6 }}>
+                        <span>Mevcut Pil Kapasitesi</span>
+                        <span>%{remainingPercent}</span>
+                      </div>
+                      <div className="progress-bar" style={{ height: 10 }}>
+                        <div 
+                          className={`progress-fill ${remainingDays <= 7 ? 'danger' : remainingDays <= 15 ? 'warning' : 'primary'}`}
+                          style={{ width: `${remainingPercent}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--surface-border-light)', paddingTop: 14 }}>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Tahmini Pil Bitiş Tarihi:</span>
+                        <div style={{ fontWeight: 700, color: 'var(--gray-900)', fontFamily: 'var(--font-mono)' }}>
+                          {expiryDateString}
+                        </div>
+                      </div>
+                      <span className={`badge badge-${remainingDays <= 7 ? 'danger' : remainingDays <= 15 ? 'warning' : 'success'}`}>
+                        {remainingDays <= 7 ? 'Kritik Seviye' : remainingDays <= 15 ? 'Yenileme Yaklaştı' : 'Yeterli'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Aksiyon Paneli */}
+                {remainingDays <= 10 ? (
+                  <div className="card" style={{ border: '1px solid var(--warning-100)', background: 'var(--warning-50)' }}>
+                    <div className="card-body">
+                      <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--warning-600)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <IconWarning size={16} strokeWidth={2} /> Akıllı Yenileme Aksiyonu Gerekli
+                      </h4>
+                      <p style={{ fontSize: '0.78rem', color: 'var(--gray-600)', marginBottom: 16 }}>
+                        Hastanın pillerinin tükenmesine {remainingDays} gün kalmıştır. İletişime geçerek yeni pil gönderimi teklif edebilirsiniz.
+                      </p>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-sm btn-primary" onClick={handleSendWhatsApp}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--success-600)', borderColor: 'var(--success-700)' }}>
+                          <IconMessage size={14} strokeWidth={2} /> WhatsApp Gönder
+                        </button>
+                        <button className="btn btn-sm btn-secondary" onClick={handleCreateShipping}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <IconPlus size={14} strokeWidth={2} /> Kargo Fişi Oluştur
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="card" style={{ border: '1px solid var(--primary-100)', background: 'var(--primary-50)' }}>
+                    <div className="card-body">
+                      <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-700)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <IconCheck size={16} strokeWidth={2} /> Abonelik Durumu Aktif
+                      </h4>
+                      <p style={{ fontSize: '0.78rem', color: 'var(--primary-600)', lineHeight: 1.5 }}>
+                        Pil seviyesi güvenli bölgede. Sistem, pil bitimine son 7 gün kala bu alanda otomatik aksiyon butonlarını aktif hale getirecek ve recall ekranına uyarı düşürecektir.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
