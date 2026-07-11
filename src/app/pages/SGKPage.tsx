@@ -5,14 +5,37 @@ import { useApp } from '../context/AppContext';
 import { IconSearch, IconCheck, IconWarning, IconSGK, IconRefresh } from '../components/Icons';
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage } = useApp();
+  const { addToast, setCurrentPage, patientsList } = useApp();
   const [tc, setTc] = useState('');
   const [queryResult, setQueryResult] = useState<null | 'success' | 'loading'>(null);
+  const [matchedPatient, setMatchedPatient] = useState<any | null>(null);
 
   const handleQuery = () => {
     if (tc.length === 11) {
       setQueryResult('loading');
-      setTimeout(() => setQueryResult('success'), 1500);
+      setTimeout(() => {
+        const matched = patientsList.find(p => p.tc === tc);
+        if (matched) {
+          setMatchedPatient({
+            firstName: matched.firstName,
+            lastName: matched.lastName,
+            tc: matched.tc,
+            birthDate: matched.birthDate,
+            sgkStatus: matched.sgkStatus
+          });
+        } else {
+          // Simulasyon
+          const isEligible = Number(tc[10]) % 2 === 0; // çift haneliyse yenileme hakkı var
+          setMatchedPatient({
+            firstName: isEligible ? 'Saniye' : 'Kemal',
+            lastName: 'Öztürk',
+            tc: tc,
+            birthDate: '1959-11-12',
+            sgkStatus: isEligible ? 'Yenileme Hakkı Var' : 'Pasif'
+          });
+        }
+        setQueryResult('success');
+      }, 1200);
     }
   };
 
@@ -72,43 +95,64 @@ export default function SGKPage() {
             </div>
           )}
 
-          {queryResult === 'success' && (
+          {queryResult === 'success' && matchedPatient && (
             <div style={{ marginTop: 20 }}>
-              <div style={{
-                padding: '16px 20px',
-                background: 'var(--success-50)',
-                border: '1px solid var(--success-200)',
-                borderRadius: 'var(--radius-lg)',
-                marginBottom: 16,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-              }}>
-                <span style={{ color: 'var(--success-600)', flexShrink: 0 }}>
-                  <IconCheck size={20} strokeWidth={2} />
-                </span>
-                <div>
-                  <div style={{ fontWeight: 700, color: 'var(--success-700)' }}>Hak Sahipliği Doğrulandı</div>
-                  <div style={{ fontSize: '0.82rem', color: 'var(--success-600)' }}>SGK Genel Sağlık Sigortası aktif</div>
+              {matchedPatient.sgkStatus === 'Yenileme Hakkı Var' ? (
+                <div style={{
+                  padding: '16px 20px',
+                  background: 'var(--success-50)',
+                  border: '1px solid var(--success-200)',
+                  borderRadius: 'var(--radius-lg)',
+                  marginBottom: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}>
+                  <span style={{ color: 'var(--success-600)', flexShrink: 0 }}>
+                    <IconCheck size={20} strokeWidth={2} />
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: 'var(--success-700)' }}>Hak Sahipliği Doğrulandı</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--success-600)' }}>SGK Genel Sağlık Sigortası aktif ve cihaz alma hakkı mevcut.</div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div style={{
+                  padding: '16px 20px',
+                  background: 'var(--warning-50)',
+                  border: '1px solid var(--warning-200)',
+                  borderRadius: 'var(--radius-lg)',
+                  marginBottom: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                }}>
+                  <span style={{ color: 'var(--warning-600)', flexShrink: 0 }}>
+                    <IconWarning size={20} strokeWidth={2} />
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 700, color: 'var(--warning-700)' }}>Hak Sahipliği Bulunmamaktadır</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--warning-600)' }}>Son cihaz alım tarihi üzerinden henüz 5 yıl geçmemiştir.</div>
+                  </div>
+                </div>
+              )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="responsive-grid-2">
                 <div className="card" style={{ border: '1px solid var(--gray-200)' }}>
                   <div className="card-body">
                     <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 4 }}>Hasta Bilgileri</div>
                     <div style={{ display: 'grid', gap: 8 }}>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Ad Soyad: </span>
-                        <span style={{ fontWeight: 600 }}>Ayşe Yılmaz</span>
+                        <span style={{ fontWeight: 600 }}>{matchedPatient.firstName} {matchedPatient.lastName}</span>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>TC: </span>
-                        <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{tc}</span>
+                        <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{matchedPatient.tc}</span>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Doğum Tarihi: </span>
-                        <span style={{ fontWeight: 600 }}>15.03.1958</span>
+                        <span style={{ fontWeight: 600 }}>{matchedPatient.birthDate || '12.04.1963'}</span>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Sigorta Türü: </span>
@@ -124,19 +168,25 @@ export default function SGKPage() {
                     <div style={{ display: 'grid', gap: 8 }}>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Son Cihaz Tarihi: </span>
-                        <span style={{ fontWeight: 600 }}>20.06.2021</span>
+                        <span style={{ fontWeight: 600 }}>{matchedPatient.sgkStatus === 'Yenileme Hakkı Var' ? '20.06.2021' : '15.09.2024'}</span>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Yenileme Hakkı: </span>
-                        <span className="badge badge-success">✓ Hakkı Açık</span>
+                        {matchedPatient.sgkStatus === 'Yenileme Hakkı Var' ? (
+                          <span className="badge badge-success">✓ Hakkı Açık</span>
+                        ) : (
+                          <span className="badge badge-danger">Süre Dolmadı</span>
+                        )}
                       </div>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Kalan Süre: </span>
-                        <span style={{ fontWeight: 600 }}>5 yıl doldu</span>
+                        <span style={{ fontWeight: 600 }}>{matchedPatient.sgkStatus === 'Yenileme Hakkı Var' ? '5 yıl doldu' : '3 yıl, 2 ay'}</span>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>SGK Karşılama: </span>
-                        <span style={{ fontWeight: 700, color: 'var(--primary-600)' }}>₺6.200</span>
+                        <span style={{ fontWeight: 700, color: 'var(--primary-600)' }}>
+                          {matchedPatient.sgkStatus === 'Yenileme Hakkı Var' ? '₺6.200' : '₺0 (Hak Dışı)'}
+                        </span>
                       </div>
                     </div>
                   </div>

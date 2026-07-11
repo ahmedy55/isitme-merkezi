@@ -3,13 +3,74 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { stockItems, formatCurrency } from '../data/mockData';
-import { IconPlus, IconUpload, IconEdit } from '../components/Icons';
+import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
-  const { stockList, updateStockItem, patientsList, updatePatient, addToast } = useApp();
+  const { stockList, updateStockItem, addStockItem, patientsList, updatePatient, addToast } = useApp();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    brand: '',
+    category: 'Cihaz',
+    quantity: 1,
+    price: 15000,
+    serialNo: '',
+    utsStatus: 'Uyumlu',
+    branch: 'Merkez 1 - Kadıköy',
+    criticalLevel: 5,
+    status: 'Stokta'
+  });
+
+  const handleSaveNew = () => {
+    if (!formData.name || !formData.brand) {
+      alert('Lütfen ürün adı ve markasını girin.');
+      return;
+    }
+    const newItem = {
+      id: `s-${Date.now().toString().slice(-6)}`,
+      name: formData.name,
+      brand: formData.brand,
+      model: formData.brand,
+      category: formData.category as any,
+      quantity: Number(formData.quantity),
+      price: Number(formData.price),
+      sgkPrice: Number(formData.price) * 0.4,
+      warrantyExpiry: '2028-07-10',
+      location: 'Depo',
+      serialNo: formData.serialNo || `SN-${Math.floor(Math.random() * 900000 + 100000)}`,
+      utsStatus: formData.utsStatus as any,
+      branch: formData.branch as any,
+      criticalLevel: Number(formData.criticalLevel),
+      status: formData.status as any
+    };
+    addStockItem(newItem);
+    setShowAddModal(false);
+    // Reset form
+    setFormData({
+      name: '',
+      brand: '',
+      category: 'Cihaz',
+      quantity: 1,
+      price: 15000,
+      serialNo: '',
+      utsStatus: 'Uyumlu',
+      branch: 'Merkez 1 - Kadıköy',
+      criticalLevel: 5,
+      status: 'Stokta'
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingItem) return;
+    updateStockItem(editingItem);
+    setShowEditModal(false);
+    setEditingItem(null);
+  };
 
   const filtered = stockList.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) || item.brand.toLowerCase().includes(search.toLowerCase());
@@ -54,7 +115,7 @@ export default function StockPage() {
       <div className="page-header">
         <div className="page-header-left">
           <h2>Stok & Aksesuar Yönetimi</h2>
-          <p>{stockItems.length} ürün kayıtlı</p>
+          <p>{stockList.length} ürün kayıtlı</p>
         </div>
         <div className="page-header-actions">
           <button className="btn btn-secondary" 
@@ -72,21 +133,27 @@ export default function StockPage() {
       {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon primary">📦</div>
+          <div className="stat-icon primary">
+            <IconStock size={18} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Toplam Ürün Çeşidi</div>
-            <div className="stat-value">{stockItems.length}</div>
+            <div className="stat-value">{stockList.length}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon success">💎</div>
+          <div className="stat-icon success">
+            <IconCash size={18} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Toplam Stok Değeri</div>
             <div className="stat-value">{formatCurrency(totalValue)}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon danger">⚠️</div>
+          <div className="stat-icon danger">
+            <IconWarning size={18} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Kritik Stok</div>
             <div className="stat-value">{lowStockCount}</div>
@@ -94,10 +161,12 @@ export default function StockPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon info">🏥</div>
+          <div className="stat-icon info">
+            <IconHearing size={18} />
+          </div>
           <div className="stat-content">
             <div className="stat-label">Cihaz Adedi</div>
-            <div className="stat-value">{stockItems.filter(s => s.category === 'Cihaz').reduce((sum, s) => sum + s.quantity, 0)}</div>
+            <div className="stat-value">{stockList.filter(s => s.category === 'Cihaz').reduce((sum, s) => sum + s.quantity, 0)}</div>
           </div>
         </div>
       </div>
@@ -106,7 +175,9 @@ export default function StockPage() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <div className="header-search" style={{ flex: 1 }}>
-            <span className="header-search-icon">🔍</span>
+            <span className="header-search-icon">
+              <IconSearch size={15} strokeWidth={1.7} />
+            </span>
             <input
               type="text"
               placeholder="Ürün adı veya marka ile ara..."
@@ -205,7 +276,12 @@ export default function StockPage() {
                             ÜTS Bildirimi Yap
                           </button>
                         )}
-                        <button className="btn btn-sm btn-ghost btn-icon" aria-label="Düzenle">
+                        <button className="btn btn-sm btn-ghost btn-icon" 
+                          onClick={() => {
+                            setEditingItem(item);
+                            setShowEditModal(true);
+                          }}
+                          aria-label="Düzenle">
                           <IconEdit size={14} strokeWidth={1.7} />
                         </button>
                       </div>
@@ -223,18 +299,27 @@ export default function StockPage() {
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
             <div className="modal-header">
-              <span className="modal-title">➕ Yeni Ürün Ekle</span>
+              <span className="modal-title">Yeni Ürün Ekle</span>
               <button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button>
             </div>
             <div className="modal-body">
               <div className="form-group">
                 <label className="form-label">Ürün Adı</label>
-                <input className="form-input" placeholder="Örn: Phonak Audéo P90" />
+                <input
+                  className="form-input"
+                  placeholder="Örn: Phonak Audéo P90"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Kategori</label>
-                  <select className="form-select">
+                  <select
+                    className="form-select"
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  >
                     <option>Cihaz</option>
                     <option>Pil</option>
                     <option>Kalıp</option>
@@ -243,50 +328,222 @@ export default function StockPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Marka</label>
-                  <input className="form-input" placeholder="Marka adı" />
+                  <input
+                    className="form-input"
+                    placeholder="Marka adı"
+                    value={formData.brand}
+                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Model</label>
-                  <input className="form-input" placeholder="Model adı" />
+                  <label className="form-label">Seri No</label>
+                  <input
+                    className="form-input"
+                    placeholder="Seri/garanti numarası"
+                    value={formData.serialNo}
+                    onChange={(e) => setFormData({ ...formData, serialNo: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Seri No</label>
-                  <input className="form-input" placeholder="Seri/garanti numarası" />
+                  <label className="form-label">ÜTS Durumu</label>
+                  <select
+                    className="form-select"
+                    value={formData.utsStatus}
+                    onChange={(e) => setFormData({ ...formData, utsStatus: e.target.value })}
+                  >
+                    <option>Uyumlu</option>
+                    <option>Bekliyor</option>
+                    <option>Bildirildi</option>
+                  </select>
                 </div>
               </div>
               <div className="form-row-3">
                 <div className="form-group">
                   <label className="form-label">Adet</label>
-                  <input className="form-input" type="number" placeholder="0" />
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.quantity}
+                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Kritik Seviye</label>
-                  <input className="form-input" type="number" placeholder="0" />
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.criticalLevel}
+                    onChange={(e) => setFormData({ ...formData, criticalLevel: Number(e.target.value) })}
+                  />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Lokasyon</label>
-                  <select className="form-select">
-                    <option>Merkez 1</option>
-                    <option>Merkez 2</option>
+                  <label className="form-label">Lokasyon / Şube</label>
+                  <select
+                    className="form-select"
+                    value={formData.branch}
+                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                  >
+                    <option>Merkez 1 - Kadıköy</option>
+                    <option>Merkez 2 - Beşiktaş</option>
                   </select>
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Satış Fiyatı (₺)</label>
-                  <input className="form-input" type="number" placeholder="0" />
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                  />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">SGK Fiyatı (₺)</label>
-                  <input className="form-input" type="number" placeholder="0" />
+                  <label className="form-label">Cihaz Statüsü</label>
+                  <select
+                    className="form-select"
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  >
+                    <option>Stokta</option>
+                    <option>Hastaya Ayrıldı</option>
+                    <option>Satıldı</option>
+                    <option>Serviste</option>
+                  </select>
                 </div>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={() => setShowAddModal(false)}>💾 Kaydet</button>
+              <button className="btn btn-primary" onClick={handleSaveNew}>Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Stock Modal */}
+      {showEditModal && editingItem && (
+        <div className="modal-overlay" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <span className="modal-title">Ürün Düzenle — {editingItem.name}</span>
+              <button className="modal-close" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Ürün Adı</label>
+                <input
+                  className="form-input"
+                  value={editingItem.name}
+                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Kategori</label>
+                  <select
+                    className="form-select"
+                    value={editingItem.category}
+                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                  >
+                    <option>Cihaz</option>
+                    <option>Pil</option>
+                    <option>Kalıp</option>
+                    <option>Aksesuar</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Marka</label>
+                  <input
+                    className="form-input"
+                    value={editingItem.brand}
+                    onChange={(e) => setEditingItem({ ...editingItem, brand: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Seri No</label>
+                  <input
+                    className="form-input"
+                    value={editingItem.serialNo}
+                    onChange={(e) => setEditingItem({ ...editingItem, serialNo: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">ÜTS Durumu</label>
+                  <select
+                    className="form-select"
+                    value={editingItem.utsStatus}
+                    onChange={(e) => setEditingItem({ ...editingItem, utsStatus: e.target.value })}
+                  >
+                    <option>Uyumlu</option>
+                    <option>Bekliyor</option>
+                    <option>Bildirildi</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-row-3">
+                <div className="form-group">
+                  <label className="form-label">Adet</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={editingItem.quantity}
+                    onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Kritik Seviye</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={editingItem.criticalLevel}
+                    onChange={(e) => setEditingItem({ ...editingItem, criticalLevel: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Lokasyon / Şube</label>
+                  <select
+                    className="form-select"
+                    value={editingItem.branch}
+                    onChange={(e) => setEditingItem({ ...editingItem, branch: e.target.value })}
+                  >
+                    <option>Merkez 1 - Kadıköy</option>
+                    <option>Merkez 2 - Beşiktaş</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Satış Fiyatı (₺)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={editingItem.price}
+                    onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cihaz Statüsü</label>
+                  <select
+                    className="form-select"
+                    value={editingItem.status}
+                    onChange={(e) => setEditingItem({ ...editingItem, status: e.target.value })}
+                  >
+                    <option>Stokta</option>
+                    <option>Hastaya Ayrıldı</option>
+                    <option>Satıldı</option>
+                    <option>Serviste</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>İptal</button>
+              <button className="btn btn-primary" onClick={handleSaveEdit}>Kaydet</button>
             </div>
           </div>
         </div>

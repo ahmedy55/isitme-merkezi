@@ -28,6 +28,10 @@ function ToastIcon({ type }: { type: string }) {
 function AppContent() {
   const { currentPage, toasts, removeToast } = useApp();
 
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [currentPage]);
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':      return <DashboardPage />;

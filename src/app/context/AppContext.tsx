@@ -59,6 +59,7 @@ interface AppContextType {
   addAppointment: (appointment: Appointment) => void;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
   addSale: (sale: SaleRecord) => void;
+  addStockItem: (item: StockItem) => void;
   updateStockItem: (item: StockItem) => void;
   updateRecallItemStatus: (id: string, status: RecallItem['status']) => void;
   
@@ -136,6 +137,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSalesList(prev => [sale, ...prev]);
   };
 
+  const addStockItem = (item: StockItem) => {
+    setStockList(prev => [item, ...prev]);
+  };
+
   const updateStockItem = (updatedItem: StockItem) => {
     setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
   };
@@ -172,6 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addAppointment,
       updateAppointmentStatus,
       addSale,
+      addStockItem,
       updateStockItem,
       updateRecallItemStatus,
       

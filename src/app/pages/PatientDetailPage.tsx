@@ -25,12 +25,39 @@ export default function PatientDetailPage() {
     updateStockItem,
     addSale,
     appointmentsList,
+    addAppointment,
     salesList
   } = useApp();
 
   const [activeTab, setActiveTab] = useState('genel');
   const [comparePast, setComparePast] = useState(false);
   const [isParsingXml, setIsParsingXml] = useState(false);
+
+  const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+  const [showQuickAptModal, setShowQuickAptModal] = useState(false);
+
+  const [editFormData, setEditFormData] = useState({
+    firstName: '',
+    lastName: '',
+    tc: '',
+    phone: '',
+    gender: 'Erkek',
+    birthDate: '',
+    email: '',
+    address: '',
+    hearingLoss: 'Hafif',
+    hearingLossSide: 'Sol',
+    sgkStatus: 'Aktif'
+  });
+
+  const [aptFormData, setAptFormData] = useState({
+    date: '2026-07-11',
+    time: '11:00',
+    type: 'Kontrol',
+    audiologist: 'Dr. Elif Arslan',
+    branch: 'Merkez 1 - Kadıköy',
+    notes: ''
+  });
 
   const patient = patientsList.find(p => p.id === selectedPatientId);
 
@@ -51,13 +78,26 @@ export default function PatientDetailPage() {
 
   useEffect(() => {
     if (patient) {
-      setAudioLeft(patient.audiogramLeft);
-      setAudioRight(patient.audiogramRight);
+      setAudioLeft(patient.audiogramLeft || []);
+      setAudioRight(patient.audiogramRight || []);
       setComparePast(false);
       setBatterySize(patient.batterySize || '312');
       setDailyUsage(patient.dailyUsageHours || 8);
       setLastPurchaseDate(patient.lastBatteryPurchaseDate || '');
       setPackCount(patient.batteryPackCount || 1);
+      setEditFormData({
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        tc: patient.tc,
+        phone: patient.phone,
+        gender: patient.gender,
+        birthDate: patient.birthDate,
+        email: patient.email,
+        address: patient.address,
+        hearingLoss: patient.hearingLoss,
+        hearingLossSide: patient.hearingLossSide,
+        sgkStatus: patient.sgkStatus || 'Aktif'
+      });
     }
   }, [selectedPatientId, patient]);
 
@@ -164,6 +204,68 @@ export default function PatientDetailPage() {
     }, 2000);
   };
 
+  const handleUpdatePatient = () => {
+    if (!patient) return;
+    const updated = {
+      ...patient,
+      firstName: editFormData.firstName,
+      lastName: editFormData.lastName,
+      tc: editFormData.tc,
+      phone: editFormData.phone,
+      gender: editFormData.gender as any,
+      birthDate: editFormData.birthDate,
+      email: editFormData.email,
+      address: editFormData.address,
+      hearingLoss: editFormData.hearingLoss as any,
+      hearingLossSide: editFormData.hearingLossSide as any,
+      sgkStatus: editFormData.sgkStatus as any,
+      timeline: [
+        { date: '11.07.2026', action: 'Hasta kartı bilgileri güncellendi.', icon: 'Edit' },
+        ...(patient.timeline || [])
+      ]
+    };
+    updatePatient(updated);
+    setShowEditPatientModal(false);
+    addToast({ type: 'success', message: 'Hasta bilgileri başarıyla güncellendi.' });
+  };
+
+  const handleQuickApt = () => {
+    if (!patient) return;
+    const newApt = {
+      id: `apt-${Date.now().toString().slice(-6)}`,
+      patientId: patient.id,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      date: aptFormData.date,
+      time: aptFormData.time,
+      type: aptFormData.type as any,
+      audiologist: aptFormData.audiologist,
+      branch: aptFormData.branch as any,
+      status: 'Bekliyor' as const,
+      notes: aptFormData.notes
+    };
+    addAppointment(newApt);
+    
+    const updated = {
+      ...patient,
+      timeline: [
+        { date: '11.07.2026', action: `Yeni Randevu Oluşturuldu (${aptFormData.type} - Saat: ${aptFormData.time}).`, icon: 'Calendar' },
+        ...(patient.timeline || [])
+      ]
+    };
+    updatePatient(updated);
+    
+    setShowQuickAptModal(false);
+    addToast({ type: 'success', message: 'Randevu başarıyla oluşturuldu ve hasta takvimine eklendi.' });
+    setAptFormData({
+      date: '2026-07-11',
+      time: '11:00',
+      type: 'Kontrol',
+      audiologist: 'Dr. Elif Arslan',
+      branch: 'Merkez 1 - Kadıköy',
+      notes: ''
+    });
+  };
+
   const patientAppointments = appointmentsList.filter(a => a.patientId === patient.id);
   const patientSales = salesList.filter(s => s.patientId === patient.id);
 
@@ -210,10 +312,10 @@ export default function PatientDetailPage() {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-secondary" onClick={() => setShowEditPatientModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconEdit size={15} strokeWidth={1.8} /> Düzenle
           </button>
-          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-primary" onClick={() => setShowQuickAptModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconCalendar size={15} strokeWidth={1.8} /> Randevu Oluştur
           </button>
         </div>
@@ -252,7 +354,7 @@ export default function PatientDetailPage() {
                      <span className="card-title">Kişisel Bilgiler</span>
                    </div>
                    <div className="card-body">
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                     <div className="responsive-grid-2" style={{ gap: '14px 24px' }}>
                        <div>
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Ad Soyad</div>
                          <div style={{ fontWeight: 600 }}>{patient.firstName} {patient.lastName}</div>
@@ -290,7 +392,7 @@ export default function PatientDetailPage() {
                      <span className="card-title">Cihaz Bilgileri</span>
                    </div>
                    <div className="card-body">
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                     <div className="responsive-grid-2" style={{ gap: '14px 24px' }}>
                        <div>
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>İşitme Kaybı</div>
                          <div style={{ fontWeight: 600 }}>{patient.hearingLoss} · {patient.hearingLossSide}</div>
@@ -312,16 +414,16 @@ export default function PatientDetailPage() {
                        {patient.sgkRenewalDate && (
                          <div>
                            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>SGK Yenileme Tarihi</div>
-                           <div style={{ fontWeight: 600 }}>{formatDate(patient.sgkRenewalDate)}</div>
+                           <div style={{ fontWeight: 600 }}>{formatDate(patient.sgkRenewalDate || '')}</div>
                          </div>
                        )}
                        <div>
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Kayıt Tarihi</div>
-                         <div style={{ fontWeight: 600 }}>{formatDate(patient.createdAt)}</div>
+                         <div style={{ fontWeight: 600 }}>{formatDate(patient.createdAt || '')}</div>
                        </div>
                        <div>
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Son Ziyaret</div>
-                         <div style={{ fontWeight: 600 }}>{formatDate(patient.lastVisit)}</div>
+                         <div style={{ fontWeight: 600 }}>{formatDate(patient.lastVisit || '')}</div>
                        </div>
                      </div>
                    </div>
@@ -335,7 +437,7 @@ export default function PatientDetailPage() {
                      <span className="card-title">CRM & Satış Süreci</span>
                    </div>
                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                     <div className="responsive-grid-2" style={{ gap: 14 }}>
                        <div className="form-group">
                          <label className="form-label">Hasta Kaynağı</label>
                          <select 
@@ -392,7 +494,7 @@ export default function PatientDetailPage() {
                        </div>
                      </div>
 
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                     <div className="responsive-grid-2" style={{ gap: 14 }}>
                        <div className="form-group">
                          <label className="form-label">Sevk Eden Doktor</label>
                          <input 
@@ -474,7 +576,7 @@ export default function PatientDetailPage() {
                      <span className="card-title">Refakatçi & Yakın Bilgisi</span>
                    </div>
                    <div className="card-body">
-                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                     <div className="responsive-grid-2" style={{ gap: '14px 24px' }}>
                        <div>
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Yakın Ad Soyad</div>
                          <div style={{ fontWeight: 600 }}>{patient.emergencyContactName || '—'}</div>
@@ -498,8 +600,55 @@ export default function PatientDetailPage() {
                <div className="card-header">
                  <span className="card-title">Hasta İşlem Zaman Çizelgesi (Timeline)</span>
                </div>
-               <div className="card-body">
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', paddingLeft: 20, borderLeft: '2px solid var(--surface-border-light)', marginLeft: 8 }}>
+                <div className="card-body">
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+                    <input 
+                      id="quick-note-input"
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Hastaya ait yeni bir takip notu/sistem notu ekleyin..."
+                      style={{ flex: 1 }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = (e.target as HTMLInputElement).value;
+                          if (!val.trim()) return;
+                          const updated = {
+                            ...patient,
+                            timeline: [
+                              { date: '11.07.2026', action: val, icon: 'Message' },
+                              ...(patient.timeline || [])
+                            ]
+                          };
+                          updatePatient(updated);
+                          (e.target as HTMLInputElement).value = '';
+                          addToast({ type: 'success', message: 'Not başarıyla kaydedildi ve timeline listesine eklendi.' });
+                        }
+                      }}
+                    />
+                    <button 
+                      className="btn btn-primary"
+                      onClick={() => {
+                        const input = document.getElementById('quick-note-input') as HTMLInputElement;
+                        if (input && input.value.trim()) {
+                          const val = input.value;
+                          const updated = {
+                            ...patient,
+                            timeline: [
+                              { date: '11.07.2026', action: val, icon: 'Message' },
+                              ...(patient.timeline || [])
+                            ]
+                          };
+                          updatePatient(updated);
+                          input.value = '';
+                          addToast({ type: 'success', message: 'Not başarıyla kaydedildi ve timeline listesine eklendi.' });
+                        }
+                      }}
+                    >
+                      Not Ekle
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', paddingLeft: 20, borderLeft: '2px solid var(--surface-border-light)', marginLeft: 8 }}>
                    {patient.timeline && patient.timeline.length > 0 ? (
                      patient.timeline.map((event, idx) => (
                        <div key={idx} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -750,8 +899,10 @@ export default function PatientDetailPage() {
 
         {activeTab === 'cihaz-onerisi' && (() => {
           // Dynamic calculation based on patient profile
-          const leftAvg = patient.audiogramLeft.reduce((s,v) => s+v, 0) / patient.audiogramLeft.length;
-          const rightAvg = patient.audiogramRight.reduce((s,v) => s+v, 0) / patient.audiogramRight.length;
+          const leftAudio = patient.audiogramLeft || [];
+          const rightAudio = patient.audiogramRight || [];
+          const leftAvg = leftAudio.length > 0 ? leftAudio.reduce((s,v) => s+v, 0) / leftAudio.length : 0;
+          const rightAvg = rightAudio.length > 0 ? rightAudio.reduce((s,v) => s+v, 0) / rightAudio.length : 0;
           const worstAvg = Math.max(leftAvg, rightAvg);
           const age = calculateAge(patient.birthDate);
 
@@ -784,7 +935,7 @@ export default function PatientDetailPage() {
           }
 
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 20 }}>
+            <div className="responsive-grid-1-2">
               {/* Left Column: Rules & Diagnosis Summary */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div className="card" style={{ border: '1px solid var(--gray-200)' }}>
@@ -932,7 +1083,7 @@ export default function PatientDetailPage() {
           };
 
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 20 }}>
+            <div className="responsive-grid-1-15">
               {/* Sol Kolon: Pil Abonelik Tanımları */}
               <div className="card">
                 <div className="card-header">
@@ -1002,7 +1153,7 @@ export default function PatientDetailPage() {
                     <span className="card-title">📊 Pil Tüketim Analizi</span>
                   </div>
                   <div className="card-body">
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginBottom: 20 }}>
+                    <div className="responsive-grid-2" style={{ gap: '14px 20px', marginBottom: 20 }}>
                       <div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Cihaz Kullanım Tarafı</div>
                         <div style={{ fontWeight: 700, color: 'var(--primary-600)' }}>
@@ -1239,6 +1390,222 @@ export default function PatientDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Patient Edit Modal */}
+      {showEditPatientModal && (
+        <div className="modal-overlay" onClick={() => setShowEditPatientModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <span className="modal-title">Hasta Bilgilerini Güncelle</span>
+              <button className="modal-close" onClick={() => setShowEditPatientModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Adı</label>
+                  <input
+                    className="form-input"
+                    value={editFormData.firstName}
+                    onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Soyadı</label>
+                  <input
+                    className="form-input"
+                    value={editFormData.lastName}
+                    onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">TC Kimlik No</label>
+                  <input
+                    className="form-input"
+                    value={editFormData.tc}
+                    onChange={(e) => setEditFormData({ ...editFormData, tc: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Telefon</label>
+                  <input
+                    className="form-input"
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Doğum Tarihi</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={editFormData.birthDate}
+                    onChange={(e) => setEditFormData({ ...editFormData, birthDate: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cinsiyet</label>
+                  <select
+                    className="form-select"
+                    value={editFormData.gender}
+                    onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                  >
+                    <option>Erkek</option>
+                    <option>Kadın</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">E-Posta</label>
+                <input
+                  className="form-input"
+                  value={editFormData.email}
+                  onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Adres</label>
+                <textarea
+                  className="form-textarea"
+                  value={editFormData.address}
+                  onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                />
+              </div>
+              <div className="form-row-3">
+                <div className="form-group">
+                  <label className="form-label">İşitme Kaybı Derecesi</label>
+                  <select
+                    className="form-select"
+                    value={editFormData.hearingLoss}
+                    onChange={(e) => setEditFormData({ ...editFormData, hearingLoss: e.target.value })}
+                  >
+                    <option>Hafif</option>
+                    <option>Orta</option>
+                    <option>İleri</option>
+                    <option>Çok İleri</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Kulak Tarafı</label>
+                  <select
+                    className="form-select"
+                    value={editFormData.hearingLossSide}
+                    onChange={(e) => setEditFormData({ ...editFormData, hearingLossSide: e.target.value })}
+                  >
+                    <option>Sol</option>
+                    <option>Sağ</option>
+                    <option>Bilateral</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">SGK Durumu</label>
+                  <select
+                    className="form-select"
+                    value={editFormData.sgkStatus}
+                    onChange={(e) => setEditFormData({ ...editFormData, sgkStatus: e.target.value })}
+                  >
+                    <option>Aktif</option>
+                    <option>Yenileme Hakkı Var</option>
+                    <option>Pasif</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowEditPatientModal(false)}>İptal</button>
+              <button className="btn btn-primary" onClick={handleUpdatePatient}>Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Appointment Modal */}
+      {showQuickAptModal && (
+        <div className="modal-overlay" onClick={() => setShowQuickAptModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Randevu Oluştur — {patient.firstName} {patient.lastName}</span>
+              <button className="modal-close" onClick={() => setShowQuickAptModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Tarih</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={aptFormData.date}
+                    onChange={(e) => setAptFormData({ ...aptFormData, date: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Saat</label>
+                  <input
+                    className="form-input"
+                    type="time"
+                    value={aptFormData.time}
+                    onChange={(e) => setAptFormData({ ...aptFormData, time: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Randevu Türü</label>
+                  <select
+                    className="form-select"
+                    value={aptFormData.type}
+                    onChange={(e) => setAptFormData({ ...aptFormData, type: e.target.value })}
+                  >
+                    <option>Kontrol</option>
+                    <option>İşitme Testi</option>
+                    <option>Cihaz Denemesi</option>
+                    <option>SGK Yenileme</option>
+                    <option>Kalıp Alma</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Odyolog</label>
+                  <select
+                    className="form-select"
+                    value={aptFormData.audiologist}
+                    onChange={(e) => setAptFormData({ ...aptFormData, audiologist: e.target.value })}
+                  >
+                    <option>Dr. Elif Arslan</option>
+                    <option>Ody. Hasan Kaya</option>
+                    <option>Dr. Ayşe Yılmaz</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Şube</label>
+                <select
+                  className="form-select"
+                  value={aptFormData.branch}
+                  onChange={(e) => setAptFormData({ ...aptFormData, branch: e.target.value })}
+                >
+                  <option>Merkez 1 - Kadıköy</option>
+                  <option>Merkez 2 - Beşiktaş</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notlar</label>
+                <textarea
+                  className="form-textarea"
+                  value={aptFormData.notes}
+                  onChange={(e) => setAptFormData({ ...aptFormData, notes: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowQuickAptModal(false)}>İptal</button>
+              <button className="btn btn-primary" onClick={handleQuickApt}>Randevu Oluştur</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

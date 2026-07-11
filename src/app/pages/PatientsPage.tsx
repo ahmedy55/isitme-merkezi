@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import {
-  patients, getAvatarColor, getInitials, formatDate, calculateAge,
+  getAvatarColor, getInitials, formatDate, calculateAge,
   type Patient,
 } from '../data/mockData';
 import { IconPlus, IconSearch, IconArrowRight, IconClose } from '../components/Icons';
@@ -36,12 +36,67 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient } = useApp();
   const [search, setSearch] = useState('');
   const [filterLoss, setFilterLoss] = useState('Tümü');
   const [showAddModal, setShowAddModal] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const [formData, setFormData] = useState({
+    tc: '',
+    gender: 'Erkek',
+    firstName: '',
+    lastName: '',
+    phone: '',
+    birthDate: '1985-05-15',
+    email: '',
+    address: '',
+    hearingLoss: 'Hafif',
+    hearingLossSide: 'Sol',
+    notes: ''
+  });
+
+  const handleSave = () => {
+    if (!formData.firstName || !formData.lastName) {
+      alert('Lütfen hasta adını ve soyadını girin.');
+      return;
+    }
+    const newPatient: Patient = {
+      id: `p-${Date.now().toString().slice(-6)}`,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      tc: formData.tc || '11122233344',
+      phone: formData.phone || '0555 111 2233',
+      gender: formData.gender as any,
+      birthDate: formData.birthDate,
+      email: formData.email || `${formData.firstName.toLowerCase()}@example.com`,
+      address: formData.address || 'İstanbul',
+      hearingLoss: formData.hearingLoss as any,
+      hearingLossSide: formData.hearingLossSide as any,
+      sgkStatus: 'Aktif',
+      lastVisit: new Date().toISOString().split('T')[0],
+      timeline: [
+        { date: '11.07.2026', action: 'Hasta kaydı oluşturuldu.', icon: 'Plus' }
+      ]
+    };
+    addPatient(newPatient);
+    setShowAddModal(false);
+    // Reset form
+    setFormData({
+      tc: '',
+      gender: 'Erkek',
+      firstName: '',
+      lastName: '',
+      phone: '',
+      birthDate: '1985-05-15',
+      email: '',
+      address: '',
+      hearingLoss: 'Hafif',
+      hearingLossSide: 'Sol',
+      notes: ''
+    });
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -52,7 +107,7 @@ export default function PatientsPage() {
     }
   };
 
-  const filtered = patients.filter((p) => {
+  const filtered = patientsList.filter((p) => {
     const matchSearch =
       `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
       p.tc.includes(search) ||
@@ -80,16 +135,16 @@ export default function PatientsPage() {
           cmp = calculateAge(a.birthDate) - calculateAge(b.birthDate);
           break;
         case 'hearingLoss':
-          cmp = (hearingLossOrder[a.hearingLoss] || 0) - (hearingLossOrder[b.hearingLoss] || 0);
+          cmp = (hearingLossOrder[a.hearingLoss || 'Hafif'] || 0) - (hearingLossOrder[b.hearingLoss || 'Hafif'] || 0);
           break;
         case 'device':
           cmp = (a.currentDevice || '').localeCompare(b.currentDevice || '', 'tr');
           break;
         case 'sgkStatus':
-          cmp = (sgkStatusOrder[a.sgkStatus] || 0) - (sgkStatusOrder[b.sgkStatus] || 0);
+          cmp = (sgkStatusOrder[a.sgkStatus || 'Aktif'] || 0) - (sgkStatusOrder[b.sgkStatus || 'Aktif'] || 0);
           break;
         case 'lastVisit':
-          cmp = new Date(a.lastVisit).getTime() - new Date(b.lastVisit).getTime();
+          cmp = new Date(a.lastVisit || '').getTime() - new Date(b.lastVisit || '').getTime();
           break;
       }
       return sortDir === 'asc' ? cmp : -cmp;
@@ -108,7 +163,7 @@ export default function PatientsPage() {
       <div className="page-header">
         <div className="page-header-left">
           <h2>Hasta Listesi</h2>
-          <p>{patients.length} kayıtlı hasta</p>
+          <p>{patientsList.length} kayıtlı hasta</p>
         </div>
         <div className="page-header-actions">
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
@@ -154,9 +209,9 @@ export default function PatientsPage() {
             <thead>
               <tr>
                 <th style={thStyle} onClick={() => handleSort('name')}>Hasta <SortIcon column="name" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} onClick={() => handleSort('tc')}>TC Kimlik <SortIcon column="tc" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} onClick={() => handleSort('phone')}>Telefon <SortIcon column="phone" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} onClick={() => handleSort('age')}>Yaş <SortIcon column="age" sortKey={sortKey} sortDir={sortDir} /></th>
+                <th style={thStyle} className="hide-tablet" onClick={() => handleSort('tc')}>TC Kimlik <SortIcon column="tc" sortKey={sortKey} sortDir={sortDir} /></th>
+                <th style={thStyle} className="hide-tablet" onClick={() => handleSort('phone')}>Telefon <SortIcon column="phone" sortKey={sortKey} sortDir={sortDir} /></th>
+                <th style={thStyle} className="hide-tablet" onClick={() => handleSort('age')}>Yaş <SortIcon column="age" sortKey={sortKey} sortDir={sortDir} /></th>
                 <th style={thStyle} onClick={() => handleSort('hearingLoss')}>İşitme Kaybı <SortIcon column="hearingLoss" sortKey={sortKey} sortDir={sortDir} /></th>
                 <th style={thStyle} onClick={() => handleSort('device')}>Mevcut Cihaz <SortIcon column="device" sortKey={sortKey} sortDir={sortDir} /></th>
                 <th style={thStyle} onClick={() => handleSort('sgkStatus')}>SGK Durumu <SortIcon column="sgkStatus" sortKey={sortKey} sortDir={sortDir} /></th>
@@ -184,9 +239,9 @@ export default function PatientsPage() {
                       </div>
                     </div>
                   </td>
-                  <td data-label="TC Kimlik" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{patient.tc}</td>
-                  <td data-label="Telefon">{patient.phone}</td>
-                  <td data-label="Yaş">{calculateAge(patient.birthDate)}</td>
+                  <td data-label="TC Kimlik" className="hide-tablet" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{patient.tc}</td>
+                  <td data-label="Telefon" className="hide-tablet">{patient.phone}</td>
+                  <td data-label="Yaş" className="hide-tablet">{calculateAge(patient.birthDate)}</td>
                   <td data-label="İşitme Kaybı">
                     <span className={`badge badge-${
                       patient.hearingLoss === 'Hafif' ? 'success' :
@@ -208,7 +263,7 @@ export default function PatientsPage() {
                       {patient.sgkStatus}
                     </span>
                   </td>
-                  <td data-label="Son Ziyaret">{formatDate(patient.lastVisit)}</td>
+                  <td data-label="Son Ziyaret">{formatDate(patient.lastVisit || '')}</td>
                   <td data-label="">
                     <button className="btn btn-sm btn-ghost"
                       style={{ display: 'flex', alignItems: 'center', gap: 4 }}
@@ -245,11 +300,21 @@ export default function PatientsPage() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">TC Kimlik No</label>
-                  <input className="form-input" placeholder="11 haneli TC kimlik numarası" maxLength={11} />
+                  <input
+                    className="form-input"
+                    placeholder="11 haneli TC kimlik numarası"
+                    maxLength={11}
+                    value={formData.tc}
+                    onChange={(e) => setFormData({ ...formData, tc: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Cinsiyet</label>
-                  <select className="form-select">
+                  <select
+                    className="form-select"
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                  >
                     <option>Erkek</option>
                     <option>Kadın</option>
                   </select>
@@ -258,35 +323,69 @@ export default function PatientsPage() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Ad</label>
-                  <input className="form-input" placeholder="Hastanın adı" />
+                  <input
+                    className="form-input"
+                    placeholder="Hastanın adı"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Soyad</label>
-                  <input className="form-input" placeholder="Hastanın soyadı" />
+                  <input
+                    className="form-input"
+                    placeholder="Hastanın soyadı"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Telefon</label>
-                  <input className="form-input" placeholder="0532 123 4567" />
+                  <input
+                    className="form-input"
+                    placeholder="0532 123 4567"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Doğum Tarihi</label>
-                  <input className="form-input" type="date" />
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={formData.birthDate}
+                    onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="form-group">
                 <label className="form-label">E-posta</label>
-                <input className="form-input" placeholder="email@adres.com" />
+                <input
+                  className="form-input"
+                  placeholder="email@adres.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Adres</label>
-                <input className="form-input" placeholder="İlçe, Şehir" />
+                <input
+                  className="form-input"
+                  placeholder="İlçe, Şehir"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                />
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">İşitme Kaybı Derecesi</label>
-                  <select className="form-select">
+                  <select
+                    className="form-select"
+                    value={formData.hearingLoss}
+                    onChange={(e) => setFormData({ ...formData, hearingLoss: e.target.value })}
+                  >
                     <option>Hafif</option>
                     <option>Orta</option>
                     <option>İleri</option>
@@ -295,7 +394,11 @@ export default function PatientsPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">İşitme Kaybı Tarafı</label>
-                  <select className="form-select">
+                  <select
+                    className="form-select"
+                    value={formData.hearingLossSide}
+                    onChange={(e) => setFormData({ ...formData, hearingLossSide: e.target.value })}
+                  >
                     <option>Sol</option>
                     <option>Sağ</option>
                     <option>Her İki Kulak</option>
@@ -304,12 +407,17 @@ export default function PatientsPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Notlar</label>
-                <textarea className="form-textarea" placeholder="Hasta hakkında notlar..." />
+                <textarea
+                  className="form-textarea"
+                  placeholder="Hasta hakkında notlar..."
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={() => setShowAddModal(false)}>Kaydet</button>
+              <button className="btn btn-primary" onClick={handleSave}>Kaydet</button>
             </div>
           </div>
         </div>

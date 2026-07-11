@@ -20,8 +20,28 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 };
 
 export default function Header() {
-  const { currentPage, toggleSidebar } = useApp();
+  const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchTerm.trim()) return;
+    
+    const foundPatient = patientsList.find(p => 
+      `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.tc.includes(searchTerm)
+    );
+    
+    if (foundPatient) {
+      setSelectedPatientId(foundPatient.id);
+      setCurrentPage('patient-detail');
+      setSearchTerm('');
+    } else {
+      setCurrentPage('patients');
+    }
+  };
+
   const pageInfo = pageTitles[currentPage] || pageTitles.dashboard;
 
   return (
@@ -45,7 +65,7 @@ export default function Header() {
 
       {/* Sağ Taraf */}
       <div className="header-right">
-        <div className="header-search">
+        <form onSubmit={handleSearchSubmit} className="header-search">
           <span className="header-search-icon">
             <IconSearch size={16} strokeWidth={1.7} />
           </span>
@@ -53,8 +73,10 @@ export default function Header() {
             type="search"
             placeholder="Hasta, TC veya telefon ara..."
             aria-label="Arama"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
-        </div>
+        </form>
         <div style={{ position: 'relative' }} onMouseLeave={() => setShowNotifications(false)}>
           <button 
             className="header-btn" 
@@ -85,21 +107,17 @@ export default function Header() {
                 <span style={{ fontSize: '0.72rem', color: 'var(--primary-600)', cursor: 'pointer' }} onClick={() => setShowNotifications(false)}>Tümünü Oku</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontSize: '0.8rem', borderBottom: '1px solid var(--gray-50)', paddingBottom: 8 }}>
-                  <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>SGK Yenileme Hakkı</div>
-                  <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>Ayşe Yılmaz&apos;ın SGK yenileme hakkı açıldı.</div>
-                  <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>1 saat önce</div>
-                </div>
-                <div style={{ fontSize: '0.8rem', borderBottom: '1px solid var(--gray-50)', paddingBottom: 8 }}>
-                  <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>Pil Yenileme Uyarısı</div>
-                  <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>Hasan Çelik&apos;in pil bitişi (15 Temmuz) yaklaşıyor.</div>
-                  <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>3 saat önce</div>
-                </div>
-                <div style={{ fontSize: '0.8rem' }}>
-                  <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>Kritik Stok Uyarısı</div>
-                  <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>Mikrofon stok seviyesi kritik düzeyde (2 adet kaldı).</div>
-                  <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>Dün</div>
-                </div>
+                {[
+                  { id: 1, title: 'SGK Yenileme Hakkı', desc: 'Ayşe Yılmaz\'ın SGK yenileme hakkı açıldı.', time: '1 saat önce' },
+                  { id: 2, title: 'Pil Yenileme Uyarısı', desc: 'Hasan Çelik\'in pil bitişi (15 Temmuz) yaklaşıyor.', time: '3 saat önce' },
+                  { id: 3, title: 'Kritik Stok Uyarısı', desc: 'Mikrofon stok seviyesi kritik düzeyde (2 adet kaldı).', time: 'Dün' }
+                ].map((notif, index, arr) => (
+                  <div key={notif.id} style={{ fontSize: '0.8rem', borderBottom: index < arr.length - 1 ? '1px solid var(--gray-50)' : 'none', paddingBottom: index < arr.length - 1 ? 8 : 0 }}>
+                    <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>{notif.title}</div>
+                    <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>{notif.desc}</div>
+                    <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>{notif.time}</div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

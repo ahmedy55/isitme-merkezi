@@ -356,6 +356,7 @@ img        { max-width: 100%; display: block; }
    ============================================================ */
 .main-content {
   flex: 1;
+  min-width: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -605,7 +606,7 @@ img        { max-width: 100%; display: block; }
    ============================================================ */
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -771,7 +772,13 @@ img        { max-width: 100%; display: block; }
 /* ============================================================
    TABLES — DESKTOP
    ============================================================ */
-.table-container { overflow-x: auto; }
+.table-container {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 table {
   width: 100%;
@@ -948,15 +955,21 @@ tbody tr:hover { background: var(--gray-25); }
    ============================================================ */
 .tabs {
   display: flex;
+  flex-wrap: nowrap;
   gap: 2px;
   padding: 3px;
   background: var(--gray-100);
   border-radius: var(--radius-md);
   margin-bottom: 18px;
-  width: fit-content;
-  overflow-x: auto;
+  width: auto;
   max-width: 100%;
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+
+.tabs::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
 }
 
 .tab {
@@ -1645,4 +1658,47 @@ tbody tr:hover { background: var(--gray-25); }
   .tabs { max-width: 100%; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .quick-actions { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Responsive Helper Classes ── */
+.responsive-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.responsive-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 1023px) {
+  .hide-tablet {
+    display: none !important;
+  }
+}
+
+.responsive-grid-1-2 {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 20px;
+}
+
+.responsive-grid-1-15 {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 20px;
+}
+
+@media (max-width: 767px) {
+  .responsive-grid-2,
+  .responsive-grid-3,
+  .responsive-grid-1-2,
+  .responsive-grid-1-15 {
+    grid-template-columns: 1fr;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
 }

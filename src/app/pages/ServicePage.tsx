@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useApp } from '../context/AppContext';
 import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
 import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye } from '../components/Icons';
 
@@ -131,18 +132,57 @@ const statusConfig: Record<string, { color: string; icon: string }> = {
 };
 
 export default function ServicePage() {
+  const { addSale, addToast } = useApp();
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<ServiceRecord | null>(null);
+  const [records, setRecords] = useState<ServiceRecord[]>(serviceRecords);
 
-  const filtered = serviceRecords.filter(r =>
+  const handleDeliver = (record: ServiceRecord) => {
+    const updatedRecords = records.map(r => 
+      r.id === record.id 
+        ? { ...r, status: 'Teslim Edildi' as const, returnedDate: '2026-07-10' }
+        : r
+    );
+    setRecords(updatedRecords);
+    setSelectedRecord({ ...record, status: 'Teslim Edildi', returnedDate: '2026-07-10' });
+
+    if (!record.warrantyRepair && record.totalCost > 0) {
+      const newSale = {
+        id: `s-srv-${Date.now().toString().slice(-6)}`,
+        patientId: 'p-unknown',
+        date: '2026-07-10',
+        patientName: record.patientName,
+        items: [
+          { name: `Teknik Servis Onarım: ${record.deviceName}`, quantity: 1, price: record.totalCost }
+        ],
+        total: record.totalCost,
+        sgkAmount: 0,
+        patientAmount: record.totalCost,
+        paymentMethod: 'Nakit' as const,
+        status: 'Tahsil Edildi' as const
+      };
+      addSale(newSale);
+      addToast({
+        type: 'success',
+        message: `${record.patientName} adına servis teslim kaydı yapıldı. ${formatCurrency(record.totalCost)} tutarındaki teknik servis geliri kasaya işlendi.`
+      });
+    } else {
+      addToast({
+        type: 'success',
+        message: `${record.patientName} adına servis teslim kaydı tamamlandı (Garanti Kapsamı - Ücretsiz).`
+      });
+    }
+  };
+
+  const filtered = records.filter(r =>
     filterStatus === 'Tümü' || r.status === filterStatus
   );
 
-  const activeCount = serviceRecords.filter(r => !['Teslim Edildi'].includes(r.status)).length;
-  const waitingCount = serviceRecords.filter(r => r.status === 'Hazır').length;
-  const totalRevenue = serviceRecords.reduce((sum, r) => sum + r.totalCost, 0);
-  const warrantyCount = serviceRecords.filter(r => r.warrantyRepair).length;
+  const activeCount = records.filter(r => !['Teslim Edildi'].includes(r.status)).length;
+  const waitingCount = records.filter(r => r.status === 'Hazır').length;
+  const totalRevenue = records.reduce((sum, r) => sum + r.totalCost, 0);
+  const warrantyCount = records.filter(r => r.warrantyRepair).length;
 
   return (
     <div className="page">
@@ -308,7 +348,7 @@ export default function ServicePage() {
             </div>
             <div className="modal-body">
               {/* Device & Patient Info */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+              <div className="responsive-grid-2" style={{ marginBottom: 20 }}>
                 <div style={{
                   padding: '14px',
                   background: 'var(--gray-50)',
@@ -440,7 +480,9 @@ export default function ServicePage() {
             </div>
             <div className="modal-footer">
               {selectedRecord.status === 'Hazır' && (
-                <button className="btn btn-primary">📤 Teslim Edildi Olarak İşaretle</button>
+                <button className="btn btn-primary" onClick={() => handleDeliver(selectedRecord)}>
+                  Teslim Edildi Olarak İşaretle
+                </button>
               )}
               <button className="btn btn-secondary" onClick={() => setSelectedRecord(null)}>Kapat</button>
             </div>

@@ -6,10 +6,65 @@ import { formatCurrency, formatDate, SaleRecord } from '../data/mockData';
 import { IconPlus, IconDownload, IconCash, IconCheck, IconRecall, IconShield, IconClose } from '../components/Icons';
 
 export default function CashPage() {
-  const { salesList, commissionRate, addSale, addToast } = useApp();
+  const { salesList, commissionRate, addSale, stockList, updateStockItem, addToast } = useApp();
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<SaleRecord | null>(null);
+
+  const [formData, setFormData] = useState({
+    patientName: '',
+    itemName: 'Phonak Audéo P90',
+    itemPrice: 85000,
+    quantity: 1,
+    sgkAmount: 0,
+    paymentMethod: 'Nakit',
+    installments: 'Tek Çekim'
+  });
+
+  const handleSave = () => {
+    if (!formData.patientName) {
+      alert('Lütfen hasta adı girin.');
+      return;
+    }
+    const patientAmt = formData.itemPrice * formData.quantity - formData.sgkAmount;
+    const newSale = {
+      id: `s-${Date.now().toString().slice(-6)}`,
+      patientId: 'p-unknown',
+      date: new Date().toISOString().split('T')[0],
+      patientName: formData.patientName,
+      items: [
+        { name: formData.itemName, quantity: Number(formData.quantity), price: Number(formData.itemPrice) }
+      ],
+      total: formData.itemPrice * formData.quantity,
+      sgkAmount: Number(formData.sgkAmount),
+      patientAmount: patientAmt,
+      paymentMethod: formData.paymentMethod as any,
+      status: 'Tahsil Edildi' as const
+    };
+    addSale(newSale);
+
+    const matchingStockItem = stockList.find(s => s.name.includes(formData.itemName) && s.status === 'Stokta');
+    if (matchingStockItem) {
+      updateStockItem({
+        ...matchingStockItem,
+        status: 'Satıldı',
+        assignedPatientId: 'p-1',
+        assignedPatientName: formData.patientName
+      });
+    }
+
+    setShowSaleModal(false);
+    addToast({ type: 'success', message: 'Satış kaydı kasaya başarıyla işlendi ve toplam ciro güncellendi.' });
+    setFormData({
+      patientName: '',
+      itemName: 'Phonak Audéo P90',
+      itemPrice: 85000,
+      quantity: 1,
+      sgkAmount: 0,
+      paymentMethod: 'Nakit',
+      installments: 'Tek Çekim'
+    });
+  };
 
   const filtered = salesList.filter(s =>
     filterStatus === 'Tümü' || s.status === filterStatus
@@ -29,7 +84,9 @@ export default function CashPage() {
           <p>Satış, tahsilat ve prim takibi</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button className="btn btn-secondary" 
+            onClick={() => addToast({ type: 'success', message: 'Kasa raporu başarıyla Excel formatında indirildi.' })}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconDownload size={15} strokeWidth={1.7} /> Rapor İndir
           </button>
           <button className="btn btn-primary" onClick={() => setShowSaleModal(true)}
@@ -254,35 +311,68 @@ export default function CashPage() {
             <div className="modal-body">
               <div className="form-group">
                 <label className="form-label">Hasta</label>
-                <input className="form-input" placeholder="Hasta adı veya TC ile ara..." />
+                <input
+                  className="form-input"
+                  placeholder="Hasta adı veya TC ile ara..."
+                  value={formData.patientName}
+                  onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Ürün</label>
-                <select className="form-select">
-                  <option>Stoktan ürün seçin...</option>
-                  <option>Phonak Audéo P90 — ₺85.000</option>
-                  <option>Oticon More 1 — ₺92.000</option>
-                  <option>Phonak Pil 312 — ₺120</option>
+                <select
+                  className="form-select"
+                  value={formData.itemName}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    let price = 120;
+                    if (name === 'Phonak Audéo P90') price = 85000;
+                    else if (name === 'Oticon More 1') price = 92000;
+                    setFormData({ ...formData, itemName: name, itemPrice: price });
+                  }}
+                >
+                  <option value="Phonak Audéo P90">Phonak Audéo P90 — ₺85.000</option>
+                  <option value="Oticon More 1">Oticon More 1 — ₺92.000</option>
+                  <option value="Phonak Pil 312">Phonak Pil 312 — ₺120</option>
                 </select>
               </div>
               <div className="form-row-3">
                 <div className="form-group">
                   <label className="form-label">Adet</label>
-                  <input className="form-input" type="number" defaultValue="1" />
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.quantity}
+                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Fiyat (₺)</label>
-                  <input className="form-input" type="number" placeholder="0" />
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.itemPrice}
+                    onChange={(e) => setFormData({ ...formData, itemPrice: Number(e.target.value) })}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">SGK Payı (₺)</label>
-                  <input className="form-input" type="number" placeholder="0" />
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.sgkAmount}
+                    onChange={(e) => setFormData({ ...formData, sgkAmount: Number(e.target.value) })}
+                  />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Ödeme Yöntemi</label>
-                  <select className="form-select">
+                  <select
+                    className="form-select"
+                    value={formData.paymentMethod}
+                    onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                  >
                     <option>Nakit</option>
                     <option>Kredi Kartı</option>
                     <option>Havale</option>
@@ -291,7 +381,11 @@ export default function CashPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Taksit Sayısı</label>
-                  <select className="form-select">
+                  <select
+                    className="form-select"
+                    value={formData.installments}
+                    onChange={(e) => setFormData({ ...formData, installments: e.target.value })}
+                  >
                     <option>Tek Çekim</option>
                     <option>2 Taksit</option>
                     <option>3 Taksit</option>
@@ -303,10 +397,7 @@ export default function CashPage() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowSaleModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={() => {
-                setShowSaleModal(false);
-                addToast({ type: 'success', message: 'Satış kaydı kasaya başarıyla işlendi.' });
-              }}>Satışı Kaydet</button>
+              <button className="btn btn-primary" onClick={handleSave}>Satışı Kaydet</button>
             </div>
           </div>
         </div>
@@ -344,7 +435,7 @@ export default function CashPage() {
               {/* Müşteri Bilgileri */}
               <div style={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)', padding: 12, marginBottom: 20, fontSize: '0.84rem' }}>
                 <div style={{ fontWeight: 700, color: 'var(--gray-700)', marginBottom: 6 }}>ALICI BİLGİLERİ</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+                <div className="responsive-grid-2" style={{ gap: '8px 16px' }}>
                   <div><strong>Adı Soyadı:</strong> {selectedSaleForInvoice.patientName}</div>
                   <div><strong>Ödeme Yöntemi:</strong> {selectedSaleForInvoice.paymentMethod}</div>
                   <div><strong>SGK Durumu:</strong> {selectedSaleForInvoice.sgkAmount > 0 ? 'SGK Karşılamalı' : 'Şahsi Ödeme'}</div>

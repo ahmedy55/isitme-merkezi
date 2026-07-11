@@ -7,6 +7,19 @@ export default function SettingsPage() {
   const { addToast } = useApp();
   const [activeSection, setActiveSection] = useState('firma');
 
+  const [notifSettings, setNotifSettings] = useState([
+    { id: 'apt_create', label: 'Yeni randevu oluşturulduğunda', checked: true },
+    { id: 'apt_cancel', label: 'Randevu iptal edildiğinde', checked: true },
+    { id: 'stock_critical', label: 'Stok kritik seviyeye düştüğünde', checked: true },
+    { id: 'sale_create', label: 'Yeni satış kaydedildiğinde', checked: false },
+    { id: 'recall_firsat', label: 'Recall fırsatı oluştuğunda', checked: true },
+    { id: 'sgk_renewal', label: 'SGK yenileme hakkı açıldığında', checked: true },
+  ]);
+
+  const toggleNotifSetting = (id: string) => {
+    setNotifSettings(notifSettings.map(n => n.id === id ? { ...n, checked: !n.checked } : n));
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -226,24 +239,17 @@ export default function SettingsPage() {
 
           {activeSection === 'bildirim' && (
             <div className="settings-section">
-              <h3>🔔 Bildirim Ayarları</h3>
+              <h3>Bildirim Ayarları</h3>
               <p>Hangi olaylarda bildirim almak istediğinizi seçin</p>
               <div className="card">
                 <div className="card-body">
-                  {[
-                    { label: 'Yeni randevu oluşturulduğunda', checked: true },
-                    { label: 'Randevu iptal edildiğinde', checked: true },
-                    { label: 'Stok kritik seviyeye düştüğünde', checked: true },
-                    { label: 'Yeni satış kaydedildiğinde', checked: false },
-                    { label: 'Recall fırsatı oluştuğunda', checked: true },
-                    { label: 'SGK yenileme hakkı açıldığında', checked: true },
-                  ].map((item, i) => (
-                    <div key={i} style={{
+                  {notifSettings.map((item, i) => (
+                    <div key={item.id} style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '10px 0',
-                      borderBottom: i < 5 ? '1px solid var(--gray-100)' : 'none',
+                      borderBottom: i < notifSettings.length - 1 ? '1px solid var(--gray-100)' : 'none',
                     }}>
                       <span style={{ fontSize: '0.88rem' }}>{item.label}</span>
                       <label style={{
@@ -251,8 +257,9 @@ export default function SettingsPage() {
                         width: 44,
                         height: 24,
                         cursor: 'pointer',
-                      }}>
-                        <input type="checkbox" defaultChecked={item.checked} style={{ display: 'none' }} />
+                      }}
+                      onClick={() => toggleNotifSetting(item.id)}>
+                        <input type="checkbox" checked={item.checked} readOnly style={{ display: 'none' }} />
                         <div style={{
                           width: '100%',
                           height: '100%',
