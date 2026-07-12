@@ -23,7 +23,10 @@ export default function StockPage() {
     utsStatus: 'Uyumlu',
     branch: 'Merkez 1 - Kadıköy',
     criticalLevel: 5,
-    status: 'Stokta'
+    status: 'Stokta',
+    utsKurumNo: '',
+    gln: '',
+    mersisNo: ''
   });
 
   const handleSaveNew = () => {
@@ -46,7 +49,10 @@ export default function StockPage() {
       utsStatus: formData.utsStatus as any,
       branch: formData.branch as any,
       criticalLevel: Number(formData.criticalLevel),
-      status: formData.status as any
+      status: formData.status as any,
+      utsKurumNo: formData.utsKurumNo || '954201',
+      gln: formData.gln || '8680001402361',
+      mersisNo: formData.mersisNo || '0123456789000014'
     };
     addStockItem(newItem);
     setShowAddModal(false);
@@ -61,7 +67,10 @@ export default function StockPage() {
       utsStatus: 'Uyumlu',
       branch: 'Merkez 1 - Kadıköy',
       criticalLevel: 5,
-      status: 'Stokta'
+      status: 'Stokta',
+      utsKurumNo: '',
+      gln: '',
+      mersisNo: ''
     });
   };
 
@@ -224,6 +233,18 @@ export default function StockPage() {
                       <div>
                         <div style={{ fontWeight: 600 }}>{item.name}</div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{item.brand} {item.model}</div>
+                        {item.utsKurumNo && (
+                          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                            <span style={{ fontSize: '0.64rem', fontFamily: 'var(--font-mono)', background: 'var(--gray-100)', color: 'var(--gray-600)', padding: '2px 4px', borderRadius: '4px' }}>
+                              UIK: {item.utsKurumNo}
+                            </span>
+                            {item.gln && (
+                              <span style={{ fontSize: '0.64rem', fontFamily: 'var(--font-mono)', background: 'var(--gray-100)', color: 'var(--gray-600)', padding: '2px 4px', borderRadius: '4px' }}>
+                                GLN: {item.gln}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td data-label="Kategori">
@@ -414,6 +435,37 @@ export default function StockPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Yasal ÜTS / GLN / MERSİS Bilgileri */}
+              <div className="form-row-3" style={{ marginTop: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">ÜTS Kurum No (UIK)</label>
+                  <input
+                    className="form-input"
+                    placeholder="Örn: 954201"
+                    value={formData.utsKurumNo}
+                    onChange={(e) => setFormData({ ...formData, utsKurumNo: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">GLN Kodu</label>
+                  <input
+                    className="form-input"
+                    placeholder="Örn: 8680001402361"
+                    value={formData.gln}
+                    onChange={(e) => setFormData({ ...formData, gln: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">MERSİS No</label>
+                  <input
+                    className="form-input"
+                    placeholder="Örn: 012345..."
+                    value={formData.mersisNo}
+                    onChange={(e) => setFormData({ ...formData, mersisNo: e.target.value })}
+                  />
+                </div>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
@@ -538,6 +590,34 @@ export default function StockPage() {
                     <option>Satıldı</option>
                     <option>Serviste</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Yasal ÜTS / GLN / MERSİS Bilgileri */}
+              <div className="form-row-3" style={{ marginTop: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">ÜTS Kurum No (UIK)</label>
+                  <input
+                    className="form-input"
+                    value={editingItem.utsKurumNo || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, utsKurumNo: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">GLN Kodu</label>
+                  <input
+                    className="form-input"
+                    value={editingItem.gln || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, gln: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">MERSİS No</label>
+                  <input
+                    className="form-input"
+                    value={editingItem.mersisNo || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, mersisNo: e.target.value })}
+                  />
                 </div>
               </div>
             </div>

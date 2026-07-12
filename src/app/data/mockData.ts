@@ -73,6 +73,9 @@ export interface StockItem {
   assignedPatientId?: string;
   assignedPatientName?: string;
   branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş';
+  utsKurumNo?: string;
+  gln?: string;
+  mersisNo?: string;
 }
 
 export interface SaleRecord {

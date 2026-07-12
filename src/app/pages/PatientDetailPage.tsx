@@ -35,6 +35,29 @@ export default function PatientDetailPage() {
 
   const [showEditPatientModal, setShowEditPatientModal] = useState(false);
   const [showQuickAptModal, setShowQuickAptModal] = useState(false);
+  const [showServiceModal, setShowServiceModal] = useState(false);
+
+  const [serviceFormData, setServiceFormData] = useState({
+    deviceName: '',
+    serialNo: '',
+    problem: '',
+    estimatedDate: '2026-07-15',
+    notes: '',
+    accessories: [] as string[],
+    complaints: [] as string[]
+  });
+
+  const toggleDetailAccessory = (acc: string) => {
+    const list = serviceFormData.accessories;
+    const updated = list.includes(acc) ? list.filter(a => a !== acc) : [...list, acc];
+    setServiceFormData({ ...serviceFormData, accessories: updated });
+  };
+
+  const toggleDetailComplaint = (comp: string) => {
+    const list = serviceFormData.complaints;
+    const updated = list.includes(comp) ? list.filter(c => c !== comp) : [...list, comp];
+    setServiceFormData({ ...serviceFormData, complaints: updated });
+  };
 
   const [editFormData, setEditFormData] = useState({
     firstName: '',
@@ -229,6 +252,38 @@ export default function PatientDetailPage() {
     addToast({ type: 'success', message: 'Hasta bilgileri başarıyla güncellendi.' });
   };
 
+  const handleSaveService = () => {
+    if (!patient) return;
+    if (!serviceFormData.deviceName) {
+      alert('Lütfen cihaz adı girin.');
+      return;
+    }
+
+    const updated = {
+      ...patient,
+      timeline: [
+        {
+          date: '11.07.2026',
+          action: `Teknik Servis Kabulü Yapıldı: ${serviceFormData.deviceName} (${serviceFormData.serialNo || 'SN Belirtilmedi'}). Alınan aksesuarlar: ${serviceFormData.accessories.join(', ') || 'Yok'}. Şikayetler: ${serviceFormData.complaints.join(', ') || 'Belirtilmedi'}`,
+          icon: 'Service'
+        },
+        ...(patient.timeline || [])
+      ]
+    };
+    updatePatient(updated);
+    setShowServiceModal(false);
+    setServiceFormData({
+      deviceName: '',
+      serialNo: '',
+      problem: '',
+      estimatedDate: '2026-07-15',
+      notes: '',
+      accessories: [],
+      complaints: []
+    });
+    addToast({ type: 'success', message: `${patient.firstName} ${patient.lastName} adına yeni teknik servis kaydı oluşturuldu.` });
+  };
+
   const handleQuickApt = () => {
     if (!patient) return;
     const newApt = {
@@ -311,9 +366,12 @@ export default function PatientDetailPage() {
             </span>
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={() => setShowEditPatientModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconEdit size={15} strokeWidth={1.8} /> Düzenle
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowServiceModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconPlus size={15} strokeWidth={1.8} /> Servis Kabul
           </button>
           <button className="btn btn-primary" onClick={() => setShowQuickAptModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconCalendar size={15} strokeWidth={1.8} /> Randevu Oluştur
@@ -1602,6 +1660,115 @@ export default function PatientDetailPage() {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowQuickAptModal(false)}>İptal</button>
               <button className="btn btn-primary" onClick={handleQuickApt}>Randevu Oluştur</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Quick Service Modal */}
+      {showServiceModal && (
+        <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <div className="modal-header">
+              <span className="modal-title">Hızlı Teknik Servis Kabul — {patient.firstName} {patient.lastName}</span>
+              <button className="modal-close" onClick={() => setShowServiceModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Cihaz</label>
+                  <input
+                    className="form-input"
+                    placeholder="Cihaz adı / modeli"
+                    value={serviceFormData.deviceName}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, deviceName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Seri No</label>
+                  <input
+                    className="form-input"
+                    placeholder="Cihaz seri numarası"
+                    value={serviceFormData.serialNo}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, serialNo: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Teslim Alınan Aksesuarlar */}
+              <div className="form-group">
+                <label className="form-label">Teslim Alınan Aksesuarlar</label>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 6, marginBottom: 12 }}>
+                  {['Pil', 'Cihaz Kutusu', 'Garanti Kartı', 'Kulak Kalıbı'].map(acc => (
+                    <label key={acc} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', cursor: 'pointer', color: 'var(--gray-700)' }}>
+                      <input
+                        type="checkbox"
+                        checked={serviceFormData.accessories.includes(acc)}
+                        onChange={() => toggleDetailAccessory(acc)}
+                      />
+                      {acc}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sık Karşılaşılan Şikayetler */}
+              <div className="form-group">
+                <label className="form-label">Sık Karşılaşılan Şikayetler (Çeklist)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: 6, marginBottom: 12 }}>
+                  {[
+                    'Çalışmıyor',
+                    'Ses Az/Kısık',
+                    'Ara Ara Kesiliyor',
+                    'Hışırtı/Parazit',
+                    'Bluetooth Bağlantı Sorunu',
+                    'Feedback (Çınlama)',
+                    'Yüksek Pil Tüketimi'
+                  ].map(comp => (
+                    <label key={comp} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', cursor: 'pointer', color: 'var(--gray-700)' }}>
+                      <input
+                        type="checkbox"
+                        checked={serviceFormData.complaints.includes(comp)}
+                        onChange={() => toggleDetailComplaint(comp)}
+                      />
+                      {comp}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Ek Sorun Tanımı</label>
+                <textarea
+                  className="form-textarea"
+                  placeholder="Ek şikayetler..."
+                  value={serviceFormData.problem}
+                  onChange={(e) => setServiceFormData({ ...serviceFormData, problem: e.target.value })}
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Tahmini Teslim</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={serviceFormData.estimatedDate}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, estimatedDate: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ek Notlar</label>
+                  <input
+                    className="form-input"
+                    placeholder="Teknisyene not..."
+                    value={serviceFormData.notes}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowServiceModal(false)}>İptal</button>
+              <button className="btn btn-primary" onClick={handleSaveService}>Kaydı Kaydet</button>
             </div>
           </div>
         </div>
