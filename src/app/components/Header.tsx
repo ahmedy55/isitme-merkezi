@@ -122,6 +122,32 @@ export default function Header() {
             </div>
           )}
         </div>
+
+        {/* Kullanıcı Profili */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '1px solid var(--gray-200)', paddingLeft: 12, marginLeft: 4 }}>
+          <div style={{ textAlign: 'right' }} className="hide-tablet">
+            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-800)', lineHeight: '1.2' }}>Ahmet Yılmaz</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', lineHeight: '1.2' }}>Yönetici / Admin</div>
+          </div>
+          <div 
+            className="avatar avatar-sm" 
+            style={{ 
+              background: 'linear-gradient(135deg, var(--primary-500), var(--primary-600))', 
+              color: 'white', 
+              fontWeight: 600, 
+              fontSize: '0.8rem',
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: 'var(--shadow-xs)'
+            }}
+          >
+            AY
+          </div>
+        </div>
       </div>
     </header>
   );

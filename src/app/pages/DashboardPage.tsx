@@ -66,11 +66,19 @@ export default function DashboardPage() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        boxShadow: 'var(--shadow-sm)'
+        boxShadow: 'var(--shadow-sm)',
+        flexWrap: 'wrap',
+        gap: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#4ef037', animation: 'pulse 1.5s infinite' }} />
-          <span style={{ fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.5px' }}>DENEYİM MODU AKTİF</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#4ef037', animation: 'pulse 1.5s infinite' }} />
+            <span style={{ fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.5px' }}>DENEYİM MODU AKTİF</span>
+          </div>
+          <span style={{ opacity: 0.5, fontSize: '0.8rem' }}>|</span>
+          <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+            Kullanıcı: <strong style={{ fontWeight: 700 }}>Ahmet Yılmaz</strong> (Yönetici / Admin)
+          </div>
         </div>
         <div style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
           Sistem Günü: 10.07.2026
