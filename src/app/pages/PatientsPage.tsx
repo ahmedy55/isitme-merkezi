@@ -49,33 +49,49 @@ export default function PatientsPage() {
     firstName: '',
     lastName: '',
     phone: '',
-    birthDate: '1985-05-15',
+    birthDate: '',
     email: '',
     address: '',
     hearingLoss: 'Hafif',
     hearingLossSide: 'Sol',
-    notes: ''
+    notes: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    prescriptionNo: '',
+    reportNo: '',
+    sgkInsuranceStatus: 'Belirtilmemiş',
+    patientStatus: 'Potansiyel',
+    source: 'Tavsiye'
   });
 
   const handleSave = () => {
-    if (!formData.firstName || !formData.lastName) {
-      alert('Lütfen hasta adını ve soyadını girin.');
+    if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.tc.trim() || !formData.phone.trim() || !formData.address.trim()) {
+      alert('Lütfen zorunlu alanları (* işaretli: Ad, Soyad, TC Kimlik No, Telefon, Adres) doldurunuz.');
       return;
     }
     const newPatient: Patient = {
       id: `p-${Date.now().toString().slice(-6)}`,
       firstName: formData.firstName,
       lastName: formData.lastName,
-      tc: formData.tc || '11122233344',
-      phone: formData.phone || '0555 111 2233',
+      tc: formData.tc,
+      phone: formData.phone,
       gender: formData.gender as any,
       birthDate: formData.birthDate,
       email: formData.email || `${formData.firstName.toLowerCase()}@example.com`,
-      address: formData.address || 'İstanbul',
+      address: formData.address,
       hearingLoss: formData.hearingLoss as any,
       hearingLossSide: formData.hearingLossSide as any,
       sgkStatus: 'Aktif',
       lastVisit: new Date().toISOString().split('T')[0],
+      emergencyContactName: formData.emergencyContactName,
+      emergencyContactPhone: formData.emergencyContactPhone,
+      emergencyContactRelation: 'Yakını',
+      prescriptionNo: formData.prescriptionNo,
+      reportNo: formData.reportNo,
+      sgkInsuranceStatus: formData.sgkInsuranceStatus as any,
+      patientStatus: formData.patientStatus as any,
+      source: formData.source as any,
+      notes: formData.notes,
       timeline: [
         { date: '11.07.2026', action: 'Hasta kaydı oluşturuldu.', icon: 'Plus' }
       ]
@@ -89,12 +105,19 @@ export default function PatientsPage() {
       firstName: '',
       lastName: '',
       phone: '',
-      birthDate: '1985-05-15',
+      birthDate: '',
       email: '',
       address: '',
       hearingLoss: 'Hafif',
       hearingLossSide: 'Sol',
-      notes: ''
+      notes: '',
+      emergencyContactName: '',
+      emergencyContactPhone: '',
+      prescriptionNo: '',
+      reportNo: '',
+      sgkInsuranceStatus: 'Belirtilmemiş',
+      patientStatus: 'Potansiyel',
+      source: 'Tavsiye'
     });
   };
 
@@ -296,13 +319,35 @@ export default function PatientsPage() {
                 <IconClose size={16} strokeWidth={2} />
               </button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 8 }}>
+              {/* Temel Bilgiler */}
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">TC Kimlik No</label>
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Ad</label>
                   <input
                     className="form-input"
-                    placeholder="11 haneli TC kimlik numarası"
+                    placeholder="Ad"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Soyad</label>
+                  <input
+                    className="form-input"
+                    placeholder="Soyad"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> TC Kimlik No</label>
+                  <input
+                    className="form-input"
+                    placeholder="TC Kimlik No"
                     maxLength={11}
                     value={formData.tc}
                     onChange={(e) => setFormData({ ...formData, tc: e.target.value })}
@@ -320,32 +365,13 @@ export default function PatientsPage() {
                   </select>
                 </div>
               </div>
+
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Ad</label>
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Telefon</label>
                   <input
                     className="form-input"
-                    placeholder="Hastanın adı"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Soyad</label>
-                  <input
-                    className="form-input"
-                    placeholder="Hastanın soyadı"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Telefon</label>
-                  <input
-                    className="form-input"
-                    placeholder="0532 123 4567"
+                    placeholder="05XX XXX XX XX"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   />
@@ -360,25 +386,29 @@ export default function PatientsPage() {
                   />
                 </div>
               </div>
+
               <div className="form-group">
-                <label className="form-label">E-posta</label>
-                <input
-                  className="form-input"
-                  placeholder="email@adres.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Adres</label>
-                <input
-                  className="form-input"
-                  placeholder="İlçe, Şehir"
+                <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Adres</label>
+                <textarea
+                  className="form-textarea"
+                  placeholder="Adres"
+                  rows={2}
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 />
               </div>
+
+              {/* Ekstra Bilgiler (Mevcut Alanlar) */}
               <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">E-posta (İsteğe Bağlı)</label>
+                  <input
+                    className="form-input"
+                    placeholder="email@adres.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
                 <div className="form-group">
                   <label className="form-label">İşitme Kaybı Derecesi</label>
                   <select
@@ -392,6 +422,9 @@ export default function PatientsPage() {
                     <option>Çok İleri</option>
                   </select>
                 </div>
+              </div>
+              
+              <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">İşitme Kaybı Tarafı</label>
                   <select
@@ -404,12 +437,157 @@ export default function PatientsPage() {
                     <option>Her İki Kulak</option>
                   </select>
                 </div>
+                <div className="form-group" style={{ visibility: 'hidden' }} />
               </div>
-              <div className="form-group">
-                <label className="form-label">Notlar</label>
+
+              {/* Hasta Yakını İletişim */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>Hasta Yakını İletişim</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Yakın Adı</label>
+                  <input
+                    className="form-input"
+                    placeholder="Örn: Eşim Ayşe Hanım"
+                    value={formData.emergencyContactName}
+                    onChange={(e) => setFormData({ ...formData, emergencyContactName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Yakın Telefon</label>
+                  <input
+                    className="form-input"
+                    placeholder="05XX XXX XX XX"
+                    value={formData.emergencyContactPhone}
+                    onChange={(e) => setFormData({ ...formData, emergencyContactPhone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* E-Reçete / SGK Kodları */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>E-Reçete / SGK Kodları</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Reçete No</label>
+                  <input
+                    className="form-input"
+                    placeholder="E-Reçete numarası"
+                    value={formData.prescriptionNo}
+                    onChange={(e) => setFormData({ ...formData, prescriptionNo: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Rapor No</label>
+                  <input
+                    className="form-input"
+                    placeholder="Rapor numarası"
+                    value={formData.reportNo}
+                    onChange={(e) => setFormData({ ...formData, reportNo: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">
+                    SGK Sigorta Durumu 
+                    <span style={{ color: 'var(--gray-400)', cursor: 'help', marginLeft: 4 }} title="Hastanın SGK güvence tipini seçin.">ⓘ</span>
+                  </label>
+                  <select
+                    className="form-select"
+                    value={formData.sgkInsuranceStatus}
+                    onChange={(e) => setFormData({ ...formData, sgkInsuranceStatus: e.target.value })}
+                  >
+                    <option>Belirtilmemiş</option>
+                    <option>Çalışan (sigortalı)</option>
+                    <option>Emekli</option>
+                    <option>Diğer / Kapsam dışı</option>
+                  </select>
+                </div>
+                
+                {/* SGK warning box */}
+                {!formData.birthDate ? (
+                  <div style={{
+                    background: '#fef8ec',
+                    border: '1px solid #fcebc6',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '10px 14px',
+                    color: '#b87214',
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: 'fit-content',
+                    alignSelf: 'end',
+                    marginBottom: 8,
+                    flex: 1
+                  }}>
+                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>ⓘ</span>
+                    <span>SGK katkısı için hastanın <strong>doğum tarihi</strong> girilmelidir.</span>
+                  </div>
+                ) : (
+                  <div className="form-group" style={{ flex: 1 }} />
+                )}
+              </div>
+
+              {/* Hasta Durumu */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>Hasta Durumu</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Durum</label>
+                  <select
+                    className="form-select"
+                    value={formData.patientStatus}
+                    onChange={(e) => setFormData({ ...formData, patientStatus: e.target.value })}
+                  >
+                    <option>Potansiyel</option>
+                    <option>Deneme Yapıldı</option>
+                    <option>Müşteri</option>
+                    <option>Satın Almayanlar</option>
+                    <option>Genel</option>
+                    <option>Tamir için gelen</option>
+                    <option>Kalıp Hastası</option>
+                    <option>Pil Hastası</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Nasıl Duydunuz? (Referans Kaynağı)</label>
+                  <select
+                    className="form-select"
+                    value={formData.source}
+                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                  >
+                    <option value="Doktor">Doktor Yönlendirmesi</option>
+                    <option value="Sosyal Medya">Sosyal Medya</option>
+                    <option value="Tavsiye">Hasta Tavsiyesi</option>
+                    <option value="Yürüyerek">Yürüyerek (Walk-in)</option>
+                    <option value="Web">Web Sitesi</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Hasta Notu */}
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>Hasta Notu</label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{formData.notes.length} / 50000</span>
+                </div>
                 <textarea
                   className="form-textarea"
                   placeholder="Hasta hakkında notlar..."
+                  maxLength={50000}
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 />
@@ -417,7 +595,7 @@ export default function PatientsPage() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSave}>Kaydet</button>
+              <button className="btn btn-primary" onClick={handleSave}>Tamam</button>
             </div>
           </div>
         </div>

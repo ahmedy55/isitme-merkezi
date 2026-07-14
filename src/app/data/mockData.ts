@@ -38,6 +38,10 @@ export interface Patient {
   emergencyContactRelation?: string;
   nextAction?: string;
   timeline?: { date: string; action: string; icon: string }[];
+  prescriptionNo?: string;
+  reportNo?: string;
+  sgkInsuranceStatus?: 'Belirtilmemiş' | 'Çalışan (sigortalı)' | 'Emekli' | 'Diğer / Kapsam dışı';
+  patientStatus?: 'Potansiyel' | 'Deneme Yapıldı' | 'Müşteri' | 'Satın Almayanlar' | 'Genel' | 'Tamir için gelen' | 'Kalıp Hastası' | 'Pil Hastası';
 }
 
 export interface Appointment {
@@ -135,8 +139,10 @@ export const formatCurrency = (value: number) => {
 };
 
 export const calculateAge = (birthDate: string) => {
+  if (!birthDate) return 0;
   const today = new Date('2026-07-10'); // Demo günü
   const birth = new Date(birthDate);
+  if (isNaN(birth.getTime())) return 0;
   let age = today.getFullYear() - birth.getFullYear();
   const m = today.getMonth() - birth.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {

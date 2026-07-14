@@ -70,7 +70,15 @@ export default function PatientDetailPage() {
     address: '',
     hearingLoss: 'Hafif',
     hearingLossSide: 'Sol',
-    sgkStatus: 'Aktif'
+    sgkStatus: 'Aktif',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    prescriptionNo: '',
+    reportNo: '',
+    sgkInsuranceStatus: 'Belirtilmemiş',
+    patientStatus: 'Potansiyel',
+    source: 'Tavsiye',
+    notes: ''
   });
 
   const [aptFormData, setAptFormData] = useState({
@@ -119,7 +127,15 @@ export default function PatientDetailPage() {
         address: patient.address,
         hearingLoss: patient.hearingLoss,
         hearingLossSide: patient.hearingLossSide,
-        sgkStatus: patient.sgkStatus || 'Aktif'
+        sgkStatus: patient.sgkStatus || 'Aktif',
+        emergencyContactName: patient.emergencyContactName || '',
+        emergencyContactPhone: patient.emergencyContactPhone || '',
+        prescriptionNo: patient.prescriptionNo || '',
+        reportNo: patient.reportNo || '',
+        sgkInsuranceStatus: patient.sgkInsuranceStatus || 'Belirtilmemiş',
+        patientStatus: patient.patientStatus || 'Potansiyel',
+        source: patient.source || 'Tavsiye',
+        notes: patient.notes || ''
       });
     }
   }, [selectedPatientId, patient]);
@@ -229,6 +245,10 @@ export default function PatientDetailPage() {
 
   const handleUpdatePatient = () => {
     if (!patient) return;
+    if (!editFormData.firstName.trim() || !editFormData.lastName.trim() || !editFormData.tc.trim() || !editFormData.phone.trim() || !editFormData.address.trim()) {
+      alert('Lütfen zorunlu alanları (* işaretli: Ad, Soyad, TC Kimlik No, Telefon, Adres) doldurunuz.');
+      return;
+    }
     const updated = {
       ...patient,
       firstName: editFormData.firstName,
@@ -242,6 +262,14 @@ export default function PatientDetailPage() {
       hearingLoss: editFormData.hearingLoss as any,
       hearingLossSide: editFormData.hearingLossSide as any,
       sgkStatus: editFormData.sgkStatus as any,
+      emergencyContactName: editFormData.emergencyContactName,
+      emergencyContactPhone: editFormData.emergencyContactPhone,
+      prescriptionNo: editFormData.prescriptionNo,
+      reportNo: editFormData.reportNo,
+      sgkInsuranceStatus: editFormData.sgkInsuranceStatus as any,
+      patientStatus: editFormData.patientStatus as any,
+      source: editFormData.source as any,
+      notes: editFormData.notes,
       timeline: [
         { date: '11.07.2026', action: 'Hasta kartı bilgileri güncellendi.', icon: 'Edit' },
         ...(patient.timeline || [])
@@ -1457,10 +1485,11 @@ export default function PatientDetailPage() {
               <span className="modal-title">Hasta Bilgilerini Güncelle</span>
               <button className="modal-close" onClick={() => setShowEditPatientModal(false)}>✕</button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 8 }}>
+              {/* Temel Bilgiler */}
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Adı</label>
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Adı</label>
                   <input
                     className="form-input"
                     value={editFormData.firstName}
@@ -1468,7 +1497,7 @@ export default function PatientDetailPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Soyadı</label>
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Soyadı</label>
                   <input
                     className="form-input"
                     value={editFormData.lastName}
@@ -1478,7 +1507,7 @@ export default function PatientDetailPage() {
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">TC Kimlik No</label>
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> TC Kimlik No</label>
                   <input
                     className="form-input"
                     value={editFormData.tc}
@@ -1486,7 +1515,7 @@ export default function PatientDetailPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Telefon</label>
+                  <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Telefon</label>
                   <input
                     className="form-input"
                     value={editFormData.phone}
@@ -1525,13 +1554,15 @@ export default function PatientDetailPage() {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Adres</label>
+                <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Adres</label>
                 <textarea
                   className="form-textarea"
+                  rows={2}
                   value={editFormData.address}
                   onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
                 />
               </div>
+              
               <div className="form-row-3">
                 <div className="form-group">
                   <label className="form-label">İşitme Kaybı Derecesi</label>
@@ -1555,11 +1586,11 @@ export default function PatientDetailPage() {
                   >
                     <option>Sol</option>
                     <option>Sağ</option>
-                    <option>Bilateral</option>
+                    <option>Her İki Kulak</option>
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">SGK Durumu</label>
+                  <label className="form-label">SGK Cihaz Desteği Durumu</label>
                   <select
                     className="form-select"
                     value={editFormData.sgkStatus}
@@ -1570,6 +1601,156 @@ export default function PatientDetailPage() {
                     <option>Pasif</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Hasta Yakını İletişim */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>Hasta Yakını İletişim</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Yakın Adı</label>
+                  <input
+                    className="form-input"
+                    placeholder="Örn: Eşim Ayşe Hanım"
+                    value={editFormData.emergencyContactName}
+                    onChange={(e) => setEditFormData({ ...editFormData, emergencyContactName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Yakın Telefon</label>
+                  <input
+                    className="form-input"
+                    placeholder="05XX XXX XX XX"
+                    value={editFormData.emergencyContactPhone}
+                    onChange={(e) => setEditFormData({ ...editFormData, emergencyContactPhone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* E-Reçete / SGK Kodları */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>E-Reçete / SGK Kodları</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Reçete No</label>
+                  <input
+                    className="form-input"
+                    placeholder="E-Reçete numarası"
+                    value={editFormData.prescriptionNo}
+                    onChange={(e) => setEditFormData({ ...editFormData, prescriptionNo: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Rapor No</label>
+                  <input
+                    className="form-input"
+                    placeholder="Rapor numarası"
+                    value={editFormData.reportNo}
+                    onChange={(e) => setEditFormData({ ...editFormData, reportNo: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">SGK Sigorta Durumu</label>
+                  <select
+                    className="form-select"
+                    value={editFormData.sgkInsuranceStatus}
+                    onChange={(e) => setEditFormData({ ...editFormData, sgkInsuranceStatus: e.target.value })}
+                  >
+                    <option>Belirtilmemiş</option>
+                    <option>Çalışan (sigortalı)</option>
+                    <option>Emekli</option>
+                    <option>Diğer / Kapsam dışı</option>
+                  </select>
+                </div>
+                
+                {/* SGK warning box */}
+                {!editFormData.birthDate ? (
+                  <div style={{
+                    background: '#fef8ec',
+                    border: '1px solid #fcebc6',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '10px 14px',
+                    color: '#b87214',
+                    fontSize: '0.8rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    height: 'fit-content',
+                    alignSelf: 'end',
+                    marginBottom: 8,
+                    flex: 1
+                  }}>
+                    <span style={{ fontSize: '1rem', lineHeight: 1 }}>ⓘ</span>
+                    <span>SGK katkısı için hastanın <strong>doğum tarihi</strong> girilmelidir.</span>
+                  </div>
+                ) : (
+                  <div className="form-group" style={{ flex: 1 }} />
+                )}
+              </div>
+
+              {/* Hasta Durumu */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 24, marginBottom: 16 }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>Hasta Durumu</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Durum</label>
+                  <select
+                    className="form-select"
+                    value={editFormData.patientStatus}
+                    onChange={(e) => setEditFormData({ ...editFormData, patientStatus: e.target.value })}
+                  >
+                    <option>Potansiyel</option>
+                    <option>Deneme Yapıldı</option>
+                    <option>Müşteri</option>
+                    <option>Satın Almayanlar</option>
+                    <option>Genel</option>
+                    <option>Tamir için gelen</option>
+                    <option>Kalıp Hastası</option>
+                    <option>Pil Hastası</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Nasıl Duydunuz? (Referans Kaynağı)</label>
+                  <select
+                    className="form-select"
+                    value={editFormData.source}
+                    onChange={(e) => setEditFormData({ ...editFormData, source: e.target.value })}
+                  >
+                    <option value="Doktor">Doktor Yönlendirmesi</option>
+                    <option value="Sosyal Medya">Sosyal Medya</option>
+                    <option value="Tavsiye">Hasta Tavsiyesi</option>
+                    <option value="Yürüyerek">Yürüyerek (Walk-in)</option>
+                    <option value="Web">Web Sitesi</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Hasta Notu */}
+              <div className="form-group" style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>Hasta Notu</label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{(editFormData.notes || '').length} / 50000</span>
+                </div>
+                <textarea
+                  className="form-textarea"
+                  placeholder="Hasta hakkında notlar..."
+                  maxLength={50000}
+                  value={editFormData.notes || ''}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                />
               </div>
             </div>
             <div className="modal-footer">
