@@ -41,7 +41,7 @@ export interface Patient {
   prescriptionNo?: string;
   reportNo?: string;
   sgkInsuranceStatus?: 'Belirtilmemiş' | 'Çalışan (sigortalı)' | 'Emekli' | 'Diğer / Kapsam dışı';
-  patientStatus?: 'Potansiyel' | 'Deneme Yapıldı' | 'Müşteri' | 'Satın Almayanlar' | 'Genel' | 'Tamir için gelen' | 'Kalıp Hastası' | 'Pil Hastası';
+  patientStatus?: 'Potansiyel' | 'Deneme Yapıldı' | 'Müşteri' | 'Satın Almayanlar' | 'Genel' | 'Tamir için gelen' | 'Kalıp Hastası' | 'Pil Hastası' | 'Satış Hastası' | 'Eski Hasta';
 }
 
 export interface Appointment {

@@ -54,7 +54,26 @@ export default function PatientsPage() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    tc: string;
+    gender: Patient['gender'];
+    firstName: string;
+    lastName: string;
+    phone: string;
+    birthDate: string;
+    email: string;
+    address: string;
+    hearingLoss: Patient['hearingLoss'];
+    hearingLossSide: Patient['hearingLossSide'];
+    notes: string;
+    emergencyContactName: string;
+    emergencyContactPhone: string;
+    prescriptionNo: string;
+    reportNo: string;
+    sgkInsuranceStatus: NonNullable<Patient['sgkInsuranceStatus']>;
+    patientStatus: NonNullable<Patient['patientStatus']>;
+    source: NonNullable<Patient['source']>;
+  }>({
     tc: '',
     gender: 'Erkek',
     firstName: '',
@@ -86,12 +105,12 @@ export default function PatientsPage() {
       lastName: formData.lastName,
       tc: formData.tc,
       phone: formData.phone,
-      gender: formData.gender as any,
+      gender: formData.gender,
       birthDate: formData.birthDate,
       email: formData.email || `${formData.firstName.toLowerCase()}@example.com`,
       address: formData.address,
-      hearingLoss: formData.hearingLoss as any,
-      hearingLossSide: formData.hearingLossSide as any,
+      hearingLoss: formData.hearingLoss,
+      hearingLossSide: formData.hearingLossSide,
       sgkStatus: 'Aktif',
       lastVisit: new Date().toISOString().split('T')[0],
       emergencyContactName: formData.emergencyContactName,
@@ -99,9 +118,9 @@ export default function PatientsPage() {
       emergencyContactRelation: 'Yakını',
       prescriptionNo: formData.prescriptionNo,
       reportNo: formData.reportNo,
-      sgkInsuranceStatus: formData.sgkInsuranceStatus as any,
-      patientStatus: formData.patientStatus as any,
-      source: formData.source as any,
+      sgkInsuranceStatus: formData.sgkInsuranceStatus,
+      patientStatus: formData.patientStatus,
+      source: formData.source,
       notes: formData.notes,
       timeline: [
         { date: '11.07.2026', action: 'Hasta kaydı oluşturuldu.', icon: 'Plus' }
@@ -615,7 +634,7 @@ export default function PatientsPage() {
                   <select
                     className="form-select"
                     value={formData.gender}
-                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value as Patient['gender'] })}
                   >
                     <option>Erkek</option>
                     <option>Kadın</option>
@@ -671,7 +690,7 @@ export default function PatientsPage() {
                   <select
                     className="form-select"
                     value={formData.hearingLoss}
-                    onChange={(e) => setFormData({ ...formData, hearingLoss: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, hearingLoss: e.target.value as Patient['hearingLoss'] })}
                   >
                     <option>Hafif</option>
                     <option>Orta</option>
@@ -687,7 +706,7 @@ export default function PatientsPage() {
                   <select
                     className="form-select"
                     value={formData.hearingLossSide}
-                    onChange={(e) => setFormData({ ...formData, hearingLossSide: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, hearingLossSide: e.target.value as Patient['hearingLossSide'] })}
                   >
                     <option>Sol</option>
                     <option>Sağ</option>
@@ -760,7 +779,7 @@ export default function PatientsPage() {
                   <select
                     className="form-select"
                     value={formData.sgkInsuranceStatus}
-                    onChange={(e) => setFormData({ ...formData, sgkInsuranceStatus: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, sgkInsuranceStatus: e.target.value as NonNullable<Patient['sgkInsuranceStatus']> })}
                   >
                     <option>Belirtilmemiş</option>
                     <option>Çalışan (sigortalı)</option>
@@ -806,7 +825,7 @@ export default function PatientsPage() {
                   <select
                     className="form-select"
                     value={formData.patientStatus}
-                    onChange={(e) => setFormData({ ...formData, patientStatus: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, patientStatus: e.target.value as NonNullable<Patient['patientStatus']> })}
                   >
                     <option>Potansiyel</option>
                     <option>Deneme Yapıldı</option>
@@ -824,7 +843,7 @@ export default function PatientsPage() {
                   <select
                     className="form-select"
                     value={formData.source}
-                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, source: e.target.value as NonNullable<Patient['source']> })}
                   >
                     <option value="Doktor">Doktor Yönlendirmesi</option>
                     <option value="Sosyal Medya">Sosyal Medya</option>

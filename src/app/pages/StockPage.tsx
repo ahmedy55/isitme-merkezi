@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { stockItems, formatCurrency } from '../data/mockData';
+import { stockItems, formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
@@ -10,17 +10,31 @@ export default function StockPage() {
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<StockItem | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    brand: string;
+    category: StockItem['category'];
+    quantity: number;
+    price: number;
+    serialNo: string;
+    utsStatus: StockItem['utsStatus'];
+    branch: StockItem['branch'];
+    criticalLevel: number;
+    status: StockItem['status'];
+    utsKurumNo: string;
+    gln: string;
+    mersisNo: string;
+  }>({
     name: '',
     brand: '',
     category: 'Cihaz',
     quantity: 1,
     price: 15000,
     serialNo: '',
-    utsStatus: 'Uyumlu',
+    utsStatus: 'Bekliyor',
     branch: 'Merkez 1 - Kadıköy',
     criticalLevel: 5,
     status: 'Stokta',
@@ -34,25 +48,23 @@ export default function StockPage() {
       alert('Lütfen ürün adı ve markasını girin.');
       return;
     }
-    const newItem = {
+    const newItem: StockItem = {
       id: `s-${Date.now().toString().slice(-6)}`,
       name: formData.name,
       brand: formData.brand,
       model: formData.brand,
-      category: formData.category as any,
+      category: formData.category,
       quantity: Number(formData.quantity),
       price: Number(formData.price),
       sgkPrice: Number(formData.price) * 0.4,
       warrantyExpiry: '2028-07-10',
       location: 'Depo',
       serialNo: formData.serialNo || `SN-${Math.floor(Math.random() * 900000 + 100000)}`,
-      utsStatus: formData.utsStatus as any,
-      branch: formData.branch as any,
+      utsStatus: formData.utsStatus,
+      branch: formData.branch,
       criticalLevel: Number(formData.criticalLevel),
-      status: formData.status as any,
+      status: formData.status,
       utsKurumNo: formData.utsKurumNo || '954201',
-      gln: formData.gln || '8680001402361',
-      mersisNo: formData.mersisNo || '0123456789000014'
     };
     addStockItem(newItem);
     setShowAddModal(false);
@@ -64,7 +76,7 @@ export default function StockPage() {
       quantity: 1,
       price: 15000,
       serialNo: '',
-      utsStatus: 'Uyumlu',
+      utsStatus: 'Bekliyor',
       branch: 'Merkez 1 - Kadıköy',
       criticalLevel: 5,
       status: 'Stokta',
@@ -90,7 +102,7 @@ export default function StockPage() {
   const totalValue = stockList.reduce((sum, i) => sum + (i.price * i.quantity), 0);
   const lowStockCount = stockList.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel).length;
 
-  const handleUtsNotification = (item: any) => {
+  const handleUtsNotification = (item: StockItem) => {
     if (!item.assignedPatientId) return;
 
     // 1. ÜTS durumunu bildirildi yap
@@ -339,7 +351,7 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value as StockItem['category'] })}
                   >
                     <option>Cihaz</option>
                     <option>Pil</option>
@@ -372,11 +384,12 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={formData.utsStatus}
-                    onChange={(e) => setFormData({ ...formData, utsStatus: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, utsStatus: e.target.value as StockItem['utsStatus'] })}
                   >
-                    <option>Uyumlu</option>
                     <option>Bekliyor</option>
                     <option>Bildirildi</option>
+                    <option>Hata</option>
+                    <option>Gerekli Değil</option>
                   </select>
                 </div>
               </div>
@@ -404,7 +417,7 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={formData.branch}
-                    onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, branch: e.target.value as StockItem['branch'] })}
                   >
                     <option>Merkez 1 - Kadıköy</option>
                     <option>Merkez 2 - Beşiktaş</option>
@@ -426,7 +439,7 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as StockItem['status'] })}
                   >
                     <option>Stokta</option>
                     <option>Hastaya Ayrıldı</option>
@@ -498,7 +511,7 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={editingItem.category}
-                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value as StockItem['category'] })}
                   >
                     <option>Cihaz</option>
                     <option>Pil</option>
@@ -529,11 +542,12 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={editingItem.utsStatus}
-                    onChange={(e) => setEditingItem({ ...editingItem, utsStatus: e.target.value })}
+                    onChange={(e) => setEditingItem({ ...editingItem, utsStatus: e.target.value as StockItem['utsStatus'] })}
                   >
-                    <option>Uyumlu</option>
                     <option>Bekliyor</option>
                     <option>Bildirildi</option>
+                    <option>Hata</option>
+                    <option>Gerekli Değil</option>
                   </select>
                 </div>
               </div>
@@ -561,7 +575,7 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={editingItem.branch}
-                    onChange={(e) => setEditingItem({ ...editingItem, branch: e.target.value })}
+                    onChange={(e) => setEditingItem({ ...editingItem, branch: e.target.value as StockItem['branch'] })}
                   >
                     <option>Merkez 1 - Kadıköy</option>
                     <option>Merkez 2 - Beşiktaş</option>
@@ -583,7 +597,7 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={editingItem.status}
-                    onChange={(e) => setEditingItem({ ...editingItem, status: e.target.value })}
+                    onChange={(e) => setEditingItem({ ...editingItem, status: e.target.value as StockItem['status'] })}
                   >
                     <option>Stokta</option>
                     <option>Hastaya Ayrıldı</option>

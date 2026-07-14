@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   patients, appointments, sales,
   getAvatarColor, getInitials, formatDate, formatCurrency, calculateAge,
+  type Patient, type Appointment
 } from '../data/mockData';
 import {
   IconBack, IconEdit, IconCalendar, IconCheck, IconWarning,
@@ -59,7 +60,27 @@ export default function PatientDetailPage() {
     setServiceFormData({ ...serviceFormData, complaints: updated });
   };
 
-  const [editFormData, setEditFormData] = useState({
+  const [editFormData, setEditFormData] = useState<{
+    firstName: string;
+    lastName: string;
+    tc: string;
+    phone: string;
+    gender: Patient['gender'];
+    birthDate: string;
+    email: string;
+    address: string;
+    hearingLoss: Patient['hearingLoss'];
+    hearingLossSide: Patient['hearingLossSide'];
+    sgkStatus: NonNullable<Patient['sgkStatus']>;
+    emergencyContactName: string;
+    emergencyContactPhone: string;
+    prescriptionNo: string;
+    reportNo: string;
+    sgkInsuranceStatus: NonNullable<Patient['sgkInsuranceStatus']>;
+    patientStatus: NonNullable<Patient['patientStatus']>;
+    source: NonNullable<Patient['source']>;
+    notes: string;
+  }>({
     firstName: '',
     lastName: '',
     tc: '',
@@ -81,7 +102,14 @@ export default function PatientDetailPage() {
     notes: ''
   });
 
-  const [aptFormData, setAptFormData] = useState({
+  const [aptFormData, setAptFormData] = useState<{
+    date: string;
+    time: string;
+    type: Appointment['type'];
+    audiologist: string;
+    branch: Appointment['branch'];
+    notes: string;
+  }>({
     date: '2026-07-11',
     time: '11:00',
     type: 'Kontrol',
@@ -99,16 +127,21 @@ export default function PatientDetailPage() {
   const [dailyUsage, setDailyUsage] = useState<number>(8);
   const [lastPurchaseDate, setLastPurchaseDate] = useState<string>('');
   const [packCount, setPackCount] = useState<number>(1);
+  
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesText, setNotesText] = useState('');
+  const lastPatientIdRef = useRef<string | null>(null);
 
-  // Sync tab status with context redirects
+  // Sync tab status with context redirects (only if changed to avoid synchronous rendering warning)
   useEffect(() => {
-    if (activeDetailTab) {
+    if (activeDetailTab && activeDetailTab !== activeTab) {
       setActiveTab(activeDetailTab);
     }
-  }, [activeDetailTab]);
+  }, [activeDetailTab, activeTab]);
 
   useEffect(() => {
-    if (patient) {
+    if (patient && lastPatientIdRef.current !== selectedPatientId) {
+      lastPatientIdRef.current = selectedPatientId;
       setAudioLeft(patient.audiogramLeft || []);
       setAudioRight(patient.audiogramRight || []);
       setComparePast(false);
@@ -116,6 +149,8 @@ export default function PatientDetailPage() {
       setDailyUsage(patient.dailyUsageHours || 8);
       setLastPurchaseDate(patient.lastBatteryPurchaseDate || '');
       setPackCount(patient.batteryPackCount || 1);
+      setNotesText(patient.notes || '');
+      setIsEditingNotes(false);
       setEditFormData({
         firstName: patient.firstName,
         lastName: patient.lastName,
@@ -249,26 +284,26 @@ export default function PatientDetailPage() {
       alert('Lütfen zorunlu alanları (* işaretli: Ad, Soyad, TC Kimlik No, Telefon, Adres) doldurunuz.');
       return;
     }
-    const updated = {
+    const updated: Patient = {
       ...patient,
       firstName: editFormData.firstName,
       lastName: editFormData.lastName,
       tc: editFormData.tc,
       phone: editFormData.phone,
-      gender: editFormData.gender as any,
+      gender: editFormData.gender,
       birthDate: editFormData.birthDate,
       email: editFormData.email,
       address: editFormData.address,
-      hearingLoss: editFormData.hearingLoss as any,
-      hearingLossSide: editFormData.hearingLossSide as any,
-      sgkStatus: editFormData.sgkStatus as any,
+      hearingLoss: editFormData.hearingLoss,
+      hearingLossSide: editFormData.hearingLossSide,
+      sgkStatus: editFormData.sgkStatus,
       emergencyContactName: editFormData.emergencyContactName,
       emergencyContactPhone: editFormData.emergencyContactPhone,
       prescriptionNo: editFormData.prescriptionNo,
       reportNo: editFormData.reportNo,
-      sgkInsuranceStatus: editFormData.sgkInsuranceStatus as any,
-      patientStatus: editFormData.patientStatus as any,
-      source: editFormData.source as any,
+      sgkInsuranceStatus: editFormData.sgkInsuranceStatus,
+      patientStatus: editFormData.patientStatus,
+      source: editFormData.source,
       notes: editFormData.notes,
       timeline: [
         { date: '11.07.2026', action: 'Hasta kartı bilgileri güncellendi.', icon: 'Edit' },
@@ -314,15 +349,15 @@ export default function PatientDetailPage() {
 
   const handleQuickApt = () => {
     if (!patient) return;
-    const newApt = {
+    const newApt: Appointment = {
       id: `apt-${Date.now().toString().slice(-6)}`,
       patientId: patient.id,
       patientName: `${patient.firstName} ${patient.lastName}`,
       date: aptFormData.date,
       time: aptFormData.time,
-      type: aptFormData.type as any,
+      type: aptFormData.type,
       audiologist: aptFormData.audiologist,
-      branch: aptFormData.branch as any,
+      branch: aptFormData.branch,
       status: 'Bekliyor' as const,
       notes: aptFormData.notes
     };
@@ -533,7 +568,7 @@ export default function PatientDetailPage() {
                              const val = e.target.value;
                              const updated = {
                                ...patient,
-                               source: val as any,
+                               source: val as Patient['source'],
                                timeline: [
                                  { date: '10.07.2026', action: `Hasta kaynağı "${val}" olarak güncellendi.`, icon: 'Edit' },
                                  ...(patient.timeline || [])
@@ -560,7 +595,7 @@ export default function PatientDetailPage() {
                              const val = e.target.value;
                              const updated = {
                                ...patient,
-                               salesStage: val as any,
+                               salesStage: val as Patient['salesStage'],
                                timeline: [
                                  { date: '10.07.2026', action: `Satış süreci "${val}" aşamasına taşındı.`, icon: 'Check' },
                                  ...(patient.timeline || [])
@@ -614,7 +649,7 @@ export default function PatientDetailPage() {
                              const val = e.target.value;
                              const updated = {
                                ...patient,
-                               prescriptionStatus: val as any,
+                               prescriptionStatus: val as Patient['prescriptionStatus'],
                                timeline: [
                                  { date: '10.07.2026', action: `Reçete durumu "${val}" olarak güncellendi.`, icon: 'Check' },
                                  ...(patient.timeline || [])
@@ -1181,7 +1216,7 @@ export default function PatientDetailPage() {
                     <select 
                       className="form-select"
                       value={batterySize}
-                      onChange={(e) => setBatterySize(e.target.value as any)}
+                      onChange={(e) => setBatterySize(e.target.value as '10' | '312' | '13' | '675')}
                     >
                       <option value="10">10 Numara (Sarı)</option>
                       <option value="312">312 Numara (Kahverengi)</option>
@@ -1336,7 +1371,7 @@ export default function PatientDetailPage() {
           <div className="card">
             <div className="card-header">
               <span className="card-title">📅 Randevu Geçmişi</span>
-              <button className="btn btn-sm btn-primary">📅 Yeni Randevu</button>
+              <button className="btn btn-sm btn-primary" onClick={() => setShowQuickAptModal(true)}>📅 Yeni Randevu</button>
             </div>
             <div className="card-body">
               {patientAppointments.length > 0 ? (
@@ -1451,10 +1486,43 @@ export default function PatientDetailPage() {
           <div className="card">
             <div className="card-header">
               <span className="card-title">📝 Notlar</span>
-              <button className="btn btn-sm btn-primary">➕ Not Ekle</button>
+              {!isEditingNotes && (
+                <button className="btn btn-sm btn-primary" onClick={() => {
+                  setNotesText(patient.notes || '');
+                  setIsEditingNotes(true);
+                }}>
+                  {patient.notes ? '📝 Düzenle' : '➕ Not Ekle'}
+                </button>
+              )}
             </div>
             <div className="card-body">
-              {patient.notes ? (
+              {isEditingNotes ? (
+                <div>
+                  <textarea
+                    className="form-textarea"
+                    style={{ width: '100%', height: 160, marginBottom: 12, padding: 12 }}
+                    placeholder="Hasta hakkında notlar yazın..."
+                    value={notesText}
+                    onChange={(e) => setNotesText(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button className="btn btn-secondary" onClick={() => setIsEditingNotes(false)}>İptal</button>
+                    <button className="btn btn-primary" onClick={() => {
+                      const updated = {
+                        ...patient,
+                        notes: notesText,
+                        timeline: [
+                          { date: new Date().toLocaleDateString('tr-TR'), action: 'Hasta notu güncellendi.', icon: 'Edit' },
+                          ...(patient.timeline || [])
+                        ]
+                      };
+                      updatePatient(updated);
+                      setIsEditingNotes(false);
+                      addToast({ type: 'success', message: 'Hasta notu başarıyla kaydedildi.' });
+                    }}>Kaydet</button>
+                  </div>
+                </div>
+              ) : patient.notes ? (
                 <div style={{
                   padding: '14px',
                   background: 'var(--gray-50)',
@@ -1462,6 +1530,7 @@ export default function PatientDetailPage() {
                   fontSize: '0.88rem',
                   lineHeight: 1.7,
                   color: 'var(--gray-700)',
+                  whiteSpace: 'pre-wrap'
                 }}>
                   {patient.notes}
                 </div>
@@ -1538,7 +1607,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={editFormData.gender}
-                    onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value as Patient['gender'] })}
                   >
                     <option>Erkek</option>
                     <option>Kadın</option>
@@ -1569,7 +1638,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={editFormData.hearingLoss}
-                    onChange={(e) => setEditFormData({ ...editFormData, hearingLoss: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, hearingLoss: e.target.value as Patient['hearingLoss'] })}
                   >
                     <option>Hafif</option>
                     <option>Orta</option>
@@ -1582,7 +1651,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={editFormData.hearingLossSide}
-                    onChange={(e) => setEditFormData({ ...editFormData, hearingLossSide: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, hearingLossSide: e.target.value as Patient['hearingLossSide'] })}
                   >
                     <option>Sol</option>
                     <option>Sağ</option>
@@ -1594,7 +1663,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={editFormData.sgkStatus}
-                    onChange={(e) => setEditFormData({ ...editFormData, sgkStatus: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, sgkStatus: e.target.value as NonNullable<Patient['sgkStatus']> })}
                   >
                     <option>Aktif</option>
                     <option>Yenileme Hakkı Var</option>
@@ -1663,7 +1732,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={editFormData.sgkInsuranceStatus}
-                    onChange={(e) => setEditFormData({ ...editFormData, sgkInsuranceStatus: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, sgkInsuranceStatus: e.target.value as NonNullable<Patient['sgkInsuranceStatus']> })}
                   >
                     <option>Belirtilmemiş</option>
                     <option>Çalışan (sigortalı)</option>
@@ -1709,7 +1778,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={editFormData.patientStatus}
-                    onChange={(e) => setEditFormData({ ...editFormData, patientStatus: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, patientStatus: e.target.value as NonNullable<Patient['patientStatus']> })}
                   >
                     <option>Potansiyel</option>
                     <option>Deneme Yapıldı</option>
@@ -1727,7 +1796,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={editFormData.source}
-                    onChange={(e) => setEditFormData({ ...editFormData, source: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, source: e.target.value as NonNullable<Patient['source']> })}
                   >
                     <option value="Doktor">Doktor Yönlendirmesi</option>
                     <option value="Sosyal Medya">Sosyal Medya</option>
@@ -1796,7 +1865,7 @@ export default function PatientDetailPage() {
                   <select
                     className="form-select"
                     value={aptFormData.type}
-                    onChange={(e) => setAptFormData({ ...aptFormData, type: e.target.value })}
+                    onChange={(e) => setAptFormData({ ...aptFormData, type: e.target.value as Appointment['type'] })}
                   >
                     <option>Kontrol</option>
                     <option>İşitme Testi</option>
