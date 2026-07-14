@@ -18,6 +18,15 @@ const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 export default function AppointmentsPage() {
   const { appointmentsList, addAppointment, updateAppointmentStatus } = useApp();
+  
+  const stats = React.useMemo(() => {
+    const total = appointmentsList.length;
+    const planlandi = appointmentsList.filter(a => a.status === 'Bekliyor' || a.status === 'Hatırlatıldı').length;
+    const tamamlanan = appointmentsList.filter(a => a.status === 'Geldi').length;
+    const iptal = appointmentsList.filter(a => a.status === 'İptal' || a.status === 'Gelmedi').length;
+    return { total, planlandi, tamamlanan, iptal };
+  }, [appointmentsList]);
+
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [filterAudiologist, setFilterAudiologist] = useState('Tümü');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -84,6 +93,107 @@ export default function AppointmentsPage() {
             <IconPlus size={15} strokeWidth={2} /> Yeni Randevu
           </button>
         </div>
+      </div>
+
+      {/* İstatistik Kartları */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20, marginBottom: 20 }}>
+        
+        {/* Toplam Randevu */}
+        <div className="card">
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--primary-100)',
+              color: 'var(--primary-600)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.4rem',
+              boxShadow: 'var(--shadow-xs)'
+            }}>
+              📅
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Toplam Randevu</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--gray-900)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.total}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Planlandı */}
+        <div className="card">
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--info-50)',
+              color: 'var(--info-600)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.4rem',
+              boxShadow: 'var(--shadow-xs)'
+            }}>
+              🕒
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Planlandı</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--info-600)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.planlandi}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tamamlanan */}
+        <div className="card">
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--success-50)',
+              color: 'var(--success-600)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.4rem',
+              boxShadow: 'var(--shadow-xs)'
+            }}>
+              ✅
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tamamlanan</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--success-600)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.tamamlanan}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* İptal Edilen */}
+        <div className="card">
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--danger-50)',
+              color: 'var(--danger-600)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.4rem',
+              boxShadow: 'var(--shadow-xs)'
+            }}>
+              ❌
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>İptal Edilen</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--danger-600)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.iptal}</div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Filters */}
