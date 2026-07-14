@@ -188,6 +188,10 @@ export const patients: Patient[] = [
     emergencyContactPhone: '0532 222 3344',
     emergencyContactRelation: 'Oğlu',
     nextAction: 'SGK yenileme evrakları Medula üzerinden kontrol edilecek.',
+    prescriptionNo: 'REC-2026-9938',
+    reportNo: 'RAP-2026-1122',
+    sgkInsuranceStatus: 'Emekli',
+    patientStatus: 'Müşteri',
     timeline: [
       { date: '10.02.2019', action: 'İlk hasta kaydı oluşturuldu.', icon: 'Patients' },
       { date: '20.06.2021', action: 'Phonak Audéo P90 cihaz satışı yapıldı.', icon: 'Cash' },
@@ -230,6 +234,10 @@ export const patients: Patient[] = [
     emergencyContactPhone: '0544 333 4455',
     emergencyContactRelation: 'Eşi',
     nextAction: '6 ay sonra rutin kontrol araması yapılacak.',
+    prescriptionNo: 'REC-2026-5544',
+    reportNo: 'RAP-2026-8877',
+    sgkInsuranceStatus: 'Çalışan (sigortalı)',
+    patientStatus: 'Deneme Yapıldı',
     timeline: [
       { date: '05.11.2022', action: 'İlk muayene kaydı yapıldı.', icon: 'Patients' },
       { date: '10.01.2023', action: 'Oticon More 1 cihaz satışı ve ÜTS bildirimi tamamlandı.', icon: 'Check' },
@@ -265,6 +273,10 @@ export const patients: Patient[] = [
     emergencyContactPhone: '0555 444 5566',
     emergencyContactRelation: 'Kardeşi',
     nextAction: 'Cihaz denemesi için randevu verilecek.',
+    prescriptionNo: '',
+    reportNo: '',
+    sgkInsuranceStatus: 'Belirtilmemiş',
+    patientStatus: 'Potansiyel',
     timeline: [
       { date: '01.07.2026', action: 'Hasta kliniğe ilk kez gelerek işitme testi yaptırdı.', icon: 'Patients' }
     ]

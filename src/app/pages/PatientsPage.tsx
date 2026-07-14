@@ -6,7 +6,7 @@ import {
   getAvatarColor, getInitials, formatDate, calculateAge,
   type Patient,
 } from '../data/mockData';
-import { IconPlus, IconSearch, IconArrowRight, IconClose } from '../components/Icons';
+import { IconPlus, IconSearch, IconArrowRight, IconClose, IconPatients, IconCalendar } from '../components/Icons';
 
 type SortKey = 'name' | 'tc' | 'phone' | 'age' | 'hearingLoss' | 'device' | 'sgkStatus' | 'lastVisit';
 type SortDir = 'asc' | 'desc';
@@ -36,10 +36,21 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast } = useApp();
   const [search, setSearch] = useState('');
   const [filterLoss, setFilterLoss] = useState('Tümü');
+  const [filterStatus, setFilterStatus] = useState('Tümü');
+  const [filterSource, setFilterSource] = useState('Tümü');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showBulkAddModal, setShowBulkAddModal] = useState(false);
+  const [showImportHistoryModal, setShowImportHistoryModal] = useState(false);
+  
+  const [bulkInputText, setBulkInputText] = useState('');
+  const [importFileSimulated, setImportFileSimulated] = useState(false);
+
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -121,6 +132,86 @@ export default function PatientsPage() {
     });
   };
 
+  const stats = useMemo(() => {
+    const getCount = (status: string) => patientsList.filter(p => (p.patientStatus || 'Potansiyel') === status).length;
+    return {
+      potansiyel: getCount('Potansiyel'),
+      deneme: getCount('Deneme Yapıldı'),
+      musteri: getCount('Müşteri'),
+      satinAlmayanlar: getCount('Satın Almayanlar'),
+      genel: getCount('Genel'),
+      tamir: getCount('Tamir için gelen'),
+      kalip: getCount('Kalıp Hastası'),
+      pil: getCount('Pil Hastası'),
+      satis: getCount('Satış Hastası'),
+      eski: getCount('Eski Hasta'),
+    };
+  }, [patientsList]);
+
+  const handleBulkSave = () => {
+    if (!bulkInputText.trim()) {
+      alert('Lütfen eklenecek hasta verilerini girin.');
+      return;
+    }
+    const lines = bulkInputText.split('\n');
+    let addedCount = 0;
+    
+    lines.forEach((line) => {
+      if (!line.trim()) return;
+      const parts = line.split(';');
+      if (parts.length >= 2) {
+        const firstName = parts[0]?.trim() || '';
+        const lastName = parts[1]?.trim() || '';
+        const tc = parts[2]?.trim() || '11122233344';
+        const phone = parts[3]?.trim() || '0555 111 2233';
+        const address = parts[4]?.trim() || 'Belirtilmemiş';
+        
+        if (firstName && lastName) {
+          const newPat: Patient = {
+            id: `p-${Date.now().toString().slice(-6)}-${addedCount}`,
+            firstName,
+            lastName,
+            tc,
+            phone,
+            address,
+            gender: 'Erkek',
+            birthDate: '1985-05-15',
+            email: `${firstName.toLowerCase()}@example.com`,
+            hearingLoss: 'Hafif',
+            hearingLossSide: 'Sol',
+            sgkStatus: 'Aktif',
+            patientStatus: 'Potansiyel',
+            sgkInsuranceStatus: 'Belirtilmemiş',
+            source: 'Tavsiye',
+            lastVisit: new Date().toISOString().split('T')[0],
+            createdAt: new Date().toISOString().split('T')[0],
+            timeline: [
+              { date: '11.07.2026', action: 'Toplu aktarımla hasta kaydı oluşturuldu.', icon: 'Plus' }
+            ]
+          };
+          addPatient(newPat);
+          addedCount++;
+        }
+      }
+    });
+    
+    addToast({ type: 'success', message: `${addedCount} hasta başarıyla toplu olarak eklendi.` });
+    setShowBulkAddModal(false);
+    setBulkInputText('');
+  };
+
+  const handleImportHistory = () => {
+    setImportFileSimulated(true);
+    setTimeout(() => {
+      addToast({ 
+        type: 'success', 
+        message: 'Odimax geçmiş hasta veritabanı (142 hasta kartı ve 512 randevu/cihaz geçmişi) başarıyla sisteme aktarıldı.' 
+      });
+      setShowImportHistoryModal(false);
+      setImportFileSimulated(false);
+    }, 1500);
+  };
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -134,9 +225,25 @@ export default function PatientsPage() {
     const matchSearch =
       `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
       p.tc.includes(search) ||
-      p.phone.includes(search);
-    const matchFilter = filterLoss === 'Tümü' || p.hearingLoss === filterLoss;
-    return matchSearch && matchFilter;
+      p.phone.includes(search) ||
+      (p.address || '').toLowerCase().includes(search.toLowerCase());
+      
+    const matchLoss = filterLoss === 'Tümü' || p.hearingLoss === filterLoss;
+    const matchStatus = filterStatus === 'Tümü' || (p.patientStatus || 'Potansiyel') === filterStatus;
+    const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
+    
+    let matchDate = true;
+    const itemDate = p.createdAt || p.lastVisit || '';
+    if (itemDate) {
+      if (filterStartDate) {
+        matchDate = matchDate && itemDate >= filterStartDate;
+      }
+      if (filterEndDate) {
+        matchDate = matchDate && itemDate <= filterEndDate;
+      }
+    }
+    
+    return matchSearch && matchLoss && matchStatus && matchSource && matchDate;
   });
 
   const sorted = useMemo(() => {
@@ -185,38 +292,188 @@ export default function PatientsPage() {
     <div className="page">
       <div className="page-header">
         <div className="page-header-left">
-          <h2>Hasta Listesi</h2>
-          <p>{patientsList.length} kayıtlı hasta</p>
-        </div>
-        <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <IconPlus size={16} strokeWidth={2} /> Yeni Hasta Ekle
-          </button>
+          <h2>Hasta Yönetimi</h2>
+          <p>Kayıtlı hastaların listesi, durum dağılımı ve CRM filtreleme</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div className="header-search" style={{ flex: 1, minWidth: 200 }}>
-            <span className="header-search-icon">
-              <IconSearch size={15} strokeWidth={1.7} />
-            </span>
-            <input
-              type="search"
-              placeholder="Ad, TC veya telefon ile ara..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ width: '100%' }}
-            />
+      {/* Toplam Hasta & Durum Dağılımı İstatistikleri */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 20 }}>
+        {/* Toplam Hasta Kartı */}
+        <div className="card" style={{ display: 'flex', alignItems: 'center' }}>
+          <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%' }}>
+            <div style={{
+              width: 52,
+              height: 52,
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--primary-100)',
+              color: 'var(--primary-600)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.5rem',
+              boxShadow: 'var(--shadow-xs)'
+            }}>
+              👥
+            </div>
+            <div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Toplam Hasta</div>
+              <div style={{ fontSize: '2.2rem', fontWeight: 700, color: 'var(--gray-900)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{patientsList.length}</div>
+            </div>
           </div>
-          <div className="tabs">
+        </div>
+
+        {/* Durumlara Göre Dağılım Kartı */}
+        <div className="card" style={{ flex: 2 }}>
+          <div className="card-body">
+            <h4 style={{ fontSize: '0.78rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
+              Durumlara Göre Dağılım
+            </h4>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                { label: 'Potansiyel', count: stats.potansiyel, bg: '#eff6ff', text: '#1e40af', border: '#dbeafe' },
+                { label: 'Deneme Yapıldı', count: stats.deneme, bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' },
+                { label: 'Müşteri', count: stats.musteri, bg: '#f0fdf4', text: '#166534', border: '#dcfce7' },
+                { label: 'Satın Almayanlar', count: stats.satinAlmayanlar, bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' },
+                { label: 'Genel', count: stats.genel, bg: '#f9fafb', text: '#374151', border: '#f3f4f6' },
+                { label: 'Tamir için gelen', count: stats.tamir, bg: '#fff1f2', text: '#9f1239', border: '#ffe4e6' },
+                { label: 'Kalıp Hastası', count: stats.kalip, bg: '#f0fdfa', text: '#0f766e', border: '#ccfbf1' },
+                { label: 'Pil Hastası', count: stats.pil, bg: '#fefce8', text: '#854d0e', border: '#fef9c3' },
+                { label: 'Satış Hastası', count: stats.satis, bg: '#f5f3ff', text: '#5b21b6', border: '#ede9fe' },
+                { label: 'Eski Hasta', count: stats.eski, bg: '#fdf2f8', text: '#9d174d', border: '#fce7f3' }
+              ].map((item, idx) => (
+                <div key={idx} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '5px 12px',
+                  borderRadius: 'var(--radius-full)',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  background: item.bg,
+                  color: item.text,
+                  border: `1px solid ${item.border}`,
+                  boxShadow: 'var(--shadow-xs)',
+                  transition: 'transform var(--transition-fast)'
+                }}>
+                  <span>{item.label}:</span>
+                  <strong style={{ fontSize: '0.85rem' }}>{item.count}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filtreleme ve Aksiyon Paneli */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-body" style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          
+          {/* Sol Kısım: Arama ve Dropdown Filtreler */}
+          <div style={{ display: 'flex', gap: 12, flex: 1, minWidth: 320, flexWrap: 'wrap', alignItems: 'center' }}>
+            
+            {/* Arama Kutusu */}
+            <div className="header-search" style={{ flex: '1.2 1 200px' }}>
+              <span className="header-search-icon">
+                <IconSearch size={15} strokeWidth={1.7} />
+              </span>
+              <input
+                type="search"
+                placeholder="Ad, TC, telefon veya adres ile ara..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            {/* Durum filtrele select */}
+            <div style={{ minWidth: 150, flex: '1 1 120px' }}>
+              <select
+                className="form-select"
+                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }}
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <option value="Tümü">Durum filtrele</option>
+                <option value="Potansiyel">Potansiyel</option>
+                <option value="Deneme Yapıldı">Deneme Yapıldı</option>
+                <option value="Müşteri">Müşteri</option>
+                <option value="Satın Almayanlar">Satın Almayanlar</option>
+                <option value="Genel">Genel</option>
+                <option value="Tamir için gelen">Tamir için gelen</option>
+                <option value="Kalıp Hastası">Kalıp Hastası</option>
+                <option value="Pil Hastası">Pil Hastası</option>
+                <option value="Satış Hastası">Satış Hastası</option>
+                <option value="Eski Hasta">Eski Hasta</option>
+              </select>
+            </div>
+
+            {/* Referans kaynağı select */}
+            <div style={{ minWidth: 150, flex: '1 1 120px' }}>
+              <select
+                className="form-select"
+                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }}
+                value={filterSource}
+                onChange={(e) => setFilterSource(e.target.value)}
+              >
+                <option value="Tümü">Referans kaynağı</option>
+                <option value="Doktor">Doktor Yönlendirmesi</option>
+                <option value="Sosyal Medya">Sosyal Medya</option>
+                <option value="Tavsiye">Hasta Tavsiyesi</option>
+                <option value="Yürüyerek">Yürüyerek (Walk-in)</option>
+                <option value="Web">Web Sitesi</option>
+              </select>
+            </div>
+
+            {/* Tarih Aralığı Seçici */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 250, flex: '1 1 200px' }}>
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '6px 10px', fontSize: '0.82rem', height: 38, flex: 1 }}
+                value={filterStartDate}
+                onChange={(e) => setFilterStartDate(e.target.value)}
+                title="Başlangıç Tarihi"
+              />
+              <span style={{ color: 'var(--gray-400)', fontSize: '0.9rem' }}>→</span>
+              <input
+                type="date"
+                className="form-input"
+                style={{ padding: '6px 10px', fontSize: '0.82rem', height: 38, flex: 1 }}
+                value={filterEndDate}
+                onChange={(e) => setFilterEndDate(e.target.value)}
+                title="Bitiş Tarihi"
+              />
+            </div>
+          </div>
+
+          {/* Sağ Kısım: Aksiyon Butonları (Toplu Ekle, Geçmiş Aktar, Yeni Hasta Ekle) */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: 'auto', justifySelf: 'end' }}>
+            <button className="btn btn-secondary" onClick={() => setShowBulkAddModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
+              📥 Toplu Ekle
+            </button>
+            <button className="btn btn-secondary" onClick={() => setShowImportHistoryModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
+              🔄 Geçmiş Aktar
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
+              <IconPlus size={15} strokeWidth={2} /> Yeni Hasta Ekle
+            </button>
+          </div>
+        </div>
+
+        {/* İşitme Kaybı Tabs (Mevcut yapı, kartın alt sınırında ince bir çizgi ile) */}
+        <div style={{ padding: '0px 20px 14px', borderTop: '1px solid var(--surface-border-light)', display: 'flex', alignItems: 'center', gap: 12, paddingTop: 14 }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)', fontWeight: 600 }}>İşitme Kaybı:</span>
+          <div className="tabs" style={{ marginBottom: 0 }}>
             {['Tümü', 'Hafif', 'Orta', 'İleri', 'Çok İleri'].map((loss) => (
               <button
                 key={loss}
                 className={`tab ${filterLoss === loss ? 'active' : ''}`}
                 onClick={() => setFilterLoss(loss)}
+                style={{ padding: '4px 12px', fontSize: '0.8rem' }}
               >
                 {loss}
               </button>
@@ -596,6 +853,100 @@ export default function PatientsPage() {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
               <button className="btn btn-primary" onClick={handleSave}>Tamam</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toplu Hasta Ekle Modalı */}
+      {showBulkAddModal && (
+        <div className="modal-overlay" onClick={() => setShowBulkAddModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <span className="modal-title">📥 Toplu Hasta Aktarımı</span>
+              <button className="modal-close" onClick={() => setShowBulkAddModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.82rem', color: 'var(--gray-600)', marginBottom: 12, lineHeight: 1.5 }}>
+                Aşağıdaki kutuya, her satıra bir hasta gelecek şekilde verilerinizi yapıştırın. Sütunları ayırmak için <strong>noktalı virgül (;)</strong> kullanın.
+              </p>
+              <div style={{ background: 'var(--gray-50)', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: 'var(--gray-700)', fontFamily: 'var(--font-mono)', marginBottom: 16, border: '1px solid var(--gray-200)' }}>
+                <strong>Format:</strong> Ad;Soyad;TC;Telefon;Adres<br />
+                <strong>Örnek:</strong> Ahmet;Yılmaz;12345678901;05321112233;Kadıköy, İstanbul
+              </div>
+              <div className="form-group">
+                <label className="form-label">Hasta Verileri</label>
+                <textarea
+                  className="form-textarea"
+                  style={{ height: 200, fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}
+                  placeholder="Ahmet;Yılmaz;12345678901;05321112233;Kadıköy, İstanbul&#10;Can;Saraç;45678901234;05553334455;Üsküdar, İstanbul"
+                  value={bulkInputText}
+                  onChange={(e) => setBulkInputText(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowBulkAddModal(false)}>İptal</button>
+              <button className="btn btn-primary" onClick={handleBulkSave}>Tamam</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Geçmiş Veri Aktarımı Modalı */}
+      {showImportHistoryModal && (
+        <div className="modal-overlay" onClick={() => setShowImportHistoryModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
+            <div className="modal-header">
+              <span className="modal-title">🔄 Odimax Geçmiş Veri Aktarımı</span>
+              <button className="modal-close" onClick={() => setShowImportHistoryModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.82rem', color: 'var(--gray-600)', marginBottom: 16, lineHeight: 1.5 }}>
+                Odimax veya eski yazılımınızdan dışa aktardığınız Excel, CSV, XML veya JSON formatındaki hasta kayıt ve cihaz/randevu geçmişi yedek dosyasını buraya yükleyebilirsiniz.
+              </p>
+              
+              <div style={{
+                border: '2px dashed var(--gray-300)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '30px 20px',
+                textAlign: 'center',
+                background: 'var(--surface-card)',
+                cursor: 'pointer',
+                marginBottom: 16,
+                transition: 'border-color var(--transition-base)'
+              }}
+              onClick={handleImportHistory}>
+                <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📁</div>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-800)', marginBottom: 4 }}>
+                  Yedek dosyasını sürükleyip bırakın veya seçin
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
+                  Desteklenen formatlar: .xlsx, .xls, .csv, .xml, .json (Maks. 20MB)
+                </div>
+              </div>
+
+              {importFileSimulated && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--primary-50)', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--primary-100)' }}>
+                  <div className="spinner-small" style={{
+                    width: 16,
+                    height: 16,
+                    border: '2px solid var(--primary-200)',
+                    borderTopColor: 'var(--primary-600)',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <span style={{ fontSize: '0.8rem', color: 'var(--primary-700)', fontWeight: 500 }}>
+                    Dosya analiz ediliyor ve veriler veritabanına işleniyor...
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowImportHistoryModal(false)}>Kapat</button>
+              <button className="btn btn-primary" onClick={handleImportHistory} disabled={importFileSimulated}>
+                {importFileSimulated ? 'Aktarılıyor...' : 'Aktarımı Başlat'}
+              </button>
             </div>
           </div>
         </div>
