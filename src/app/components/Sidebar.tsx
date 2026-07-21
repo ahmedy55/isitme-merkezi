@@ -42,7 +42,22 @@ const menuSections = [
 ];
 
 export default function Sidebar() {
-  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen } = useApp();
+  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, isPlatformAdmin } = useApp();
+
+  const activeSections = React.useMemo(() => {
+    if (isPlatformAdmin) {
+      return [
+        ...menuSections,
+        {
+          title: 'SaaS Yönetimi',
+          items: [
+            { id: 'super-admin' as const, label: 'SaaS Panel', badge: null }
+          ]
+        }
+      ];
+    }
+    return menuSections;
+  }, [isPlatformAdmin, menuSections]);
 
   return (
     <>
@@ -82,7 +97,7 @@ export default function Sidebar() {
         </div>
 
         {/* Navigasyon */}
-        {menuSections.map((section) => {
+        {activeSections.map((section) => {
           const NavIcon = navIcons;
           return (
             <div key={section.title} className="sidebar-section">
@@ -114,12 +129,54 @@ export default function Sidebar() {
 
         {/* Kullanıcı */}
         <div className="sidebar-footer">
-          <div className="sidebar-user">
-            <div className="sidebar-user-avatar">EA</div>
-            <div className="sidebar-user-info">
-              <div className="sidebar-user-name">Dr. Elif Arslan</div>
-              <div className="sidebar-user-role">Odyolog · Kadıköy</div>
+          <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="sidebar-user-avatar" style={{ background: 'var(--primary-600)', color: 'white', fontWeight: 600 }}>
+                {currentUser 
+                  ? `${currentUser.user_metadata?.first_name?.[0] || ''}${currentUser.user_metadata?.last_name?.[0] || ''}`.toUpperCase() || 'U'
+                  : 'EA'}
+              </div>
+              <div className="sidebar-user-info">
+                <div className="sidebar-user-name" style={{ color: 'var(--gray-200)', fontWeight: 600, fontSize: '0.82rem' }}>
+                  {currentUser 
+                    ? `${currentUser.user_metadata?.first_name || ''} ${currentUser.user_metadata?.last_name || ''}`.trim() || currentUser.email 
+                    : 'Dr. Elif Arslan'}
+                </div>
+                <div className="sidebar-user-role" style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>
+                  {currentUser 
+                    ? (currentUser.user_metadata?.role || 'Odyolog') 
+                    : 'Odyolog · Kadıköy'}
+                </div>
+              </div>
             </div>
+
+            {/* Çıkış Butonu */}
+            {currentUser && (
+              <button
+                onClick={logout}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--gray-400)',
+                  cursor: 'pointer',
+                  padding: 4,
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                  marginLeft: 'auto'
+                }}
+                className="sidebar-logout-btn"
+                title="Güvenli Çıkış"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" x2="9" y1="12" y2="12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </aside>

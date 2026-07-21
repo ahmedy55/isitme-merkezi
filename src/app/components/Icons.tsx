@@ -656,6 +656,7 @@ export const navIcons = {
   support:      IconSupport,
   'activity-log': IconActivity,
   'branch-activities': IconBranchActivity,
+  'super-admin': IconShield,
 } as const;
 
 export type NavIconKey = keyof typeof navIcons;

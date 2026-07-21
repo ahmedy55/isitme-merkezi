@@ -26,6 +26,9 @@ import AssetsPage from './pages/AssetsPage';
 import SupportPage from './pages/SupportPage';
 import ActivityLogPage from './pages/ActivityLogPage';
 import BranchActivitiesPage from './pages/BranchActivitiesPage';
+import LoginPage from './pages/LoginPage';
+import OrgSelectPage from './pages/OrgSelectPage';
+import SuperAdminPage from './pages/SuperAdminPage';
 
 function ToastIcon({ type }: { type: string }) {
   if (type === 'success') return <IconCheck size={16} strokeWidth={2} />;
@@ -39,6 +42,27 @@ function AppContent() {
   React.useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [currentPage]);
+
+  // Giriş ve Klinik seçim ekranları için ana tasarımı (Sidebar/Header) render etme
+  if (currentPage === 'login') {
+    return (
+      <>
+        <LoginPage />
+        {/* Toast Bildirimleri */}
+        {toasts.length > 0 && renderToastContainer()}
+      </>
+    );
+  }
+
+  if (currentPage === 'org-select') {
+    return (
+      <>
+        <OrgSelectPage />
+        {/* Toast Bildirimleri */}
+        {toasts.length > 0 && renderToastContainer()}
+      </>
+    );
+  }
 
   const renderPage = () => {
     switch (currentPage) {
@@ -62,9 +86,34 @@ function AppContent() {
       case 'support':           return <SupportPage />;
       case 'activity-log':      return <ActivityLogPage />;
       case 'branch-activities': return <BranchActivitiesPage />;
+      case 'super-admin':       return <SuperAdminPage />;
       default:                  return <DashboardPage />;
     }
   };
+
+  function renderToastContainer() {
+    return (
+      <div className="toast-container" role="alert" aria-live="polite">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.type}`}>
+            <span style={{ color: 'var(--primary-600)', flexShrink: 0 }}>
+              <ToastIcon type={toast.type} />
+            </span>
+            <span style={{ flex: 1, fontSize: '0.84rem', color: 'var(--gray-800)' }}>
+              {toast.message}
+            </span>
+            <button
+              onClick={() => removeToast(toast.id)}
+              style={{ opacity: 0.4, flexShrink: 0 }}
+              aria-label="Bildirimi kapat"
+            >
+              <IconClose size={14} strokeWidth={2} />
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="app-layout">
@@ -79,27 +128,7 @@ function AppContent() {
       <BottomNav />
 
       {/* Toast Bildirimleri */}
-      {toasts.length > 0 && (
-        <div className="toast-container" role="alert" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`toast ${toast.type}`}>
-              <span style={{ color: 'var(--primary-600)', flexShrink: 0 }}>
-                <ToastIcon type={toast.type} />
-              </span>
-              <span style={{ flex: 1, fontSize: '0.84rem', color: 'var(--gray-800)' }}>
-                {toast.message}
-              </span>
-              <button
-                onClick={() => removeToast(toast.id)}
-                style={{ opacity: 0.4, flexShrink: 0 }}
-                aria-label="Bildirimi kapat"
-              >
-                <IconClose size={14} strokeWidth={2} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {toasts.length > 0 && renderToastContainer()}
     </div>
   );
 }

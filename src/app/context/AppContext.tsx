@@ -15,6 +15,18 @@ import {
   Patient, Appointment, StockItem, SaleRecord, RecallItem,
   Supplier, Expense, SystemUser, AuditLogEntry, Branch
 } from '../data/mockData';
+import { supabase } from '../lib/supabase';
+import {
+  dbFetchPatients, dbInsertPatient, dbUpdatePatient,
+  dbFetchAppointments, dbInsertAppointment, dbUpdateAppointmentStatus,
+  dbFetchStockItems, dbInsertStockItem, dbUpdateStockItem,
+  dbFetchSales, dbInsertSale,
+  dbFetchRecallItems, dbUpdateRecallStatus,
+  dbFetchSuppliers, dbInsertSupplier, dbUpdateSupplier, dbDeleteSupplier,
+  dbFetchExpenses, dbInsertExpense, dbUpdateExpense, dbDeleteExpense,
+  dbFetchBranches, dbInsertBranch, dbUpdateBranch,
+  dbFetchAuditLogs, dbInsertAuditLog
+} from '../lib/database';
 
 type Page = 
   | 'dashboard'
@@ -36,7 +48,10 @@ type Page =
   | 'assets'
   | 'support'
   | 'activity-log'
-  | 'branch-activities';
+  | 'branch-activities'
+  | 'login'
+  | 'org-select'
+  | 'super-admin';
 
 interface Toast {
   id: string;
@@ -59,6 +74,13 @@ interface AppContextType {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
+  
+  // Auth Eyaletleri
+  currentUser: any;
+  currentOrgId: string | null;
+  logout: () => Promise<void>;
+  dataLoading: boolean;
+  isPlatformAdmin: boolean;
   
   // Dinamik Veri Eyaletleri
   patientsList: Patient[];
@@ -110,7 +132,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const [currentPage, setCurrentPage] = useState<Page>('login');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<string>('genel');
   const [showModal, setShowModal] = useState<string | null>(null);
@@ -129,12 +151,69 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [auditLogList, setAuditLogList] = useState<AuditLogEntry[]>([]);
   const [branchesList, setBranchesList] = useState<Branch[]>([]);
 
+  // Auth Eyaletleri State
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [dataLoading, setDataLoading] = useState(false);
+
   // Demo Ayarları
   const [demoModeActive] = useState(true);
   const [commissionRate, setCommissionRate] = useState(3);
 
-  // İlk yüklemede mock verileri set et
+  // Supabase'den tüm verileri tek hamlede çek
+  const loadAllData = async () => {
+    setDataLoading(true);
+    try {
+      const [
+        patients,
+        appointments,
+        stock,
+        sales,
+        recall,
+        suppliers,
+        expenses,
+        branches,
+        auditLogs
+      ] = await Promise.all([
+        dbFetchPatients(),
+        dbFetchAppointments(),
+        dbFetchStockItems(),
+        dbFetchSales(),
+        dbFetchRecallItems(),
+        dbFetchSuppliers(),
+        dbFetchExpenses(),
+        dbFetchBranches(),
+        dbFetchAuditLogs()
+      ]);
+
+      setPatientsList(patients);
+      setAppointmentsList(appointments);
+      setStockList(stock);
+      setSalesList(sales);
+      setRecallList(recall);
+      setSuppliersList(suppliers);
+      setExpensesList(expenses);
+      setBranchesList(branches);
+      setAuditLogList(auditLogs);
+    } catch (err: any) {
+      console.error('Veriler Supabase\'den çekilirken hata oluştu:', err);
+      addToast({ type: 'error', message: 'Klinik verileri veritabanından çekilemedi.' });
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  // Organizasyon seçimi değiştiğinde verileri otomatik yükle
   useEffect(() => {
+    if (currentOrgId) {
+      loadAllData();
+    }
+  }, [currentOrgId]);
+
+  // İlk yüklemede mock verileri set et & Auth kontrolü yap
+  useEffect(() => {
+    // 1. Mock veriler
     setPatientsList(initialPatients);
     setAppointmentsList(initialAppointments);
     setStockList(initialStock);
@@ -145,7 +224,87 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUsersList(initialUsers);
     setAuditLogList(initialAuditLog);
     setBranchesList(initialBranches);
+
+    // Platform admin kontrol helper'ı
+    const checkAdminStatus = async (uid: string) => {
+      try {
+        const { data } = await supabase
+          .from('platform_admins')
+          .select('user_id')
+          .eq('user_id', uid)
+          .maybeSingle();
+        return !!data;
+      } catch (err) {
+        console.error('Admin status check failed:', err);
+        return false;
+      }
+    };
+
+    // 2. İlk açılışta aktif oturum kontrolü
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setCurrentUser(session.user);
+        const admin = await checkAdminStatus(session.user.id);
+        setIsPlatformAdmin(admin);
+        
+        const orgId = session.user.app_metadata?.organization_id;
+        if (orgId) {
+          setCurrentOrgId(orgId);
+          setCurrentPage('dashboard');
+        } else {
+          setCurrentPage('org-select');
+        }
+      } else {
+        setCurrentUser(null);
+        setCurrentOrgId(null);
+        setIsPlatformAdmin(false);
+        setCurrentPage('login');
+      }
+    };
+
+    checkSession();
+
+    // 3. Auth State Dinleyicisi
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        setCurrentUser(session.user);
+        const admin = await checkAdminStatus(session.user.id);
+        setIsPlatformAdmin(admin);
+
+        const orgId = session.user.app_metadata?.organization_id;
+        if (orgId) {
+          setCurrentOrgId(orgId);
+          setCurrentPage(prev => (prev === 'login' || prev === 'org-select' ? 'dashboard' : prev));
+        } else {
+          setCurrentOrgId(null);
+          setCurrentPage(prev => (prev === 'login' ? 'org-select' : prev));
+        }
+      } else {
+        setCurrentUser(null);
+        setCurrentOrgId(null);
+        setIsPlatformAdmin(false);
+        setCurrentPage('login');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      addToast({ type: 'error', message: 'Çıkış yapılırken bir hata oluştu.' });
+    } else {
+      addToast({ type: 'success', message: 'Güvenli çıkış yapıldı.' });
+      setCurrentUser(null);
+      setCurrentOrgId(null);
+      setIsPlatformAdmin(false);
+      setCurrentPage('login');
+    }
+  };
 
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
@@ -165,58 +324,228 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Metotlar
-  const addPatient = (patient: Patient) => {
-    setPatientsList(prev => [patient, ...prev]);
+  const addPatient = async (patient: Patient) => {
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertPatient(patient);
+        setPatientsList(prev => [created, ...prev]);
+        addToast({ type: 'success', message: 'Hasta başarıyla eklendi.' });
+        await dbInsertAuditLog({
+          action: 'Hasta Ekleme',
+          module: 'Hastalar',
+          description: `${patient.firstName} ${patient.lastName} eklendi.`
+        });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Hasta eklenemedi: ${err.message}` });
+      }
+    } else {
+      setPatientsList(prev => [patient, ...prev]);
+    }
   };
 
-  const updatePatient = (updatedPatient: Patient) => {
-    setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+  const updatePatient = async (updatedPatient: Patient) => {
+    if (currentOrgId && updatedPatient.id) {
+      try {
+        const updated = await dbUpdatePatient(updatedPatient.id, updatedPatient);
+        setPatientsList(prev => prev.map(p => p.id === updated.id ? updated : p));
+        addToast({ type: 'success', message: 'Hasta bilgileri güncellendi.' });
+        await dbInsertAuditLog({
+          action: 'Hasta Güncelleme',
+          module: 'Hastalar',
+          description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.`
+        });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Hasta güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+    }
   };
 
-  const addAppointment = (appointment: Appointment) => {
-    setAppointmentsList(prev => [appointment, ...prev]);
+  const addAppointment = async (appointment: Appointment) => {
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertAppointment(appointment);
+        // dbInsertAppointment patientName'i JOIN ile getirmez, bu yüzden yerel eşleme yapalım
+        const pat = patientsList.find(p => p.id === appointment.patientId);
+        const patientName = pat ? `${pat.firstName} ${pat.lastName}` : 'Bilinmeyen Hasta';
+        const createdWithPatName = { ...created, patientName };
+
+        setAppointmentsList(prev => [...prev, createdWithPatName]);
+        addToast({ type: 'success', message: 'Randevu başarıyla oluşturuldu.' });
+        await dbInsertAuditLog({
+          action: 'Randevu Ekleme',
+          module: 'Randevular',
+          description: `Randevu tarihi: ${appointment.date}`
+        });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Randevu eklenemedi: ${err.message}` });
+      }
+    } else {
+      setAppointmentsList(prev => [appointment, ...prev]);
+    }
   };
 
-  const updateAppointmentStatus = (id: string, status: Appointment['status']) => {
-    setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+  const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
+    if (currentOrgId) {
+      try {
+        const updated = await dbUpdateAppointmentStatus(id, status);
+        setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+        addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Randevu güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    }
   };
 
-  const addSale = (sale: SaleRecord) => {
-    setSalesList(prev => [sale, ...prev]);
+  const addSale = async (sale: SaleRecord) => {
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertSale(sale);
+        // patientName JOIN eşlemesi yapalım
+        const pat = patientsList.find(p => p.id === sale.patientId);
+        const patientName = pat ? `${pat.firstName} ${pat.lastName}` : 'Bilinmeyen Hasta';
+        const createdWithPatName = { ...created, patientName };
+
+        setSalesList(prev => [createdWithPatName, ...prev]);
+        addToast({ type: 'success', message: 'Satış işlemi başarıyla kaydedildi.' });
+        await dbInsertAuditLog({
+          action: 'Satış Ekleme',
+          module: 'Kasa',
+          description: `${patientName} adına ${sale.total} TL tutarında satış.`
+        });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Satış kaydedilemedi: ${err.message}` });
+      }
+    } else {
+      setSalesList(prev => [sale, ...prev]);
+    }
   };
 
-  const addStockItem = (item: StockItem) => {
-    setStockList(prev => [item, ...prev]);
+  const addStockItem = async (item: StockItem) => {
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertStockItem(item);
+        setStockList(prev => [created, ...prev]);
+        addToast({ type: 'success', message: 'Ürün envantere eklendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Ürün eklenemedi: ${err.message}` });
+      }
+    } else {
+      setStockList(prev => [item, ...prev]);
+    }
   };
 
-  const updateStockItem = (updatedItem: StockItem) => {
-    setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
+  const updateStockItem = async (updatedItem: StockItem) => {
+    if (currentOrgId && updatedItem.id) {
+      try {
+        const updated = await dbUpdateStockItem(updatedItem.id, updatedItem);
+        setStockList(prev => prev.map(s => s.id === updated.id ? updated : s));
+        addToast({ type: 'success', message: 'Ürün bilgileri güncellendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Ürün güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
+    }
   };
 
-  const updateRecallItemStatus = (id: string, status: RecallItem['status']) => {
-    setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: '2026-07-10' } : r));
+  const updateRecallItemStatus = async (id: string, status: RecallItem['status']) => {
+    if (currentOrgId) {
+      try {
+        const updated = await dbUpdateRecallStatus(id, status);
+        setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: updated.lastContact } : r));
+        addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Durum güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: '2026-07-10' } : r));
+    }
   };
 
   // P0 — Tedarikçi CRUD
-  const addSupplier = (supplier: Supplier) => {
-    setSuppliersList(prev => [supplier, ...prev]);
+  const addSupplier = async (supplier: Supplier) => {
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertSupplier(supplier);
+        setSuppliersList(prev => [created, ...prev]);
+        addToast({ type: 'success', message: 'Tedarikçi başarıyla eklendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Tedarikçi eklenemedi: ${err.message}` });
+      }
+    } else {
+      setSuppliersList(prev => [supplier, ...prev]);
+    }
   };
-  const updateSupplier = (updatedSupplier: Supplier) => {
-    setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
+  const updateSupplier = async (updatedSupplier: Supplier) => {
+    if (currentOrgId && updatedSupplier.id) {
+      try {
+        const updated = await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
+        setSuppliersList(prev => prev.map(s => s.id === updated.id ? updated : s));
+        addToast({ type: 'success', message: 'Tedarikçi bilgileri güncellendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Tedarikçi güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
+    }
   };
-  const deleteSupplier = (id: string) => {
-    setSuppliersList(prev => prev.filter(s => s.id !== id));
+  const deleteSupplier = async (id: string) => {
+    if (currentOrgId) {
+      try {
+        await dbDeleteSupplier(id);
+        setSuppliersList(prev => prev.filter(s => s.id !== id));
+        addToast({ type: 'success', message: 'Tedarikçi silindi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Tedarikçi silinemedi: ${err.message}` });
+      }
+    } else {
+      setSuppliersList(prev => prev.filter(s => s.id !== id));
+    }
   };
 
   // P0 — Masraf CRUD
-  const addExpense = (expense: Expense) => {
-    setExpensesList(prev => [expense, ...prev]);
+  const addExpense = async (expense: Expense) => {
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertExpense(expense);
+        setExpensesList(prev => [created, ...prev]);
+        addToast({ type: 'success', message: 'Gider başarıyla kaydedildi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Gider eklenemedi: ${err.message}` });
+      }
+    } else {
+      setExpensesList(prev => [expense, ...prev]);
+    }
   };
-  const updateExpense = (updatedExpense: Expense) => {
-    setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+  const updateExpense = async (updatedExpense: Expense) => {
+    if (currentOrgId && updatedExpense.id) {
+      try {
+        const updated = await dbUpdateExpense(updatedExpense.id, updatedExpense);
+        setExpensesList(prev => prev.map(e => e.id === updated.id ? updated : e));
+        addToast({ type: 'success', message: 'Gider kaydı güncellendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Gider güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+    }
   };
-  const deleteExpense = (id: string) => {
-    setExpensesList(prev => prev.filter(e => e.id !== id));
+  const deleteExpense = async (id: string) => {
+    if (currentOrgId) {
+      try {
+        await dbDeleteExpense(id);
+        setExpensesList(prev => prev.filter(e => e.id !== id));
+        addToast({ type: 'success', message: 'Gider kaydı silindi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Gider silinemedi: ${err.message}` });
+      }
+    } else {
+      setExpensesList(prev => prev.filter(e => e.id !== id));
+    }
   };
 
   // P0 — Kullanıcı CRUD
@@ -231,12 +560,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Şube CRUD
-  const addBranch = (branch: Branch) => {
-    setBranchesList(prev => [...prev, branch]);
+  const addBranch = async (branch: Branch) => {
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertBranch(branch);
+        setBranchesList(prev => [...prev, created]);
+        addToast({ type: 'success', message: 'Şube başarıyla oluşturuldu.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Şube oluşturulamadı: ${err.message}` });
+      }
+    } else {
+      setBranchesList(prev => [...prev, branch]);
+    }
   };
 
-  const updateBranch = (updatedBranch: Branch) => {
-    setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
+  const updateBranch = async (updatedBranch: Branch) => {
+    if (currentOrgId && updatedBranch.id) {
+      try {
+        const updated = await dbUpdateBranch(updatedBranch.id, updatedBranch);
+        setBranchesList(prev => prev.map(b => b.id === updated.id ? updated : b));
+        addToast({ type: 'success', message: 'Şube bilgileri güncellendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Şube güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
+    }
   };
 
   return (
@@ -255,6 +604,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       sidebarOpen,
       setSidebarOpen,
       toggleSidebar,
+      
+      currentUser,
+      currentOrgId,
+      logout,
+      dataLoading,
+      isPlatformAdmin,
       
       patientsList,
       appointmentsList,

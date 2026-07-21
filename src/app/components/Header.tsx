@@ -17,10 +17,11 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   reports:          { title: 'Raporlama & Analitik',  subtitle: 'Performans ve finansal raporlar' },
   branches:         { title: 'Şubeler & Yetki',       subtitle: 'Çoklu şube ve rol yönetimi' },
   settings:         { title: 'Ayarlar',               subtitle: 'Sistem ve entegrasyon ayarları' },
+  'super-admin':     { title: 'SaaS Super Admin',      subtitle: 'Tüm organizasyonlar, üyelikler ve lisans limitleri' },
 };
 
 export default function Header() {
-  const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage } = useApp();
+  const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -164,8 +165,16 @@ export default function Header() {
         {/* Kullanıcı Profili */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '1px solid var(--gray-200)', paddingLeft: 12, marginLeft: 4 }}>
           <div style={{ textAlign: 'right' }} className="hide-tablet">
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-800)', lineHeight: '1.2' }}>Dr. Elif Arslan</div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', lineHeight: '1.2' }}>Odyolog · Kadıköy</div>
+            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-800)', lineHeight: '1.2' }}>
+              {currentUser 
+                ? `${currentUser.user_metadata?.first_name || ''} ${currentUser.user_metadata?.last_name || ''}`.trim() || currentUser.email 
+                : 'Dr. Elif Arslan'}
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', lineHeight: '1.2' }}>
+              {currentUser 
+                ? (currentUser.user_metadata?.role || 'Firma Yöneticisi') 
+                : 'Odyolog · Kadıköy'}
+            </div>
           </div>
           <div 
             className="avatar avatar-sm" 
@@ -183,7 +192,9 @@ export default function Header() {
               boxShadow: 'var(--shadow-xs)'
             }}
           >
-            EA
+            {currentUser 
+              ? `${currentUser.user_metadata?.first_name?.[0] || ''}${currentUser.user_metadata?.last_name?.[0] || ''}`.toUpperCase() || 'U'
+              : 'EA'}
           </div>
         </div>
       </div>
