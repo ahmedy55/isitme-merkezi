@@ -173,7 +173,7 @@ export default function AppointmentsPage() {
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Planlandı</div>
-              <div style={{ fontSize: '1.8rem', fontWeight 700, color: 'var(--info-600)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.planlandi}</div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--info-600)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.planlandi}</div>
             </div>
           </div>
         </div>
