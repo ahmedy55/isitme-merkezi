@@ -42,6 +42,8 @@ export interface Patient {
   reportNo?: string;
   sgkInsuranceStatus?: 'Belirtilmemiş' | 'Çalışan (sigortalı)' | 'Emekli' | 'Diğer / Kapsam dışı';
   patientStatus?: 'Potansiyel' | 'Deneme Yapıldı' | 'Müşteri' | 'Satın Almayanlar' | 'Genel' | 'Tamir için gelen' | 'Kalıp Hastası' | 'Pil Hastası' | 'Satış Hastası' | 'Eski Hasta';
+  consentGiven?: boolean;
+  consentDate?: string;
 }
 
 export interface Appointment {

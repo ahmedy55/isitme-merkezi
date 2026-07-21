@@ -98,7 +98,8 @@ export default function PatientsPage() {
     reportNo: '',
     sgkInsuranceStatus: 'Belirtilmemiş',
     patientStatus: 'Potansiyel',
-    source: 'Tavsiye'
+    source: 'Tavsiye',
+    consentGiven: true
   });
 
   const handleSave = () => {
@@ -129,8 +130,10 @@ export default function PatientsPage() {
       patientStatus: formData.patientStatus,
       source: formData.source,
       notes: formData.notes,
+      consentGiven: formData.consentGiven,
+      consentDate: formData.consentGiven ? new Date().toISOString() : undefined,
       timeline: [
-        { date: '11.07.2026', action: 'Hasta kaydı oluşturuldu.', icon: 'Plus' }
+        { date: '11.07.2026', action: 'Hasta kaydı ve KVKK rızası oluşturuldu.', icon: 'Plus' }
       ]
     };
     addPatient(newPatient);
@@ -154,7 +157,8 @@ export default function PatientsPage() {
       reportNo: '',
       sgkInsuranceStatus: 'Belirtilmemiş',
       patientStatus: 'Potansiyel',
-      source: 'Tavsiye'
+      source: 'Tavsiye',
+      consentGiven: true
     });
   };
 
@@ -909,6 +913,19 @@ export default function PatientsPage() {
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 />
+              </div>
+
+              {/* KVKK Açık Rıza Formu */}
+              <div className="form-group" style={{ marginTop: 14, padding: '12px 14px', background: 'var(--surface-light, #f8fafc)', borderRadius: 8, border: '1px solid var(--border-color, #e2e8f0)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 500, fontSize: '0.85rem', color: 'var(--text-main)' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.consentGiven}
+                    onChange={(e) => setFormData({ ...formData, consentGiven: e.target.checked })}
+                    style={{ width: 18, height: 18, accentColor: 'var(--primary-500, #0ea5e9)' }}
+                  />
+                  <span>📋 <strong>KVKK Kişisel Sağlık Verileri Rıza Formu:</strong> Hastadan özel nitelikli kişisel veri işleme açık rızası alındı.</span>
+                </label>
               </div>
             </div>
             <div className="modal-footer">

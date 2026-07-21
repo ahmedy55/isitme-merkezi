@@ -78,6 +78,7 @@ interface AppContextType {
   // Auth Eyaletleri
   currentUser: any;
   currentOrgId: string | null;
+  currentOrg?: any;
   logout: () => Promise<void>;
   dataLoading: boolean;
   isPlatformAdmin: boolean;
@@ -154,6 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Auth Eyaletleri State
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
+  const [currentOrg, setCurrentOrg] = useState<any>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
 
@@ -165,6 +167,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadAllData = async () => {
     setDataLoading(true);
     try {
+      if (currentOrgId) {
+        const { data: orgData } = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('id', currentOrgId)
+          .maybeSingle();
+        if (orgData) setCurrentOrg(orgData);
+      }
+
       const [
         patients,
         appointments,
@@ -325,6 +336,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Metotlar
   const addPatient = async (patient: Patient) => {
+    if (currentOrg && currentOrg.plan_type === 'trial' && patientsList.length >= 50) {
+      addToast({
+        type: 'warning',
+        message: 'Deneme sürümü (Trial) hasta limitinize ulaştınız (Maksimum 50 hasta). Üst pakete geçmek için SaaS yöneticiniz ile iletişime geçin.'
+      });
+      return;
+    }
     if (currentOrgId) {
       try {
         const created = await dbInsertPatient(patient);
@@ -550,6 +568,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // P0 — Kullanıcı CRUD
   const addUser = (user: SystemUser) => {
+    if (currentOrg && usersList.length >= (currentOrg.max_users || 5)) {
+      addToast({
+        type: 'warning',
+        message: `Kullanıcı limitinize ulaştınız (Maksimum ${currentOrg.max_users} kullanıcı). Paketinizi yükseltmek için SaaS yöneticiniz ile iletişime geçin.`
+      });
+      return;
+    }
     setUsersList(prev => [user, ...prev]);
   };
   const updateUser = (updatedUser: SystemUser) => {
@@ -561,6 +586,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Şube CRUD
   const addBranch = async (branch: Branch) => {
+    if (currentOrg && branchesList.length >= (currentOrg.max_branches || 2)) {
+      addToast({
+        type: 'warning',
+        message: `Şube limitinize ulaştınız (Maksimum ${currentOrg.max_branches} şube). Paketinizi yükseltmek için SaaS yöneticiniz ile iletişime geçin.`
+      });
+      return;
+    }
     if (currentOrgId) {
       try {
         const created = await dbInsertBranch(branch);
@@ -607,6 +639,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       currentUser,
       currentOrgId,
+      currentOrg,
       logout,
       dataLoading,
       isPlatformAdmin,
