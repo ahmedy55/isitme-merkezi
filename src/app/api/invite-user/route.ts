@@ -1,10 +1,33 @@
 import { NextResponse } from 'next/server';
-import { Client } from 'pg';
-
-const connectionString = 'postgresql://postgres.znktitzknixpbakfrnzk:AudiProDbPass2026!%23@aws-0-eu-central-1.pooler.supabase.com:5432/postgres';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://znktitzknixpbakfrnzk.supabase.co';
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+    if (!supabaseUrl) {
+      return NextResponse.json({ error: 'Supabase URL yapılandırılmamış.' }, { status: 500 });
+    }
+
+    // 1. Yetki Kontrolü: İsteği atan kullanıcının Bearer JWT Token kontrolü
+    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '').trim();
+
+    if (!token) {
+      return NextResponse.json({ error: 'Yetkisiz erişim. Lütfen oturum açın.' }, { status: 401 });
+    }
+
+    const supabaseUserClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
+      auth: { persistSession: false }
+    });
+
+    const { data: { user: requesterUser }, error: authErr } = await supabaseUserClient.auth.getUser(token);
+
+    if (authErr || !requesterUser) {
+      return NextResponse.json({ error: 'Geçersiz veya süresi dolmuş oturum.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { email, firstName, lastName, phone, roles, branchId, orgId } = body;
 
@@ -12,96 +35,114 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'E-posta ve Organizasyon ID zorunludur.' }, { status: 400 });
     }
 
-    const client = new Client({
-      connectionString,
-      ssl: { rejectUnauthorized: false }
+    // 2. Rol Yetki Denetimi: İsteği atan kullanıcı bu organizasyonun "Firma Yöneticisi" mi veya Platform Admin mi?
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    await client.connect();
+    // Platform admin kontrolü
+    const { data: adminData } = await supabaseAdmin
+      .from('platform_admins')
+      .select('user_id')
+      .eq('user_id', requesterUser.id)
+      .maybeSingle();
 
-    try {
-      // 1. auth.users içinde kullanıcı var mı kontrol et
-      let userRes = await client.query('SELECT id FROM auth.users WHERE email = $1', [email.toLowerCase().trim()]);
-      let userId = userRes.rows[0]?.id;
+    const isPlatformAdmin = !!adminData;
 
-      // 2. Kullanıcı yoksa auth.users tablosunda yeni yetkili kullanıcı hesabı oluştur
-      if (!userId) {
-        const insertUserSql = `
-          INSERT INTO auth.users (
-            instance_id, id, aud, role, email, encrypted_password, 
-            email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
-          ) VALUES (
-            '00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', $1,
-            crypt('AudiPro123!', gen_salt('bf')), NOW(),
-            json_build_object('provider','email','providers',ARRAY['email'],'organization_id',$5),
-            json_build_object('first_name', $2, 'last_name', $3, 'phone', $4),
-            NOW(), NOW()
-          ) RETURNING id;
-        `;
-        const newUserRes = await client.query(insertUserSql, [
-          email.toLowerCase().trim(), 
-          firstName || '', 
-          lastName || '', 
-          phone || '',
-          orgId
-        ]);
-        userId = newUserRes.rows[0]?.id;
+    if (!isPlatformAdmin) {
+      // Firma Yöneticisi yetki kontrolü
+      const { data: membership } = await supabaseAdmin
+        .from('memberships')
+        .select('roles, status')
+        .eq('user_id', requesterUser.id)
+        .eq('organization_id', orgId)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      const isOrgManager = membership?.roles?.includes('Firma Yöneticisi');
+
+      if (!isOrgManager) {
+        return NextResponse.json({ 
+          error: 'Yetkisiz işlem. Kullanıcı davet etme yetkisi sadece Firma Yöneticisi veya Platform Yöneticisine aittir.' 
+        }, { status: 403 });
       }
+    }
 
-      // 3. Profiles tablosuna profil bilgisi ekle
-      await client.query(`
-        INSERT INTO public.profiles (id, first_name, last_name, phone)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (id) DO UPDATE SET
-          first_name = EXCLUDED.first_name,
-          last_name = EXCLUDED.last_name,
-          phone = EXCLUDED.phone;
-      `, [userId, firstName || '', lastName || '', phone || '']);
+    // 3. Supabase Auth Admin SDK ile Güvenli Kullanıcı Daveti / Hesabı (auth.users + auth.identities)
+    let invitedUserId: string;
 
-      // 4. Memberships kaydı ekle
-      const memRes = await client.query(`
-        INSERT INTO memberships (user_id, organization_id, roles, branch_id, status, first_name, last_name, email, phone)
-        VALUES ($1, $2, $3, $4, 'active', $5, $6, $7, $8)
-        ON CONFLICT (user_id, organization_id) DO UPDATE SET
-          roles = EXCLUDED.roles,
-          first_name = EXCLUDED.first_name,
-          last_name = EXCLUDED.last_name,
-          phone = EXCLUDED.phone,
-          status = 'active'
-        RETURNING id, joined_at;
-      `, [
-        userId, 
-        orgId, 
-        roles || ['Odyometrist'], 
-        branchId || null, 
-        firstName || '', 
-        lastName || '', 
-        email.toLowerCase().trim(), 
-        phone || ''
-      ]);
+    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
+    const foundUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase().trim());
 
-      const mem = memRes.rows[0];
-
-      return NextResponse.json({
-        success: true,
-        user: {
-          id: mem.id,
-          userId,
-          firstName,
-          lastName,
-          email: email.toLowerCase().trim(),
-          phone,
-          roles: roles || ['Odyometrist'],
-          branch: 'Tüm Şubeler',
-          status: 'Aktif',
-          createdAt: mem.joined_at ? new Date(mem.joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    if (foundUser) {
+      invitedUserId = foundUser.id;
+    } else {
+      const { data: newAuthUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+        email: email.toLowerCase().trim(),
+        email_confirm: true,
+        user_metadata: {
+          first_name: firstName || '',
+          last_name: lastName || '',
+          phone: phone || ''
+        },
+        app_metadata: {
+          organization_id: orgId
         }
       });
-    } finally {
-      await client.end();
+
+      if (createErr || !newAuthUser.user) {
+        throw new Error(`Kullanıcı hesabı oluşturulamadı: ${createErr?.message}`);
+      }
+
+      invitedUserId = newAuthUser.user.id;
     }
+
+    // 4. Profiles tablosuna profil verisini işleme
+    await supabaseAdmin.from('profiles').upsert({
+      id: invitedUserId,
+      first_name: firstName || '',
+      last_name: lastName || '',
+      phone: phone || ''
+    });
+
+    // 5. Memberships tablosuna ilişkili organizasyon kaydı ekleme
+    const { data: memData, error: memErr } = await supabaseAdmin
+      .from('memberships')
+      .upsert({
+        user_id: invitedUserId,
+        organization_id: orgId,
+        roles: roles || ['Odyometrist'],
+        branch_id: branchId || null,
+        status: 'active',
+        first_name: firstName || '',
+        last_name: lastName || '',
+        email: email.toLowerCase().trim(),
+        phone: phone || ''
+      }, { onConflict: 'user_id, organization_id' })
+      .select('id, joined_at');
+
+    if (memErr) {
+      throw new Error(`Üyelik kaydı oluşturulamadı: ${memErr.message}`);
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: memData?.[0]?.id || invitedUserId,
+        userId: invitedUserId,
+        firstName,
+        lastName,
+        email: email.toLowerCase().trim(),
+        phone,
+        roles: roles || ['Odyometrist'],
+        branch: 'Tüm Şubeler',
+        status: 'Aktif',
+        createdAt: memData?.[0]?.joined_at ? new Date(memData[0].joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+      }
+    });
+
   } catch (err: any) {
-    console.error('Invite API error:', err);
-    return NextResponse.json({ error: err.message || 'Davet oluşturulamadı' }, { status: 500 });
+    console.error('Invite API secure route error:', err);
+    return NextResponse.json({ error: err.message || 'Sunucu hatası' }, { status: 500 });
   }
 }
