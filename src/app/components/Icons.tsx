@@ -611,6 +611,27 @@ export const IconSupport: React.FC<IconProps> = (p = {}) => {
   );
 };
 
+/** Aktivite / Pulse Line */
+export const IconActivity: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+/** Şube Aktivite / Bar Chart Comparison */
+export const IconBranchActivity: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <path d="M18 20V10M12 20V4M6 20v10" strokeWidth={strokeWidth} />
+      <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
 /* ============================================================
    İKON HARİTASI — Sidebar için
    ============================================================ */
@@ -633,6 +654,8 @@ export const navIcons = {
   'sgk-receivables': IconShield,
   assets:       IconAsset,
   support:      IconSupport,
+  'activity-log': IconActivity,
+  'branch-activities': IconBranchActivity,
 } as const;
 
 export type NavIconKey = keyof typeof navIcons;

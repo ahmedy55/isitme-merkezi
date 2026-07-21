@@ -17,6 +17,7 @@ const menuSections = [
     title: 'İşlemler',
     items: [
       { id: 'recall'          as const, label: 'Recall',              badge: '5' },
+      { id: 'activity-log'    as const, label: 'Aktivite Kaydı',      badge: null },
       { id: 'sgk'             as const, label: 'SGK & Reçete',        badge: null },
       { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null },
       { id: 'stock'           as const, label: 'Stok & Aksesuar',     badge: null },
@@ -30,12 +31,13 @@ const menuSections = [
   {
     title: 'Yönetim',
     items: [
-      { id: 'reports'   as const, label: 'Raporlar',          badge: null },
-      { id: 'branches'  as const, label: 'Şubeler & Yetki',   badge: null },
-      { id: 'users'     as const, label: 'Kullanıcılar',      badge: null },
-      { id: 'audit-log' as const, label: 'İşlem Kayıtları',   badge: null },
-      { id: 'settings'  as const, label: 'Ayarlar',           badge: null },
-      { id: 'support'   as const, label: 'Destek',            badge: null },
+      { id: 'reports'           as const, label: 'Raporlar',          badge: null },
+      { id: 'branches'          as const, label: 'Şubeler & Yetki',   badge: null },
+      { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null },
+      { id: 'users'             as const, label: 'Kullanıcılar',      badge: null },
+      { id: 'audit-log'         as const, label: 'İşlem Kayıtları',   badge: null },
+      { id: 'settings'          as const, label: 'Ayarlar',           badge: null },
+      { id: 'support'           as const, label: 'Destek',            badge: null },
     ],
   },
 ];

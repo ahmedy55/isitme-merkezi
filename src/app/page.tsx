@@ -25,6 +25,8 @@ import AuditLogPage from './pages/AuditLogPage';
 import SgkReceivablesPage from './pages/SgkReceivablesPage';
 import AssetsPage from './pages/AssetsPage';
 import SupportPage from './pages/SupportPage';
+import ActivityLogPage from './pages/ActivityLogPage';
+import BranchActivitiesPage from './pages/BranchActivitiesPage';
 
 function ToastIcon({ type }: { type: string }) {
   if (type === 'success') return <IconCheck size={16} strokeWidth={2} />;
@@ -41,26 +43,28 @@ function AppContent() {
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'dashboard':       return <DashboardPage />;
-      case 'patients':        return <PatientsPage />;
-      case 'patient-detail':  return <PatientDetailPage />;
-      case 'appointments':    return <AppointmentsPage />;
-      case 'recall':          return <RecallPage />;
-      case 'sgk':             return <SGKPage />;
-      case 'stock':           return <StockPage />;
-      case 'cash':            return <CashPage />;
-      case 'service':         return <ServicePage />;
-      case 'reports':         return <ReportsPage />;
-      case 'branches':        return <BranchesPage />;
-      case 'settings':        return <SettingsPage />;
-      case 'users':           return <UsersPage />;
-      case 'suppliers':       return <SuppliersPage />;
-      case 'expenses':        return <ExpensesPage />;
-      case 'audit-log':       return <AuditLogPage />;
-      case 'sgk-receivables': return <SgkReceivablesPage />;
-      case 'assets':          return <AssetsPage />;
-      case 'support':         return <SupportPage />;
-      default:                return <DashboardPage />;
+      case 'dashboard':         return <DashboardPage />;
+      case 'patients':          return <PatientsPage />;
+      case 'patient-detail':    return <PatientDetailPage />;
+      case 'appointments':      return <AppointmentsPage />;
+      case 'recall':            return <RecallPage />;
+      case 'sgk':               return <SGKPage />;
+      case 'stock':             return <StockPage />;
+      case 'cash':              return <CashPage />;
+      case 'service':           return <ServicePage />;
+      case 'reports':           return <ReportsPage />;
+      case 'branches':          return <BranchesPage />;
+      case 'settings':          return <SettingsPage />;
+      case 'users':             return <UsersPage />;
+      case 'suppliers':         return <SuppliersPage />;
+      case 'expenses':          return <ExpensesPage />;
+      case 'audit-log':         return <AuditLogPage />;
+      case 'sgk-receivables':   return <SgkReceivablesPage />;
+      case 'assets':            return <AssetsPage />;
+      case 'support':           return <SupportPage />;
+      case 'activity-log':      return <ActivityLogPage />;
+      case 'branch-activities': return <BranchActivitiesPage />;
+      default:                  return <DashboardPage />;
     }
   };
 

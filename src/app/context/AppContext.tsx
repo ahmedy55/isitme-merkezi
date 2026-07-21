@@ -35,7 +35,9 @@ type Page =
   | 'audit-log'
   | 'sgk-receivables'
   | 'assets'
-  | 'support';
+  | 'support'
+  | 'activity-log'
+  | 'branch-activities';
 
 interface Toast {
   id: string;
