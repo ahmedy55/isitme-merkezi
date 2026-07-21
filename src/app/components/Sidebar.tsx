@@ -34,7 +34,6 @@ const menuSections = [
       { id: 'reports'           as const, label: 'Raporlar',          badge: null },
       { id: 'branches'          as const, label: 'Şubeler & Yetki',   badge: null },
       { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null },
-      { id: 'users'             as const, label: 'Kullanıcılar',      badge: null },
       { id: 'audit-log'         as const, label: 'İşlem Kayıtları',   badge: null },
       { id: 'settings'          as const, label: 'Ayarlar',           badge: null },
       { id: 'support'           as const, label: 'Destek',            badge: null },

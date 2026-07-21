@@ -29,7 +29,6 @@ type Page =
   | 'reports'
   | 'branches'
   | 'settings'
-  | 'users'
   | 'suppliers'
   | 'expenses'
   | 'audit-log'
