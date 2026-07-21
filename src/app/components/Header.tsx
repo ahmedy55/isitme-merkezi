@@ -22,6 +22,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 export default function Header() {
   const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -98,7 +99,7 @@ export default function Header() {
             onClick={() => setShowNotifications(!showNotifications)}
           >
             <IconBell size={18} strokeWidth={1.7} />
-            <span className="header-btn-badge" aria-hidden="true" />
+            {hasUnreadNotifications && <span className="header-btn-badge" aria-hidden="true" />}
           </button>
 
           {showNotifications && (
@@ -117,7 +118,15 @@ export default function Header() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid var(--surface-border-light)', paddingBottom: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--gray-800)' }}>Bildirimler</span>
-                <span style={{ fontSize: '0.72rem', color: 'var(--primary-600)', cursor: 'pointer' }} onClick={() => setShowNotifications(false)}>Tümünü Oku</span>
+                <span 
+                  style={{ fontSize: '0.72rem', color: 'var(--primary-600)', cursor: 'pointer' }} 
+                  onClick={() => {
+                    setHasUnreadNotifications(false);
+                    setShowNotifications(false);
+                  }}
+                >
+                  Tümünü Oku
+                </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[
