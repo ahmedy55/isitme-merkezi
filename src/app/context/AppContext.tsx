@@ -134,12 +134,44 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentPage, setCurrentPage] = useState<Page>('login');
+  const [currentPage, setCurrentPageState] = useState<Page>('login');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<string>('genel');
   const [showModal, setShowModal] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Tarayıcı Geri/İleri butonları & URL Hash (#page) entegrasyonu
+  const setCurrentPage = (page: Page, replace = false) => {
+    setCurrentPageState(page);
+    if (typeof window !== 'undefined') {
+      const hash = `#${page}`;
+      if (window.location.hash !== hash) {
+        if (replace) {
+          window.history.replaceState({ page }, '', hash);
+        } else {
+          window.history.pushState({ page }, '', hash);
+        }
+      }
+    }
+  };
+
+  // Tarayıcının Geri (<-) / İleri (->) butonlarına tıklandığında sayfayı değiştir
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = (e: PopStateEvent) => {
+      const hash = window.location.hash.replace('#', '') as Page;
+      if (hash) {
+        setCurrentPageState(hash);
+      } else if (e.state?.page) {
+        setCurrentPageState(e.state.page);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Veri Listeleri State
   const [patientsList, setPatientsList] = useState<Patient[]>([]);
@@ -266,9 +298,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const orgId = session.user.app_metadata?.organization_id;
         if (orgId) {
           setCurrentOrgId(orgId);
-          setCurrentPage('dashboard');
+          const initialHash = (typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '') as Page;
+          setCurrentPage(initialHash || 'dashboard', true);
         } else {
-          setCurrentPage('org-select');
+          setCurrentPage('org-select', true);
         }
       } else {
         setCurrentUser(null);
