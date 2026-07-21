@@ -3,12 +3,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconPlus, IconClose } from '../components/Icons';
+import { Branch } from '../data/mockData';
 
 export default function BranchesPage() {
-  const { stockList, updateStockItem, addToast } = useApp();
+  const { stockList, updateStockItem, addToast, branchesList, addBranch, usersList, setCurrentPage } = useApp();
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [transferCompleted, setTransferCompleted] = useState(false);
+  const [branchForm, setBranchForm] = useState({ name: '', address: '', phone: '' });
 
   const handleConfirmTransfer = () => {
     // Find device in Beşiktaş (Merkez 2 - Beşiktaş)
@@ -32,91 +33,68 @@ export default function BranchesPage() {
     }
   };
 
-  const [branches, setBranches] = useState([
-    { name: 'Merkez 1 - Kadıköy', address: 'Caferağa Mah. Moda Cad. No:42, Kadıköy', staff: 3, patients: 142, status: 'Aktif' },
-    { name: 'Merkez 2 - Beşiktaş', address: 'Sinanpaşa Mah. Çelebioğlu Sok. No:15, Beşiktaş', staff: 2, patients: 86, status: 'Aktif' },
-  ]);
-
-  const [roles, setRoles] = useState([
-    { name: 'Admin', desc: 'Tüm yetkilere sahip, sistem ayarlarını yönetir', users: 1, color: 'var(--danger-500)' },
-    { name: 'Yönetici', desc: 'Raporları görür, personel yönetir, fiyat değiştirir', users: 1, color: 'var(--accent-500)' },
-    { name: 'Odyolog', desc: 'Hasta kaydı, randevu, test, satış yapabilir', users: 2, color: 'var(--primary-500)' },
-    { name: 'Sekreter', desc: 'Randevu ve hasta kaydı alabilir', users: 1, color: 'var(--info-500)' },
-    { name: 'Muhasebe', desc: 'Kasa, fatura ve SGK işlemlerini görür', users: 1, color: 'var(--warning-500)' },
-  ]);
-
-  const [users, setUsers] = useState([
-    { name: 'Dr. Elif Arslan', role: 'Odyolog', branch: 'Merkez 1 - Kadıköy', email: 'elif@audiopro.com', active: true },
-    { name: 'Dr. Can Yılmaz', role: 'Odyolog', branch: 'Merkez 2 - Beşiktaş', email: 'can@audiopro.com', active: true },
-    { name: 'Ahmet Yılmaz', role: 'Admin', branch: 'Tüm Şubeler', email: 'ahmet@audiopro.com', active: true },
-    { name: 'Zeynep Demir', role: 'Sekreter', branch: 'Merkez 1 - Kadıköy', email: 'zeynep@audiopro.com', active: true },
-    { name: 'Emre Koç', role: 'Muhasebe', branch: 'Tüm Şubeler', email: 'emre@audiopro.com', active: true },
-  ]);
-
-  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<any | null>(null);
-  const [showEditUserModal, setShowEditUserModal] = useState(false);
-
-  const [branchForm, setBranchForm] = useState({ name: '', address: '', phone: '' });
-  const [userForm, setUserForm] = useState({ name: '', role: 'Odyolog', branch: 'Merkez 1 - Kadıköy', email: '' });
-  const [roleForm, setRoleForm] = useState({ name: '', desc: '', color: 'var(--primary-500)' });
-
-  const handleUpdateUser = () => {
-    if (!editingUser) return;
-    setUsers(users.map(u => u.email === editingUser.email ? editingUser : u));
-    setShowEditUserModal(false);
-    setEditingUser(null);
-    addToast({ type: 'success', message: 'Kullanıcı yetkileri başarıyla güncellendi.' });
-  };
-
   const handleSaveBranch = () => {
     if (!branchForm.name) {
       alert('Lütfen şube adı girin.');
       return;
     }
-    setBranches([...branches, { name: branchForm.name, address: branchForm.address, staff: 0, patients: 0, status: 'Aktif' }]);
+    const newBranch: Branch = {
+      id: 'br-' + Date.now(),
+      name: branchForm.name,
+      address: branchForm.address,
+      phone: branchForm.phone,
+      patientsCount: 0,
+      status: 'Aktif'
+    };
+    addBranch(newBranch);
     setShowAddBranchModal(false);
     setBranchForm({ name: '', address: '', phone: '' });
     addToast({ type: 'success', message: 'Yeni şube kaydı başarıyla oluşturuldu.' });
   };
 
-  const handleSaveUser = () => {
-    if (!userForm.name || !userForm.email) {
-      alert('Lütfen ad soyad ve e-posta girin.');
-      return;
+  // Dinamik Rol Dağılım Özeti (canonical UserRole tiplerinden hesaplanır)
+  const rolesSummary = [
+    {
+      name: 'Firma Yöneticisi',
+      desc: 'Tüm şube ve izinlere tam erişim. Sistem ayarlarını yönetir.',
+      users: usersList.filter(u => u.roles.includes('Firma Yöneticisi')).length,
+      color: 'var(--danger-500)'
+    },
+    {
+      name: 'Odyometrist',
+      desc: 'Hasta kaydı, randevu, işitme testleri ve cihaz satışlarını yapar.',
+      users: usersList.filter(u => u.roles.includes('Odyometrist')).length,
+      color: 'var(--primary-500)'
+    },
+    {
+      name: 'Sekreter',
+      desc: 'Hasta kabul, randevu planlama ve ön büro işlerini yönetir.',
+      users: usersList.filter(u => u.roles.includes('Sekreter')).length,
+      color: 'var(--info-500)'
+    },
+    {
+      name: 'Muhasebe',
+      desc: 'Kasa hesapları, ödemeler, masraflar ve faturaları takip eder.',
+      users: usersList.filter(u => u.roles.includes('Muhasebe')).length,
+      color: 'var(--warning-500)'
     }
-    setUsers([...users, { name: userForm.name, role: userForm.role, branch: userForm.branch, email: userForm.email, active: true }]);
-    setShowAddUserModal(false);
-    setUserForm({ name: '', role: 'Odyolog', branch: 'Merkez 1 - Kadıköy', email: '' });
-    addToast({ type: 'success', message: 'Yeni personel kaydı oluşturuldu ve aktivasyon e-postası gönderildi.' });
-  };
-
-  const handleSaveRole = () => {
-    if (!roleForm.name) {
-      alert('Lütfen rol adı girin.');
-      return;
-    }
-    setRoles([...roles, { name: roleForm.name, desc: roleForm.desc, users: 0, color: roleForm.color }]);
-    setShowAddRoleModal(false);
-    setRoleForm({ name: '', desc: '', color: 'var(--primary-500)' });
-    addToast({ type: 'success', message: 'Yeni yetki rolü başarıyla oluşturuldu.' });
-  };
+  ];
 
   return (
     <div className="page">
       <div className="page-header">
         <div className="page-header-left">
           <h2>Şubeler & Yetki Yönetimi</h2>
-          <p>Tüm şubelerinizi tek panelden yönetin</p>
+          <p>Şube listesi, stok transferleri ve yetki rolleri dağılımı</p>
         </div>
         <div className="page-header-actions">
           <button className="btn btn-secondary" onClick={() => setShowAddBranchModal(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconPlus size={15} strokeWidth={1.8} /> Yeni Şube
           </button>
-          <button className="btn btn-primary" onClick={() => setShowAddUserModal(true)}
+          <button className="btn btn-primary" onClick={() => setCurrentPage('users')}
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <IconPlus size={15} strokeWidth={2} /> Kullanıcı Ekle
+            <IconPlus size={15} strokeWidth={2} /> Kullanıcıları Yönet
           </button>
         </div>
       </div>
@@ -156,96 +134,106 @@ export default function BranchesPage() {
 
       {/* Branches */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-        {branches.map((branch, i) => (
-          <div key={i} className="card">
-            <div className="card-body">
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 2 }}>{branch.name}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>{branch.address}</div>
+        {branchesList.map((branch) => {
+          // Personel sayısını dinamik hesapla
+          const staffCount = usersList.filter(u => u.branch === branch.name || u.branch === 'Tüm Şubeler').length;
+          return (
+            <div key={branch.id} className="card">
+              <div className="card-body">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 2 }}>{branch.name}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>{branch.address}</div>
+                  </div>
+                  <span className="badge badge-success">
+                    <span className="badge-dot success" />
+                    {branch.status}
+                  </span>
                 </div>
-                <span className="badge badge-success">
-                  <span className="badge-dot success" />
-                  {branch.status}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 24 }}>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--gray-500)' }}>Personel</div>
-                  <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{branch.staff}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--gray-500)' }}>Toplam Hasta</div>
-                  <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{branch.patients}</div>
+                <div style={{ display: 'flex', gap: 24 }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--gray-500)' }}>Aktif Personel</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{staffCount}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--gray-500)' }}>Toplam Hasta</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{branch.patientsCount}</div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Roles */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-header">
-          <span className="card-title">Roller</span>
-          <button className="btn btn-sm btn-ghost" onClick={() => setShowAddRoleModal(true)}>Yeni Rol</button>
+          <span className="card-title">Sistem Rolleri & Dağılımı</span>
         </div>
         <div className="card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-            {roles.map((role, i) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {rolesSummary.map((role, i) => (
               <div key={i} style={{
                 padding: '14px',
                 border: '1px solid var(--gray-200)',
                 borderRadius: 'var(--radius-lg)',
                 borderLeft: `4px solid ${role.color}`,
+                background: 'var(--surface-card)'
               }}>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>{role.name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: 8 }}>{role.desc}</div>
-                <span className="badge badge-neutral">{role.users} kullanıcı</span>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--gray-800)' }}>{role.name}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: 8, minHeight: 36 }}>{role.desc}</div>
+                <span className="badge badge-neutral" style={{ fontWeight: 600 }}>{role.users} personel</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Users */}
+      {/* Users List (Dinamik Context Verisinden) */}
       <div className="card">
-        <div className="card-header">
-          <span className="card-title">Kullanıcılar</span>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="card-title">Sistem Kullanıcıları</span>
+          <button className="btn btn-sm btn-ghost" onClick={() => setCurrentPage('users')}>Kullanıcıları Yönet</button>
         </div>
         <div className="table-container">
           <table className="mobile-cards">
             <thead>
               <tr>
                 <th>Kullanıcı</th>
-                <th>Rol</th>
-                <th>Şube</th>
+                <th>Roller</th>
+                <th>Atandığı Şube</th>
                 <th>E-posta</th>
                 <th>Durum</th>
-                <th></th>
+                <th>İşlem</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((user, i) => (
-                <tr key={i}>
-                  <td data-label="Kullanıcı" className="td-primary">{user.name}</td>
-                  <td data-label="Rol"><span className="badge badge-info">{user.role}</span></td>
+              {usersList.map((user) => (
+                <tr key={user.id}>
+                  <td data-label="Kullanıcı" className="td-primary" style={{ fontWeight: 600 }}>
+                    {user.firstName} {user.lastName}
+                  </td>
+                  <td data-label="Roller">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {user.roles.map(r => (
+                        <span key={r} className="badge badge-info" style={{ fontSize: '0.74rem' }}>{r}</span>
+                      ))}
+                    </div>
+                  </td>
                   <td data-label="Şube">{user.branch}</td>
                   <td data-label="E-posta" style={{ fontSize: '0.82rem', color: 'var(--gray-500)' }}>{user.email}</td>
                   <td data-label="Durum">
-                    <span className="badge badge-success">
-                      <span className="badge-dot success" />
-                      Aktif
+                    <span className={`badge badge-${user.status === 'Aktif' ? 'success' : 'danger'}`}>
+                      <span className={`badge-dot ${user.status === 'Aktif' ? 'success' : 'danger'}`} />
+                      {user.status}
                     </span>
                   </td>
-                  <td data-label="">
-                    <button className="btn btn-sm btn-ghost" 
-                      onClick={() => {
-                        setEditingUser(user);
-                        setShowEditUserModal(true);
-                      }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      Düzenle
+                  <td data-label="İşlem">
+                    <button className="btn btn-sm btn-secondary" 
+                      onClick={() => setCurrentPage('users')}
+                      style={{ fontSize: '0.72rem', padding: '4px 8px' }}>
+                      Detay / Yönet
                     </button>
                   </td>
                 </tr>
@@ -270,7 +258,7 @@ export default function BranchesPage() {
                 <label className="form-label">Şube Adı</label>
                 <input
                   className="form-input"
-                  placeholder="Örn: Kadıköy Şubesi"
+                  placeholder="Örn: Merkez 3 - Kadıköy"
                   value={branchForm.name}
                   onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })}
                 />
@@ -292,6 +280,7 @@ export default function BranchesPage() {
                   rows={3}
                   value={branchForm.address}
                   onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })}
+                  style={{ width: '100%', resize: 'none' }}
                 />
               </div>
             </div>
@@ -302,192 +291,6 @@ export default function BranchesPage() {
           </div>
         </div>
       )}
-
-      {/* Kullanıcı Ekle Modal */}
-      {showAddUserModal && (
-        <div className="modal-overlay" onClick={() => setShowAddUserModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
-            <div className="modal-header">
-              <span className="modal-title">Sisteme Kullanıcı Ekle</span>
-              <button className="modal-close" onClick={() => setShowAddUserModal(false)} aria-label="Kapat">
-                <IconClose size={16} strokeWidth={2} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Ad Soyad</label>
-                  <input
-                    className="form-input"
-                    placeholder="Kullanıcı adı"
-                    value={userForm.name}
-                    onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Rolü</label>
-                  <select
-                    className="form-select"
-                    value={userForm.role}
-                    onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
-                  >
-                    <option>Odyolog</option>
-                    <option>Sekreter</option>
-                    <option>Yönetici</option>
-                    <option>Muhasebe</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">E-posta</label>
-                  <input
-                    className="form-input"
-                    type="email"
-                    placeholder="kullanici@isitmecihazi.com"
-                    value={userForm.email}
-                    onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Atanacak Şube</label>
-                  <select
-                    className="form-select"
-                    value={userForm.branch}
-                    onChange={(e) => setUserForm({ ...userForm, branch: e.target.value })}
-                  >
-                    <option>Tüm Şubeler</option>
-                    <option>Merkez 1 - Kadıköy</option>
-                    <option>Merkez 2 - Beşiktaş</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddUserModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSaveUser}>Kullanıcıyı Kaydet</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Rol Ekle Modal */}
-      {showAddRoleModal && (
-        <div className="modal-overlay" onClick={() => setShowAddRoleModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <span className="modal-title">Yeni Yetki Rolü Tanımla</span>
-              <button className="modal-close" onClick={() => setShowAddRoleModal(false)} aria-label="Kapat">
-                <IconClose size={16} strokeWidth={2} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Rol Adı</label>
-                <input
-                  className="form-input"
-                  placeholder="Örn: Stajyer"
-                  value={roleForm.name}
-                  onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Açıklama / İzinler</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder="Bu role ait erişim yetkisi tanımları..."
-                  rows={2}
-                  value={roleForm.desc}
-                  onChange={(e) => setRoleForm({ ...roleForm, desc: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Renk Etiketi</label>
-                <select
-                  className="form-select"
-                  value={roleForm.color}
-                  onChange={(e) => setRoleForm({ ...roleForm, color: e.target.value })}
-                >
-                  <option value="var(--primary-500)">Mavi (Varsayılan)</option>
-                  <option value="var(--success-500)">Yeşil</option>
-                  <option value="var(--warning-500)">Sarı</option>
-                  <option value="var(--danger-500)">Kırmızı</option>
-                  <option value="var(--accent-500)">Mor</option>
-                </select>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddRoleModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSaveRole}>Rolü Kaydet</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Kullanıcı Düzenle Modal */}
-      {showEditUserModal && editingUser && (
-        <div className="modal-overlay" onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
-            <div className="modal-header">
-              <span className="modal-title">Kullanıcı Yetki Ayarları — {editingUser.name}</span>
-              <button className="modal-close" onClick={() => { setShowEditUserModal(false); setEditingUser(null); }} aria-label="Kapat">
-                <IconClose size={16} strokeWidth={2} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Ad Soyad</label>
-                <input
-                  className="form-input"
-                  value={editingUser.name}
-                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Rolü</label>
-                  <select
-                    className="form-select"
-                    value={editingUser.role}
-                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-                  >
-                    <option>Odyolog</option>
-                    <option>Sekreter</option>
-                    <option>Yönetici</option>
-                    <option>Muhasebe</option>
-                    <option>Admin</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Atandığı Şube</label>
-                  <select
-                    className="form-select"
-                    value={editingUser.branch}
-                    onChange={(e) => setEditingUser({ ...editingUser, branch: e.target.value })}
-                  >
-                    <option>Tüm Şubeler</option>
-                    <option>Merkez 1 - Kadıköy</option>
-                    <option>Merkez 2 - Beşiktaş</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">E-posta</label>
-                <input
-                  className="form-input"
-                  type="email"
-                  value={editingUser.email}
-                  onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setShowEditUserModal(false); setEditingUser(null); }}>İptal</button>
-              <button className="btn btn-primary" onClick={handleUpdateUser}>Değişiklikleri Kaydet</button>
-            </div>
-          </div>
-        </div>
-      )}
      </div>
-   );
- }
+  );
+}

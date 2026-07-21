@@ -899,3 +899,33 @@ export const auditLog: AuditLogEntry[] = [
     description: 'Hasta bilgileri güncellendi: Mehmet Demir — Adres ve telefon değişikliği',
   }
 ];
+
+// ─── Şube Tanımı ─────────────────
+export interface Branch {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  patientsCount: number;
+  status: 'Aktif' | 'Pasif';
+}
+
+export const initialBranches: Branch[] = [
+  {
+    id: 'br-1',
+    name: 'Merkez 1 - Kadıköy',
+    address: 'Caferağa Mah. Moda Cad. No:42, Kadıköy',
+    phone: '0216 555 00 00',
+    patientsCount: 142,
+    status: 'Aktif'
+  },
+  {
+    id: 'br-2',
+    name: 'Merkez 2 - Beşiktaş',
+    address: 'Sinanpaşa Mah. Çelebioğlu Sok. No:15, Beşiktaş',
+    phone: '0212 222 11 11',
+    patientsCount: 86,
+    status: 'Aktif'
+  }
+];
+

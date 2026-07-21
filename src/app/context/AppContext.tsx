@@ -11,8 +11,9 @@ import {
   expenses as initialExpenses,
   systemUsers as initialUsers,
   auditLog as initialAuditLog,
+  initialBranches,
   Patient, Appointment, StockItem, SaleRecord, RecallItem,
-  Supplier, Expense, SystemUser, AuditLogEntry
+  Supplier, Expense, SystemUser, AuditLogEntry, Branch
 } from '../data/mockData';
 
 type Page = 
@@ -68,6 +69,7 @@ interface AppContextType {
   expensesList: Expense[];
   usersList: SystemUser[];
   auditLogList: AuditLogEntry[];
+  branchesList: Branch[];
   
   // Veri Güncelleme Metotları
   addPatient: (patient: Patient) => void;
@@ -93,6 +95,10 @@ interface AppContextType {
   addUser: (user: SystemUser) => void;
   updateUser: (user: SystemUser) => void;
   deleteUser: (id: string) => void;
+  
+  // Şube
+  addBranch: (branch: Branch) => void;
+  updateBranch: (branch: Branch) => void;
   
   // Demo ve Ayarlar Parametreleri
   demoModeActive: boolean;
@@ -120,6 +126,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [expensesList, setExpensesList] = useState<Expense[]>([]);
   const [usersList, setUsersList] = useState<SystemUser[]>([]);
   const [auditLogList, setAuditLogList] = useState<AuditLogEntry[]>([]);
+  const [branchesList, setBranchesList] = useState<Branch[]>([]);
 
   // Demo Ayarları
   const [demoModeActive] = useState(true);
@@ -136,6 +143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setExpensesList(initialExpenses);
     setUsersList(initialUsers);
     setAuditLogList(initialAuditLog);
+    setBranchesList(initialBranches);
   }, []);
 
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
@@ -221,6 +229,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUsersList(prev => prev.filter(u => u.id !== id));
   };
 
+  // Şube CRUD
+  const addBranch = (branch: Branch) => {
+    setBranchesList(prev => [...prev, branch]);
+  };
+
+  const updateBranch = (updatedBranch: Branch) => {
+    setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
+  };
+
   return (
     <AppContext.Provider value={{
       currentPage,
@@ -247,6 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       expensesList,
       usersList,
       auditLogList,
+      branchesList,
       
       addPatient,
       updatePatient,
@@ -266,6 +284,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addUser,
       updateUser,
       deleteUser,
+      addBranch,
+      updateBranch,
       
       demoModeActive,
       commissionRate,
