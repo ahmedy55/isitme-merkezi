@@ -1,14 +1,20 @@
 'use client';
 
-import React, { useMemo, useEffect, useRef, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../data/mockData';
-import { Chart } from 'chart.js/auto';
+import { ResponsiveBar } from '@nivo/bar';
+import { ResponsivePie } from '@nivo/pie';
 import { IconCash, IconReports, IconPatients, IconRecall, IconBranches } from '../components/Icons';
 
 export default function ReportsPage() {
   const { patientsList, salesList, appointmentsList, recallList, addToast } = useApp();
   const [selectedYear, setSelectedYear] = useState('2026');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // 1. İstatistikleri Gerçek Zamanlı Hesapla
   const stats = useMemo(() => {
@@ -55,13 +61,13 @@ export default function ReportsPage() {
         }
       });
 
-    return {
-      labels: months,
-      values: monthlyTotals
-    };
+    return months.map((label, idx) => ({
+      ay: label,
+      ciro: monthlyTotals[idx]
+    }));
   }, [salesList, selectedYear]);
 
-  const sourceData = useMemo(() => {
+  const sourcePieData = useMemo(() => {
     const sources = {
       'Doktor': 0,
       'Sosyal Medya': 0,
@@ -77,26 +83,36 @@ export default function ReportsPage() {
       }
     });
 
-    return {
-      labels: ['Doktor Yönlendirmesi', 'Sosyal Medya', 'Hasta Tavsiyesi', 'Yürüyerek (Walk-in)', 'Web Sitesi'],
-      values: [sources['Doktor'], sources['Sosyal Medya'], sources['Tavsiye'], sources['Yürüyerek'], sources['Web']]
+    const displayLabels: Record<string, string> = {
+      'Doktor': 'Doktor Yön.',
+      'Sosyal Medya': 'Sosyal Medya',
+      'Tavsiye': 'Tavsiye',
+      'Yürüyerek': 'Yürüyerek',
+      'Web': 'Web Sitesi'
     };
+
+    return Object.keys(sources).map(key => ({
+      id: displayLabels[key] || key,
+      label: displayLabels[key] || key,
+      value: sources[key as keyof typeof sources]
+    }));
   }, [patientsList]);
 
-  const funnelData = useMemo(() => {
+  const funnelBarData = useMemo(() => {
     const totalApts = appointmentsList.length;
     const visitedApts = appointmentsList.filter(a => a.status === 'Geldi').length;
     const triedDevice = patientsList.filter(p => p.salesStage === 'Cihaz Denendi' || p.salesStage === 'Teklif Verildi' || p.salesStage === 'Satış Yapıldı').length;
     const soldCount = patientsList.filter(p => p.salesStage === 'Satış Yapıldı').length;
 
-    return {
-      labels: ['Toplam Randevu', 'Gelen Hasta (Muayene/Test)', 'Cihaz Deneme', 'Satış Gerçekleşti'],
-      values: [totalApts, visitedApts, triedDevice, soldCount]
-    };
+    return [
+      { asama: 'Satış', adet: soldCount },
+      { asama: 'Deneme', adet: triedDevice },
+      { asama: 'Muayene', adet: visitedApts },
+      { asama: 'Randevu', adet: totalApts }
+    ];
   }, [appointmentsList, patientsList]);
 
   const audiologistData = useMemo(() => {
-    // Benzersiz odyologlar
     const names = Array.from(new Set([
       ...appointmentsList.map(a => a.audiologist),
       ...salesList.map(s => s.audiologist).filter(Boolean) as string[]
@@ -119,144 +135,6 @@ export default function ReportsPage() {
       };
     });
   }, [appointmentsList, salesList]);
-
-  // Refs for Charts
-  const revenueChartRef = useRef<HTMLCanvasElement | null>(null);
-  const sourceChartRef = useRef<HTMLCanvasElement | null>(null);
-  const funnelChartRef = useRef<HTMLCanvasElement | null>(null);
-
-  // Instantiated Chart Instances
-  const chartInstances = useRef<Record<string, Chart | null>>({
-    revenue: null,
-    source: null,
-    funnel: null
-  });
-
-  // Render Charts
-  useEffect(() => {
-    // 1. Monthly Revenue Chart (Bar)
-    if (revenueChartRef.current) {
-      if (chartInstances.current.revenue) chartInstances.current.revenue.destroy();
-      
-      chartInstances.current.revenue = new Chart(revenueChartRef.current, {
-        type: 'bar',
-        data: {
-          labels: monthlyRevenueData.labels,
-          datasets: [{
-            label: 'Ciro (TL)',
-            data: monthlyRevenueData.values,
-            backgroundColor: 'rgba(46, 122, 113, 0.75)',
-            borderColor: 'var(--primary-600)',
-            borderWidth: 1.5,
-            borderRadius: 4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              grid: { color: 'var(--gray-100)' },
-              ticks: {
-                callback: (val) => `${val.toLocaleString('tr-TR')} TL`
-              }
-            },
-            x: {
-              grid: { display: false }
-            }
-          }
-        }
-      });
-    }
-
-    // 2. Patient Source Chart (Doughnut)
-    if (sourceChartRef.current) {
-      if (chartInstances.current.source) chartInstances.current.source.destroy();
-
-      chartInstances.current.source = new Chart(sourceChartRef.current, {
-        type: 'doughnut',
-        data: {
-          labels: sourceData.labels,
-          datasets: [{
-            data: sourceData.values,
-            backgroundColor: [
-              'rgba(46, 122, 113, 0.85)', // primary
-              'rgba(224, 126, 44, 0.85)',  // accent
-              'rgba(46, 120, 196, 0.85)',  // info
-              'rgba(217, 140, 26, 0.85)',  // warning
-              'rgba(201, 69, 53, 0.85)'    // danger
-            ],
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: {
-                boxWidth: 12,
-                font: { size: 11 }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    // 3. Sales Funnel Chart (Horizontal Bar)
-    if (funnelChartRef.current) {
-      if (chartInstances.current.funnel) chartInstances.current.funnel.destroy();
-
-      chartInstances.current.funnel = new Chart(funnelChartRef.current, {
-        type: 'bar',
-        data: {
-          labels: funnelData.labels,
-          datasets: [{
-            label: 'Hasta Sayısı',
-            data: funnelData.values,
-            backgroundColor: [
-              'rgba(46, 120, 196, 0.75)',  // info
-              'rgba(46, 122, 113, 0.75)',  // primary
-              'rgba(224, 126, 44, 0.75)',  // accent
-              'rgba(46, 180, 100, 0.75)'   // success
-            ],
-            borderColor: 'var(--gray-200)',
-            borderWidth: 1,
-            borderRadius: 4
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false }
-          },
-          scales: {
-            x: {
-              beginAtZero: true,
-              grid: { color: 'var(--gray-100)' }
-            },
-            y: {
-              grid: { display: false }
-            }
-          }
-        }
-      });
-    }
-
-    return () => {
-      Object.values(chartInstances.current).forEach(chart => {
-        if (chart) chart.destroy();
-      });
-    };
-  }, [monthlyRevenueData, sourceData, funnelData]);
 
   // CSV Rapor İndirme Fonksiyonu
   const handleDownloadReport = () => {
@@ -282,7 +160,6 @@ export default function ReportsPage() {
       ...rows.map(row => row.map(val => `"${val}"`).join(','))
     ].join('\n');
 
-    // UTF-8 BOM ekleyerek Türkçe karakter desteği sağlama
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -389,8 +266,52 @@ export default function ReportsPage() {
               Aylık Ciro Trendi ({selectedYear})
             </span>
           </div>
-          <div className="card-body" style={{ height: 260 }}>
-            <canvas ref={revenueChartRef} />
+          <div className="card-body" style={{ height: 280, position: 'relative' }}>
+            {mounted ? (
+              <ResponsiveBar
+                data={monthlyRevenueData}
+                keys={['ciro']}
+                indexBy="ay"
+                margin={{ top: 20, right: 10, bottom: 40, left: 60 }}
+                padding={0.35}
+                valueScale={{ type: 'linear' }}
+                indexScale={{ type: 'band', round: true }}
+                colors="rgba(46, 122, 113, 0.85)"
+                borderRadius={4}
+                axisLeft={{
+                  tickSize: 5,
+                  tickPadding: 5,
+                  tickRotation: 0,
+                  format: (v) => `${(Number(v) / 1000).toFixed(0)}k TL`
+                }}
+                axisBottom={{
+                  tickSize: 5,
+                  tickPadding: 5,
+                  tickRotation: 0
+                }}
+                enableLabel={false}
+                theme={{
+                  axis: {
+                    ticks: {
+                      text: {
+                        fill: "var(--gray-600)",
+                        fontSize: 11
+                      }
+                    }
+                  },
+                  grid: {
+                    line: {
+                      stroke: "var(--gray-100)",
+                      strokeWidth: 1
+                    }
+                  }
+                }}
+              />
+            ) : (
+              <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' }}>
+                Grafik Yükleniyor...
+              </div>
+            )}
           </div>
         </div>
 
@@ -404,8 +325,42 @@ export default function ReportsPage() {
               CRM Satış Hunisi
             </span>
           </div>
-          <div className="card-body" style={{ height: 260 }}>
-            <canvas ref={funnelChartRef} />
+          <div className="card-body" style={{ height: 280, position: 'relative' }}>
+            {mounted ? (
+              <ResponsiveBar
+                data={funnelBarData}
+                keys={['adet']}
+                indexBy="asama"
+                margin={{ top: 20, right: 10, bottom: 40, left: 70 }}
+                padding={0.3}
+                layout="horizontal"
+                valueScale={{ type: 'linear' }}
+                indexScale={{ type: 'band', round: true }}
+                colors="rgba(224, 126, 44, 0.85)"
+                borderRadius={4}
+                axisBottom={{
+                  tickSize: 5,
+                  tickPadding: 5,
+                  tickRotation: 0
+                }}
+                enableLabel={true}
+                labelTextColor="#ffffff"
+                theme={{
+                  axis: {
+                    ticks: {
+                      text: {
+                        fill: "var(--gray-600)",
+                        fontSize: 11
+                      }
+                    }
+                  }
+                }}
+              />
+            ) : (
+              <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' }}>
+                Grafik Yükleniyor...
+              </div>
+            )}
           </div>
         </div>
 
@@ -416,11 +371,34 @@ export default function ReportsPage() {
               <span style={{ color: 'var(--info-500)', display: 'inline-flex' }}>
                 <IconBranches size={18} strokeWidth={1.8} />
               </span>
-              Hasta Kaynak Dağılımı (Doughnut)
+              Hasta Kaynak Dağılımı
             </span>
           </div>
-          <div className="card-body" style={{ height: 280 }}>
-            <canvas ref={sourceChartRef} />
+          <div className="card-body" style={{ height: 280, position: 'relative' }}>
+            {mounted ? (
+              <ResponsivePie
+                data={sourcePieData}
+                margin={{ top: 30, right: 20, bottom: 40, left: 20 }}
+                innerRadius={0.45}
+                padAngle={0.7}
+                cornerRadius={3}
+                activeOuterRadiusOffset={8}
+                colors={['#1f6059', '#e07e2c', '#2d547a', '#825136', '#4b5842']}
+                borderWidth={1}
+                borderColor={{ from: 'color', modifiers: [['darker', 0.2]] }}
+                arcLinkLabelsSkipAngle={10}
+                arcLinkLabelsTextColor="var(--gray-700)"
+                arcLinkLabelsThickness={2}
+                arcLinkLabelsColor={{ from: 'color' }}
+                arcLabelsSkipAngle={10}
+                arcLabelsTextColor="#ffffff"
+                enableArcLinkLabels={true}
+              />
+            ) : (
+              <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' }}>
+                Grafik Yükleniyor...
+              </div>
+            )}
           </div>
         </div>
 
