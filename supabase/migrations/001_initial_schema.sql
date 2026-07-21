@@ -366,7 +366,7 @@ $$ LANGUAGE sql STABLE;
 -- 4.2.1 platform_admins (SaaS Platform Yöneticileri)
 ALTER TABLE platform_admins ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Sadece platform admin kendi listesini görebilir" ON platform_admins
-  FOR SELECT USING ((select auth.uid()) IN (SELECT user_id FROM platform_admins));
+  FOR SELECT USING (user_id = auth.uid());
 
 -- 4.2.2 organizations (Organizasyonlar)
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
