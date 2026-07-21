@@ -236,7 +236,7 @@ export default function PatientsPage() {
     setTimeout(() => {
       addToast({ 
         type: 'success', 
-        message: 'Odimax geçmiş hasta veritabanı (142 hasta kartı ve 512 randevu/cihaz geçmişi) başarıyla sisteme aktarıldı.' 
+        message: 'Geçmiş hasta veritabanı (142 hasta kartı ve 512 randevu/cihaz geçmişi) başarıyla sisteme aktarıldı.' 
       });
       setShowImportHistoryModal(false);
       setImportFileSimulated(false);
@@ -977,12 +977,12 @@ export default function PatientsPage() {
         <div className="modal-overlay" onClick={() => setShowImportHistoryModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
             <div className="modal-header">
-              <span className="modal-title">🔄 Odimax Geçmiş Veri Aktarımı</span>
+              <span className="modal-title">🔄 Geçmiş Veri Aktarımı</span>
               <button className="modal-close" onClick={() => setShowImportHistoryModal(false)}>✕</button>
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '0.82rem', color: 'var(--gray-600)', marginBottom: 16, lineHeight: 1.5 }}>
-                Odimax veya eski yazılımınızdan dışa aktardığınız Excel, CSV, XML veya JSON formatındaki hasta kayıt ve cihaz/randevu geçmişi yedek dosyasını buraya yükleyebilirsiniz.
+                Eski yazılımınızdan veya başka bir sistemden dışa aktardığınız Excel, CSV, XML veya JSON formatındaki hasta kayıt ve cihaz/randevu geçmişi yedek dosyasını buraya yükleyebilirsiniz.
               </p>
               
               <div style={{
