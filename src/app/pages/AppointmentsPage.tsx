@@ -29,6 +29,7 @@ export default function AppointmentsPage() {
 
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [filterAudiologist, setFilterAudiologist] = useState('Tümü');
+  const [statusWidgetFilter, setStatusWidgetFilter] = useState<'all' | 'planlandi' | 'tamamlanan' | 'iptal'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 9));
 
@@ -72,16 +73,25 @@ export default function AppointmentsPage() {
     });
   };
 
-  const filtered = appointmentsList.filter(a =>
-    filterAudiologist === 'Tümü' || a.audiologist === filterAudiologist
-  );
+  const filtered = appointmentsList.filter(a => {
+    const matchAudiologist = filterAudiologist === 'Tümü' || a.audiologist === filterAudiologist;
+    let matchWidget = true;
+    if (statusWidgetFilter === 'planlandi') {
+      matchWidget = a.status === 'Bekliyor' || a.status === 'Hatırlatıldı';
+    } else if (statusWidgetFilter === 'tamamlanan') {
+      matchWidget = a.status === 'Geldi';
+    } else if (statusWidgetFilter === 'iptal') {
+      matchWidget = a.status === 'İptal' || a.status === 'Gelmedi';
+    }
+    return matchAudiologist && matchWidget;
+  });
 
   return (
     <div className="page">
       <div className="page-header">
         <div className="page-header-left">
           <h2>Randevu Takvimi</h2>
-          <p>{appointmentsList.length} randevu kayıtlı</p>
+          <p>{appointmentsList.length} randevu kayıtlı {statusWidgetFilter !== 'all' && `(${filtered.length} filtreli gösteriliyor)`}</p>
         </div>
         <div className="page-header-actions">
           <div className="tabs">
@@ -95,11 +105,22 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
-      {/* İstatistik Kartları */}
+      {/* İstatistik Kartları (Filtreleme Widget'ları) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20, marginBottom: 20 }}>
         
         {/* Toplam Randevu */}
-        <div className="card">
+        <div 
+          className="card" 
+          onClick={() => setStatusWidgetFilter('all')}
+          style={{ 
+            cursor: 'pointer', 
+            transition: 'all 0.2s ease',
+            border: statusWidgetFilter === 'all' ? '2px solid var(--primary-600)' : '1px solid var(--gray-200)',
+            boxShadow: statusWidgetFilter === 'all' ? '0 4px 12px rgba(var(--primary-rgb), 0.15)' : undefined,
+            transform: statusWidgetFilter === 'all' ? 'translateY(-2px)' : undefined
+          }}
+          title="Tüm Randevuları Listele"
+        >
           <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
               width: 48,
@@ -123,7 +144,18 @@ export default function AppointmentsPage() {
         </div>
 
         {/* Planlandı */}
-        <div className="card">
+        <div 
+          className="card"
+          onClick={() => setStatusWidgetFilter('planlandi')}
+          style={{ 
+            cursor: 'pointer', 
+            transition: 'all 0.2s ease',
+            border: statusWidgetFilter === 'planlandi' ? '2px solid var(--info-600)' : '1px solid var(--gray-200)',
+            boxShadow: statusWidgetFilter === 'planlandi' ? '0 4px 12px rgba(var(--info-rgb), 0.15)' : undefined,
+            transform: statusWidgetFilter === 'planlandi' ? 'translateY(-2px)' : undefined
+          }}
+          title="Sadece Bekleyen / Planlanan Randevuları Listele"
+        >
           <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
               width: 48,
@@ -141,13 +173,24 @@ export default function AppointmentsPage() {
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Planlandı</div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--info-600)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.planlandi}</div>
+              <div style={{ fontSize: '1.8rem', fontWeight 700, color: 'var(--info-600)', fontFamily: 'var(--font-display)', lineHeight: 1.2 }}>{stats.planlandi}</div>
             </div>
           </div>
         </div>
 
         {/* Tamamlanan */}
-        <div className="card">
+        <div 
+          className="card"
+          onClick={() => setStatusWidgetFilter('tamamlanan')}
+          style={{ 
+            cursor: 'pointer', 
+            transition: 'all 0.2s ease',
+            border: statusWidgetFilter === 'tamamlanan' ? '2px solid var(--success-600)' : '1px solid var(--gray-200)',
+            boxShadow: statusWidgetFilter === 'tamamlanan' ? '0 4px 12px rgba(var(--success-rgb), 0.15)' : undefined,
+            transform: statusWidgetFilter === 'tamamlanan' ? 'translateY(-2px)' : undefined
+          }}
+          title="Sadece Tamamlanan Randevuları Listele"
+        >
           <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
               width: 48,
@@ -171,7 +214,18 @@ export default function AppointmentsPage() {
         </div>
 
         {/* İptal Edilen */}
-        <div className="card">
+        <div 
+          className="card"
+          onClick={() => setStatusWidgetFilter('iptal')}
+          style={{ 
+            cursor: 'pointer', 
+            transition: 'all 0.2s ease',
+            border: statusWidgetFilter === 'iptal' ? '2px solid var(--danger-600)' : '1px solid var(--gray-200)',
+            boxShadow: statusWidgetFilter === 'iptal' ? '0 4px 12px rgba(var(--danger-rgb), 0.15)' : undefined,
+            transform: statusWidgetFilter === 'iptal' ? 'translateY(-2px)' : undefined
+          }}
+          title="Sadece İptal Edilen / Gelmeyen Randevuları Listele"
+        >
           <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
               width: 48,
