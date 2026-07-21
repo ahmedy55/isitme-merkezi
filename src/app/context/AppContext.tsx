@@ -62,7 +62,7 @@ interface Toast {
 
 interface AppContextType {
   currentPage: Page;
-  setCurrentPage: (page: Page) => void;
+  setCurrentPage: (page: Page | ((prev: Page) => Page), replace?: boolean) => void;
   selectedPatientId: string | null;
   setSelectedPatientId: (id: string | null) => void;
   activeDetailTab: string;
@@ -142,18 +142,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Tarayıcı Geri/İleri butonları & URL Hash (#page) entegrasyonu
-  const setCurrentPage = (page: Page, replace = false) => {
-    setCurrentPageState(page);
-    if (typeof window !== 'undefined') {
-      const hash = `#${page}`;
-      if (window.location.hash !== hash) {
-        if (replace) {
-          window.history.replaceState({ page }, '', hash);
-        } else {
-          window.history.pushState({ page }, '', hash);
+  const setCurrentPage = (pageOrFn: Page | ((prev: Page) => Page), replace = false) => {
+    setCurrentPageState(prev => {
+      const nextPage = typeof pageOrFn === 'function' ? pageOrFn(prev) : pageOrFn;
+      if (typeof window !== 'undefined') {
+        const hash = `#${nextPage}`;
+        if (window.location.hash !== hash) {
+          if (replace) {
+            window.history.replaceState({ page: nextPage }, '', hash);
+          } else {
+            window.history.pushState({ page: nextPage }, '', hash);
+          }
         }
       }
-    }
+      return nextPage;
+    });
   };
 
   // Tarayıcının Geri (<-) / İleri (->) butonlarına tıklandığında sayfayı değiştir
@@ -323,10 +326,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const orgId = session.user.app_metadata?.organization_id;
         if (orgId) {
           setCurrentOrgId(orgId);
-          setCurrentPage(prev => (prev === 'login' || prev === 'org-select' ? 'dashboard' : prev));
+          setCurrentPage((prev: Page) => (prev === 'login' || prev === 'org-select' ? 'dashboard' : prev));
         } else {
           setCurrentOrgId(null);
-          setCurrentPage(prev => (prev === 'login' ? 'org-select' : prev));
+          setCurrentPage((prev: Page) => (prev === 'login' ? 'org-select' : prev));
         }
       } else {
         setCurrentUser(null);
