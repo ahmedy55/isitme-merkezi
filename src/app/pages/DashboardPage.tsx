@@ -57,31 +57,6 @@ export default function DashboardPage() {
   return (
     <div className="page">
       {/* Zarif Demo Bannerı */}
-      <div style={{
-        background: 'linear-gradient(90deg, var(--primary-600), var(--accent-500))',
-        color: 'white',
-        padding: '10px 18px',
-        borderRadius: 'var(--radius-lg)',
-        marginBottom: 20,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        boxShadow: 'var(--shadow-sm)',
-        flexWrap: 'wrap',
-        gap: 10
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#4ef037', animation: 'pulse 1.5s infinite' }} />
-            <span style={{ fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.5px' }}>
-              Hoş geldiniz, <strong style={{ fontWeight: 800 }}>Ahmet Yılmaz</strong> (Yönetici / Admin)
-            </span>
-          </div>
-        </div>
-        <div style={{ fontSize: '0.85rem', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-          Sistem Günü: 10.07.2026
-        </div>
-      </div>
 
       {/* Hızlı İstatistikler */}
       <div className="stats-grid">
