@@ -20,6 +20,7 @@ const menuSections = [
       { id: 'sgk'             as const, label: 'SGK & Reçete',        badge: null },
       { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null },
       { id: 'stock'           as const, label: 'Stok & Aksesuar',     badge: null },
+      { id: 'assets'          as const, label: 'Demirbaşlar',         badge: null },
       { id: 'cash'            as const, label: 'Kasa & Tahsilat',     badge: null },
       { id: 'service'         as const, label: 'Teknik Servis',       badge: null },
       { id: 'suppliers'       as const, label: 'Tedarikçiler',        badge: null },
@@ -34,6 +35,7 @@ const menuSections = [
       { id: 'users'     as const, label: 'Kullanıcılar',      badge: null },
       { id: 'audit-log' as const, label: 'İşlem Kayıtları',   badge: null },
       { id: 'settings'  as const, label: 'Ayarlar',           badge: null },
+      { id: 'support'   as const, label: 'Destek',            badge: null },
     ],
   },
 ];

@@ -587,6 +587,33 @@ export const IconAuditLog: React.FC<IconProps> = (p = {}) => {
 /* ============================================================
    İKON HARİTASI — Sidebar için
    ============================================================ */
+/** Demirbaş / Asset Display */
+export const IconAsset: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <rect x="2" y="3" width="20" height="14" rx="2" strokeWidth={strokeWidth} />
+      <line x1="8" y1="21" x2="16" y2="21" strokeWidth={strokeWidth} />
+      <line x1="12" y1="17" x2="12" y2="21" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+/** Destek / Support Headset */
+export const IconSupport: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <path d="M3 18v-6a9 9 0 0118 0v6" strokeWidth={strokeWidth} />
+      <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z" strokeWidth={strokeWidth} />
+      <path d="M12 21a9.004 9.004 0 01-9-9" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+/* ============================================================
+   İKON HARİTASI — Sidebar için
+   ============================================================ */
 export const navIcons = {
   dashboard:    IconDashboard,
   patients:     IconPatients,
@@ -604,6 +631,8 @@ export const navIcons = {
   expenses:     IconWallet,
   'audit-log':  IconAuditLog,
   'sgk-receivables': IconShield,
+  assets:       IconAsset,
+  support:      IconSupport,
 } as const;
 
 export type NavIconKey = keyof typeof navIcons;

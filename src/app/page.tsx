@@ -23,6 +23,8 @@ import SuppliersPage from './pages/SuppliersPage';
 import ExpensesPage from './pages/ExpensesPage';
 import AuditLogPage from './pages/AuditLogPage';
 import SgkReceivablesPage from './pages/SgkReceivablesPage';
+import AssetsPage from './pages/AssetsPage';
+import SupportPage from './pages/SupportPage';
 
 function ToastIcon({ type }: { type: string }) {
   if (type === 'success') return <IconCheck size={16} strokeWidth={2} />;
@@ -56,6 +58,8 @@ function AppContent() {
       case 'expenses':        return <ExpensesPage />;
       case 'audit-log':       return <AuditLogPage />;
       case 'sgk-receivables': return <SgkReceivablesPage />;
+      case 'assets':          return <AssetsPage />;
+      case 'support':         return <SupportPage />;
       default:                return <DashboardPage />;
     }
   };
