@@ -23,6 +23,19 @@ export default function Header() {
   const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
   
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +90,7 @@ export default function Header() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </form>
-        <div style={{ position: 'relative' }} onMouseLeave={() => setShowNotifications(false)}>
+        <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button 
             className="header-btn" 
             title="Bildirimler" 
@@ -108,12 +121,28 @@ export default function Header() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[
-                  { id: 1, title: 'SGK Yenileme Hakkı', desc: 'Ayşe Yılmaz\'ın SGK yenileme hakkı açıldı.', time: '1 saat önce' },
-                  { id: 2, title: 'Pil Yenileme Uyarısı', desc: 'Hasan Çelik\'in pil bitişi (15 Temmuz) yaklaşıyor.', time: '3 saat önce' },
-                  { id: 3, title: 'Kritik Stok Uyarısı', desc: 'Mikrofon stok seviyesi kritik düzeyde (2 adet kaldı).', time: 'Dün' }
+                  { id: 1, title: 'SGK Yenileme Hakkı', desc: 'Ayşe Yılmaz\'ın SGK yenileme hakkı açıldı.', time: '1 saat önce', page: 'sgk' as const },
+                  { id: 2, title: 'Pil Yenileme Uyarısı', desc: 'Hasan Çelik\'in pil bitişi (15 Temmuz) yaklaşıyor.', time: '3 saat önce', page: 'recall' as const },
+                  { id: 3, title: 'Kritik Stok Uyarısı', desc: 'Mikrofon stok seviyesi kritik düzeyde (2 adet kaldı).', time: 'Dün', page: 'stock' as const }
                 ].map((notif, index, arr) => (
-                  <div key={notif.id} style={{ fontSize: '0.8rem', borderBottom: index < arr.length - 1 ? '1px solid var(--gray-50)' : 'none', paddingBottom: index < arr.length - 1 ? 8 : 0 }}>
-                    <div style={{ color: 'var(--gray-800)', fontWeight: 500 }}>{notif.title}</div>
+                  <div 
+                    key={notif.id} 
+                    onClick={() => {
+                      setCurrentPage(notif.page);
+                      setShowNotifications(false);
+                    }}
+                    style={{ 
+                      fontSize: '0.8rem', 
+                      borderBottom: index < arr.length - 1 ? '1px solid var(--gray-50)' : 'none', 
+                      paddingBottom: index < arr.length - 1 ? 8 : 0,
+                      cursor: 'pointer',
+                      padding: '4px',
+                      borderRadius: 'var(--radius-sm)',
+                      transition: 'background 0.15s ease'
+                    }}
+                    className="notification-item"
+                  >
+                    <div style={{ color: 'var(--gray-800)', fontWeight: 600 }}>{notif.title}</div>
                     <div style={{ color: 'var(--gray-600)', fontSize: '0.75rem', marginTop: 2 }}>{notif.desc}</div>
                     <div style={{ color: 'var(--gray-400)', fontSize: '0.68rem', marginTop: 4 }}>{notif.time}</div>
                   </div>
