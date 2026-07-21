@@ -37,7 +37,7 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading } = useApp();
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {

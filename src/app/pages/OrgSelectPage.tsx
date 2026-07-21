@@ -48,14 +48,25 @@ export default function OrgSelectPage() {
   const handleSelectOrg = async (orgId: string, orgName: string) => {
     setSelectingId(orgId);
     try {
-      // 1. JWT app_metadata'ya organization_id'yi yaz
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: { organization_id: orgId }
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || '';
+
+      // 1. Server-side /api/select-org ile app_metadata.organization_id'yi yaz
+      const res = await fetch('/api/select-org', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ orgId })
       });
 
-      if (updateError) throw updateError;
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Organizasyon seçimi kaydedilemedi.');
+      }
 
-      // 2. Token'ı güncelle (Bölüm 5.4 - refreshSession)
+      // 2. Token'ı yenile (Bölüm 5.4 - refreshSession)
       await supabase.auth.refreshSession();
 
       addToast({ type: 'success', message: `${orgName} şubesi ile giriş yapıldı.` });

@@ -61,16 +61,22 @@ export default function LoginPage() {
         const orgId = activeOrgs[0].organization_id;
         const orgName = (activeOrgs[0].organizations as any)?.name || 'Klinik';
 
-        // JWT app_metadata'ya organization_id'yi yaz
-        const { error: updateError } = await supabase.auth.updateUser({
-          data: { organization_id: orgId } // RLS Raporu için JWT claim
+        // Server-side /api/select-org ile app_metadata.organization_id'yi yaz
+        const res = await fetch('/api/select-org', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ orgId })
         });
 
-        if (updateError) {
-          console.error('JWT organization_id güncellenemedi:', updateError);
+        if (!res.ok) {
+          const errData = await res.json();
+          console.error('Server app_metadata orgId update error:', errData);
         }
 
-        // Token cache'ini elle yenile (Bölüm 5.4 - refreshSession)
+        // Token cache'ini yenile (Bölüm 5.4 - refreshSession)
         await supabase.auth.refreshSession();
 
         addToast({ type: 'success', message: `Hoş geldiniz! ${orgName} oturumu açıldı.` });
