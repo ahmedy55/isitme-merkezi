@@ -700,7 +700,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       currentPage,
-      setCurrentPage: handleSetCurrentPage,
+      setCurrentPage,
       selectedPatientId,
       setSelectedPatientId,
       activeDetailTab,
