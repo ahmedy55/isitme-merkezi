@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { SystemUser, UserRole } from '../data/mockData';
 
 // Key Case Converters (snake_case <-> camelCase)
 export const toCamel = (obj: any): any => {
@@ -414,7 +415,7 @@ export const dbUpdateBranch = async (id: string, branch: any) => {
 // ═══════════════════════════════════════════════
 // 10. Memberships (Kullanıcı & Personel Yönetimi)
 // ═══════════════════════════════════════════════
-export const dbFetchMemberships = async () => {
+export const dbFetchMemberships = async (): Promise<SystemUser[]> => {
   const { data, error } = await supabase
     .from('memberships')
     .select('*, branches(name)')
@@ -431,9 +432,9 @@ export const dbFetchMemberships = async () => {
     lastName: m.last_name || '',
     email: m.email || 'kullanici@audipro.com',
     phone: m.phone || '',
-    roles: m.roles || ['Odyometrist'],
+    roles: (m.roles || ['Odyometrist']) as UserRole[],
     branch: m.branches?.name || 'Tüm Şubeler',
-    status: m.status === 'inactive' ? 'Pasif' : 'Aktif',
+    status: (m.status === 'inactive' ? 'Pasif' : 'Aktif') as 'Aktif' | 'Pasif',
     createdAt: m.joined_at ? m.joined_at.split('T')[0] : new Date().toISOString().split('T')[0],
     lastLogin: m.joined_at ? m.joined_at.split('T')[0] : undefined
   }));
