@@ -4,50 +4,58 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { IconLogo, IconClose, navIcons } from './Icons';
 
-const menuSections = [
-  {
-    title: 'Ana Menü',
-    items: [
-      { id: 'dashboard'    as const, label: 'Dashboard' },
-      { id: 'patients'     as const, label: 'Hastalar',      badge: null },
-      { id: 'appointments' as const, label: 'Randevular',    badge: '4' },
-    ],
-  },
-  {
-    title: 'İşlemler',
-    items: [
-      { id: 'recall'          as const, label: 'Recall',              badge: '5' },
-      { id: 'activity-log'    as const, label: 'Aktivite Kaydı',      badge: null },
-      { id: 'sgk'             as const, label: 'SGK & Reçete',        badge: null },
-      { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null },
-      { id: 'stock'           as const, label: 'Stok & Aksesuar',     badge: null },
-      { id: 'assets'          as const, label: 'Demirbaşlar',         badge: null },
-      { id: 'cash'            as const, label: 'Kasa & Tahsilat',     badge: null },
-      { id: 'service'         as const, label: 'Teknik Servis',       badge: null },
-      { id: 'suppliers'       as const, label: 'Tedarikçiler',        badge: null },
-      { id: 'expenses'        as const, label: 'Masraflar',           badge: null },
-    ],
-  },
-  {
-    title: 'Yönetim',
-    items: [
-      { id: 'reports'           as const, label: 'Raporlar',          badge: null },
-      { id: 'branches'          as const, label: 'Şubeler & Yetki',   badge: null },
-      { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null },
-      { id: 'audit-log'         as const, label: 'İşlem Kayıtları',   badge: null },
-      { id: 'settings'          as const, label: 'Ayarlar',           badge: null },
-      { id: 'support'           as const, label: 'Destek',            badge: null },
-    ],
-  },
-];
-
 export default function Sidebar() {
-  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, isPlatformAdmin } = useApp();
+  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, isPlatformAdmin, appointmentsList, recallList } = useApp();
+
+  const pendingAppointmentsCount = React.useMemo(() => {
+    return (appointmentsList || []).filter(a => a.status === 'Bekliyor').length;
+  }, [appointmentsList]);
+
+  const pendingRecallCount = React.useMemo(() => {
+    return (recallList || []).filter(r => r.status === 'Bekliyor').length;
+  }, [recallList]);
 
   const activeSections = React.useMemo(() => {
+    const dynamicSections = [
+      {
+        title: 'Ana Menü',
+        items: [
+          { id: 'dashboard'    as const, label: 'Dashboard' },
+          { id: 'patients'     as const, label: 'Hastalar',      badge: null },
+          { id: 'appointments' as const, label: 'Randevular',    badge: pendingAppointmentsCount > 0 ? String(pendingAppointmentsCount) : null },
+        ],
+      },
+      {
+        title: 'İşlemler',
+        items: [
+          { id: 'recall'          as const, label: 'Recall',              badge: pendingRecallCount > 0 ? String(pendingRecallCount) : null },
+          { id: 'activity-log'    as const, label: 'Aktivite Kaydı',      badge: null },
+          { id: 'sgk'             as const, label: 'SGK & Reçete',        badge: null },
+          { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null },
+          { id: 'stock'           as const, label: 'Stok & Aksesuar',     badge: null },
+          { id: 'assets'          as const, label: 'Demirbaşlar',         badge: null },
+          { id: 'cash'            as const, label: 'Kasa & Tahsilat',     badge: null },
+          { id: 'service'         as const, label: 'Teknik Servis',       badge: null },
+          { id: 'suppliers'       as const, label: 'Tedarikçiler',        badge: null },
+          { id: 'expenses'        as const, label: 'Masraflar',           badge: null },
+        ],
+      },
+      {
+        title: 'Yönetim',
+        items: [
+          { id: 'reports'           as const, label: 'Raporlar',          badge: null },
+          { id: 'branches'          as const, label: 'Şubeler & Yetki',   badge: null },
+          { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null },
+          { id: 'audit-log'         as const, label: 'İşlem Kayıtları',   badge: null },
+          { id: 'settings'          as const, label: 'Ayarlar',           badge: null },
+          { id: 'support'           as const, label: 'Destek',            badge: null },
+        ],
+      },
+    ];
+
     if (isPlatformAdmin) {
       return [
-        ...menuSections,
+        ...dynamicSections,
         {
           title: 'SaaS Yönetimi',
           items: [
@@ -56,8 +64,8 @@ export default function Sidebar() {
         }
       ];
     }
-    return menuSections;
-  }, [isPlatformAdmin, menuSections]);
+    return dynamicSections;
+  }, [isPlatformAdmin, pendingAppointmentsCount, pendingRecallCount]);
 
   return (
     <>
