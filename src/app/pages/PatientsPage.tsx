@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { ResponsivePie } from '@nivo/pie';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
   type Patient,
@@ -37,6 +38,12 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 
 export default function PatientsPage() {
   const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast } = useApp();
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [search, setSearch] = useState('');
   const [filterLoss, setFilterLoss] = useState('Tümü');
   const [filterStatus, setFilterStatus] = useState('Tümü');
@@ -348,37 +355,72 @@ export default function PatientsPage() {
             <h4 style={{ fontSize: '0.78rem', color: 'var(--gray-500)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
               Durumlara Göre Dağılım
             </h4>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {[
-                { label: 'Potansiyel', count: stats.potansiyel, bg: '#eff6ff', text: '#1e40af', border: '#dbeafe' },
-                { label: 'Deneme Yapıldı', count: stats.deneme, bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' },
-                { label: 'Müşteri', count: stats.musteri, bg: '#f0fdf4', text: '#166534', border: '#dcfce7' },
-                { label: 'Satın Almayanlar', count: stats.satinAlmayanlar, bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' },
-                { label: 'Genel', count: stats.genel, bg: '#f9fafb', text: '#374151', border: '#f3f4f6' },
-                { label: 'Tamir için gelen', count: stats.tamir, bg: '#fff1f2', text: '#9f1239', border: '#ffe4e6' },
-                { label: 'Kalıp Hastası', count: stats.kalip, bg: '#f0fdfa', text: '#0f766e', border: '#ccfbf1' },
-                { label: 'Pil Hastası', count: stats.pil, bg: '#fefce8', text: '#854d0e', border: '#fef9c3' },
-                { label: 'Satış Hastası', count: stats.satis, bg: '#f5f3ff', text: '#5b21b6', border: '#ede9fe' },
-                { label: 'Eski Hasta', count: stats.eski, bg: '#fdf2f8', text: '#9d174d', border: '#fce7f3' }
-              ].map((item, idx) => (
-                <div key={idx} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '5px 12px',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  background: item.bg,
-                  color: item.text,
-                  border: `1px solid ${item.border}`,
-                  boxShadow: 'var(--shadow-xs)',
-                  transition: 'transform var(--transition-fast)'
-                }}>
-                  <span>{item.label}:</span>
-                  <strong style={{ fontSize: '0.85rem' }}>{item.count}</strong>
-                </div>
-              ))}
+            <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Left Column: Nivo Doughnut Chart */}
+              <div style={{ width: 130, height: 130, position: 'relative', flexShrink: 0 }}>
+                {mounted ? (
+                  <ResponsivePie
+                    data={[
+                      { id: 'Potansiyel', label: 'Potansiyel', value: stats.potansiyel, color: '#eff6ff' },
+                      { id: 'Deneme Yapıldı', label: 'Deneme Yapıldı', value: stats.deneme, color: '#fff7ed' },
+                      { id: 'Müşteri', label: 'Müşteri', value: stats.musteri, color: '#f0fdf4' },
+                      { id: 'Satın Almayanlar', label: 'Satın Almayanlar', value: stats.satinAlmayanlar, color: '#fef2f2' },
+                      { id: 'Genel', label: 'Genel', value: stats.genel, color: '#f9fafb' },
+                      { id: 'Tamir için gelen', label: 'Tamir', value: stats.tamir, color: '#fff1f2' },
+                      { id: 'Kalıp Hastası', label: 'Kalıp', value: stats.kalip, color: '#f0fdfa' },
+                      { id: 'Pil Hastası', label: 'Pil', value: stats.pil, color: '#fefce8' },
+                      { id: 'Satış Hastası', label: 'Satış', value: stats.satis, color: '#f5f3ff' },
+                      { id: 'Eski Hasta', label: 'Eski', value: stats.eski, color: '#fdf2f8' }
+                    ].filter(d => d.value > 0)}
+                    margin={{ top: 5, right: 5, bottom: 5, left: 5 }}
+                    innerRadius={0.65}
+                    padAngle={1.5}
+                    cornerRadius={3}
+                    colors={{ datum: 'data.color' }}
+                    enableArcLabels={false}
+                    enableArcLinkLabels={false}
+                    activeOuterRadiusOffset={4}
+                    borderWidth={1}
+                    borderColor="rgba(0,0,0,0.08)"
+                  />
+                ) : (
+                  <div style={{ fontSize: '0.74rem', color: 'var(--gray-400)', textAlign: 'center', paddingTop: 50 }}>Yükleniyor...</div>
+                )}
+              </div>
+              
+              {/* Right Column: Badges */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                {[
+                  { label: 'Potansiyel', count: stats.potansiyel, bg: '#eff6ff', text: '#1e40af', border: '#dbeafe' },
+                  { label: 'Deneme Yapıldı', count: stats.deneme, bg: '#fff7ed', text: '#c2410c', border: '#ffedd5' },
+                  { label: 'Müşteri', count: stats.musteri, bg: '#f0fdf4', text: '#166534', border: '#dcfce7' },
+                  { label: 'Satın Almayanlar', count: stats.satinAlmayanlar, bg: '#fef2f2', text: '#991b1b', border: '#fee2e2' },
+                  { label: 'Genel', count: stats.genel, bg: '#f9fafb', text: '#374151', border: '#f3f4f6' },
+                  { label: 'Tamir için gelen', count: stats.tamir, bg: '#fff1f2', text: '#9f1239', border: '#ffe4e6' },
+                  { label: 'Kalıp Hastası', count: stats.kalip, bg: '#f0fdfa', text: '#0f766e', border: '#ccfbf1' },
+                  { label: 'Pil Hastası', count: stats.pil, bg: '#fefce8', text: '#854d0e', border: '#fef9c3' },
+                  { label: 'Satış Hastası', count: stats.satis, bg: '#f5f3ff', text: '#5b21b6', border: '#ede9fe' },
+                  { label: 'Eski Hasta', count: stats.eski, bg: '#fdf2f8', text: '#9d174d', border: '#fce7f3' }
+                ].map((item, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-full)',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    background: item.bg,
+                    color: item.text,
+                    border: `1px solid ${item.border}`,
+                    boxShadow: 'var(--shadow-xs)',
+                    opacity: item.count > 0 ? 1 : 0.4
+                  }}>
+                    <span>{item.label}:</span>
+                    <strong style={{ fontSize: '0.8rem' }}>{item.count}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
