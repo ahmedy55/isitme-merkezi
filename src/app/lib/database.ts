@@ -410,3 +410,92 @@ export const dbUpdateBranch = async (id: string, branch: any) => {
   if (error) throw error;
   return toCamel(data?.[0]);
 };
+
+// ═══════════════════════════════════════════════
+// 10. Memberships (Kullanıcı & Personel Yönetimi)
+// ═══════════════════════════════════════════════
+export const dbFetchMemberships = async () => {
+  const { data, error } = await supabase
+    .from('memberships')
+    .select('*, branches(name)')
+    .order('joined_at', { ascending: false });
+
+  if (error) {
+    console.error('dbFetchMemberships error:', error);
+    return [];
+  }
+
+  return (data || []).map((m: any) => ({
+    id: m.id,
+    firstName: m.first_name || m.email?.split('@')[0] || 'Kullanıcı',
+    lastName: m.last_name || '',
+    email: m.email || 'kullanici@audipro.com',
+    phone: m.phone || '',
+    roles: m.roles || ['Odyometrist'],
+    branch: m.branches?.name || 'Tüm Şubeler',
+    status: m.status === 'inactive' ? 'Pasif' : 'Aktif',
+    createdAt: m.joined_at ? m.joined_at.split('T')[0] : new Date().toISOString().split('T')[0],
+    lastLogin: m.joined_at ? m.joined_at.split('T')[0] : undefined
+  }));
+};
+
+export const dbInsertMembership = async (user: any) => {
+  const orgId = await getActiveOrgId();
+  if (!orgId) throw new Error('Aktif organizasyon bulunamadı.');
+
+  const { data, error } = await supabase
+    .from('memberships')
+    .insert([{
+      organization_id: orgId,
+      roles: user.roles || ['Odyometrist'],
+      status: user.status === 'Pasif' ? 'inactive' : 'active',
+      first_name: user.firstName,
+      last_name: user.lastName,
+      email: user.email,
+      phone: user.phone
+    }])
+    .select('*, branches(name)');
+
+  if (error) throw error;
+  const m = data?.[0];
+  return {
+    id: m.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    phone: user.phone,
+    roles: user.roles,
+    branch: m.branches?.name || user.branch || 'Tüm Şubeler',
+    status: user.status,
+    createdAt: new Date().toISOString().split('T')[0]
+  };
+};
+
+export const dbUpdateMembership = async (id: string, user: any) => {
+  const { data, error } = await supabase
+    .from('memberships')
+    .update({
+      roles: user.roles,
+      status: user.status === 'Pasif' ? 'inactive' : 'active',
+      first_name: user.firstName,
+      last_name: user.lastName,
+      phone: user.phone
+    })
+    .eq('id', id)
+    .select('*, branches(name)');
+
+  if (error) throw error;
+  return {
+    ...user,
+    branch: data?.[0]?.branches?.name || user.branch
+  };
+};
+
+export const dbDeleteMembership = async (id: string) => {
+  const { error } = await supabase
+    .from('memberships')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+};

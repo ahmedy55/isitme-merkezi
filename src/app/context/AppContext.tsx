@@ -25,7 +25,8 @@ import {
   dbFetchSuppliers, dbInsertSupplier, dbUpdateSupplier, dbDeleteSupplier,
   dbFetchExpenses, dbInsertExpense, dbUpdateExpense, dbDeleteExpense,
   dbFetchBranches, dbInsertBranch, dbUpdateBranch,
-  dbFetchAuditLogs, dbInsertAuditLog
+  dbFetchAuditLogs, dbInsertAuditLog,
+  dbFetchMemberships, dbInsertMembership, dbUpdateMembership, dbDeleteMembership
 } from '../lib/database';
 
 type Page = 
@@ -185,7 +186,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         suppliers,
         expenses,
         branches,
-        auditLogs
+        auditLogs,
+        users
       ] = await Promise.all([
         dbFetchPatients(),
         dbFetchAppointments(),
@@ -195,7 +197,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dbFetchSuppliers(),
         dbFetchExpenses(),
         dbFetchBranches(),
-        dbFetchAuditLogs()
+        dbFetchAuditLogs(),
+        dbFetchMemberships()
       ]);
 
       setPatientsList(patients);
@@ -207,6 +210,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setExpensesList(expenses);
       setBranchesList(branches);
       setAuditLogList(auditLogs);
+      setUsersList(users);
     } catch (err: any) {
       console.error('Veriler Supabase\'den çekilirken hata oluştu:', err);
       addToast({ type: 'error', message: 'Klinik verileri veritabanından çekilemedi.' });
@@ -566,8 +570,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // P0 — Kullanıcı CRUD
-  const addUser = (user: SystemUser) => {
+  // P0 — Kullanıcı / Üyelik (Memberships) CRUD
+  const addUser = async (user: SystemUser) => {
     if (currentOrg && usersList.length >= (currentOrg.max_users || 5)) {
       addToast({
         type: 'warning',
@@ -575,13 +579,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    setUsersList(prev => [user, ...prev]);
+    if (currentOrgId) {
+      try {
+        const created = await dbInsertMembership(user);
+        setUsersList(prev => [created, ...prev]);
+        addToast({ type: 'success', message: 'Personel / Üye başarıyla davet edildi.' });
+        await dbInsertAuditLog({
+          action: 'Kullanıcı Ekledi',
+          module: 'Kullanıcı Yönetimi',
+          description: `${user.firstName} ${user.lastName} (${user.roles.join(', ')}) ekleme işlemi yapıldı.`
+        });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Kullanıcı eklenemedi: ${err.message}` });
+      }
+    } else {
+      setUsersList(prev => [user, ...prev]);
+    }
   };
-  const updateUser = (updatedUser: SystemUser) => {
-    setUsersList(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+
+  const updateUser = async (updatedUser: SystemUser) => {
+    if (currentOrgId && updatedUser.id) {
+      try {
+        const updated = await dbUpdateMembership(updatedUser.id, updatedUser);
+        setUsersList(prev => prev.map(u => u.id === updated.id ? updated : u));
+        addToast({ type: 'success', message: 'Kullanıcı bilgileri ve rolü güncellendi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Kullanıcı güncellenemedi: ${err.message}` });
+      }
+    } else {
+      setUsersList(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    }
   };
-  const deleteUser = (id: string) => {
-    setUsersList(prev => prev.filter(u => u.id !== id));
+
+  const deleteUser = async (id: string) => {
+    if (currentOrgId) {
+      try {
+        await dbDeleteMembership(id);
+        setUsersList(prev => prev.filter(u => u.id !== id));
+        addToast({ type: 'success', message: 'Kullanıcı üyeliği kaldırıldı.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Kullanıcı kaldırılamadı: ${err.message}` });
+      }
+    } else {
+      setUsersList(prev => prev.filter(u => u.id !== id));
+    }
   };
 
   // Şube CRUD
