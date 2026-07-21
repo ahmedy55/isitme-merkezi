@@ -603,6 +603,7 @@ export const navIcons = {
   suppliers:    IconTruck,
   expenses:     IconWallet,
   'audit-log':  IconAuditLog,
+  'sgk-receivables': IconShield,
 } as const;
 
 export type NavIconKey = keyof typeof navIcons;

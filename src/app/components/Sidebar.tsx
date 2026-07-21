@@ -16,13 +16,14 @@ const menuSections = [
   {
     title: 'İşlemler',
     items: [
-      { id: 'recall'    as const, label: 'Recall',          badge: '5' },
-      { id: 'sgk'       as const, label: 'SGK & Reçete',    badge: null },
-      { id: 'stock'     as const, label: 'Stok & Aksesuar', badge: null },
-      { id: 'cash'      as const, label: 'Kasa & Tahsilat', badge: null },
-      { id: 'service'   as const, label: 'Teknik Servis',   badge: null },
-      { id: 'suppliers' as const, label: 'Tedarikçiler',    badge: null },
-      { id: 'expenses'  as const, label: 'Masraflar',       badge: null },
+      { id: 'recall'          as const, label: 'Recall',              badge: '5' },
+      { id: 'sgk'             as const, label: 'SGK & Reçete',        badge: null },
+      { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null },
+      { id: 'stock'           as const, label: 'Stok & Aksesuar',     badge: null },
+      { id: 'cash'            as const, label: 'Kasa & Tahsilat',     badge: null },
+      { id: 'service'         as const, label: 'Teknik Servis',       badge: null },
+      { id: 'suppliers'       as const, label: 'Tedarikçiler',        badge: null },
+      { id: 'expenses'        as const, label: 'Masraflar',           badge: null },
     ],
   },
   {

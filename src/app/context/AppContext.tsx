@@ -31,7 +31,8 @@ type Page =
   | 'users'
   | 'suppliers'
   | 'expenses'
-  | 'audit-log';
+  | 'audit-log'
+  | 'sgk-receivables';
 
 interface Toast {
   id: string;
