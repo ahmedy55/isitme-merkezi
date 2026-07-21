@@ -80,6 +80,7 @@ export default function PatientsPage() {
     sgkInsuranceStatus: NonNullable<Patient['sgkInsuranceStatus']>;
     patientStatus: NonNullable<Patient['patientStatus']>;
     source: NonNullable<Patient['source']>;
+    consentGiven: boolean;
   }>({
     tc: '',
     gender: 'Erkek',
