@@ -18,6 +18,10 @@ import ServicePage from './pages/ServicePage';
 import ReportsPage from './pages/ReportsPage';
 import BranchesPage from './pages/BranchesPage';
 import SettingsPage from './pages/SettingsPage';
+import UsersPage from './pages/UsersPage';
+import SuppliersPage from './pages/SuppliersPage';
+import ExpensesPage from './pages/ExpensesPage';
+import AuditLogPage from './pages/AuditLogPage';
 
 function ToastIcon({ type }: { type: string }) {
   if (type === 'success') return <IconCheck size={16} strokeWidth={2} />;
@@ -46,6 +50,10 @@ function AppContent() {
       case 'reports':        return <ReportsPage />;
       case 'branches':       return <BranchesPage />;
       case 'settings':       return <SettingsPage />;
+      case 'users':          return <UsersPage />;
+      case 'suppliers':      return <SuppliersPage />;
+      case 'expenses':       return <ExpensesPage />;
+      case 'audit-log':      return <AuditLogPage />;
       default:               return <DashboardPage />;
     }
   };

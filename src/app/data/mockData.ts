@@ -506,3 +506,396 @@ export const recallItems: RecallItem[] = [
     probability: 'Orta Olasılık'
   }
 ];
+
+/* ══════════════════════════════════════════════
+   P0 Modülleri — Yeni Tipler ve Mock Veriler
+   ══════════════════════════════════════════════ */
+
+// ─── Tedarikçi / Dış Firma ─────────────────
+export interface Supplier {
+  id: string;
+  companyName: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  address: string;
+  taxNo: string;
+  category: 'İşitme Cihazı' | 'Pil & Aksesuar' | 'Kalıp Malzemesi' | 'Teknik Servis' | 'Diğer';
+  status: 'Aktif' | 'Pasif';
+  balance: number; // Pozitif = bize borcu, negatif = bizim borcumuz
+  createdAt: string;
+  notes?: string;
+  purchases: SupplierPurchase[];
+}
+
+export interface SupplierPurchase {
+  id: string;
+  supplierId: string;
+  date: string;
+  invoiceNo: string;
+  items: { name: string; quantity: number; unitPrice: number }[];
+  total: number;
+  paymentStatus: 'Ödendi' | 'Bekliyor' | 'Kısmi Ödendi';
+  paymentMethod: 'Nakit' | 'Havale' | 'Çek' | 'Açık Hesap';
+}
+
+export const suppliers: Supplier[] = [
+  {
+    id: 'sup-1',
+    companyName: 'Phonak Türkiye A.Ş.',
+    contactPerson: 'Caner Yıldız',
+    phone: '0212 555 01 01',
+    email: 'caner@phonak.com.tr',
+    address: 'Maslak, Sarıyer, İstanbul',
+    taxNo: '1234567890',
+    category: 'İşitme Cihazı',
+    status: 'Aktif',
+    balance: -45000,
+    createdAt: '2025-01-15',
+    notes: 'Ana cihaz tedarikçisi. Aylık sipariş sözleşmesi mevcut.',
+    purchases: [
+      {
+        id: 'pur-1',
+        supplierId: 'sup-1',
+        date: '2026-06-20',
+        invoiceNo: 'PH-2026-0412',
+        items: [
+          { name: 'Phonak Audéo L90-R', quantity: 3, unitPrice: 28000 },
+          { name: 'Phonak Slim L90', quantity: 2, unitPrice: 32000 }
+        ],
+        total: 148000,
+        paymentStatus: 'Kısmi Ödendi',
+        paymentMethod: 'Havale'
+      }
+    ]
+  },
+  {
+    id: 'sup-2',
+    companyName: 'Rayovac Pil Dağıtım',
+    contactPerson: 'Sevgi Demir',
+    phone: '0216 444 22 33',
+    email: 'sevgi@rayovac.com.tr',
+    address: 'Ataşehir, İstanbul',
+    taxNo: '9876543210',
+    category: 'Pil & Aksesuar',
+    status: 'Aktif',
+    balance: 0,
+    createdAt: '2025-03-10',
+    purchases: [
+      {
+        id: 'pur-2',
+        supplierId: 'sup-2',
+        date: '2026-07-05',
+        invoiceNo: 'RV-2026-0088',
+        items: [
+          { name: 'Rayovac 312 (60lı Paket)', quantity: 20, unitPrice: 180 },
+          { name: 'Rayovac 13 (60lı Paket)', quantity: 10, unitPrice: 190 }
+        ],
+        total: 5500,
+        paymentStatus: 'Ödendi',
+        paymentMethod: 'Nakit'
+      }
+    ]
+  },
+  {
+    id: 'sup-3',
+    companyName: 'Widex İşitme Sistemleri',
+    contactPerson: 'Berk Aydın',
+    phone: '0212 333 44 55',
+    email: 'berk@widex.com.tr',
+    address: 'Levent, Beşiktaş, İstanbul',
+    taxNo: '5678901234',
+    category: 'İşitme Cihazı',
+    status: 'Aktif',
+    balance: -12000,
+    createdAt: '2025-06-01',
+    purchases: []
+  },
+  {
+    id: 'sup-4',
+    companyName: 'Kalıp Malzeme San. Tic.',
+    contactPerson: 'Melek Koç',
+    phone: '0312 111 22 33',
+    email: 'melek@kalipmalzeme.com',
+    address: 'Yenimahalle, Ankara',
+    taxNo: '3456789012',
+    category: 'Kalıp Malzemesi',
+    status: 'Pasif',
+    balance: 0,
+    createdAt: '2024-11-20',
+    notes: 'Sözleşme yenilenmedi — alternatif tedarikçi aranıyor.',
+    purchases: []
+  }
+];
+
+// ─── Masraf Yönetimi ─────────────────
+export interface Expense {
+  id: string;
+  date: string;
+  category: 'Kira' | 'Fatura' | 'Maaş' | 'Malzeme' | 'Bakım & Onarım' | 'Ulaşım' | 'Reklam & Pazarlama' | 'Vergi & Sigorta' | 'Diğer';
+  description: string;
+  amount: number;
+  paymentMethod: 'Nakit' | 'Havale' | 'Kredi Kartı' | 'Otomatik Ödeme';
+  branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Genel';
+  createdBy: string;
+  receiptNo?: string;
+  notes?: string;
+}
+
+export const expenses: Expense[] = [
+  {
+    id: 'exp-1',
+    date: '2026-07-01',
+    category: 'Kira',
+    description: 'Kadıköy Şubesi Temmuz ayı kira ödemesi',
+    amount: 42000,
+    paymentMethod: 'Havale',
+    branch: 'Merkez 1 - Kadıköy',
+    createdBy: 'Dr. Elif Arslan',
+    receiptNo: 'KR-2026-07'
+  },
+  {
+    id: 'exp-2',
+    date: '2026-07-01',
+    category: 'Kira',
+    description: 'Beşiktaş Şubesi Temmuz ayı kira ödemesi',
+    amount: 38000,
+    paymentMethod: 'Havale',
+    branch: 'Merkez 2 - Beşiktaş',
+    createdBy: 'Dr. Elif Arslan',
+    receiptNo: 'KR-2026-07B'
+  },
+  {
+    id: 'exp-3',
+    date: '2026-07-03',
+    category: 'Fatura',
+    description: 'Kadıköy şube elektrik faturası (Haziran dönemi)',
+    amount: 4200,
+    paymentMethod: 'Otomatik Ödeme',
+    branch: 'Merkez 1 - Kadıköy',
+    createdBy: 'Dr. Elif Arslan'
+  },
+  {
+    id: 'exp-4',
+    date: '2026-07-05',
+    category: 'Maaş',
+    description: 'Ody. Hasan Kaya — Temmuz maaşı',
+    amount: 52000,
+    paymentMethod: 'Havale',
+    branch: 'Genel',
+    createdBy: 'Dr. Elif Arslan'
+  },
+  {
+    id: 'exp-5',
+    date: '2026-07-05',
+    category: 'Maaş',
+    description: 'Sek. Zeynep Acar — Temmuz maaşı',
+    amount: 32000,
+    paymentMethod: 'Havale',
+    branch: 'Genel',
+    createdBy: 'Dr. Elif Arslan'
+  },
+  {
+    id: 'exp-6',
+    date: '2026-07-10',
+    category: 'Reklam & Pazarlama',
+    description: 'Google Ads Temmuz kampanya ödemesi',
+    amount: 8500,
+    paymentMethod: 'Kredi Kartı',
+    branch: 'Genel',
+    createdBy: 'Dr. Elif Arslan',
+    notes: 'İşitme testi kampanyası — hedef: Kadıköy çevresi'
+  },
+  {
+    id: 'exp-7',
+    date: '2026-07-12',
+    category: 'Bakım & Onarım',
+    description: 'Odyometre cihazı yıllık kalibrasyon ücreti',
+    amount: 3200,
+    paymentMethod: 'Nakit',
+    branch: 'Merkez 1 - Kadıköy',
+    createdBy: 'Ody. Hasan Kaya'
+  },
+  {
+    id: 'exp-8',
+    date: '2026-07-15',
+    category: 'Malzeme',
+    description: 'Ofis kırtasiye ve yazıcı toneri',
+    amount: 1400,
+    paymentMethod: 'Nakit',
+    branch: 'Merkez 1 - Kadıköy',
+    createdBy: 'Sek. Zeynep Acar'
+  }
+];
+
+// ─── Kullanıcı Yönetimi ─────────────────
+export type UserRole = 'Firma Yöneticisi' | 'Odyometrist' | 'Sekreter' | 'Muhasebe';
+
+export interface SystemUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  roles: UserRole[];
+  branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Tüm Şubeler';
+  status: 'Aktif' | 'Pasif';
+  createdAt: string;
+  lastLogin?: string;
+  avatar?: string;
+}
+
+export const systemUsers: SystemUser[] = [
+  {
+    id: 'usr-1',
+    firstName: 'Elif',
+    lastName: 'Arslan',
+    email: 'elif.arslan@audipro.com.tr',
+    phone: '0532 111 22 33',
+    roles: ['Firma Yöneticisi'],
+    branch: 'Tüm Şubeler',
+    status: 'Aktif',
+    createdAt: '2024-06-01',
+    lastLogin: '2026-07-20T14:35:00'
+  },
+  {
+    id: 'usr-2',
+    firstName: 'Hasan',
+    lastName: 'Kaya',
+    email: 'hasan.kaya@audipro.com.tr',
+    phone: '0533 222 33 44',
+    roles: ['Odyometrist'],
+    branch: 'Merkez 1 - Kadıköy',
+    status: 'Aktif',
+    createdAt: '2024-08-15',
+    lastLogin: '2026-07-20T09:10:00'
+  },
+  {
+    id: 'usr-3',
+    firstName: 'Zeynep',
+    lastName: 'Acar',
+    email: 'zeynep.acar@audipro.com.tr',
+    phone: '0534 333 44 55',
+    roles: ['Sekreter'],
+    branch: 'Merkez 1 - Kadıköy',
+    status: 'Aktif',
+    createdAt: '2025-01-10',
+    lastLogin: '2026-07-19T17:22:00'
+  },
+  {
+    id: 'usr-4',
+    firstName: 'Murat',
+    lastName: 'Özkan',
+    email: 'murat.ozkan@audipro.com.tr',
+    phone: '0535 444 55 66',
+    roles: ['Muhasebe'],
+    branch: 'Tüm Şubeler',
+    status: 'Aktif',
+    createdAt: '2025-03-20',
+    lastLogin: '2026-07-18T11:05:00'
+  },
+  {
+    id: 'usr-5',
+    firstName: 'Ayşe',
+    lastName: 'Yılmaz',
+    email: 'ayse.yilmaz@audipro.com.tr',
+    phone: '0536 555 66 77',
+    roles: ['Odyometrist'],
+    branch: 'Merkez 2 - Beşiktaş',
+    status: 'Aktif',
+    createdAt: '2025-06-01',
+    lastLogin: '2026-07-20T10:45:00'
+  },
+  {
+    id: 'usr-6',
+    firstName: 'Fatma',
+    lastName: 'Demir',
+    email: 'fatma.demir@audipro.com.tr',
+    phone: '0537 666 77 88',
+    roles: ['Sekreter', 'Muhasebe'],
+    branch: 'Merkez 2 - Beşiktaş',
+    status: 'Pasif',
+    createdAt: '2025-02-15',
+    lastLogin: '2026-05-10T16:30:00'
+  }
+];
+
+// ─── İşlem Kayıtları (Audit Log) ─────────────────
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  userName: string;
+  action: 'Ekleme' | 'Düzenleme' | 'Silme' | 'Giriş' | 'Çıkış' | 'Satış' | 'Tahsilat' | 'Stok Hareketi';
+  module: 'Hasta' | 'Randevu' | 'Stok' | 'Satış' | 'Kasa' | 'Tedarikçi' | 'Masraf' | 'Kullanıcı' | 'Ayarlar' | 'Sistem';
+  description: string;
+  details?: string;
+}
+
+export const auditLog: AuditLogEntry[] = [
+  {
+    id: 'log-1',
+    timestamp: '2026-07-20T14:35:00',
+    userId: 'usr-1',
+    userName: 'Dr. Elif Arslan',
+    action: 'Giriş',
+    module: 'Sistem',
+    description: 'Sisteme giriş yapıldı.',
+    details: 'IP: 85.107.xx.xx · Tarayıcı: Chrome 126'
+  },
+  {
+    id: 'log-2',
+    timestamp: '2026-07-20T14:40:00',
+    userId: 'usr-1',
+    userName: 'Dr. Elif Arslan',
+    action: 'Ekleme',
+    module: 'Hasta',
+    description: 'Yeni hasta kaydı oluşturuldu: Kemal Deniz',
+  },
+  {
+    id: 'log-3',
+    timestamp: '2026-07-20T10:15:00',
+    userId: 'usr-2',
+    userName: 'Ody. Hasan Kaya',
+    action: 'Satış',
+    module: 'Satış',
+    description: 'Cihaz satışı tamamlandı: Ahmet Yılmaz — Phonak Audéo L90',
+    details: 'Toplam: 95.000 TL · SGK: 5.621 TL · Hasta Payı: 89.379 TL'
+  },
+  {
+    id: 'log-4',
+    timestamp: '2026-07-19T16:20:00',
+    userId: 'usr-4',
+    userName: 'Murat Özkan',
+    action: 'Ekleme',
+    module: 'Masraf',
+    description: 'Yeni masraf kaydı: Google Ads Temmuz kampanya ödemesi — 8.500 TL',
+  },
+  {
+    id: 'log-5',
+    timestamp: '2026-07-19T14:50:00',
+    userId: 'usr-3',
+    userName: 'Zeynep Acar',
+    action: 'Ekleme',
+    module: 'Randevu',
+    description: 'Yeni randevu oluşturuldu: Fatma Kaya — 21.07.2026 11:00',
+  },
+  {
+    id: 'log-6',
+    timestamp: '2026-07-18T09:30:00',
+    userId: 'usr-1',
+    userName: 'Dr. Elif Arslan',
+    action: 'Stok Hareketi',
+    module: 'Stok',
+    description: 'Yeni ürün eklendi: Phonak Slim L70 — SN: PH-SL70-2026-005',
+  },
+  {
+    id: 'log-7',
+    timestamp: '2026-07-17T11:00:00',
+    userId: 'usr-5',
+    userName: 'Ayşe Yılmaz',
+    action: 'Düzenleme',
+    module: 'Hasta',
+    description: 'Hasta bilgileri güncellendi: Mehmet Demir — Adres ve telefon değişikliği',
+  }
+];

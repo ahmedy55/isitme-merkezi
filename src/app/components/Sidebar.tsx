@@ -16,19 +16,23 @@ const menuSections = [
   {
     title: 'İşlemler',
     items: [
-      { id: 'recall'  as const, label: 'Recall',          badge: '5' },
-      { id: 'sgk'     as const, label: 'SGK & Reçete',    badge: null },
-      { id: 'stock'   as const, label: 'Stok & Aksesuar', badge: null },
-      { id: 'cash'    as const, label: 'Kasa & Tahsilat', badge: null },
-      { id: 'service' as const, label: 'Teknik Servis',   badge: null },
+      { id: 'recall'    as const, label: 'Recall',          badge: '5' },
+      { id: 'sgk'       as const, label: 'SGK & Reçete',    badge: null },
+      { id: 'stock'     as const, label: 'Stok & Aksesuar', badge: null },
+      { id: 'cash'      as const, label: 'Kasa & Tahsilat', badge: null },
+      { id: 'service'   as const, label: 'Teknik Servis',   badge: null },
+      { id: 'suppliers' as const, label: 'Tedarikçiler',    badge: null },
+      { id: 'expenses'  as const, label: 'Masraflar',       badge: null },
     ],
   },
   {
     title: 'Yönetim',
     items: [
-      { id: 'reports'  as const, label: 'Raporlar',          badge: null },
-      { id: 'branches' as const, label: 'Şubeler & Yetki',   badge: null },
-      { id: 'settings' as const, label: 'Ayarlar',           badge: null },
+      { id: 'reports'   as const, label: 'Raporlar',          badge: null },
+      { id: 'branches'  as const, label: 'Şubeler & Yetki',   badge: null },
+      { id: 'users'     as const, label: 'Kullanıcılar',      badge: null },
+      { id: 'audit-log' as const, label: 'İşlem Kayıtları',   badge: null },
+      { id: 'settings'  as const, label: 'Ayarlar',           badge: null },
     ],
   },
 ];

@@ -533,6 +533,57 @@ export const IconTrendDown: React.FC<IconProps> = (p = {}) => {
   );
 };
 
+/** Kullanıcılar / Users */
+export const IconUsers: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" strokeWidth={strokeWidth} />
+      <circle cx="9" cy="7" r="4" strokeWidth={strokeWidth} />
+      <path d="M22 21v-2a4 4 0 00-3-3.87" strokeWidth={strokeWidth} />
+      <path d="M16 3.13a4 4 0 010 7.75" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+/** Tedarikçi / Truck */
+export const IconTruck: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <rect x="1" y="3" width="15" height="13" rx="1" strokeWidth={strokeWidth} />
+      <path d="M16 8h4l3 3v5h-7V8z" strokeWidth={strokeWidth} />
+      <circle cx="5.5" cy="18.5" r="2.5" strokeWidth={strokeWidth} />
+      <circle cx="18.5" cy="18.5" r="2.5" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+/** Masraflar / Wallet */
+export const IconWallet: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <path d="M21 12V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2v-1" strokeWidth={strokeWidth} />
+      <path d="M16 12h5v4h-5a2 2 0 010-4z" strokeWidth={strokeWidth} />
+      <path d="M3 7l9-4 9 4" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+/** İşlem Kayıtları / Audit Log */
+export const IconAuditLog: React.FC<IconProps> = (p = {}) => {
+  const { size, className, strokeWidth } = { ...defaultProps, ...p };
+  return (
+    <Svg size={size} className={className}>
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeWidth={strokeWidth} />
+      <path d="M14 2v6h6" strokeWidth={strokeWidth} />
+      <path d="M12 18v-6" strokeWidth={strokeWidth} />
+      <path d="M9.5 15.5L12 18l2.5-2.5" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
 /* ============================================================
    İKON HARİTASI — Sidebar için
    ============================================================ */
@@ -548,6 +599,10 @@ export const navIcons = {
   reports:      IconReports,
   branches:     IconBranches,
   settings:     IconSettings,
+  users:        IconUsers,
+  suppliers:    IconTruck,
+  expenses:     IconWallet,
+  'audit-log':  IconAuditLog,
 } as const;
 
 export type NavIconKey = keyof typeof navIcons;

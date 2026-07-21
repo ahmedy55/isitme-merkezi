@@ -7,7 +7,12 @@ import {
   stockItems as initialStock,
   sales as initialSales,
   recallItems as initialRecall,
-  Patient, Appointment, StockItem, SaleRecord, RecallItem
+  suppliers as initialSuppliers,
+  expenses as initialExpenses,
+  systemUsers as initialUsers,
+  auditLog as initialAuditLog,
+  Patient, Appointment, StockItem, SaleRecord, RecallItem,
+  Supplier, Expense, SystemUser, AuditLogEntry
 } from '../data/mockData';
 
 type Page = 
@@ -22,7 +27,11 @@ type Page =
   | 'service'
   | 'reports'
   | 'branches'
-  | 'settings';
+  | 'settings'
+  | 'users'
+  | 'suppliers'
+  | 'expenses'
+  | 'audit-log';
 
 interface Toast {
   id: string;
@@ -52,6 +61,10 @@ interface AppContextType {
   stockList: StockItem[];
   salesList: SaleRecord[];
   recallList: RecallItem[];
+  suppliersList: Supplier[];
+  expensesList: Expense[];
+  usersList: SystemUser[];
+  auditLogList: AuditLogEntry[];
   
   // Veri Güncelleme Metotları
   addPatient: (patient: Patient) => void;
@@ -62,6 +75,21 @@ interface AppContextType {
   addStockItem: (item: StockItem) => void;
   updateStockItem: (item: StockItem) => void;
   updateRecallItemStatus: (id: string, status: RecallItem['status']) => void;
+  
+  // P0 — Tedarikçi
+  addSupplier: (supplier: Supplier) => void;
+  updateSupplier: (supplier: Supplier) => void;
+  deleteSupplier: (id: string) => void;
+  
+  // P0 — Masraf
+  addExpense: (expense: Expense) => void;
+  updateExpense: (expense: Expense) => void;
+  deleteExpense: (id: string) => void;
+  
+  // P0 — Kullanıcı
+  addUser: (user: SystemUser) => void;
+  updateUser: (user: SystemUser) => void;
+  deleteUser: (id: string) => void;
   
   // Demo ve Ayarlar Parametreleri
   demoModeActive: boolean;
@@ -85,6 +113,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [stockList, setStockList] = useState<StockItem[]>([]);
   const [salesList, setSalesList] = useState<SaleRecord[]>([]);
   const [recallList, setRecallList] = useState<RecallItem[]>([]);
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
+  const [expensesList, setExpensesList] = useState<Expense[]>([]);
+  const [usersList, setUsersList] = useState<SystemUser[]>([]);
+  const [auditLogList, setAuditLogList] = useState<AuditLogEntry[]>([]);
 
   // Demo Ayarları
   const [demoModeActive] = useState(true);
@@ -97,6 +129,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStockList(initialStock);
     setSalesList(initialSales);
     setRecallList(initialRecall);
+    setSuppliersList(initialSuppliers);
+    setExpensesList(initialExpenses);
+    setUsersList(initialUsers);
+    setAuditLogList(initialAuditLog);
   }, []);
 
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
@@ -149,6 +185,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: '2026-07-10' } : r));
   };
 
+  // P0 — Tedarikçi CRUD
+  const addSupplier = (supplier: Supplier) => {
+    setSuppliersList(prev => [supplier, ...prev]);
+  };
+  const updateSupplier = (updatedSupplier: Supplier) => {
+    setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
+  };
+  const deleteSupplier = (id: string) => {
+    setSuppliersList(prev => prev.filter(s => s.id !== id));
+  };
+
+  // P0 — Masraf CRUD
+  const addExpense = (expense: Expense) => {
+    setExpensesList(prev => [expense, ...prev]);
+  };
+  const updateExpense = (updatedExpense: Expense) => {
+    setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+  };
+  const deleteExpense = (id: string) => {
+    setExpensesList(prev => prev.filter(e => e.id !== id));
+  };
+
+  // P0 — Kullanıcı CRUD
+  const addUser = (user: SystemUser) => {
+    setUsersList(prev => [user, ...prev]);
+  };
+  const updateUser = (updatedUser: SystemUser) => {
+    setUsersList(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+  };
+  const deleteUser = (id: string) => {
+    setUsersList(prev => prev.filter(u => u.id !== id));
+  };
+
   return (
     <AppContext.Provider value={{
       currentPage,
@@ -171,6 +240,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       stockList,
       salesList,
       recallList,
+      suppliersList,
+      expensesList,
+      usersList,
+      auditLogList,
       
       addPatient,
       updatePatient,
@@ -180,6 +253,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addStockItem,
       updateStockItem,
       updateRecallItemStatus,
+      
+      addSupplier,
+      updateSupplier,
+      deleteSupplier,
+      addExpense,
+      updateExpense,
+      deleteExpense,
+      addUser,
+      updateUser,
+      deleteUser,
       
       demoModeActive,
       commissionRate,
