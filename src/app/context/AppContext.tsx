@@ -369,10 +369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
-  const handleSetCurrentPage = (page: Page) => {
-    setCurrentPage(page);
-    setSidebarOpen(false);
-  };
+
 
   // Metotlar
   const addPatient = async (patient: Patient) => {

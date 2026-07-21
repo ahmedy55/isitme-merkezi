@@ -117,7 +117,7 @@ export default function Sidebar() {
                     <button
                       key={item.id}
                       className={`sidebar-link ${currentPage === item.id ? 'active' : ''}`}
-                      onClick={() => setCurrentPage(item.id)}
+                      onClick={() => { setCurrentPage(item.id); setSidebarOpen(false); }}
                       title={item.label}
                     >
                       <span className="sidebar-link-icon">
