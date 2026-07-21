@@ -440,36 +440,29 @@ export const dbFetchMemberships = async (): Promise<SystemUser[]> => {
   }));
 };
 
-export const dbInsertMembership = async (user: any) => {
+export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
   const orgId = await getActiveOrgId();
   if (!orgId) throw new Error('Aktif organizasyon bulunamadı.');
 
-  const { data, error } = await supabase
-    .from('memberships')
-    .insert([{
-      organization_id: orgId,
-      roles: user.roles || ['Odyometrist'],
-      status: user.status === 'Pasif' ? 'inactive' : 'active',
-      first_name: user.firstName,
-      last_name: user.lastName,
+  const res = await fetch('/api/invite-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       email: user.email,
-      phone: user.phone
-    }])
-    .select('*, branches(name)');
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      roles: user.roles,
+      orgId
+    })
+  });
 
-  if (error) throw error;
-  const m = data?.[0];
-  return {
-    id: m.id,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    email: user.email,
-    phone: user.phone,
-    roles: user.roles,
-    branch: m.branches?.name || user.branch || 'Tüm Şubeler',
-    status: user.status,
-    createdAt: new Date().toISOString().split('T')[0]
-  };
+  const resData = await res.json();
+  if (!res.ok || !resData.success) {
+    throw new Error(resData.error || 'Kullanıcı daveti gönderilemedi.');
+  }
+
+  return resData.user;
 };
 
 export const dbUpdateMembership = async (id: string, user: any) => {

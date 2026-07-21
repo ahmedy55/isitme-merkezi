@@ -39,14 +39,29 @@ CREATE TABLE branches (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 1.3 memberships (Kullanıcı ↔ Firma ↔ Rol bağı)
+-- 1.3.1 PROFILES (Kullanıcı Profil Bilgileri)
+CREATE TABLE public.profiles (
+  id          UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  first_name  TEXT,
+  last_name   TEXT,
+  phone       TEXT,
+  avatar_url  TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 1.3.2 memberships (Kullanıcı ↔ Firma ↔ Rol bağı)
 CREATE TABLE memberships (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id         UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   roles           TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
   branch_id       UUID REFERENCES branches(id) ON DELETE SET NULL,
   status          TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'invited')),
+  first_name      TEXT,
+  last_name       TEXT,
+  email           TEXT,
+  phone           TEXT,
   invited_at      TIMESTAMPTZ,
   joined_at       TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, organization_id)
