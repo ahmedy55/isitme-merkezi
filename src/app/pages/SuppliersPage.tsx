@@ -208,10 +208,10 @@ export default function SuppliersPage() {
   // Filters logic
   const filteredSuppliers = suppliersList.filter(s => {
     const matchesSearch = 
-      s.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.phone.includes(searchTerm);
+      (s.companyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.contactPerson || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.phone || '').includes(searchTerm);
 
     const matchesCategory = categoryFilter === 'All' || s.category === categoryFilter;
     const matchesStatus = statusFilter === 'All' || s.status === statusFilter;
@@ -252,7 +252,7 @@ export default function SuppliersPage() {
             <div>
               <div style={{ fontSize: '0.84rem', color: 'var(--gray-500)', fontWeight: 500 }}>Toplam Borcumuz</div>
               <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--danger-600)', lineHeight: 1.2 }}>
-                {formatCurrency(Math.abs(suppliersList.reduce((acc, curr) => curr.balance < 0 ? acc + curr.balance : acc, 0)))}
+                {formatCurrency(Math.abs(suppliersList.reduce((acc, curr) => (curr.balance || 0) < 0 ? acc + (curr.balance || 0) : acc, 0)))}
               </div>
             </div>
           </div>

@@ -181,12 +181,15 @@ export const dbFetchSales = async () => {
   const mapped = (data || []).map((sale: any) => {
     const firstName = sale.patients?.first_name || '';
     const lastName = sale.patients?.last_name || '';
+    const camelSale = toCamel(sale);
     return {
-      ...sale,
-      patientName: `${firstName} ${lastName}`.trim() || 'Bilinmeyen Hasta'
+      ...camelSale,
+      patientName: `${firstName} ${lastName}`.trim() || 'Bilinmeyen Hasta',
+      items: camelSale.saleItems || camelSale.items || [],
+      installments: camelSale.saleInstallments || camelSale.installments || []
     };
   });
-  return toCamel(mapped);
+  return mapped;
 };
 
 export const dbInsertSale = async (sale: any) => {
@@ -275,7 +278,19 @@ export const dbFetchSuppliers = async () => {
     .select('*, supplier_purchases(*, supplier_purchase_items(*))')
     .order('company_name', { ascending: true });
   if (error) throw error;
-  return toCamel(data || []);
+  
+  const mapped = (data || []).map((sup: any) => {
+    const camelSup = toCamel(sup);
+    const purchases = (camelSup.supplierPurchases || camelSup.purchases || []).map((pur: any) => ({
+      ...pur,
+      items: pur.supplierPurchaseItems || pur.items || []
+    }));
+    return {
+      ...camelSup,
+      purchases
+    };
+  });
+  return mapped;
 };
 
 export const dbInsertSupplier = async (supplier: any) => {

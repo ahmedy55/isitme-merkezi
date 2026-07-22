@@ -196,10 +196,10 @@ export default function CashPage() {
     selectedAccountIdFilter === 'All' || t.accountId === selectedAccountIdFilter
   );
 
-  const totalRevenue = salesList.reduce((sum, s) => sum + s.total, 0);
-  const collected = salesList.filter(s => s.status === 'Tahsil Edildi').reduce((sum, s) => sum + s.total, 0);
-  const pending = salesList.filter(s => s.status !== 'Tahsil Edildi').reduce((sum, s) => sum + s.patientAmount, 0);
-  const sgkTotal = salesList.reduce((sum, s) => sum + s.sgkAmount, 0);
+  const totalRevenue = salesList.reduce((sum, s) => sum + (s.total || 0), 0);
+  const collected = salesList.filter(s => s.status === 'Tahsil Edildi').reduce((sum, s) => sum + (s.total || 0), 0);
+  const pending = salesList.filter(s => s.status !== 'Tahsil Edildi').reduce((sum, s) => sum + (s.patientAmount || s.total || 0), 0);
+  const sgkTotal = salesList.reduce((sum, s) => sum + (s.sgkAmount || 0), 0);
   const totalCommission = totalRevenue * (commissionRate / 100);
 
   return (
@@ -370,7 +370,7 @@ export default function CashPage() {
                   <td data-label="Tarih" className="td-primary">{formatDate(sale.date)}</td>
                   <td data-label="Hasta" style={{ fontWeight: 600 }}>{sale.patientName}</td>
                   <td data-label="Ürünler">
-                    {sale.items.map((item, i) => (
+                    {(sale.items || []).map((item, i) => (
                       <div key={i} style={{ fontSize: '0.78rem', color: 'var(--gray-600)' }}>
                         {item.name} {item.quantity > 1 && `(${item.quantity} adet)`}
                       </div>
