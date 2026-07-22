@@ -194,7 +194,7 @@ export default function ServicePage() {
       receivedDate: newRecordForm.receivedDate,
       estimatedDate: newRecordForm.estimatedDate,
       returnedDate: null,
-      problem: newRecordForm.problem || (newRecordForm.complaints.length > 0 ? newRecordForm.complaints.join(', ') : 'Arıza belirtilmedi'),
+      problem: newRecordForm.problem || (newRecordForm.customerComplaints.length > 0 ? newRecordForm.customerComplaints.join(', ') : 'Arıza belirtilmedi'),
       operations: [],
       totalCost: 0,
       status: 'Alındı',
@@ -202,7 +202,7 @@ export default function ServicePage() {
       warrantyRepair: newRecordForm.warrantyRepair,
       notes: newRecordForm.notes,
       accessoriesTaken: newRecordForm.accessories,
-      complaints: newRecordForm.complaints
+      complaints: [...newRecordForm.customerComplaints, ...newRecordForm.technicianComplaints]
     };
 
     setRecords([newRec, ...records]);
