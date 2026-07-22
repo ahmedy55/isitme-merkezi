@@ -143,8 +143,15 @@ export default function ServicePage() {
   const [newRecordForm, setNewRecordForm] = useState({
     patientName: '',
     unregisteredPatient: false,
+    unregisteredPhone: '',
+    unregisteredTC: '',
+    unregisteredAddress: '',
     deviceName: '',
     externalDevice: false,
+    externalMarka: '',
+    externalModel: '',
+    externalSeriNo: '',
+    externalTip: '',
     serialNo: '',
     accessories: [] as string[],
     moldModel: '',
@@ -162,6 +169,31 @@ export default function ServicePage() {
     technician: 'Emre Koç',
     notes: ''
   });
+
+  const [patientSearchText, setPatientSearchText] = useState('');
+  const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
+  const [moldSearchText, setMoldSearchText] = useState('');
+  const [isMoldDropdownOpen, setIsMoldDropdownOpen] = useState(false);
+
+  const patientsListMock = [
+    { name: 'Ayşe Demir', tc: '22222222222' },
+    { name: 'Ali Yılmaz', tc: '11111111111' },
+    { name: 'SAMET ALTOK', tc: '12638639514' },
+    { name: 'Mehmet Kaya', tc: '33333333333' },
+    { name: 'Hasan Çelik', tc: '44444444444' },
+    { name: 'Fatma Özkan', tc: '55555555555' }
+  ];
+
+  const moldOptions = [
+    'Prob',
+    'Kısa Destekli Akrilik',
+    'Yarım Konka İskelet',
+    'Yarım Konka',
+    'İskelet',
+    'Tam Konka',
+    'Destekli',
+    'Receiver'
+  ];
 
   const toggleAccessory = (acc: string) => {
     const list = newRecordForm.accessories;
@@ -655,27 +687,94 @@ export default function ServicePage() {
                     Kayıtsız hasta (dışarıdan geldi)
                   </label>
                 </div>
+
                 {newRecordForm.unregisteredPatient ? (
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Hastanın Adı Soyadı (Dışarıdan gelen)"
-                    value={newRecordForm.patientName}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
-                  />
+                  /* Kayıtsız Hasta Inputs (Matching Screenshot 2) */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Ad Soyad *"
+                        value={newRecordForm.patientName}
+                        onChange={(e) => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Telefon"
+                        value={newRecordForm.unregisteredPhone}
+                        onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredPhone: e.target.value })}
+                      />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="TC No"
+                        value={newRecordForm.unregisteredTC}
+                        onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredTC: e.target.value })}
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Adres"
+                      value={newRecordForm.unregisteredAddress}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredAddress: e.target.value })}
+                    />
+                    <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: -2 }}>
+                      Kaydedince hasta "Tamir için gelen" durumuyla oluşturulur.
+                    </div>
+                  </div>
                 ) : (
-                  <select
-                    className="form-select"
-                    value={newRecordForm.patientName}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
-                  >
-                    <option value="">Hasta ara ve seç</option>
-                    <option value="Ayşe Yılmaz">Ayşe Yılmaz (TC: 11111111111 - Tel: 05321112233)</option>
-                    <option value="Mehmet Kaya">Mehmet Kaya (TC: 22222222222 - Tel: 05334445566)</option>
-                    <option value="Ali Demir">Ali Demir (TC: 33333333333 - Tel: 05442221100)</option>
-                    <option value="Hasan Çelik">Hasan Çelik (TC: 44444444444 - Tel: 05553334455)</option>
-                    <option value="Fatma Özkan">Fatma Özkan (TC: 55555555555 - Tel: 05367778899)</option>
-                  </select>
+                  /* Searchable Patient Dropdown (Matching Screenshot 1) */
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ paddingRight: 36, borderColor: isPatientDropdownOpen ? '#0091ff' : undefined }}
+                        placeholder="Hasta ara ve seç"
+                        value={patientSearchText || newRecordForm.patientName}
+                        onFocus={() => setIsPatientDropdownOpen(true)}
+                        onChange={(e) => {
+                          setPatientSearchText(e.target.value);
+                          setNewRecordForm({ ...newRecordForm, patientName: e.target.value });
+                          setIsPatientDropdownOpen(true);
+                        }}
+                      />
+                      <span style={{ position: 'absolute', right: 12, color: '#94a3b8', pointerEvents: 'none', fontSize: '0.88rem' }}>🔍</span>
+                    </div>
+
+                    {isPatientDropdownOpen && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30,
+                        background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8,
+                        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 180, overflowY: 'auto'
+                      }}>
+                        {patientsListMock
+                          .filter(p => `${p.name} ${p.tc}`.toLowerCase().includes((patientSearchText || '').toLowerCase()))
+                          .map((p, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                setNewRecordForm({ ...newRecordForm, patientName: p.name });
+                                setPatientSearchText(`${p.name} (${p.tc})`);
+                                setIsPatientDropdownOpen(false);
+                              }}
+                              style={{
+                                padding: '10px 14px', fontSize: '0.84rem', cursor: 'pointer',
+                                color: '#1e293b', borderBottom: idx < patientsListMock.length - 1 ? '1px solid #f1f5f9' : 'none',
+                                background: newRecordForm.patientName === p.name ? '#f8fafc' : '#ffffff'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = newRecordForm.patientName === p.name ? '#f8fafc' : '#ffffff'}
+                            >
+                              {p.name} ({p.tc})
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -694,35 +793,63 @@ export default function ServicePage() {
                     Dış cihaz (bizim sattığımız değil)
                   </label>
                 </div>
+
                 {newRecordForm.externalDevice ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  /* External Device 4 Inputs (Matching Screenshot 4) */
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="Dış Cihaz Marka / Model"
-                      value={newRecordForm.deviceName}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
+                      placeholder="Marka"
+                      value={newRecordForm.externalMarka}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalMarka: e.target.value, deviceName: `${e.target.value} ${newRecordForm.externalModel}` })}
                     />
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="Seri No (opsiyonel)"
-                      value={newRecordForm.serialNo}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, serialNo: e.target.value })}
+                      placeholder="Model"
+                      value={newRecordForm.externalModel}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalModel: e.target.value, deviceName: `${newRecordForm.externalMarka} ${e.target.value}` })}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Seri No"
+                      value={newRecordForm.externalSeriNo}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalSeriNo: e.target.value, serialNo: e.target.value })}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Tip"
+                      value={newRecordForm.externalTip}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalTip: e.target.value })}
                     />
                   </div>
                 ) : (
-                  <select
-                    className="form-select"
-                    value={newRecordForm.deviceName}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
-                  >
-                    <option value="">Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin</option>
-                    <option value="Phonak Audéo P90 (SN: PH-2024-00142)">Phonak Audéo P90 (SN: PH-2024-00142)</option>
-                    <option value="Oticon More 1 (SN: OT-2024-00089)">Oticon More 1 (SN: OT-2024-00089)</option>
-                    <option value="Signia Pure 7Nx (SN: SG-2024-00176)">Signia Pure 7Nx (SN: SG-2024-00176)</option>
-                    <option value="ReSound ONE 9 (SN: RS-2024-00331)">ReSound ONE 9 (SN: RS-2024-00331)</option>
-                  </select>
+                  /* Standard Device Dropdown + Veri Yok Box (Matching Screenshot 3) */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <select
+                      className="form-select"
+                      value={newRecordForm.deviceName}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
+                    >
+                      <option value="">Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin</option>
+                      <option value="Phonak Audéo P90 (SN: PH-2024-00142)">Phonak Audéo P90 (SN: PH-2024-00142)</option>
+                      <option value="Oticon More 1 (SN: OT-2024-00089)">Oticon More 1 (SN: OT-2024-00089)</option>
+                      <option value="Signia Pure 7Nx (SN: SG-2024-00176)">Signia Pure 7Nx (SN: SG-2024-00176)</option>
+                    </select>
+
+                    {!newRecordForm.deviceName && (
+                      <div style={{
+                        border: '1px solid #e2e8f0', borderRadius: 8, padding: '24px 16px',
+                        textAlign: 'center', background: '#ffffff', color: '#94a3b8'
+                      }}>
+                        <div style={{ fontSize: '2rem', marginBottom: 4 }}>📥</div>
+                        <div style={{ fontSize: '0.82rem', color: '#64748b' }}>Veri Yok</div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -745,23 +872,60 @@ export default function ServicePage() {
                 </div>
               </div>
 
-              {/* 4. KALIP MODELİ */}
+              {/* 4. KALIP MODELİ (Matching Screenshot 5) */}
               <div>
                 <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
                   Kalıp Modeli <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(kalıp siparişi değilse boş bırakın)</span>
                 </label>
-                <select
-                  className="form-select"
-                  value={newRecordForm.moldModel}
-                  onChange={(e) => setNewRecordForm({ ...newRecordForm, moldModel: e.target.value })}
-                >
-                  <option value="">Kalıp modeli seçin</option>
-                  <option value="Sert Akrilik Kalıp">Sert Akrilik Kalıp</option>
-                  <option value="Yumuşak Silikon Kalıp">Yumuşak Silikon Kalıp</option>
-                  <option value="Bioporselen Kalıp">Bioporselen Kalıp</option>
-                  <option value="Micro Shell Kalıp">Micro Shell Kalıp</option>
-                  <option value="BTE Standart Kalıp">BTE Standart Kalıp</option>
-                </select>
+
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ paddingRight: 36, borderColor: isMoldDropdownOpen ? '#0091ff' : undefined }}
+                      placeholder="Kalıp modeli seçin"
+                      value={moldSearchText || newRecordForm.moldModel}
+                      onFocus={() => setIsMoldDropdownOpen(true)}
+                      onChange={(e) => {
+                        setMoldSearchText(e.target.value);
+                        setNewRecordForm({ ...newRecordForm, moldModel: e.target.value });
+                        setIsMoldDropdownOpen(true);
+                      }}
+                    />
+                    <span style={{ position: 'absolute', right: 12, color: '#94a3b8', pointerEvents: 'none', fontSize: '0.88rem' }}>🔍</span>
+                  </div>
+
+                  {isMoldDropdownOpen && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30,
+                      background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8,
+                      boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 180, overflowY: 'auto'
+                    }}>
+                      {moldOptions
+                        .filter(m => m.toLowerCase().includes((moldSearchText || '').toLowerCase()))
+                        .map((m, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setNewRecordForm({ ...newRecordForm, moldModel: m });
+                              setMoldSearchText(m);
+                              setIsMoldDropdownOpen(false);
+                            }}
+                            style={{
+                              padding: '10px 14px', fontSize: '0.84rem', cursor: 'pointer',
+                              color: '#1e293b', borderBottom: idx < moldOptions.length - 1 ? '1px solid #f1f5f9' : 'none',
+                              background: newRecordForm.moldModel === m ? '#f8fafc' : '#ffffff'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = newRecordForm.moldModel === m ? '#f8fafc' : '#ffffff'}
+                          >
+                            {m}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* 5. ŞİKAYET / ARIZA CHECKLIST MATRIX (MÜŞTERİ / TEKNİSYEN) */}
