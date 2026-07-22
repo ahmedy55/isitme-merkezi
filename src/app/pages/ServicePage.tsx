@@ -728,7 +728,7 @@ export default function ServicePage() {
                       value={newRecordForm.unregisteredAddress}
                       onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredAddress: e.target.value })}
                     />
-                    <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: -2 }}>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 4 }}>
                       Kaydedince hasta "Tamir için gelen" durumuyla oluşturulur.
                     </div>
                   </div>
@@ -834,29 +834,17 @@ export default function ServicePage() {
                     />
                   </div>
                 ) : (
-                  /* Standard Device Dropdown + Veri Yok Box (Matching Screenshot 3) */
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <select
-                      className="form-select"
-                      value={newRecordForm.deviceName}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
-                    >
-                      <option value="">Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin</option>
-                      <option value="Phonak Audéo P90 (SN: PH-2024-00142)">Phonak Audéo P90 (SN: PH-2024-00142)</option>
-                      <option value="Oticon More 1 (SN: OT-2024-00089)">Oticon More 1 (SN: OT-2024-00089)</option>
-                      <option value="Signia Pure 7Nx (SN: SG-2024-00176)">Signia Pure 7Nx (SN: SG-2024-00176)</option>
-                    </select>
-
-                    {!newRecordForm.deviceName && (
-                      <div style={{
-                        border: '1px solid #e2e8f0', borderRadius: 8, padding: '24px 16px',
-                        textAlign: 'center', background: '#ffffff', color: '#94a3b8'
-                      }}>
-                        <div style={{ fontSize: '2rem', marginBottom: 4 }}>📥</div>
-                        <div style={{ fontSize: '0.82rem', color: '#64748b' }}>Veri Yok</div>
-                      </div>
-                    )}
-                  </div>
+                  /* Standard Device Dropdown (Matching Odimax UI) */
+                  <select
+                    className="form-select"
+                    value={newRecordForm.deviceName}
+                    onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
+                  >
+                    <option value="">Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin</option>
+                    <option value="Phonak Audéo P90 (SN: PH-2024-00142)">Phonak Audéo P90 (SN: PH-2024-00142)</option>
+                    <option value="Oticon More 1 (SN: OT-2024-00089)">Oticon More 1 (SN: OT-2024-00089)</option>
+                    <option value="Signia Pure 7Nx (SN: SG-2024-00176)">Signia Pure 7Nx (SN: SG-2024-00176)</option>
+                  </select>
                 )}
               </div>
 
@@ -991,25 +979,38 @@ export default function ServicePage() {
                 />
               </div>
 
-              {/* 6. GARANTİ KAPSAMINDA TOGGLE & BİTİŞ TARİHİ */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: '0.88rem', color: '#0f172a' }}>
-                  <input
-                    type="checkbox"
-                    checked={newRecordForm.warrantyRepair}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, warrantyRepair: e.target.checked })}
-                    style={{ width: 18, height: 18, accentColor: '#2563eb' }}
-                  />
-                  Garanti kapsamında
-                </label>
+              {/* 6. GARANTİ KAPSAMINDA TOGGLE SWITCH & BİTİŞ TARİHİ */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#f8fafc', padding: '14px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => setNewRecordForm({ ...newRecordForm, warrantyRepair: !newRecordForm.warrantyRepair })}
+                    style={{
+                      width: 44, height: 24, borderRadius: 12,
+                      background: newRecordForm.warrantyRepair ? '#2563eb' : '#cbd5e1',
+                      border: 'none', cursor: 'pointer', position: 'relative',
+                      transition: 'all 0.2s ease', padding: 2, flexShrink: 0
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
+                      position: 'absolute', top: 2,
+                      left: newRecordForm.warrantyRepair ? 22 : 2,
+                      transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                    }} />
+                  </button>
+                  <span style={{ fontWeight: 600, fontSize: '0.88rem', color: '#0f172a' }}>
+                    Garanti kapsamında
+                  </span>
+                </div>
 
                 {newRecordForm.warrantyRepair && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Garanti bitiş:</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <span style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 500 }}>Garanti bitiş:</span>
                     <input
                       type="date"
                       className="form-input"
-                      style={{ padding: '4px 8px', fontSize: '0.82rem', width: 145 }}
+                      style={{ padding: '6px 10px', fontSize: '0.84rem', width: 160 }}
                       value={newRecordForm.warrantyEndDate}
                       onChange={(e) => setNewRecordForm({ ...newRecordForm, warrantyEndDate: e.target.value })}
                     />
