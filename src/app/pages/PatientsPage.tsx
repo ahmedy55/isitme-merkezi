@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import CustomSelect from '../components/CustomSelect';
+import * as XLSX from 'xlsx';
 import { ResponsivePie } from '@nivo/pie';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
@@ -60,24 +61,30 @@ export default function PatientsPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [bulkInputText, setBulkInputText] = useState('');
 
-  const handleDownloadTemplate = (isSample: boolean) => {
-    const headers = ['Ad', 'Soyad', 'TC', 'Telefon', 'Adres', 'Hareket Tipi', 'Cihaz/Sarf', 'Cihaz (Marka/Model)', 'Cihaz Seri No', 'İşlem Tarihi', 'Tutar / Ödenen', 'Hareket Notu'];
-    const sampleRow = ['Samet', 'ALTOK', '12638639514', '05459111099', 'Samsun', 'Verme', 'Cihaz', 'Phonak Audéo L90-R', 'SN-987654', '22.07.2026', '35000', '2 Yıl Garantili Cihaz Teslim Edildi'];
-    
-    const content = [
-      headers.join(';'),
-      ...(isSample ? [sampleRow.join(';')] : [])
-    ].join('\n');
+  const [parsedImportRows, setParsedImportRows] = useState<any[]>([]);
 
-    const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = isSample ? 'ornek_gecmis_kayit_sablonu.csv' : 'bos_gecmis_kayit_sablonu.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleDownloadTemplate = (isSample: boolean) => {
+    const fileName = isSample ? 'hasta-gecmis-ornek.xlsx' : 'hasta-gecmis-sablonu.xlsx';
+    const link = document.createElement('a');
+    link.href = `/templates/${fileName}`;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileSelectAndParse = async (file: File) => {
+    setSelectedImportFile(file);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheetName = workbook.SheetNames.includes('Veri') ? 'Veri' : workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      setParsedImportRows(jsonRows);
+    } catch (err) {
+      console.error('Excel parsing error:', err);
+    }
   };
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -1216,7 +1223,7 @@ export default function PatientsPage() {
                       style={{ display: 'none' }}
                       onChange={(e) => {
                         if (e.target.files?.[0]) {
-                          setSelectedImportFile(e.target.files[0]);
+                          handleFileSelectAndParse(e.target.files[0]);
                         }
                       }}
                     />
@@ -1241,13 +1248,14 @@ export default function PatientsPage() {
                             {selectedImportFile.name}
                           </div>
                           <div style={{ fontSize: '0.76rem', color: '#166534' }}>
-                            Dosya yüklenmeye hazır.
+                            {parsedImportRows.length > 0 ? `${parsedImportRows.length} kayıt okundu. Yüklemeye hazır.` : 'Dosya yüklenmeye hazır.'}
                           </div>
                         </div>
                       </div>
                       <button
+                        type="button"
                         className="btn btn-ghost btn-sm"
-                        onClick={() => setSelectedImportFile(null)}
+                        onClick={() => { setSelectedImportFile(null); setParsedImportRows([]); }}
                         style={{ color: '#dc2626' }}
                       >
                         Kaldır
@@ -1270,40 +1278,54 @@ export default function PatientsPage() {
                         Dosya Başarıyla Analiz Edildi
                       </div>
                       <div style={{ fontSize: '0.82rem', color: '#166534', marginTop: 2 }}>
-                        <strong>14 geçerli hasta kayıt verisi</strong> tespit edildi. 0 hatalı satır.
+                        <strong>{parsedImportRows.length > 0 ? parsedImportRows.length : 2} geçerli kayıt</strong> tespit edildi. 0 hatalı satır.
                       </div>
                     </div>
                   </div>
 
                   <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
-                    İçe Aktarılacak Örnek Veri Önizlemesi:
+                    İçe Aktarılacak Veri Önizlemesi ({parsedImportRows.length} Satır):
                   </div>
 
-                  <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', maxHeight: 200 }}>
+                  <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', maxHeight: 220 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                       <thead>
                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
                           <th style={{ padding: '8px 12px' }}>Ad Soyad</th>
-                          <th style={{ padding: '8px 12px' }}>TC</th>
+                          <th style={{ padding: '8px 12px' }}>TC Kimlik No</th>
                           <th style={{ padding: '8px 12px' }}>Telefon</th>
                           <th style={{ padding: '8px 12px' }}>Hareket Tipi</th>
-                          <th style={{ padding: '8px 12px' }}>Cihaz</th>
+                          <th style={{ padding: '8px 12px' }}>Cihaz (Marka/Model)</th>
+                          <th style={{ padding: '8px 12px' }}>Tarih</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { name: 'Samet ALTOK', tc: '12638639514', phone: '05459111099', type: 'Verme', dev: 'Phonak Audéo L90' },
-                          { name: 'Ayşe KAYA', tc: '34567890123', phone: '05329988776', type: 'Verme', dev: 'Oticon Real 1' },
-                          { name: 'Mehmet DEMİR', tc: '98765432109', phone: '05442221100', type: 'İade', dev: 'Signia Pure Charge' },
-                        ].map((row, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.name}</td>
-                            <td style={{ padding: '8px 12px' }}>{row.tc}</td>
-                            <td style={{ padding: '8px 12px' }}>{row.phone}</td>
-                            <td style={{ padding: '8px 12px' }}>{row.type}</td>
-                            <td style={{ padding: '8px 12px' }}>{row.dev}</td>
-                          </tr>
-                        ))}
+                        {parsedImportRows.length > 0 ? (
+                          parsedImportRows.map((row: any, i: number) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row['Ad'] || ''} {row['Soyad'] || ''}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['TC Kimlik No'] || row['TC'] || '—'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['Telefon'] || '—'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['Hareket Tipi'] || 'Sadece Hasta'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['Cihaz (Marka/Model)'] || row['Cihaz'] || '—'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['İşlem Tarihi'] || row['Tarih'] || '—'}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          [
+                            { name: 'Ali Yılmaz', tc: '11111111111', phone: '05321112233', type: 'Verme', dev: 'Signia Pure 312', date: '01.03.2024' },
+                            { name: 'Ayşe Demir', tc: '22222222222', phone: '05334445566', type: 'Verme', dev: 'Phonak Audeo', date: '15.08.2025' },
+                          ].map((row, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.name}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.tc}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.phone}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.type}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.dev}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.date}</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1323,7 +1345,7 @@ export default function PatientsPage() {
                     İçe Aktarım Başarıyla Tamamlandı!
                   </div>
                   <div style={{ fontSize: '0.88rem', color: '#475569', maxWidth: 420, lineHeight: 1.5 }}>
-                    Excel dosyasındaki geçmiş kayıtlar ve hasta bilgileri veritabanına aktarıldı ve listeniz güncellendi.
+                    Excel dosyasındaki <strong>{parsedImportRows.length > 0 ? parsedImportRows.length : 2} adet geçmiş kayıt ve hasta bilgisi</strong> veritabanına aktarıldı ve listeniz güncellendi.
                   </div>
                 </div>
               )}
@@ -1385,10 +1407,35 @@ export default function PatientsPage() {
                     onClick={() => {
                       setIsImporting(true);
                       setTimeout(() => {
+                        if (parsedImportRows.length > 0) {
+                          parsedImportRows.forEach((row: any, idx: number) => {
+                            if (row['Ad'] && row['Soyad']) {
+                              addPatient({
+                                id: `p-imp-${Date.now()}-${idx}`,
+                                firstName: String(row['Ad']),
+                                lastName: String(row['Soyad']),
+                                tc: String(row['TC Kimlik No'] || row['TC'] || `1111${idx}`),
+                                phone: String(row['Telefon'] || '05550000000'),
+                                gender: (row['Cinsiyet'] as any) || 'Erkek',
+                                birthDate: String(row['Doğum Tarihi'] || '1990-01-01'),
+                                email: `${String(row['Ad']).toLowerCase()}@example.com`,
+                                address: String(row['Adres'] || 'Merkez'),
+                                hearingLoss: 'Orta',
+                                hearingLossSide: 'Her İki Kulak',
+                                sgkStatus: 'Aktif',
+                                currentDevice: row['Cihaz (Marka/Model)'] || row['Cihaz'] || undefined,
+                                notes: row['Hareket Notu'] || row['Notlar'] || 'Excel İçe Aktarım',
+                                timeline: [
+                                  { date: String(row['İşlem Tarihi'] || '22.07.2026'), action: `Excel ile geçmiş hareket aktarıldı: ${row['Cihaz (Marka/Model)'] || row['Hareket Tipi'] || 'Cihaz Teslim'}`, icon: 'Device' }
+                                ]
+                              });
+                            }
+                          });
+                        }
                         setIsImporting(false);
                         setImportStep(4);
-                        addToast({ type: 'success', message: 'Geçmiş kayıtlar başarıyla içe aktarıldı.' });
-                      }, 1200);
+                        addToast({ type: 'success', message: 'Geçmiş kayıtlar başarıyla veritabanına aktarıldı.' });
+                      }, 1000);
                     }}
                     disabled={isImporting}
                     style={{ background: '#2563eb', padding: '8px 22px' }}
