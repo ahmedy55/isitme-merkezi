@@ -180,7 +180,7 @@ export default function ServicePage() {
   const [reminderNote, setReminderNote] = useState('');
 
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [appointmentDateTime, setAppointmentDateTime] = useState('2026-07-25T14:30');
+  const [appointmentDateTime, setAppointmentDateTime] = useState('');
   const [appointmentType, setAppointmentType] = useState('Servis');
   const [appointmentNotes, setAppointmentNotes] = useState('');
   const [createFollowupPlan, setCreateFollowupPlan] = useState(false);
@@ -1471,7 +1471,12 @@ export default function ServicePage() {
                 <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
                   <span style={{ color: '#ef4444' }}>*</span> 👤 Hasta
                 </label>
-                <select className="form-select" value={selectedRecord.patientName} disabled>
+                <select
+                  className="form-select"
+                  value={selectedRecord.patientName}
+                  disabled
+                  style={{ background: '#e2e8f0', color: '#475569', cursor: 'not-allowed', borderColor: '#cbd5e1', fontWeight: 500 }}
+                >
                   <option>{selectedRecord.patientName} - 05459111099</option>
                 </select>
 
