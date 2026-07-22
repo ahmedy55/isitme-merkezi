@@ -411,7 +411,7 @@ export default function ServicePage() {
             <div class="form-title">TAMİR FORMU</div>
             <div class="form-no">No: ${formNo}</div>
           </div>
-          <div class="brand-logo">ODIMAX</div>
+          <div class="brand-logo">AUDIPRO</div>
         </div>
 
         <div class="section-header">MÜŞTERİ & CİHAZ BİLGİLERİ</div>
@@ -944,7 +944,7 @@ export default function ServicePage() {
         </div>
       )}
 
-      {/* Tamir Kabul - Yeni Kayıt Modal (Authentic Odimax UI) */}
+      {/* Tamir Kabul - Yeni Kayıt Modal */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680, width: '95%' }}>
@@ -1402,7 +1402,7 @@ export default function ServicePage() {
               }}>
                 <span style={{ fontSize: '1.1rem', color: '#0284c7' }}>ℹ️</span>
                 <span style={{ fontSize: '0.8rem', color: '#0369a1', lineHeight: 1.35 }}>
-                  Bu hatırlatma yalnızca size (Odimax personeline) düşer; hastaya mesaj gönderilmez.
+                  Bu hatırlatma yalnızca size (merkez personeline) düşer; hastaya mesaj gönderilmez.
                 </span>
               </div>
 
