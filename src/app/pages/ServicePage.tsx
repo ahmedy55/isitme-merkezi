@@ -555,6 +555,26 @@ export default function ServicePage() {
                 </div>
               </div>
 
+              {/* Quick Action Buttons: Hatırlatma Ekle & Randevu Oluştur */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => addToast({ type: 'info', message: `${selectedRecord.patientName} için hatırlatma eklendi.` })}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 14px', borderRadius: 6 }}
+                >
+                  🔔 Hatırlatma Ekle
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => addToast({ type: 'info', message: `${selectedRecord.patientName} için randevu oluşturma penceresi açıldı.` })}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 14px', borderRadius: 6 }}
+                >
+                  📅 Randevu Oluştur
+                </button>
+              </div>
+
               {/* Problem */}
               <div style={{
                 padding: '12px 16px',
@@ -664,13 +684,25 @@ export default function ServicePage() {
                 </div>
               )}
             </div>
-            <div className="modal-footer">
-              {selectedRecord.status === 'Hazır' && (
-                <button className="btn btn-primary" onClick={() => handleDeliver(selectedRecord)}>
-                  Teslim Edildi Olarak İşaretle
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {selectedRecord.status === 'Hazır' && (
+                  <button className="btn btn-primary" onClick={() => handleDeliver(selectedRecord)}>
+                    Teslim Edildi Olarak İşaretle
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => addToast({ type: 'success', message: `${selectedRecord.patientName} tamir kabul formu (PDF) indiriliyor...` })}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84rem' }}
+                >
+                  🖨️ Form (PDF)
                 </button>
-              )}
-              <button className="btn btn-secondary" onClick={() => setSelectedRecord(null)}>Kapat</button>
+                <button className="btn btn-secondary" onClick={() => setSelectedRecord(null)}>Kapat</button>
+              </div>
             </div>
           </div>
         </div>
