@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
 import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye } from '../components/Icons';
@@ -174,6 +174,22 @@ export default function ServicePage() {
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [moldSearchText, setMoldSearchText] = useState('');
   const [isMoldDropdownOpen, setIsMoldDropdownOpen] = useState(false);
+
+  const patientDropdownRef = useRef<HTMLDivElement>(null);
+  const moldDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (patientDropdownRef.current && !patientDropdownRef.current.contains(event.target as Node)) {
+        setIsPatientDropdownOpen(false);
+      }
+      if (moldDropdownRef.current && !moldDropdownRef.current.contains(event.target as Node)) {
+        setIsMoldDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const patientsListMock = [
     { name: 'Ayşe Demir', tc: '22222222222' },
@@ -734,7 +750,7 @@ export default function ServicePage() {
                   </div>
                 ) : (
                   /* Searchable Patient Dropdown (Matching Screenshot 1) */
-                  <div style={{ position: 'relative' }}>
+                  <div ref={patientDropdownRef} style={{ position: 'relative' }}>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <input
                         type="text"
@@ -873,7 +889,7 @@ export default function ServicePage() {
                   Kalıp Modeli <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(kalıp siparişi değilse boş bırakın)</span>
                 </label>
 
-                <div style={{ position: 'relative' }}>
+                <div ref={moldDropdownRef} style={{ position: 'relative' }}>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                       type="text"
