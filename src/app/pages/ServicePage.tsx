@@ -1841,6 +1841,7 @@ export default function ServicePage() {
               >
                 📅 Randevu Oluştur
               </button>
+            </div>
           </div>
         </div>
       )}
