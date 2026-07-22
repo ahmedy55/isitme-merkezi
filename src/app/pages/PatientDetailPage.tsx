@@ -401,12 +401,20 @@ export default function PatientDetailPage() {
 
       {/* Patient Header */}
       <div className="patient-header">
-        <div
-          className="avatar avatar-xl"
-          style={{ background: getAvatarColor(patient.firstName) }}
-        >
-          {getInitials(patient.firstName, patient.lastName)}
-        </div>
+        {patient.photoUrl ? (
+          <img
+            src={patient.photoUrl}
+            alt={patient.firstName}
+            style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--surface-border)' }}
+          />
+        ) : (
+          <div
+            className="avatar avatar-xl"
+            style={{ background: getAvatarColor(patient.firstName) }}
+          >
+            {getInitials(patient.firstName, patient.lastName)}
+          </div>
+        )}
         <div className="patient-header-info">
           <h2>{patient.firstName} {patient.lastName}</h2>
           <div className="patient-header-meta">

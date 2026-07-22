@@ -61,6 +61,8 @@ export default function PatientsPage() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState<{
     tc: string;
     gender: Patient['gender'];
@@ -81,6 +83,7 @@ export default function PatientsPage() {
     patientStatus: NonNullable<Patient['patientStatus']>;
     source: NonNullable<Patient['source']>;
     consentGiven: boolean;
+    photoUrl?: string;
   }>({
     tc: '',
     gender: 'Erkek',
@@ -100,7 +103,8 @@ export default function PatientsPage() {
     sgkInsuranceStatus: 'Belirtilmemiş',
     patientStatus: 'Potansiyel',
     source: 'Tavsiye',
-    consentGiven: true
+    consentGiven: true,
+    photoUrl: ''
   });
 
   const handleSave = () => {
@@ -118,6 +122,7 @@ export default function PatientsPage() {
       birthDate: formData.birthDate,
       email: formData.email || `${formData.firstName.toLowerCase()}@example.com`,
       address: formData.address,
+      photoUrl: formData.photoUrl,
       hearingLoss: formData.hearingLoss,
       hearingLossSide: formData.hearingLossSide,
       sgkStatus: 'Aktif',
@@ -643,6 +648,67 @@ export default function PatientsPage() {
               </button>
             </div>
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 8 }}>
+              {/* Fotoğraf Yükle Alanı */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--surface-border-light)' }}>
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%', background: 'var(--gray-100)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  overflow: 'hidden', border: '2px solid var(--gray-200)', color: 'var(--gray-400)'
+                }}>
+                  {formData.photoUrl ? (
+                    <img src={formData.photoUrl} alt="Hasta Fotoğrafı" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '1.8rem' }}>👤</span>
+                  )}
+                </div>
+
+                <div>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/jpeg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert('Dosya boyutu 5 MB\'dan büyük olamaz.');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setFormData(prev => ({ ...prev, photoUrl: reader.result as string }));
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.84rem' }}
+                    >
+                      📷 Fotoğraf Yükle
+                    </button>
+                    {formData.photoUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setFormData(prev => ({ ...prev, photoUrl: '' }))}
+                        style={{ color: 'var(--danger-600)', padding: '4px 8px', fontSize: '0.8rem' }}
+                      >
+                        Kaldır
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--gray-500)', marginTop: 4 }}>
+                    Tek fotoğraf, en fazla 5 MB (JPG/PNG/WebP)
+                  </div>
+                </div>
+              </div>
+
               {/* Temel Bilgiler */}
               <div className="form-row">
                 <div className="form-group">
@@ -707,6 +773,11 @@ export default function PatientsPage() {
                     value={formData.birthDate}
                     onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
                   />
+                  {formData.birthDate && (
+                    <span className="badge badge-info" style={{ marginTop: 4, alignSelf: 'flex-start', fontSize: '0.74rem' }}>
+                      Yaş: {calculateAge(formData.birthDate)}
+                    </span>
+                  )}
                 </div>
               </div>
 

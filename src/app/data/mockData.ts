@@ -44,6 +44,7 @@ export interface Patient {
   patientStatus?: 'Potansiyel' | 'Deneme Yapıldı' | 'Müşteri' | 'Satın Almayanlar' | 'Genel' | 'Tamir için gelen' | 'Kalıp Hastası' | 'Pil Hastası' | 'Satış Hastası' | 'Eski Hasta';
   consentGiven?: boolean;
   consentDate?: string;
+  photoUrl?: string;
 }
 
 export interface Appointment {
