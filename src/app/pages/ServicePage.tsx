@@ -142,16 +142,25 @@ export default function ServicePage() {
 
   const [newRecordForm, setNewRecordForm] = useState({
     patientName: '',
+    unregisteredPatient: false,
     deviceName: '',
+    externalDevice: false,
     serialNo: '',
-    problem: '',
-    receivedDate: '2026-07-10',
-    estimatedDate: '2026-07-15',
-    technician: 'Emre Koç',
-    warrantyRepair: false,
-    notes: '',
     accessories: [] as string[],
-    complaints: [] as string[]
+    moldModel: '',
+    customerComplaints: [] as string[],
+    technicianComplaints: [] as string[],
+    problem: '',
+    extraDescription: '',
+    warrantyRepair: true,
+    warrantyEndDate: '',
+    receivedDate: '2026-07-22',
+    estimatedDate: '2026-07-27',
+    serviceTarget: 'Hedef',
+    serviceTargetName: '',
+    deliveredBy: '',
+    technician: 'Emre Koç',
+    notes: ''
   });
 
   const toggleAccessory = (acc: string) => {
@@ -160,10 +169,16 @@ export default function ServicePage() {
     setNewRecordForm({ ...newRecordForm, accessories: updated });
   };
 
-  const toggleComplaint = (comp: string) => {
-    const list = newRecordForm.complaints;
+  const toggleCustomerComplaint = (comp: string) => {
+    const list = newRecordForm.customerComplaints;
     const updated = list.includes(comp) ? list.filter(c => c !== comp) : [...list, comp];
-    setNewRecordForm({ ...newRecordForm, complaints: updated });
+    setNewRecordForm({ ...newRecordForm, customerComplaints: updated });
+  };
+
+  const toggleTechnicianComplaint = (comp: string) => {
+    const list = newRecordForm.technicianComplaints;
+    const updated = list.includes(comp) ? list.filter(c => c !== comp) : [...list, comp];
+    setNewRecordForm({ ...newRecordForm, technicianComplaints: updated });
   };
 
   const handleSaveNewRecord = () => {
@@ -597,51 +612,119 @@ export default function ServicePage() {
         </div>
       )}
 
-      {/* Add Service Modal */}
+      {/* Tamir Kabul - Yeni Kayıt Modal (Authentic Odimax UI) */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-            <div className="modal-header">
-              <span className="modal-title">Yeni Servis Kaydı</span>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680, width: '95%' }}>
+            
+            {/* Modal Header */}
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.2rem' }}>🔑</span>
+                <span className="modal-title" style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
+                  Tamir Kabul - Yeni Kayıt
+                </span>
+              </div>
               <button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button>
             </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Hasta Adı Soyadı</label>
-                <input
-                  className="form-input"
-                  placeholder="Hasta adı soyadı girin..."
-                  value={newRecordForm.patientName}
-                  onChange={(e) => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
-                />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Cihaz</label>
-                  <input
-                    className="form-input"
-                    placeholder="Cihaz adı / modeli"
-                    value={newRecordForm.deviceName}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
-                  />
+
+            {/* Modal Body */}
+            <div className="modal-body" style={{ padding: 20, maxHeight: '78vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              
+              {/* 1. HASTA SECTION */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    Hasta
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: '#475569', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={newRecordForm.unregisteredPatient}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredPatient: e.target.checked })}
+                    />
+                    Kayıtsız hasta (dışarıdan geldi)
+                  </label>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Seri No</label>
+                {newRecordForm.unregisteredPatient ? (
                   <input
+                    type="text"
                     className="form-input"
-                    placeholder="Cihaz seri numarası"
-                    value={newRecordForm.serialNo}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, serialNo: e.target.value })}
+                    placeholder="Hastanın Adı Soyadı (Dışarıdan gelen)"
+                    value={newRecordForm.patientName}
+                    onChange={(e) => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
                   />
-                </div>
+                ) : (
+                  <select
+                    className="form-select"
+                    value={newRecordForm.patientName}
+                    onChange={(e) => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
+                  >
+                    <option value="">Hasta ara ve seç</option>
+                    <option value="Ayşe Yılmaz">Ayşe Yılmaz (TC: 11111111111 - Tel: 05321112233)</option>
+                    <option value="Mehmet Kaya">Mehmet Kaya (TC: 22222222222 - Tel: 05334445566)</option>
+                    <option value="Ali Demir">Ali Demir (TC: 33333333333 - Tel: 05442221100)</option>
+                    <option value="Hasan Çelik">Hasan Çelik (TC: 44444444444 - Tel: 05553334455)</option>
+                    <option value="Fatma Özkan">Fatma Özkan (TC: 55555555555 - Tel: 05367778899)</option>
+                  </select>
+                )}
               </div>
 
-              {/* Teslim Alınan Aksesuarlar */}
-              <div className="form-group">
-                <label className="form-label">Teslim Alınan Aksesuarlar</label>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 6, marginBottom: 12 }}>
-                  {['Pil', 'Cihaz Kutusu', 'Garanti Kartı', 'Kulak Kalıbı'].map(acc => (
-                    <label key={acc} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', cursor: 'pointer', color: 'var(--gray-700)' }}>
+              {/* 2. CİHAZ SECTION */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                    Cihaz
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: '#475569', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={newRecordForm.externalDevice}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalDevice: e.target.checked })}
+                    />
+                    Dış cihaz (bizim sattığımız değil)
+                  </label>
+                </div>
+                {newRecordForm.externalDevice ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Dış Cihaz Marka / Model"
+                      value={newRecordForm.deviceName}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Seri No (opsiyonel)"
+                      value={newRecordForm.serialNo}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, serialNo: e.target.value })}
+                    />
+                  </div>
+                ) : (
+                  <select
+                    className="form-select"
+                    value={newRecordForm.deviceName}
+                    onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
+                  >
+                    <option value="">Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin</option>
+                    <option value="Phonak Audéo P90 (SN: PH-2024-00142)">Phonak Audéo P90 (SN: PH-2024-00142)</option>
+                    <option value="Oticon More 1 (SN: OT-2024-00089)">Oticon More 1 (SN: OT-2024-00089)</option>
+                    <option value="Signia Pure 7Nx (SN: SG-2024-00176)">Signia Pure 7Nx (SN: SG-2024-00176)</option>
+                    <option value="ReSound ONE 9 (SN: RS-2024-00331)">ReSound ONE 9 (SN: RS-2024-00331)</option>
+                  </select>
+                )}
+              </div>
+
+              {/* 3. BİRLİKTE ALINAN AKSESUARLAR */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
+                  Birlikte alınan aksesuarlar
+                </label>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: '0.86rem', color: '#334155' }}>
+                  {['Pil', 'Garanti Kartı', 'Kutu', 'Kulak Kalıbı'].map((acc) => (
+                    <label key={acc} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={newRecordForm.accessories.includes(acc)}
@@ -653,97 +736,182 @@ export default function ServicePage() {
                 </div>
               </div>
 
-              {/* Sık Karşılaşılan Şikayetler */}
-              <div className="form-group">
-                <label className="form-label">Sık Karşılaşılan Şikayetler (Çeklist)</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, marginTop: 6, marginBottom: 12 }}>
+              {/* 4. KALIP MODELİ */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                  Kalıp Modeli <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(kalıp siparişi değilse boş bırakın)</span>
+                </label>
+                <select
+                  className="form-select"
+                  value={newRecordForm.moldModel}
+                  onChange={(e) => setNewRecordForm({ ...newRecordForm, moldModel: e.target.value })}
+                >
+                  <option value="">Kalıp modeli seçin</option>
+                  <option value="Sert Akrilik Kalıp">Sert Akrilik Kalıp</option>
+                  <option value="Yumuşak Silikon Kalıp">Yumuşak Silikon Kalıp</option>
+                  <option value="Bioporselen Kalıp">Bioporselen Kalıp</option>
+                  <option value="Micro Shell Kalıp">Micro Shell Kalıp</option>
+                  <option value="BTE Standart Kalıp">BTE Standart Kalıp</option>
+                </select>
+              </div>
+
+              {/* 5. ŞİKAYET / ARIZA CHECKLIST MATRIX (MÜŞTERİ / TEKNİSYEN) */}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a', marginBottom: 8 }}>
+                  Şikayet / Arıza
+                </div>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{
+                    display: 'flex', background: '#f8fafc', padding: '8px 14px', borderBottom: '1px solid #e2e8f0',
+                    fontSize: '0.78rem', fontWeight: 700, color: '#475569'
+                  }}>
+                    <div style={{ flex: 1 }}>Arıza Tanımı</div>
+                    <div style={{ width: 90, textAlign: 'center' }}>Müşteri</div>
+                    <div style={{ width: 90, textAlign: 'center' }}>Teknisyen</div>
+                  </div>
                   {[
                     'Çalışmıyor',
-                    'Ses Az/Kısık',
-                    'Ara Ara Kesiliyor',
-                    'Hışırtı/Parazit',
-                    'Bluetooth Bağlantı Sorunu',
-                    'Feedback (Çınlama)',
-                    'Yüksek Pil Tüketimi'
-                  ].map(comp => (
-                    <label key={comp} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.84rem', cursor: 'pointer', color: 'var(--gray-700)' }}>
-                      <input
-                        type="checkbox"
-                        checked={newRecordForm.complaints.includes(comp)}
-                        onChange={() => toggleComplaint(comp)}
-                      />
-                      {comp}
-                    </label>
+                    'Ara ara kesiliyor',
+                    'Açma-kapama anahtarı arızalı',
+                    'Ses kontrol düğmesi arızalı',
+                    'Yüksek pil tüketimi',
+                    'Feedback (çınlama)',
+                    'Program geçişi yapmıyor'
+                  ].map((comp, idx, arr) => (
+                    <div key={idx} style={{
+                      display: 'flex', alignItems: 'center', padding: '8px 14px',
+                      borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #f1f5f9',
+                      fontSize: '0.84rem', background: idx % 2 === 0 ? '#ffffff' : '#fafafa'
+                    }}>
+                      <div style={{ flex: 1, color: '#334155' }}>{comp}</div>
+                      <div style={{ width: 90, textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={newRecordForm.customerComplaints.includes(comp)}
+                          onChange={() => toggleCustomerComplaint(comp)}
+                        />
+                      </div>
+                      <div style={{ width: 90, textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={newRecordForm.technicianComplaints.includes(comp)}
+                          onChange={() => toggleTechnicianComplaint(comp)}
+                        />
+                      </div>
+                    </div>
                   ))}
+                </div>
+
+                <textarea
+                  className="form-textarea"
+                  style={{ marginTop: 10, height: 70, fontSize: '0.84rem' }}
+                  placeholder="Ek açıklama (opsiyonel)"
+                  value={newRecordForm.extraDescription}
+                  onChange={(e) => setNewRecordForm({ ...newRecordForm, extraDescription: e.target.value })}
+                />
+              </div>
+
+              {/* 6. GARANTİ KAPSAMINDA TOGGLE & BİTİŞ TARİHİ */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 600, fontSize: '0.88rem', color: '#0f172a' }}>
+                  <input
+                    type="checkbox"
+                    checked={newRecordForm.warrantyRepair}
+                    onChange={(e) => setNewRecordForm({ ...newRecordForm, warrantyRepair: e.target.checked })}
+                    style={{ width: 18, height: 18, accentColor: '#2563eb' }}
+                  />
+                  Garanti kapsamında
+                </label>
+
+                {newRecordForm.warrantyRepair && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Garanti bitiş:</span>
+                    <input
+                      type="date"
+                      className="form-input"
+                      style={{ padding: '4px 8px', fontSize: '0.82rem', width: 145 }}
+                      value={newRecordForm.warrantyEndDate}
+                      onChange={(e) => setNewRecordForm({ ...newRecordForm, warrantyEndDate: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* 7. TAMİRE TESLİM TARİHİ */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                  Tamire teslim tarihi
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={newRecordForm.receivedDate}
+                  onChange={(e) => setNewRecordForm({ ...newRecordForm, receivedDate: e.target.value })}
+                />
+              </div>
+
+              {/* 8. TEKNİK SERVİSE GÖNDERİLECEKSE (OPSİYONEL) */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                  Teknik servise gönderilecekse <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(opsiyonel)</span>
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10 }}>
+                  <select
+                    className="form-select"
+                    value={newRecordForm.serviceTarget}
+                    onChange={(e) => setNewRecordForm({ ...newRecordForm, serviceTarget: e.target.value })}
+                  >
+                    <option value="Hedef">Hedef</option>
+                    <option value="Merkez Servis">Merkez Servis</option>
+                    <option value="Tedarikçi Servis">Tedarikçi Servis</option>
+                    <option value="Şube İçi">Şube İçi</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Hangi teknik servis (ad)"
+                    value={newRecordForm.serviceTargetName}
+                    onChange={(e) => setNewRecordForm({ ...newRecordForm, serviceTargetName: e.target.value })}
+                  />
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Ek Arıza / Sorun Tanımı</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder="Hastanın bildirdiği ek sorunlar..."
-                  value={newRecordForm.problem}
-                  onChange={(e) => setNewRecordForm({ ...newRecordForm, problem: e.target.value })}
+              {/* 9. TESLİM EDEN (CİHAZI BIRAKAN KİŞİ) */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                  Teslim eden <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(cihazı bırakan kişi / opsiyonel)</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Teslim eden adı / yakını (örn: Oğlu Mehmet)"
+                  value={newRecordForm.deliveredBy}
+                  onChange={(e) => setNewRecordForm({ ...newRecordForm, deliveredBy: e.target.value })}
                 />
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Alım Tarihi</label>
-                  <input
-                    className="form-input"
-                    type="date"
-                    value={newRecordForm.receivedDate}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, receivedDate: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Tahmini Teslim Tarihi</label>
-                  <input
-                    className="form-input"
-                    type="date"
-                    value={newRecordForm.estimatedDate}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, estimatedDate: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Teknisyen</label>
-                  <select
-                    className="form-select"
-                    value={newRecordForm.technician}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, technician: e.target.value })}
-                  >
-                    <option>Emre Koç</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Garanti Durumu</label>
-                  <select
-                    className="form-select"
-                    value={newRecordForm.warrantyRepair ? 'Garanti Kapsamında' : 'Garanti Dışı'}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, warrantyRepair: e.target.value === 'Garanti Kapsamında' })}
-                  >
-                    <option>Garanti Dışı</option>
-                    <option>Garanti Kapsamında</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Notlar</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder="Ek notlar..."
-                  value={newRecordForm.notes}
-                  onChange={(e) => setNewRecordForm({ ...newRecordForm, notes: e.target.value })}
-                />
-              </div>
+
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSaveNewRecord}>Kaydı Oluştur</button>
+
+            {/* Modal Footer Controls */}
+            <div className="modal-footer" style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowAddModal(false)}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveNewRecord}
+                style={{ background: '#2563eb', padding: '8px 22px' }}
+              >
+                Kaydet / Tamir Kaydı Oluştur
+              </button>
             </div>
+
           </div>
         </div>
       )}
