@@ -192,12 +192,12 @@ export default function ServicePage() {
   }, []);
 
   const patientsListMock = [
-    { name: 'Ayşe Demir', tc: '22222222222' },
-    { name: 'Ali Yılmaz', tc: '11111111111' },
-    { name: 'SAMET ALTOK', tc: '12638639514' },
-    { name: 'Mehmet Kaya', tc: '33333333333' },
-    { name: 'Hasan Çelik', tc: '44444444444' },
-    { name: 'Fatma Özkan', tc: '55555555555' }
+    { name: 'Ayşe Demir', tc: '22222222222', device: 'Phonak Audéo P90 (SN: PH-2024-00142)', serial: 'PH-2024-00142' },
+    { name: 'Ali Yılmaz', tc: '11111111111', device: 'Oticon More 1 (SN: OT-2024-00089)', serial: 'OT-2024-00089' },
+    { name: 'SAMET ALTOK', tc: '12638639514', device: 'Signia Pure 7Nx (SN: SG-2024-00176)', serial: 'SG-2024-00176' },
+    { name: 'Mehmet Kaya', tc: '33333333333', device: 'ReSound ONE 9 (SN: RS-2024-00331)', serial: 'RS-2024-00331' },
+    { name: 'Hasan Çelik', tc: '44444444444', device: '', serial: '' },
+    { name: 'Fatma Özkan', tc: '55555555555', device: 'Starkey Evolv AI 2400 (SN: ST-2024-00998)', serial: 'ST-2024-00998' }
   ];
 
   const moldOptions = [
@@ -780,7 +780,12 @@ export default function ServicePage() {
                             <div
                               key={idx}
                               onClick={() => {
-                                setNewRecordForm({ ...newRecordForm, patientName: p.name });
+                                setNewRecordForm({
+                                  ...newRecordForm,
+                                  patientName: p.name,
+                                  deviceName: p.device || '',
+                                  serialNo: p.serial || ''
+                                });
                                 setPatientSearchText(`${p.name} (${p.tc})`);
                                 setIsPatientDropdownOpen(false);
                               }}
