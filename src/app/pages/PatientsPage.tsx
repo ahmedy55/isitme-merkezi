@@ -259,15 +259,8 @@ export default function PatientsPage() {
   };
 
   const handleImportHistory = () => {
-    setImportFileSimulated(true);
-    setTimeout(() => {
-      addToast({ 
-        type: 'success', 
-        message: 'Geçmiş hasta veritabanı (142 hasta kartı ve 512 randevu/cihaz geçmişi) başarıyla sisteme aktarıldı.' 
-      });
-      setShowImportHistoryModal(false);
-      setImportFileSimulated(false);
-    }, 1500);
+    setImportStep(1);
+    setShowImportHistoryModal(true);
   };
 
   const handleSort = (key: SortKey) => {
