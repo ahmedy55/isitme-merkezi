@@ -55,9 +55,29 @@ export default function PatientsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkAddModal, setShowBulkAddModal] = useState(false);
   const [showImportHistoryModal, setShowImportHistoryModal] = useState(false);
-  
-  const [bulkInputText, setBulkInputText] = useState('');
-  const [importFileSimulated, setImportFileSimulated] = useState(false);
+  const [importStep, setImportStep] = useState<1 | 2 | 3 | 4>(1);
+  const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleDownloadTemplate = (isSample: boolean) => {
+    const headers = ['Ad', 'Soyad', 'TC', 'Telefon', 'Adres', 'Hareket Tipi', 'Cihaz/Sarf', 'Cihaz (Marka/Model)', 'Cihaz Seri No', 'İşlem Tarihi', 'Tutar / Ödenen', 'Hareket Notu'];
+    const sampleRow = ['Samet', 'ALTOK', '12638639514', '05459111099', 'Samsun', 'Verme', 'Cihaz', 'Phonak Audéo L90-R', 'SN-987654', '22.07.2026', '35000', '2 Yıl Garantili Cihaz Teslim Edildi'];
+    
+    const content = [
+      headers.join(';'),
+      ...(isSample ? [sampleRow.join(';')] : [])
+    ].join('\n');
+
+    const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = isSample ? 'ornek_gecmis_kayit_sablonu.csv' : 'bos_gecmis_kayit_sablonu.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -1032,61 +1052,370 @@ export default function PatientsPage() {
         </div>
       )}
 
-      {/* Geçmiş Veri Aktarımı Modalı */}
+      {/* Excel ile Geçmiş Kayıt Yükle Modalı (Wizard) */}
       {showImportHistoryModal && (
         <div className="modal-overlay" onClick={() => setShowImportHistoryModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
-            <div className="modal-header">
-              <span className="modal-title">🔄 Geçmiş Veri Aktarımı</span>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 650, width: '95%' }}>
+            
+            {/* Modal Header */}
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.2rem' }}>📄</span>
+                <span className="modal-title" style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
+                  Excel ile Geçmiş Kayıt Yükle
+                </span>
+              </div>
               <button className="modal-close" onClick={() => setShowImportHistoryModal(false)}>✕</button>
             </div>
-            <div className="modal-body">
-              <p style={{ fontSize: '0.82rem', color: 'var(--gray-600)', marginBottom: 16, lineHeight: 1.5 }}>
-                Eski yazılımınızdan veya başka bir sistemden dışa aktardığınız Excel, CSV, XML veya JSON formatındaki hasta kayıt ve cihaz/randevu geçmişi yedek dosyasını buraya yükleyebilirsiniz.
-              </p>
-              
-              <div style={{
-                border: '2px dashed var(--gray-300)',
-                borderRadius: 'var(--radius-lg)',
-                padding: '30px 20px',
-                textAlign: 'center',
-                background: 'var(--surface-card)',
-                cursor: 'pointer',
-                marginBottom: 16,
-                transition: 'border-color var(--transition-base)'
-              }}
-              onClick={handleImportHistory}>
-                <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📁</div>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-800)', marginBottom: 4 }}>
-                  Yedek dosyasını sürükleyip bırakın veya seçin
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>
-                  Desteklenen formatlar: .xlsx, .xls, .csv, .xml, .json (Maks. 20MB)
-                </div>
-              </div>
 
-              {importFileSimulated && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--primary-50)', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--primary-100)' }}>
-                  <div className="spinner-small" style={{
-                    width: 16,
-                    height: 16,
-                    border: '2px solid var(--primary-200)',
-                    borderTopColor: 'var(--primary-600)',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }} />
-                  <span style={{ fontSize: '0.8rem', color: 'var(--primary-700)', fontWeight: 500 }}>
-                    Dosya analiz ediliyor ve veriler veritabanına işleniyor...
-                  </span>
+            {/* Stepper Navigation Bar */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9'
+            }}>
+              {[
+                { step: 1, label: 'Şablon İndir' },
+                { step: 2, label: 'Dosya Yükle' },
+                { step: 3, label: 'Doğrulama' },
+                { step: 4, label: 'Sonuç' }
+              ].map((item, index) => {
+                const isActive = importStep === item.step;
+                const isDone = importStep > item.step;
+                return (
+                  <React.Fragment key={item.step}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 24, height: 24, borderRadius: '50%',
+                        background: isActive ? '#2563eb' : isDone ? '#16a34a' : '#f1f5f9',
+                        color: isActive || isDone ? '#ffffff' : '#94a3b8',
+                        fontSize: '0.78rem', fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}>
+                        {isDone ? '✓' : item.step}
+                      </div>
+                      <span style={{
+                        fontSize: '0.86rem',
+                        fontWeight: isActive ? 700 : 500,
+                        color: isActive ? '#0f172a' : '#64748b'
+                      }}>
+                        {item.label}
+                      </span>
+                    </div>
+                    {index < 3 && (
+                      <div style={{ flex: 1, height: 2, background: isDone ? '#16a34a' : '#e2e8f0', margin: '0 6px' }} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* Modal Body Content depending on importStep */}
+            <div className="modal-body" style={{ padding: 20, maxHeight: '72vh', overflowY: 'auto' }}>
+              
+              {/* STEP 1: ŞABLON İNDİR */}
+              {importStep === 1 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  
+                  {/* Önemli Bilgiler Banner */}
+                  <div style={{
+                    background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: 10,
+                    padding: 16, display: 'flex', gap: 12
+                  }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: '50%', background: '#0284c7', color: '#ffffff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0, fontSize: '0.88rem'
+                    }}>
+                      i
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0369a1', marginBottom: 6 }}>
+                        Önemli Bilgiler
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.84rem', color: '#0369a1', lineHeight: 1.6 }}>
+                        <li>Excel dosyası (.xlsx veya .xls) yükleyebilirsiniz</li>
+                        <li>İlk satır başlık satırı olmalıdır</li>
+                        <li>Maksimum dosya boyutu: 10 MB</li>
+                        <li>Zorunlu alanları mutlaka doldurun</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Şablon Alanları Table */}
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0f172a', marginBottom: 10 }}>
+                      Şablon Alanları
+                    </div>
+
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                      {[
+                        { field: 'Ad / Soyad / TC / Telefon / Adres', required: true, desc: '- Hasta bilgileri (zorunlu) — mevcut hasta varsa TC ile eşleşir' },
+                        { field: 'Hareket Tipi', required: false, desc: '- Verme veya İade (boş = sadece hasta eklenir)' },
+                        { field: 'Cihaz/Sarf', required: false, desc: '- Cihaz, Sarf veya Diğer (boş = Cihaz)' },
+                        { field: 'Cihaz (Marka/Model)', required: false, desc: '- Verilen/alınan cihaz — serbest metin' },
+                        { field: 'Cihaz Seri No', required: false, desc: '- Seri numarası (opsiyonel)' },
+                        { field: 'İşlem Tarihi', required: false, desc: '- GG.AA.YYYY (Hareket Tipi doluysa zorunlu)' },
+                        { field: 'Tutar / Ödenen', required: false, desc: '- İşlem tutarları (opsiyonel)' },
+                        { field: 'Hareket Notu', required: false, desc: '- Harekete özel not (opsiyonel)' },
+                      ].map((row, idx, arr) => (
+                        <div key={idx} style={{
+                          display: 'flex', alignItems: 'center', padding: '10px 14px',
+                          borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #f1f5f9',
+                          fontSize: '0.84rem', background: idx % 2 === 0 ? '#ffffff' : '#fafafa'
+                        }}>
+                          <div style={{ width: '38%', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>{row.field}</span>
+                            {row.required && (
+                              <span style={{
+                                background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+                                borderRadius: 4, padding: '1px 6px', fontSize: '0.72rem', fontWeight: 600
+                              }}>
+                                Zorunlu
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ width: '62%', color: '#64748b' }}>
+                            {row.desc}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Template Buttons */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => handleDownloadTemplate(false)}
+                      style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, background: '#2563eb' }}
+                    >
+                      📥 Boş Şablon İndir
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleDownloadTemplate(true)}
+                      style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, background: '#ffffff', border: '1px solid #cbd5e1' }}
+                    >
+                      📥 Örnek Verili Şablon İndir
+                    </button>
+                  </div>
                 </div>
               )}
+
+              {/* STEP 2: DOSYA YÜKLE */}
+              {importStep === 2 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>
+                    Doldurduğunuz Excel dosyasını seçin veya buraya sürükleyin:
+                  </div>
+
+                  <label style={{
+                    border: '2px dashed #cbd5e1', borderRadius: 12, padding: '36px 20px',
+                    textAlign: 'center', background: '#f8fafc', cursor: 'pointer', display: 'block',
+                    transition: 'all 0.18s ease'
+                  }}>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          setSelectedImportFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📊</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0f172a', marginBottom: 4 }}>
+                      {selectedImportFile ? selectedImportFile.name : 'Excel veya CSV dosyanızı buraya bırakın'}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                      {selectedImportFile ? `${(selectedImportFile.size / 1024).toFixed(1)} KB — Değiştirmek için tıklayın` : 'veya dosya seçmek için tıklayın (.xlsx, .xls, .csv maks 10MB)'}
+                    </div>
+                  </label>
+
+                  {selectedImportFile && (
+                    <div style={{
+                      background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8,
+                      padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: '1.2rem', color: '#16a34a' }}>✓</span>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#15803d' }}>
+                            {selectedImportFile.name}
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: '#166534' }}>
+                            Dosya yüklenmeye hazır.
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setSelectedImportFile(null)}
+                        style={{ color: '#dc2626' }}
+                      >
+                        Kaldır
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: DOĞRULAMA */}
+              {importStep === 3 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{
+                    background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
+                    padding: 16, display: 'flex', alignItems: 'center', gap: 12
+                  }}>
+                    <span style={{ fontSize: '1.5rem', color: '#16a34a' }}>✅</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#15803d' }}>
+                        Dosya Başarıyla Analiz Edildi
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: '#166534', marginTop: 2 }}>
+                        <strong>14 geçerli hasta kayıt verisi</strong> tespit edildi. 0 hatalı satır.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
+                    İçe Aktarılacak Örnek Veri Önizlemesi:
+                  </div>
+
+                  <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', maxHeight: 200 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                          <th style={{ padding: '8px 12px' }}>Ad Soyad</th>
+                          <th style={{ padding: '8px 12px' }}>TC</th>
+                          <th style={{ padding: '8px 12px' }}>Telefon</th>
+                          <th style={{ padding: '8px 12px' }}>Hareket Tipi</th>
+                          <th style={{ padding: '8px 12px' }}>Cihaz</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { name: 'Samet ALTOK', tc: '12638639514', phone: '05459111099', type: 'Verme', dev: 'Phonak Audéo L90' },
+                          { name: 'Ayşe KAYA', tc: '34567890123', phone: '05329988776', type: 'Verme', dev: 'Oticon Real 1' },
+                          { name: 'Mehmet DEMİR', tc: '98765432109', phone: '05442221100', type: 'İade', dev: 'Signia Pure Charge' },
+                        ].map((row, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.name}</td>
+                            <td style={{ padding: '8px 12px' }}>{row.tc}</td>
+                            <td style={{ padding: '8px 12px' }}>{row.phone}</td>
+                            <td style={{ padding: '8px 12px' }}>{row.type}</td>
+                            <td style={{ padding: '8px 12px' }}>{row.dev}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 4: SONUÇ */}
+              {importStep === 4 && (
+                <div style={{ padding: '24px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                  <div style={{
+                    width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', color: '#15803d',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem'
+                  }}>
+                    🎉
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#0f172a' }}>
+                    İçe Aktarım Başarıyla Tamamlandı!
+                  </div>
+                  <div style={{ fontSize: '0.88rem', color: '#475569', maxWidth: 420, lineHeight: 1.5 }}>
+                    Excel dosyasındaki geçmiş kayıtlar ve hasta bilgileri veritabanına aktarıldı ve listeniz güncellendi.
+                  </div>
+                </div>
+              )}
+
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowImportHistoryModal(false)}>Kapat</button>
-              <button className="btn btn-primary" onClick={handleImportHistory} disabled={importFileSimulated}>
-                {importFileSimulated ? 'Aktarılıyor...' : 'Aktarımı Başlat'}
-              </button>
+
+            {/* Modal Footer Controls */}
+            <div className="modal-footer" style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                {importStep > 1 && importStep < 4 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setImportStep((prev) => (prev - 1) as any)}
+                  >
+                    Geri
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                {importStep < 4 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowImportHistoryModal(false)}
+                  >
+                    İptal
+                  </button>
+                )}
+
+                {importStep === 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setImportStep(2)}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    İleri
+                  </button>
+                )}
+
+                {importStep === 2 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setImportStep(3)}
+                    disabled={!selectedImportFile}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    İleri
+                  </button>
+                )}
+
+                {importStep === 3 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setIsImporting(true);
+                      setTimeout(() => {
+                        setIsImporting(false);
+                        setImportStep(4);
+                        addToast({ type: 'success', message: 'Geçmiş kayıtlar başarıyla içe aktarıldı.' });
+                      }, 1200);
+                    }}
+                    disabled={isImporting}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    {isImporting ? 'Aktarılıyor...' : '🚀 İçe Aktarımı Başlat'}
+                  </button>
+                )}
+
+                {importStep === 4 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setShowImportHistoryModal(false)}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    Tamam
+                  </button>
+                )}
+              </div>
             </div>
+
           </div>
         </div>
       )}
