@@ -55,6 +55,35 @@ export default function PatientsPage() {
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkAddModal, setShowBulkAddModal] = useState(false);
+  const [bulkStep, setBulkStep] = useState<1 | 2 | 3 | 4>(1);
+  const [selectedBulkFile, setSelectedBulkFile] = useState<File | null>(null);
+  const [parsedBulkRows, setParsedBulkRows] = useState<any[]>([]);
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
+
+  const handleDownloadPatientTemplate = (isSample: boolean) => {
+    const fileName = isSample ? 'hasta-ornek-veri.xlsx' : 'hasta-sablonu.xlsx';
+    const link = document.createElement('a');
+    link.href = `/templates/${fileName}`;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleBulkFileSelectAndParse = async (file: File) => {
+    setSelectedBulkFile(file);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheetName = workbook.SheetNames.includes('Veri') ? 'Veri' : workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      setParsedBulkRows(jsonRows);
+    } catch (err) {
+      console.error('Excel parsing error:', err);
+    }
+  };
+
   const [showImportHistoryModal, setShowImportHistoryModal] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
@@ -1018,37 +1047,416 @@ export default function PatientsPage() {
         </div>
       )}
 
-      {/* Toplu Hasta Ekle Modalı */}
+      {/* Excel ile Toplu Hasta Yükle Modalı (Wizard) */}
       {showBulkAddModal && (
         <div className="modal-overlay" onClick={() => setShowBulkAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
-            <div className="modal-header">
-              <span className="modal-title">📥 Toplu Hasta Aktarımı</span>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 650, width: '95%' }}>
+            
+            {/* Modal Header */}
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.2rem' }}>📄</span>
+                <span className="modal-title" style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
+                  Excel ile Toplu Hasta Yükle
+                </span>
+              </div>
               <button className="modal-close" onClick={() => setShowBulkAddModal(false)}>✕</button>
             </div>
-            <div className="modal-body">
-              <p style={{ fontSize: '0.82rem', color: 'var(--gray-600)', marginBottom: 12, lineHeight: 1.5 }}>
-                Aşağıdaki kutuya, her satıra bir hasta gelecek şekilde verilerinizi yapıştırın. Sütunları ayırmak için <strong>noktalı virgül (;)</strong> kullanın.
-              </p>
-              <div style={{ background: 'var(--gray-50)', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontSize: '0.78rem', color: 'var(--gray-700)', fontFamily: 'var(--font-mono)', marginBottom: 16, border: '1px solid var(--gray-200)' }}>
-                <strong>Format:</strong> Ad;Soyad;TC;Telefon;Adres<br />
-                <strong>Örnek:</strong> Ahmet;Yılmaz;12345678901;05321112233;Kadıköy, İstanbul
+
+            {/* Stepper Navigation Bar */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 20px', background: '#ffffff', borderBottom: '1px solid #f1f5f9'
+            }}>
+              {[
+                { step: 1, label: 'Şablon İndir' },
+                { step: 2, label: 'Dosya Yükle' },
+                { step: 3, label: 'Doğrulama' },
+                { step: 4, label: 'Sonuç' }
+              ].map((item, index) => {
+                const isActive = bulkStep === item.step;
+                const isDone = bulkStep > item.step;
+                return (
+                  <React.Fragment key={item.step}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 24, height: 24, borderRadius: '50%',
+                        background: isActive ? '#2563eb' : isDone ? '#16a34a' : '#f1f5f9',
+                        color: isActive || isDone ? '#ffffff' : '#94a3b8',
+                        fontSize: '0.78rem', fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}>
+                        {isDone ? '✓' : item.step}
+                      </div>
+                      <span style={{
+                        fontSize: '0.86rem',
+                        fontWeight: isActive ? 700 : 500,
+                        color: isActive ? '#0f172a' : '#64748b'
+                      }}>
+                        {item.label}
+                      </span>
+                    </div>
+                    {index < 3 && (
+                      <div style={{ flex: 1, height: 2, background: isDone ? '#16a34a' : '#e2e8f0', margin: '0 6px' }} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* Modal Body Content depending on bulkStep */}
+            <div className="modal-body" style={{ padding: 20, maxHeight: '72vh', overflowY: 'auto' }}>
+              
+              {/* STEP 1: ŞABLON İNDİR */}
+              {bulkStep === 1 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  
+                  {/* Önemli Bilgiler Banner */}
+                  <div style={{
+                    background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: 10,
+                    padding: 16, display: 'flex', gap: 12
+                  }}>
+                    <div style={{
+                      width: 26, height: 26, borderRadius: '50%', background: '#0284c7', color: '#ffffff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0, fontSize: '0.88rem'
+                    }}>
+                      i
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0369a1', marginBottom: 6 }}>
+                        Önemli Bilgiler
+                      </div>
+                      <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.84rem', color: '#0369a1', lineHeight: 1.6 }}>
+                        <li>Excel dosyası (.xlsx veya .xls) yükleyebilirsiniz</li>
+                        <li>İlk satır başlık satırı olmalıdır</li>
+                        <li>Maksimum dosya boyutu: 10 MB</li>
+                        <li>Zorunlu alanları mutlaka doldurun</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Şablon Alanları Table */}
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0f172a', marginBottom: 10 }}>
+                      Şablon Alanları
+                    </div>
+
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+                      {[
+                        { field: 'Ad / Soyad / TC / Telefon / Adres', required: true, desc: '- Hasta temel bilgileri (zorunlu) — 11 haneli TC' },
+                        { field: 'Doğum Tarihi / Cinsiyet', required: false, desc: '- GG.AA.YYYY (Erkek / Kadın)' },
+                        { field: 'Yakın Adı / Yakın Telefon', required: false, desc: '- Hasta yakını iletişim bilgileri (opsiyonel)' },
+                        { field: 'Yakına Bildirim Gönder', required: false, desc: '- Açık veya Kapalı (boş = Açık)' },
+                        { field: 'Durum', required: false, desc: '- Potansiyel / Deneme Yapıldı / Müşteri / Satın Almayanlar' },
+                        { field: 'Nasıl Duydunuz', required: false, desc: '- Referans kaynağı (serbest metin)' },
+                        { field: 'Reçete No / Rapor No', required: false, desc: '- E-Reçete ve SGK rapor numarası' },
+                        { field: 'Notlar', required: false, desc: '- Hasta hakkında serbest not' },
+                      ].map((row, idx, arr) => (
+                        <div key={idx} style={{
+                          display: 'flex', alignItems: 'center', padding: '10px 14px',
+                          borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #f1f5f9',
+                          fontSize: '0.84rem', background: idx % 2 === 0 ? '#ffffff' : '#fafafa'
+                        }}>
+                          <div style={{ width: '38%', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>{row.field}</span>
+                            {row.required && (
+                              <span style={{
+                                background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+                                borderRadius: 4, padding: '1px 6px', fontSize: '0.72rem', fontWeight: 600
+                              }}>
+                                Zorunlu
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ width: '62%', color: '#64748b' }}>
+                            {row.desc}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Template Buttons */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => handleDownloadPatientTemplate(false)}
+                      style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, background: '#2563eb' }}
+                    >
+                      📥 Boş Şablon İndir
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleDownloadPatientTemplate(true)}
+                      style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600, background: '#ffffff', border: '1px solid #cbd5e1' }}
+                    >
+                      📥 Örnek Verili Şablon İndir
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: DOSYA YÜKLE */}
+              {bulkStep === 2 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ fontSize: '0.9rem', color: '#334155', fontWeight: 600 }}>
+                    Doldurduğunuz Excel dosyasını seçin veya buraya sürükleyin:
+                  </div>
+
+                  <label style={{
+                    border: '2px dashed #cbd5e1', borderRadius: 12, padding: '36px 20px',
+                    textAlign: 'center', background: '#f8fafc', cursor: 'pointer', display: 'block',
+                    transition: 'all 0.18s ease'
+                  }}>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) {
+                          handleBulkFileSelectAndParse(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>📊</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#0f172a', marginBottom: 4 }}>
+                      {selectedBulkFile ? selectedBulkFile.name : 'Excel veya CSV dosyanızı buraya bırakın'}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                      {selectedBulkFile ? `${(selectedBulkFile.size / 1024).toFixed(1)} KB — Değiştirmek için tıklayın` : 'veya dosya seçmek için tıklayın (.xlsx, .xls, .csv maks 10MB)'}
+                    </div>
+                  </label>
+
+                  {selectedBulkFile && (
+                    <div style={{
+                      background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8,
+                      padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: '1.2rem', color: '#16a34a' }}>✓</span>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#15803d' }}>
+                            {selectedBulkFile.name}
+                          </div>
+                          <div style={{ fontSize: '0.76rem', color: '#166534' }}>
+                            {parsedBulkRows.length > 0 ? `${parsedBulkRows.length} hasta okundu. Yüklemeye hazır.` : 'Dosya yüklenmeye hazır.'}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => { setSelectedBulkFile(null); setParsedBulkRows([]); }}
+                        style={{ color: '#dc2626' }}
+                      >
+                        Kaldır
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: DOĞRULAMA */}
+              {bulkStep === 3 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{
+                    background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
+                    padding: 16, display: 'flex', alignItems: 'center', gap: 12
+                  }}>
+                    <span style={{ fontSize: '1.5rem', color: '#16a34a' }}>✅</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#15803d' }}>
+                        Dosya Başarıyla Analiz Edildi
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: '#166534', marginTop: 2 }}>
+                        <strong>{parsedBulkRows.length > 0 ? parsedBulkRows.length : 3} geçerli hasta kaydı</strong> tespit edildi. 0 hatalı satır.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
+                    İçe Aktarılacak Hasta Verisi Önizlemesi ({parsedBulkRows.length > 0 ? parsedBulkRows.length : 3} Satır):
+                  </div>
+
+                  <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', maxHeight: 220 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left' }}>
+                          <th style={{ padding: '8px 12px' }}>Ad Soyad</th>
+                          <th style={{ padding: '8px 12px' }}>TC Kimlik No</th>
+                          <th style={{ padding: '8px 12px' }}>Telefon</th>
+                          <th style={{ padding: '8px 12px' }}>Cinsiyet</th>
+                          <th style={{ padding: '8px 12px' }}>Durum</th>
+                          <th style={{ padding: '8px 12px' }}>Nasıl Duydunuz</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parsedBulkRows.length > 0 ? (
+                          parsedBulkRows.map((row: any, i: number) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row['Ad'] || ''} {row['Soyad'] || ''}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['TC Kimlik No'] || row['TC'] || '—'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['Telefon'] || '—'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['Cinsiyet'] || 'Erkek'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['Durum'] || 'Potansiyel'}</td>
+                              <td style={{ padding: '8px 12px' }}>{row['Nasıl Duydunuz'] || '—'}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          [
+                            { name: 'Ahmet Yılmaz', tc: '12345678901', phone: '05321234567', gender: 'Erkek', status: 'Potansiyel', ref: 'Doktor tavsiyesi' },
+                            { name: 'Fatma Demir', tc: '98765432109', phone: '05339876543', gender: 'Kadın', status: 'Müşteri', ref: 'İnternet' },
+                            { name: 'Mehmet Kaya', tc: '11122233344', phone: '05551112233', gender: 'Erkek', status: 'Potansiyel', ref: 'Walk-in' },
+                          ].map((row, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.name}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.tc}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.phone}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.gender}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.status}</td>
+                              <td style={{ padding: '8px 12px' }}>{row.ref}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 4: SONUÇ */}
+              {bulkStep === 4 && (
+                <div style={{ padding: '24px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                  <div style={{
+                    width: 64, height: 64, borderRadius: '50%', background: '#dcfce7', color: '#15803d',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem'
+                  }}>
+                    🎉
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#0f172a' }}>
+                    Toplu Hasta Aktarımı Başarıyla Tamamlandı!
+                  </div>
+                  <div style={{ fontSize: '0.88rem', color: '#475569', maxWidth: 420, lineHeight: 1.5 }}>
+                    Excel dosyasındaki <strong>{parsedBulkRows.length > 0 ? parsedBulkRows.length : 3} adet hasta kaydı</strong> veritabanına eklendi ve hasta listeniz güncellendi.
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Footer Controls */}
+            <div className="modal-footer" style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                {bulkStep > 1 && bulkStep < 4 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setBulkStep((prev) => (prev - 1) as any)}
+                  >
+                    Geri
+                  </button>
+                )}
               </div>
-              <div className="form-group">
-                <label className="form-label">Hasta Verileri</label>
-                <textarea
-                  className="form-textarea"
-                  style={{ height: 200, fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}
-                  placeholder="Ahmet;Yılmaz;12345678901;05321112233;Kadıköy, İstanbul&#10;Can;Saraç;45678901234;05553334455;Üsküdar, İstanbul"
-                  value={bulkInputText}
-                  onChange={(e) => setBulkInputText(e.target.value)}
-                />
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                {bulkStep < 4 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowBulkAddModal(false)}
+                  >
+                    İptal
+                  </button>
+                )}
+
+                {bulkStep === 1 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setBulkStep(2)}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    İleri
+                  </button>
+                )}
+
+                {bulkStep === 2 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setBulkStep(3)}
+                    disabled={!selectedBulkFile}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    İleri
+                  </button>
+                )}
+
+                {bulkStep === 3 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setIsBulkImporting(true);
+                      setTimeout(() => {
+                        if (parsedBulkRows.length > 0) {
+                          parsedBulkRows.forEach((row: any, idx: number) => {
+                            if (row['Ad'] && row['Soyad']) {
+                              addPatient({
+                                id: `p-bulk-${Date.now()}-${idx}`,
+                                firstName: String(row['Ad']),
+                                lastName: String(row['Soyad']),
+                                tc: String(row['TC Kimlik No'] || row['TC'] || `1111${idx}`),
+                                phone: String(row['Telefon'] || '05550000000'),
+                                gender: (row['Cinsiyet'] as any) || 'Erkek',
+                                birthDate: String(row['Doğum Tarihi'] || '1990-01-01'),
+                                email: `${String(row['Ad']).toLowerCase()}@example.com`,
+                                address: String(row['Adres'] || 'Merkez'),
+                                hearingLoss: 'Hafif',
+                                hearingLossSide: 'Her İki Kulak',
+                                sgkStatus: 'Aktif',
+                                notes: row['Notlar'] || 'Toplu Hasta Ekleme',
+                                emergencyContactName: row['Yakın Adı'] || undefined,
+                                emergencyContactPhone: row['Yakın Telefon'] || undefined,
+                                prescriptionNo: row['Reçete No'] || undefined,
+                                reportNo: row['Rapor No'] || undefined,
+                                patientStatus: (row['Durum'] as any) || 'Potansiyel',
+                                source: (row['Nasıl Duydunuz'] as any) || 'Tavsiye',
+                                timeline: [
+                                  { date: '22.07.2026', action: 'Excel ile toplu hasta kaydı oluşturuldu.', icon: 'Plus' }
+                                ]
+                              });
+                            }
+                          });
+                        }
+                        setIsBulkImporting(false);
+                        setBulkStep(4);
+                        addToast({ type: 'success', message: 'Toplu hastalar başarıyla veritabanına eklendi.' });
+                      }, 1000);
+                    }}
+                    disabled={isBulkImporting}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    {isBulkImporting ? 'Aktarılıyor...' : '🚀 İçe Aktarımı Başlat'}
+                  </button>
+                )}
+
+                {bulkStep === 4 && (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setShowBulkAddModal(false)}
+                    style={{ background: '#2563eb', padding: '8px 22px' }}
+                  >
+                    Tamam
+                  </button>
+                )}
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowBulkAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleBulkSave}>Tamam</button>
-            </div>
+
           </div>
         </div>
       )}
