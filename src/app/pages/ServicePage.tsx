@@ -209,16 +209,25 @@ export default function ServicePage() {
     setShowAddModal(false);
     setNewRecordForm({
       patientName: '',
+      unregisteredPatient: false,
       deviceName: '',
+      externalDevice: false,
       serialNo: '',
-      problem: '',
-      receivedDate: '2026-07-10',
-      estimatedDate: '2026-07-15',
-      technician: 'Emre Koç',
-      warrantyRepair: false,
-      notes: '',
       accessories: [],
-      complaints: []
+      moldModel: '',
+      customerComplaints: [],
+      technicianComplaints: [],
+      problem: '',
+      extraDescription: '',
+      warrantyRepair: true,
+      warrantyEndDate: '',
+      receivedDate: '2026-07-22',
+      estimatedDate: '2026-07-27',
+      serviceTarget: 'Hedef',
+      serviceTargetName: '',
+      deliveredBy: '',
+      technician: 'Emre Koç',
+      notes: ''
     });
     addToast({ type: 'success', message: `${newRec.patientName} adına yeni teknik servis kaydı oluşturuldu.` });
   };
