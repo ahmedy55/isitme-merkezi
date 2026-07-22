@@ -1463,7 +1463,7 @@ export default function ServicePage() {
                 <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
                   <span style={{ color: '#ef4444' }}>*</span> 👤 Hasta
                 </label>
-                <select className="form-select" value={selectedRecord.patientName} readOnly>
+                <select className="form-select" value={selectedRecord.patientName} disabled>
                   <option>{selectedRecord.patientName} - 05459111099</option>
                 </select>
 
