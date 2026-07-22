@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { NewAppointmentModal } from './AppointmentsPage';
 import {
   patients, appointments, sales,
   getAvatarColor, getInitials, formatDate, formatCurrency, calculateAge,
@@ -1832,87 +1833,16 @@ export default function PatientDetailPage() {
 
       {/* Quick Appointment Modal */}
       {showQuickAptModal && (
-        <div className="modal-overlay" onClick={() => setShowQuickAptModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title">Randevu Oluştur — {patient.firstName} {patient.lastName}</span>
-              <button className="modal-close" onClick={() => setShowQuickAptModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Tarih</label>
-                  <input
-                    className="form-input"
-                    type="date"
-                    value={aptFormData.date}
-                    onChange={(e) => setAptFormData({ ...aptFormData, date: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Saat</label>
-                  <input
-                    className="form-input"
-                    type="time"
-                    value={aptFormData.time}
-                    onChange={(e) => setAptFormData({ ...aptFormData, time: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Randevu Türü</label>
-                  <select
-                    className="form-select"
-                    value={aptFormData.type}
-                    onChange={(e) => setAptFormData({ ...aptFormData, type: e.target.value as Appointment['type'] })}
-                  >
-                    <option>Kontrol</option>
-                    <option>İşitme Testi</option>
-                    <option>Cihaz Denemesi</option>
-                    <option>SGK Yenileme</option>
-                    <option>Kalıp Alma</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Odyolog</label>
-                  <select
-                    className="form-select"
-                    value={aptFormData.audiologist}
-                    onChange={(e) => setAptFormData({ ...aptFormData, audiologist: e.target.value })}
-                  >
-                    <option>Dr. Elif Arslan</option>
-                    <option>Ody. Hasan Kaya</option>
-                    <option>Dr. Ayşe Yılmaz</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Şube</label>
-                <select
-                  className="form-select"
-                  value={aptFormData.branch}
-                  onChange={(e) => setAptFormData({ ...aptFormData, branch: e.target.value })}
-                >
-                  <option>Merkez 1 - Kadıköy</option>
-                  <option>Merkez 2 - Beşiktaş</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Notlar</label>
-                <textarea
-                  className="form-textarea"
-                  value={aptFormData.notes}
-                  onChange={(e) => setAptFormData({ ...aptFormData, notes: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowQuickAptModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleQuickApt}>Randevu Oluştur</button>
-            </div>
-          </div>
-        </div>
+        <NewAppointmentModal
+          onClose={() => setShowQuickAptModal(false)}
+          onSave={(newApt) => {
+            addAppointment(newApt);
+            setShowQuickAptModal(false);
+            addToast({ type: 'success', message: `${patient.firstName} ${patient.lastName} için randevu oluşturuldu.` });
+          }}
+          patientsList={patientsList}
+          addToast={addToast}
+        />
       )}
       {/* Quick Service Modal */}
       {showServiceModal && (

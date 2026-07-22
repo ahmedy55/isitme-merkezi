@@ -466,7 +466,7 @@ export default function AppointmentsPage() {
 // ═══════════════════════════════════════════════
 // Gelişmiş "Yeni Randevu" Modal Bileşeni
 // ═══════════════════════════════════════════════
-function NewAppointmentModal({
+export function NewAppointmentModal({
   onClose,
   onSave,
   patientsList,
