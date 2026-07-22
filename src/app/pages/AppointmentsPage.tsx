@@ -504,6 +504,14 @@ export function NewAppointmentModal({
 
   // Takip Planı
   const [createFollowupPlan, setCreateFollowupPlan] = useState(false);
+  const [followupNote, setFollowupNote] = useState('');
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([
+    '1 Hafta Kontrol',
+    '1 Ay Kontrol',
+    '3 Ay Kontrol',
+    '6 Ay Kontrol',
+    '1 Yıl Kontrol'
+  ]);
 
   // WhatsApp Reminders
   const [sendWhatsappReminder, setSendWhatsappReminder] = useState(true);
@@ -625,6 +633,8 @@ export function NewAppointmentModal({
       status: 'Bekliyor' as const,
       notes: notes,
       followupPlan: createFollowupPlan,
+      followupPeriods: createFollowupPlan ? selectedPeriods : [],
+      followupNote: createFollowupPlan ? followupNote : '',
       whatsappReminders: sendWhatsappReminder ? reminders : [],
       sendWhatsappOnCreate
     };
@@ -1033,6 +1043,102 @@ export function NewAppointmentModal({
                 <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Randevu tarihinden itibaren periyodik kontrol hatırlatmaları oluşturulur</div>
               </div>
             </label>
+
+            {createFollowupPlan && (() => {
+              const formatFollowupDate = (addDays: number, addMonths: number, addYears: number) => {
+                const d = new Date(selectedDate);
+                if (addDays) d.setDate(d.getDate() + addDays);
+                if (addMonths) d.setMonth(d.getMonth() + addMonths);
+                if (addYears) d.setFullYear(d.getFullYear() + addYears);
+
+                const dayStr = d.getDate().toString().padStart(2, '0');
+                const monthStr = (d.getMonth() + 1).toString().padStart(2, '0');
+                const yearStr = d.getFullYear();
+                const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+                const dayName = dayNames[d.getDay()];
+
+                return `${dayStr}.${monthStr}.${yearStr} ${dayName}`;
+              };
+
+              const periodsConfig = [
+                { key: '1 Hafta Kontrol', label: '1 Hafta Kontrol', dateText: formatFollowupDate(7, 0, 0) },
+                { key: '1 Ay Kontrol', label: '1 Ay Kontrol', dateText: formatFollowupDate(0, 1, 0) },
+                { key: '3 Ay Kontrol', label: '3 Ay Kontrol', dateText: formatFollowupDate(0, 3, 0) },
+                { key: '6 Ay Kontrol', label: '6 Ay Kontrol', dateText: formatFollowupDate(0, 6, 0) },
+                { key: '1 Yıl Kontrol', label: '1 Yıl Kontrol', dateText: formatFollowupDate(0, 0, 1) },
+              ];
+
+              return (
+                <div style={{
+                  background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12,
+                  padding: 16, marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
+                    Kontrol Dönemleri
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {periodsConfig.map((item) => {
+                      const isChecked = selectedPeriods.includes(item.key);
+                      return (
+                        <label key={item.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedPeriods([...selectedPeriods, item.key]);
+                                } else {
+                                  setSelectedPeriods(selectedPeriods.filter(p => p !== item.key));
+                                }
+                              }}
+                              style={{ width: 17, height: 17, accentColor: '#2563eb' }}
+                            />
+                            <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#334155' }}>
+                              {item.label}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 500 }}>
+                            {item.dateText}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {/* Takip Notu (opsiyonel) */}
+                  <div style={{ marginTop: 4 }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#64748b', fontWeight: 500, marginBottom: 4 }}>
+                      Takip Notu (opsiyonel)
+                    </label>
+                    <textarea
+                      className="form-textarea"
+                      placeholder="Takip planı için not..."
+                      maxLength={500}
+                      value={followupNote}
+                      onChange={(e) => setFollowupNote(e.target.value)}
+                      style={{
+                        width: '100%', minHeight: 60, borderRadius: 8, border: '1px solid #cbd5e1',
+                        padding: 10, fontSize: '0.86rem', outline: 'none', resize: 'vertical', background: '#ffffff'
+                      }}
+                    />
+                    <div style={{ textAlign: 'right', fontSize: '0.74rem', color: '#94a3b8', marginTop: 2 }}>
+                      {followupNote.length} / 500
+                    </div>
+                  </div>
+
+                  {/* Info Banner */}
+                  <div style={{
+                    background: '#e0f2fe', borderRadius: 8, padding: '10px 14px',
+                    display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.78rem', color: '#0369a1', lineHeight: 1.4
+                  }}>
+                    <span style={{ fontSize: '0.9rem' }}>🗓️</span>
+                    <span>Seçilen dönemlerde personele hatırlatma bildirimi gönderilir. Aynı gün randevu hatırlatması varsa çift mesaj gitmez.</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Divider 2: WhatsApp Hatırlatma */}
