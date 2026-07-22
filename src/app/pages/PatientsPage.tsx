@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import CustomSelect from '../components/CustomSelect';
 import { ResponsivePie } from '@nivo/pie';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
@@ -744,14 +745,11 @@ export default function PatientsPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Cinsiyet</label>
-                  <select
-                    className="form-select"
+                  <CustomSelect
                     value={formData.gender}
-                    onChange={(e) => setFormData({ ...formData, gender: e.target.value as Patient['gender'] })}
-                  >
-                    <option>Erkek</option>
-                    <option>Kadın</option>
-                  </select>
+                    options={['Erkek', 'Kadın']}
+                    onChange={(val) => setFormData({ ...formData, gender: val as Patient['gender'] })}
+                  />
                 </div>
               </div>
 
@@ -805,31 +803,22 @@ export default function PatientsPage() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">İşitme Kaybı Derecesi</label>
-                  <select
-                    className="form-select"
+                  <CustomSelect
                     value={formData.hearingLoss}
-                    onChange={(e) => setFormData({ ...formData, hearingLoss: e.target.value as Patient['hearingLoss'] })}
-                  >
-                    <option>Hafif</option>
-                    <option>Orta</option>
-                    <option>İleri</option>
-                    <option>Çok İleri</option>
-                  </select>
+                    options={['Hafif', 'Orta', 'İleri', 'Çok İleri']}
+                    onChange={(val) => setFormData({ ...formData, hearingLoss: val as Patient['hearingLoss'] })}
+                  />
                 </div>
               </div>
               
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">İşitme Kaybı Tarafı</label>
-                  <select
-                    className="form-select"
+                  <CustomSelect
                     value={formData.hearingLossSide}
-                    onChange={(e) => setFormData({ ...formData, hearingLossSide: e.target.value as Patient['hearingLossSide'] })}
-                  >
-                    <option>Sol</option>
-                    <option>Sağ</option>
-                    <option>Her İki Kulak</option>
-                  </select>
+                    options={['Sol', 'Sağ', 'Her İki Kulak']}
+                    onChange={(val) => setFormData({ ...formData, hearingLossSide: val as Patient['hearingLossSide'] })}
+                  />
                 </div>
                 <div className="form-group" style={{ visibility: 'hidden' }} />
               </div>
@@ -894,16 +883,16 @@ export default function PatientsPage() {
                     SGK Sigorta Durumu 
                     <span style={{ color: 'var(--gray-400)', cursor: 'help', marginLeft: 4 }} title="Hastanın SGK güvence tipini seçin.">ⓘ</span>
                   </label>
-                  <select
-                    className="form-select"
+                  <CustomSelect
                     value={formData.sgkInsuranceStatus}
-                    onChange={(e) => setFormData({ ...formData, sgkInsuranceStatus: e.target.value as NonNullable<Patient['sgkInsuranceStatus']> })}
-                  >
-                    <option>Belirtilmemiş</option>
-                    <option>Çalışan (sigortalı)</option>
-                    <option>Emekli</option>
-                    <option>Diğer / Kapsam dışı</option>
-                  </select>
+                    options={[
+                      'Belirtilmemiş',
+                      'Çalışan (sigortalı)',
+                      'Emekli',
+                      'Diğer / Kapsam dışı'
+                    ]}
+                    onChange={(val) => setFormData({ ...formData, sgkInsuranceStatus: val as NonNullable<Patient['sgkInsuranceStatus']> })}
+                  />
                 </div>
                 
                 {/* SGK warning box */}
@@ -940,35 +929,35 @@ export default function PatientsPage() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Durum</label>
-                  <select
-                    className="form-select"
+                  <CustomSelect
                     value={formData.patientStatus}
-                    onChange={(e) => setFormData({ ...formData, patientStatus: e.target.value as NonNullable<Patient['patientStatus']> })}
-                  >
-                    <option>Potansiyel</option>
-                    <option>Deneme Yapıldı</option>
-                    <option>Müşteri</option>
-                    <option>Satın Almayanlar</option>
-                    <option>Genel</option>
-                    <option>Tamir için gelen</option>
-                    <option>Kalıp Hastası</option>
-                    <option>Pil Hastası</option>
-                  </select>
+                    options={[
+                      'Potansiyel',
+                      'Deneme Yapıldı',
+                      'Müşteri',
+                      'Satın Almayanlar',
+                      'Genel',
+                      'Tamir için gelen',
+                      'Kalıp Hastası',
+                      'Pil Hastası'
+                    ]}
+                    onChange={(val) => setFormData({ ...formData, patientStatus: val as NonNullable<Patient['patientStatus']> })}
+                  />
                 </div>
                 
                 <div className="form-group">
                   <label className="form-label">Nasıl Duydunuz? (Referans Kaynağı)</label>
-                  <select
-                    className="form-select"
+                  <CustomSelect
                     value={formData.source}
-                    onChange={(e) => setFormData({ ...formData, source: e.target.value as NonNullable<Patient['source']> })}
-                  >
-                    <option value="Doktor">Doktor Yönlendirmesi</option>
-                    <option value="Sosyal Medya">Sosyal Medya</option>
-                    <option value="Tavsiye">Hasta Tavsiyesi</option>
-                    <option value="Yürüyerek">Yürüyerek (Walk-in)</option>
-                    <option value="Web">Web Sitesi</option>
-                  </select>
+                    options={[
+                      { value: 'Doktor', label: 'Doktor Yönlendirmesi' },
+                      { value: 'Sosyal Medya', label: 'Sosyal Medya' },
+                      { value: 'Tavsiye', label: 'Hasta Tavsiyesi' },
+                      { value: 'Yürüyerek', label: 'Yürüyerek (Walk-in)' },
+                      { value: 'Web', label: 'Web Sitesi' }
+                    ]}
+                    onChange={(val) => setFormData({ ...formData, source: val as NonNullable<Patient['source']> })}
+                  />
                 </div>
               </div>
 
