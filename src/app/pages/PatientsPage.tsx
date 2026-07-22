@@ -58,6 +58,7 @@ export default function PatientsPage() {
   const [importStep, setImportStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedImportFile, setSelectedImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [bulkInputText, setBulkInputText] = useState('');
 
   const handleDownloadTemplate = (isSample: boolean) => {
     const headers = ['Ad', 'Soyad', 'TC', 'Telefon', 'Adres', 'Hareket Tipi', 'Cihaz/Sarf', 'Cihaz (Marka/Model)', 'Cihaz Seri No', 'İşlem Tarihi', 'Tutar / Ödenen', 'Hareket Notu'];
