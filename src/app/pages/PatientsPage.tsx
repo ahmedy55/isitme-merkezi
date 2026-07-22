@@ -1057,7 +1057,7 @@ export default function PatientsPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: '1.2rem' }}>📄</span>
                 <span className="modal-title" style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
-                  Excel ile Toplu Hasta Yükle
+                  Excel ile Hasta Yükle
                 </span>
               </div>
               <button className="modal-close" onClick={() => setShowBulkAddModal(false)}>✕</button>
@@ -1143,13 +1143,20 @@ export default function PatientsPage() {
 
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
                       {[
-                        { field: 'Ad / Soyad / TC / Telefon / Adres', required: true, desc: '- Hasta temel bilgileri (zorunlu) — 11 haneli TC' },
-                        { field: 'Doğum Tarihi / Cinsiyet', required: false, desc: '- GG.AA.YYYY (Erkek / Kadın)' },
-                        { field: 'Yakın Adı / Yakın Telefon', required: false, desc: '- Hasta yakını iletişim bilgileri (opsiyonel)' },
+                        { field: 'Ad', required: true, desc: '- Hastanın adı (zorunlu)' },
+                        { field: 'Soyad', required: true, desc: '- Hastanın soyadı (zorunlu)' },
+                        { field: 'TC Kimlik No', required: true, desc: '- 11 haneli TC Kimlik numarası (zorunlu, benzersiz)' },
+                        { field: 'Telefon', required: true, desc: '- İletişim telefon numarası (zorunlu)' },
+                        { field: 'Adres', required: true, desc: '- Hastanın adresi (zorunlu)' },
+                        { field: 'Doğum Tarihi', required: false, desc: '- GG.AA.YYYY (örn: 15.06.1980)' },
+                        { field: 'Cinsiyet', required: false, desc: '- Erkek veya Kadın' },
+                        { field: 'Yakın Adı', required: false, desc: '- Hasta yakınının adı (örn: Eşim Ayşe Hanım)' },
+                        { field: 'Yakın Telefon', required: false, desc: '- Yakının telefon numarası' },
                         { field: 'Yakına Bildirim Gönder', required: false, desc: '- Açık veya Kapalı (boş = Açık)' },
                         { field: 'Durum', required: false, desc: '- Potansiyel / Deneme Yapıldı / Müşteri / Satın Almayanlar' },
                         { field: 'Nasıl Duydunuz', required: false, desc: '- Referans kaynağı (serbest metin)' },
-                        { field: 'Reçete No / Rapor No', required: false, desc: '- E-Reçete ve SGK rapor numarası' },
+                        { field: 'Reçete No', required: false, desc: '- E-Reçete numarası' },
+                        { field: 'Rapor No', required: false, desc: '- SGK rapor numarası' },
                         { field: 'Notlar', required: false, desc: '- Hasta hakkında serbest not' },
                       ].map((row, idx, arr) => (
                         <div key={idx} style={{
