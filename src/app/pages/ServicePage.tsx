@@ -198,6 +198,18 @@ export default function ServicePage() {
   const [customTimeVal, setCustomTimeVal] = useState('30');
   const [customTimeUnit, setCustomTimeUnit] = useState('Dakika');
 
+  const [showAddOperationModal, setShowAddOperationModal] = useState(false);
+  const [opStatus, setOpStatus] = useState('');
+  const [opShortNote, setOpShortNote] = useState('');
+  const [opDecision, setOpDecision] = useState('');
+  const [opDiagnosis, setOpDiagnosis] = useState('');
+  const [opAction, setOpAction] = useState('');
+  const [opLaborCost, setOpLaborCost] = useState<number | string>(0);
+  const [opPartCost, setOpPartCost] = useState<number | string>(0);
+  const [showExternalDispatch, setShowExternalDispatch] = useState(false);
+  const [externalDispatchCompany, setExternalDispatchCompany] = useState('');
+  const [externalDispatchTrackingNo, setExternalDispatchTrackingNo] = useState('');
+
   const patientDropdownRef = useRef<HTMLDivElement>(null);
   const moldDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -560,6 +572,52 @@ export default function ServicePage() {
     printWindow.document.close();
   };
 
+  const handleAddOperation = () => {
+    if (!selectedRecord) return;
+
+    const labor = Number(opLaborCost) || 0;
+    const part = Number(opPartCost) || 0;
+    const total = labor + part;
+
+    const actionText = opAction || opDiagnosis || 'Servis İşlemi Yapıldı';
+
+    const newOp = {
+      description: actionText,
+      cost: total
+    };
+
+    const updatedOperations = [...selectedRecord.operations, newOp];
+    const newTotalCost = selectedRecord.warrantyRepair ? 0 : updatedOperations.reduce((sum, o) => sum + o.cost, 0);
+
+    const updatedStatus = opStatus && opStatus !== 'Durum değiştir'
+      ? (opStatus as any)
+      : selectedRecord.status;
+
+    const updatedRecord: ServiceRecord = {
+      ...selectedRecord,
+      operations: updatedOperations,
+      totalCost: newTotalCost,
+      status: updatedStatus,
+      notes: opShortNote ? (selectedRecord.notes ? `${selectedRecord.notes} | ${opShortNote}` : opShortNote) : selectedRecord.notes
+    };
+
+    const updatedRecords = records.map(r => r.id === selectedRecord.id ? updatedRecord : r);
+    setRecords(updatedRecords);
+    setSelectedRecord(updatedRecord);
+    setShowAddOperationModal(false);
+
+    setOpStatus('');
+    setOpShortNote('');
+    setOpDecision('');
+    setOpDiagnosis('');
+    setOpAction('');
+    setOpLaborCost(0);
+    setOpPartCost(0);
+    setShowExternalDispatch(false);
+
+    addToast({ type: 'success', message: `${selectedRecord.patientName} kaydına yeni servis işlemi eklendi.` });
+  };
+
   const filtered = records.filter(r =>
     filterStatus === 'Tümü' || r.status === filterStatus
   );
@@ -862,8 +920,18 @@ export default function ServicePage() {
 
               {/* Operations */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: 8, color: 'var(--gray-700)' }}>
-                  🛠️ Yapılan İşlemler
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--gray-700)' }}>
+                    🛠️ Yapılan İşlemler
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setShowAddOperationModal(true)}
+                    style={{ fontSize: '0.78rem', padding: '4px 12px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    + İşlem Ekle
+                  </button>
                 </div>
                 <div style={{ border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
                   {selectedRecord.operations.map((op, i) => (
@@ -1772,6 +1840,179 @@ export default function ServicePage() {
                 }}
               >
                 📅 Randevu Oluştur
+              </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. İŞLEM EKLE MODAL (Matching Screenshots 2, 3, 4) */}
+      {showAddOperationModal && selectedRecord && (
+        <div className="modal-overlay" onClick={() => setShowAddOperationModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, width: '95%', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <span className="modal-title" style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
+                İşlem Ekle
+              </span>
+              <button className="modal-close" onClick={() => setShowAddOperationModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Row 1: Durum (opsiyonel) | Not */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
+                    Durum (opsiyonel)
+                  </label>
+                  <select
+                    className="form-select"
+                    value={opStatus}
+                    onChange={(e) => setOpStatus(e.target.value)}
+                  >
+                    <option value="">Durum değiştir</option>
+                    <option value="İnceleniyor">İnceleniyor</option>
+                    <option value="Tamir Ediliyor">Tamir Ediliyor</option>
+                    <option value="Dışarı Gönderildi">Dışarı Gönderildi</option>
+                    <option value="Hazır">Hazır</option>
+                    <option value="Teslim Edildi">Teslim Edildi</option>
+                    <option value="İptal">İptal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
+                    Not
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Kısa not (opsiyonel)"
+                    value={opShortNote}
+                    onChange={(e) => setOpShortNote(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Karar (Teklif & Onay) */}
+              <div style={{ width: '50%' }}>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
+                  Karar (Teklif & Onay)
+                </label>
+                <select
+                  className="form-select"
+                  value={opDecision}
+                  onChange={(e) => setOpDecision(e.target.value)}
+                >
+                  <option value="">Tamir / İade</option>
+                  <option value="Tamir">Tamir</option>
+                  <option value="İade">İade (tamir edilmeden)</option>
+                </select>
+              </div>
+
+              {/* Teşhis & Yapılan İşlem Section */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
+                  Teşhis & Yapılan İşlem
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <textarea
+                    className="form-textarea"
+                    style={{ height: 60, fontSize: '0.82rem' }}
+                    placeholder="Teşhis (teknisyen tespiti)"
+                    value={opDiagnosis}
+                    onChange={(e) => setOpDiagnosis(e.target.value)}
+                  />
+                  <textarea
+                    className="form-textarea"
+                    style={{ height: 60, fontSize: '0.82rem' }}
+                    placeholder="Yapılan işlem / kullanılan parça"
+                    value={opAction}
+                    onChange={(e) => setOpAction(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Costs Row: İşçilik | Parça | Toplam */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 4 }}>
+                <div style={{ flex: 1 }}>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.78rem', color: '#64748b', marginBottom: 2 }}>
+                    İşçilik
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ fontSize: '0.85rem' }}
+                      value={opLaborCost}
+                      onChange={(e) => setOpLaborCost(e.target.value)}
+                    />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>₺</span>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.78rem', color: '#64748b', marginBottom: 2 }}>
+                    Parça
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number"
+                      className="form-input"
+                      style={{ fontSize: '0.85rem' }}
+                      value={opPartCost}
+                      onChange={(e) => setOpPartCost(e.target.value)}
+                    />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>₺</span>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.78rem', color: '#64748b', marginBottom: 2 }}>
+                    Toplam
+                  </label>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', paddingTop: 6 }}>
+                    {formatCurrency((Number(opLaborCost) || 0) + (Number(opPartCost) || 0))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Link: + Dışarı gönderim bilgisi ekle */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowExternalDispatch(!showExternalDispatch)}
+                  style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.78rem', cursor: 'pointer', padding: 0 }}
+                >
+                  + Dışarı gönderim bilgisi ekle
+                </button>
+                {showExternalDispatch && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8, background: '#f8fafc', padding: 10, borderRadius: 6 }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Firma / Lab adı"
+                      value={externalDispatchCompany}
+                      onChange={(e) => setExternalDispatchCompany(e.target.value)}
+                    />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Takip / Kargo No"
+                      value={externalDispatchTrackingNo}
+                      onChange={(e) => setExternalDispatchTrackingNo(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="btn btn-secondary" onClick={() => setShowAddOperationModal(false)}>Vazgeç</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleAddOperation}
+              >
+                Ekle
               </button>
             </div>
           </div>
