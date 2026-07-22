@@ -324,6 +324,219 @@ export default function ServicePage() {
     }
   };
 
+  const handlePrintForm = (record: ServiceRecord) => {
+    const printWindow = window.open('', '_blank', 'width=900,height=1000');
+    if (!printWindow) return;
+
+    const formNo = record.id.toUpperCase().startsWith('SRV-') 
+      ? `TMR-ENGI-20260722-${record.id.replace('srv-', '00')}`
+      : `TMR-ENGI-20260722-0001`;
+
+    const accessoriesList = ['Pil', 'Garanti Kartı', 'Kutu', 'Kulak Kalıbı'];
+    const accTaken = record.accessoriesTaken || [];
+
+    const complaintsList = record.complaints && record.complaints.length > 0 
+      ? record.complaints 
+      : [record.problem || 'Filtre tıkalı / problemi (müşteri beyanı)'];
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Tamir Formu - ${record.patientName}</title>
+        <style>
+          @page { size: A4; margin: 15mm; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; margin: 0; padding: 20px; font-size: 13px; line-height: 1.4; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 16px; }
+          .company-name { font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase; line-height: 1.2; }
+          .title-box { text-align: center; }
+          .form-title { font-size: 24px; font-weight: 900; color: #1e3a8a; letter-spacing: 1px; margin: 0; }
+          .form-no { font-size: 13px; font-weight: 700; color: #2563eb; margin-top: 4px; }
+          .brand-logo { font-size: 22px; font-weight: 900; color: #1e3a8a; background: #eff6ff; padding: 6px 16px; border-radius: 6px; letter-spacing: 1px; }
+          
+          .section-header { background: #f1f5f9; padding: 6px 10px; font-size: 12px; font-weight: 800; color: #2563eb; text-transform: uppercase; margin-top: 14px; margin-bottom: 8px; border-radius: 4px; }
+          .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+          .info-table td { padding: 4px 6px; vertical-align: top; }
+          .label { font-size: 11px; color: #64748b; font-weight: 600; display: block; }
+          .value { font-size: 13px; font-weight: 700; color: #0f172a; }
+          
+          .checkbox-group { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
+          .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+          .box { width: 14px; height: 14px; border: 1px solid #64748b; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; border-radius: 2px; }
+          .box.checked { background: #0f172a; color: #fff; border-color: #0f172a; }
+
+          .signature-container { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 10px; }
+          .signature-box { width: 45%; }
+          .signature-title { font-weight: 800; font-size: 12px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px; color: #0f172a; }
+          .signature-line { margin-top: 6px; font-size: 11px; color: #475569; }
+
+          .terms-container { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+          .terms-title { font-weight: 800; font-size: 11px; color: #2563eb; margin-bottom: 6px; text-transform: uppercase; }
+          .terms-list { font-size: 9.5px; color: #64748b; margin: 0; padding-left: 14px; line-height: 1.35; }
+          .terms-list li { margin-bottom: 3px; }
+
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-name">ENGİNSES İŞİTME<br/>CİHAZLARI</div>
+          <div class="title-box">
+            <div class="form-title">TAMİR FORMU</div>
+            <div class="form-no">No: ${formNo}</div>
+          </div>
+          <div class="brand-logo">ODIMAX</div>
+        </div>
+
+        <div class="section-header">MÜŞTERİ & CİHAZ BİLGİLERİ</div>
+        <table class="info-table">
+          <tr>
+            <td style="width: 50%;">
+              <span class="label">Bayi / Firma</span>
+              <span class="value">ENGİNSES İŞİTME CİHAZLARI</span>
+            </td>
+            <td style="width: 50%;">
+              <span class="label">Cihaz Modeli</span>
+              <span class="value">${record.deviceName || '-'}</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="label">Hasta</span>
+              <span class="value">${record.patientName}</span>
+            </td>
+            <td>
+              <span class="label">Seri Numarası</span>
+              <span class="value">${record.serialNo || '-'}</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="label">Telefon</span>
+              <span class="value">05459111099</span>
+            </td>
+            <td>
+              <span class="label">Teslim Eden</span>
+              <span class="value">-</span>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2">
+              <span class="label">Adres</span>
+              <span class="value">KALE MAH KAPTANAĞA SOK DR TEVFİK TÜRKER İŞ HANI NO:8/1 İLKADIM/SAMSUN</span>
+            </td>
+          </tr>
+        </table>
+
+        <div class="section-header">CİHAZLA BİRLİKTE ALINAN AKSESUARLAR</div>
+        <div class="checkbox-group" style="padding: 4px 6px;">
+          ${accessoriesList.map(acc => `
+            <div class="checkbox-item">
+              <span class="box ${accTaken.includes(acc) ? 'checked' : ''}">${accTaken.includes(acc) ? '✓' : ''}</span>
+              <span>${acc}</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="section-header">MÜŞTERİ ŞİKAYETLERİ / TESPİT</div>
+        <div style="padding: 4px 6px; display: flex; flex-direction: column; gap: 6px;">
+          ${complaintsList.map(comp => `
+            <div class="checkbox-item">
+              <span class="box checked">✓</span>
+              <span>${comp}</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="section-header">GARANTİ & TEKLİF / ONAY</div>
+        <table class="info-table">
+          <tr>
+            <td style="width: 40%;">
+              <div class="checkbox-group">
+                <div class="checkbox-item">
+                  <span class="box ${record.warrantyRepair ? 'checked' : ''}">${record.warrantyRepair ? '✓' : ''}</span>
+                  <span>Garanti İçinde</span>
+                </div>
+                <div class="checkbox-item">
+                  <span class="box ${!record.warrantyRepair ? 'checked' : ''}">${!record.warrantyRepair ? '✓' : ''}</span>
+                  <span>Garanti Dışında</span>
+                </div>
+              </div>
+            </td>
+            <td style="width: 30%;">
+              <span class="label">Giriş Tarihi</span>
+              <span class="value">${formatDate(record.receivedDate)}</span>
+              <span class="label" style="margin-top:4px;">Çıkış Tarihi</span>
+              <span class="value">${record.returnedDate ? formatDate(record.returnedDate) : '-'}</span>
+            </td>
+            <td style="width: 30%;">
+              <span class="label">Ücret</span>
+              <span class="value">₺${record.totalCost.toFixed(2)}</span>
+              <span class="label" style="margin-top:4px;">Karar</span>
+              <div class="checkbox-group" style="margin-top:2px;">
+                <div class="checkbox-item"><span class="box checked">✓</span> Tamir</div>
+                <div class="checkbox-item"><span class="box"></span> İade</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        ${record.operations && record.operations.length > 0 ? `
+          <div class="section-header">YAPILAN İŞLEMLER</div>
+          <div style="padding: 4px 6px;">
+            ${record.operations.map(op => `<div>• ${op.description} - ₺${op.cost.toFixed(2)}</div>`).join('')}
+          </div>
+        ` : ''}
+
+        <div class="signature-container">
+          <div class="signature-box">
+            <div class="signature-title">TESLİM EDEN</div>
+            <div class="signature-line">Adı Soyadı: ............................................</div>
+            <div class="signature-line">Tarih: ..... / ..... / ..........</div>
+            <div class="signature-line">İmza: ................................................</div>
+          </div>
+          <div class="signature-box">
+            <div class="signature-title">TESLİM ALAN</div>
+            <div class="signature-line">Adı Soyadı: ............................................</div>
+            <div class="signature-line">Tarih: ..... / ..... / ..........</div>
+            <div class="signature-line">İmza: ................................................</div>
+          </div>
+        </div>
+
+        <div class="terms-container">
+          <div class="terms-title">İŞİTME CİHAZI TAMİR ŞARTLARI</div>
+          <ol class="terms-list">
+            <li>Garanti süresi devam eden ürünlerin tamirinde garanti belgesinin ibrazı şarttır.</li>
+            <li>Garanti süresi devam eden ürünlerde, kullanım kılavuzunda belirtilen kullanıcı kaynaklı arızaların dışında kalan arızalarda tamir ücreti talep edilmez.</li>
+            <li>Garanti kapsamı dışında olan ürünlerde, "muayene ücreti" ödemek koşuluyla arıza tespiti istenebilir.</li>
+            <li>Garanti kapsamı dışında olan ürünlerde arıza tespiti yapılarak belirlenen tamir ücreti müşteriye iletilir.</li>
+            <li>Müşteri tarafından tamir onayı verilmesi durumunda belirlenen işlemler uygulanır, son kontrol ve testler yapılarak onaylanan tutar müşteriye fatura edilir.</li>
+            <li>Toplam maliyeti 100 TL'yi geçmeyen tamirlerde onay almadan doğrudan işlem yapılır.</li>
+            <li>Değiştirilen yedek parçaların 6 ay ek garanti süresi bulunmaktadır.</li>
+            <li>Tamir formunun dikkatli muhafaza edilmesi ve cihazı teslim alacak kişi tarafından ibraz edilmesi gereklidir. Tamir formu bulunmayan cihazlar teslim edilmez.</li>
+            <li>Olumlu veya olumsuz sonuç bilgisi müşteriye iletilmiş olan cihazlar 3 ay içerisinde alınmadığı takdirde hiçbir şekilde sorumluluk kabul edilmeyecektir.</li>
+            <li>Kullanım hataları, fiziksel darbeler, sıvı teması gibi sebepler dışında oluşan arızaların 1 yıl içerisinde tekrarlaması durumunda verilen bakım, onarım, tamir ücreti alınmaz.</li>
+            <li>Ürünlerin arızasının 10 (on) iş günü içerisinde giderilmemesi halinde, imalatçı-üretici veya ithalatçı, ürünlerin tamiri tamamlanıncaya kadar benzer özelliklere sahip başka bir ürünü tüketicinin kullanımına tahsis etmek zorundadır.</li>
+          </ol>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   const filtered = records.filter(r =>
     filterStatus === 'Tümü' || r.status === filterStatus
   );
@@ -696,7 +909,7 @@ export default function ServicePage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => addToast({ type: 'success', message: `${selectedRecord.patientName} tamir kabul formu (PDF) indiriliyor...` })}
+                  onClick={() => handlePrintForm(selectedRecord)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84rem' }}
                 >
                   🖨️ Form (PDF)
