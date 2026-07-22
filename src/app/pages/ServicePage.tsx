@@ -184,6 +184,14 @@ export default function ServicePage() {
   const [appointmentType, setAppointmentType] = useState('Servis');
   const [appointmentNotes, setAppointmentNotes] = useState('');
   const [createFollowupPlan, setCreateFollowupPlan] = useState(false);
+  const [followupPeriods, setFollowupPeriods] = useState<string[]>([
+    '1 Hafta Kontrol',
+    '1 Ay Kontrol',
+    '3 Ay Kontrol',
+    '6 Ay Kontrol',
+    '1 Yıl Kontrol'
+  ]);
+  const [followupNote, setFollowupNote] = useState('');
   const [sendWhatsappReminder, setSendWhatsappReminder] = useState(true);
   const [sendWhatsappMessageOnCreate, setSendWhatsappMessageOnCreate] = useState(false);
   const [selectedRemindersList, setSelectedRemindersList] = useState<string[]>(['1 saat önce', '2 saat önce']);
@@ -1500,10 +1508,12 @@ export default function ServicePage() {
                     value={appointmentType}
                     onChange={(e) => setAppointmentType(e.target.value)}
                   >
-                    <option value="Servis">● Servis</option>
                     <option value="Muayene">● Muayene</option>
                     <option value="Kontrol">● Kontrol</option>
-                    <option value="Kalıp">● Kalıp Prova</option>
+                    <option value="Test">● Test</option>
+                    <option value="Cihaz Denemesi">● Cihaz Denemesi</option>
+                    <option value="Cihaz Teslim">● Cihaz Teslim</option>
+                    <option value="Servis">● Servis</option>
                   </select>
                 </div>
               </div>
@@ -1526,7 +1536,7 @@ export default function ServicePage() {
                 />
               </div>
 
-              {/* Takip Planı Section */}
+              {/* Takip Planı Section (Matching Screenshot 2) */}
               <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
                 <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb', marginBottom: 8 }}>
                   📅 Takip Planı
@@ -1536,7 +1546,7 @@ export default function ServicePage() {
                     type="checkbox"
                     checked={createFollowupPlan}
                     onChange={(e) => setCreateFollowupPlan(e.target.checked)}
-                    style={{ marginTop: 2 }}
+                    style={{ marginTop: 2, width: 16, height: 16, accentColor: '#2563eb' }}
                   />
                   <div>
                     <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>Takip planı oluştur</div>
@@ -1545,6 +1555,48 @@ export default function ServicePage() {
                     </div>
                   </div>
                 </label>
+
+                {createFollowupPlan && (
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.84rem', color: '#0f172a' }}>Kontrol Dönemleri</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {['1 Hafta Kontrol', '1 Ay Kontrol', '3 Ay Kontrol', '6 Ay Kontrol', '1 Yıl Kontrol'].map((period) => (
+                        <label key={period} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.84rem', color: '#1e293b', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={followupPeriods.includes(period)}
+                            onChange={() => {
+                              if (followupPeriods.includes(period)) {
+                                setFollowupPeriods(followupPeriods.filter(p => p !== period));
+                              } else {
+                                setFollowupPeriods([...followupPeriods, period]);
+                              }
+                            }}
+                            style={{ width: 16, height: 16, accentColor: '#2563eb' }}
+                          />
+                          {period}
+                        </label>
+                      ))}
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 4 }}>Takip Notu (opsiyonel)</div>
+                      <textarea
+                        className="form-textarea"
+                        style={{ height: 65, fontSize: '0.82rem' }}
+                        placeholder="Takip planı için not..."
+                        value={followupNote}
+                        onChange={(e) => setFollowupNote(e.target.value)}
+                      />
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', marginTop: 2 }}>{followupNote.length} / 500</div>
+                    </div>
+
+                    {/* Info Callout */}
+                    <div style={{ background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: 6, padding: '8px 12px', fontSize: '0.76rem', color: '#0369a1', lineHeight: 1.35 }}>
+                      📅 Seçilen dönemlerde personele hatırlatma bildirimi gönderilir. Aynı gün randevu hatırlatması varsa çift mesaj gitmez.
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* WhatsApp Hatırlatma Section */}
