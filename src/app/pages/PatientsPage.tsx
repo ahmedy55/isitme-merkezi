@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { ResponsivePie } from '@nivo/pie';
 import {
