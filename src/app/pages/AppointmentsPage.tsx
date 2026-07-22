@@ -17,7 +17,7 @@ const statusColors: Record<string, string> = {
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 export default function AppointmentsPage() {
-  const { appointmentsList, addAppointment, updateAppointmentStatus } = useApp();
+  const { appointmentsList, patientsList, addAppointment, updateAppointmentStatus, addToast } = useApp();
   
   const stats = React.useMemo(() => {
     const total = appointmentsList.length;
@@ -449,96 +449,781 @@ export default function AppointmentsPage() {
 
       {/* Add Appointment Modal */}
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <span className="modal-title">📅 Yeni Randevu Oluştur</span>
-              <button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Hasta</label>
+        <NewAppointmentModal
+          onClose={() => setShowAddModal(false)}
+          onSave={(newApt) => {
+            addAppointment(newApt);
+            setShowAddModal(false);
+          }}
+          patientsList={patientsList}
+          addToast={addToast}
+        />
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// Gelişmiş "Yeni Randevu" Modal Bileşeni
+// ═══════════════════════════════════════════════
+function NewAppointmentModal({
+  onClose,
+  onSave,
+  patientsList,
+  addToast
+}: {
+  onClose: () => void;
+  onSave: (apt: any) => void;
+  patientsList: any[];
+  addToast?: any;
+}) {
+  // Patient Search & Selection State
+  const [patientSearch, setPatientSearch] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string; phone: string } | null>(null);
+  const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
+  const [isAddingNewPatient, setIsAddingNewPatient] = useState(false);
+  const [newPatientName, setNewPatientName] = useState('');
+  const [newPatientPhone, setNewPatientPhone] = useState('');
+
+  // Date & Time State
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 6, 22, 9, 0));
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState(6); // July (0-indexed)
+  const [pickerYear, setPickerYear] = useState(2026);
+
+  // Appointment Type State
+  const [aptType, setAptType] = useState('Muayene');
+  const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
+
+  // Audiologist & Branch
+  const [audiologist, setAudiologist] = useState('Dr. Elif Arslan');
+  const [branch, setBranch] = useState('Merkez 1 - Kadıköy');
+
+  // Notes
+  const [notes, setNotes] = useState('');
+
+  // Takip Planı
+  const [createFollowupPlan, setCreateFollowupPlan] = useState(false);
+
+  // WhatsApp Reminders
+  const [sendWhatsappReminder, setSendWhatsappReminder] = useState(true);
+  const [reminders, setReminders] = useState<string[]>(['1 saat önce', '2 saat önce']);
+  const [customVal, setCustomVal] = useState(30);
+  const [customUnit, setCustomUnit] = useState<'Dakika' | 'Saat' | 'Gün'>('Dakika');
+
+  // WhatsApp Message on Create
+  const [sendWhatsappOnCreate, setSendWhatsappOnCreate] = useState(false);
+
+  // Filter Patients
+  const filteredPatients = (patientsList || []).filter((p) => {
+    const fullName = `${p.firstName || ''} ${p.lastName || ''}`.trim();
+    const query = patientSearch.toLowerCase();
+    return (
+      fullName.toLowerCase().includes(query) ||
+      (p.phone && p.phone.includes(query)) ||
+      (p.tc && p.tc.includes(query))
+    );
+  });
+
+  const aptTypeOptions = [
+    { label: 'Muayene', color: '#2563eb' },
+    { label: 'Kontrol', color: '#16a34a' },
+    { label: 'Test', color: '#9333ea' },
+    { label: 'Cihaz Denemesi', color: '#db2777' },
+    { label: 'Cihaz Teslim', color: '#ea580c' },
+    { label: 'Servis', color: '#0891b2' },
+  ];
+
+  const currentTypeOption = aptTypeOptions.find(o => o.label === aptType) || aptTypeOptions[0];
+
+  // Date picker calendar logic
+  const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+  const monthShortNames = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  
+  const firstDayOfMonth = new Date(pickerYear, pickerMonth, 1);
+  const startDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7; // Monday = 0
+  const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+  const prevMonthDays = new Date(pickerYear, pickerMonth, 0).getDate();
+
+  const calendarDays = [];
+  for (let i = startDayOfWeek - 1; i >= 0; i--) {
+    calendarDays.push({ num: prevMonthDays - i, isCurrent: false });
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    calendarDays.push({ num: i, isCurrent: true });
+  }
+  const remainingCells = (calendarDays.length <= 35 ? 35 : 42) - calendarDays.length;
+  for (let i = 1; i <= remainingCells; i++) {
+    calendarDays.push({ num: i, isCurrent: false });
+  }
+
+  const formatDisplayDateTime = (d: Date) => {
+    const dayStr = d.getDate().toString().padStart(2, '0');
+    const monthStr = (d.getMonth() + 1).toString().padStart(2, '0');
+    const yearStr = d.getFullYear();
+    const hourStr = d.getHours().toString().padStart(2, '0');
+    const minStr = d.getMinutes().toString().padStart(2, '0');
+    return `${dayStr}.${monthStr}.${yearStr} ${hourStr}:${minStr}`;
+  };
+
+  const handleQuickAddReminder = (item: string) => {
+    if (!reminders.includes(item)) {
+      setReminders([...reminders, item]);
+    }
+  };
+
+  const handleAddCustomReminder = () => {
+    const newItem = `${customVal} ${customUnit.toLowerCase()} önce`;
+    if (!reminders.includes(newItem)) {
+      setReminders([...reminders, newItem]);
+    }
+  };
+
+  const handleRemoveReminder = (index: number) => {
+    setReminders(reminders.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    let patientNameFinal = '';
+    let patientIdFinal = 'p-unknown';
+
+    if (isAddingNewPatient) {
+      if (!newPatientName.trim()) {
+        alert('Lütfen yeni hasta adı girin.');
+        return;
+      }
+      patientNameFinal = newPatientName.trim();
+    } else if (selectedPatient) {
+      patientNameFinal = selectedPatient.name;
+      patientIdFinal = selectedPatient.id;
+    } else if (patientSearch.trim()) {
+      patientNameFinal = patientSearch.trim();
+    } else {
+      alert('Lütfen bir hasta seçin veya yeni hasta adı girin.');
+      return;
+    }
+
+    const yearStr = selectedDate.getFullYear();
+    const monthStr = (selectedDate.getMonth() + 1).toString().padStart(2, '0');
+    const dayStr = selectedDate.getDate().toString().padStart(2, '0');
+    const dateStr = `${yearStr}-${monthStr}-${dayStr}`;
+
+    const hourStr = selectedDate.getHours().toString().padStart(2, '0');
+    const minStr = selectedDate.getMinutes().toString().padStart(2, '0');
+    const timeStr = `${hourStr}:${minStr}`;
+
+    const newApt = {
+      id: `apt-${Date.now().toString().slice(-6)}`,
+      patientId: patientIdFinal,
+      patientName: patientNameFinal,
+      date: dateStr,
+      time: timeStr,
+      type: aptType as any,
+      audiologist,
+      branch: branch as any,
+      status: 'Bekliyor' as const,
+      notes: notes,
+      followupPlan: createFollowupPlan,
+      whatsappReminders: sendWhatsappReminder ? reminders : [],
+      sendWhatsappOnCreate
+    };
+
+    onSave(newApt);
+  };
+
+  return (
+    <div 
+      className="modal-overlay" 
+      onClick={onClose}
+      style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        padding: 16
+      }}
+    >
+      <div 
+        className="modal" 
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#ffffff', borderRadius: 16, width: '100%', maxWidth: 580,
+          maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15)',
+          display: 'flex', flexDirection: 'column'
+        }}
+      >
+        {/* Modal Header */}
+        <div style={{
+          padding: '18px 24px', borderBottom: '1px solid #f1f5f9',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          position: 'sticky', top: 0, background: '#ffffff', zIndex: 10
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
+            <span>📅</span>
+            <span>Yeni Randevu</span>
+          </div>
+          <button 
+            onClick={onClose}
+            style={{
+              background: 'transparent', border: 'none', fontSize: '1.2rem', color: '#64748b',
+              cursor: 'pointer', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <form onSubmit={handleSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          
+          {/* Hasta Seçimi */}
+          <div style={{ position: 'relative' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.86rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+              <span style={{ color: '#ef4444' }}>*</span>
+              <span>👤 Hasta</span>
+            </label>
+
+            {!isAddingNewPatient ? (
+              <>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Hasta seçin veya arayın..."
+                    value={selectedPatient ? `${selectedPatient.name} - ${selectedPatient.phone || ''}` : patientSearch}
+                    onChange={(e) => {
+                      setSelectedPatient(null);
+                      setPatientSearch(e.target.value);
+                      setIsPatientDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsPatientDropdownOpen(true)}
+                    style={{
+                      width: '100%', padding: '10px 36px 10px 14px', borderRadius: 10,
+                      border: isPatientDropdownOpen ? '2px solid #3b82f6' : '1px solid #cbd5e1',
+                      fontSize: '0.9rem', outline: 'none', background: '#ffffff'
+                    }}
+                  />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }}>
+                    {selectedPatient ? '✓' : '🔍'}
+                  </span>
+                </div>
+
+                {/* Patient Search Dropdown */}
+                {isPatientDropdownOpen && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, width: '100%', marginTop: 6,
+                    background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0',
+                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 100, overflow: 'hidden', padding: 6
+                  }}>
+                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                      {filteredPatients.length > 0 ? (
+                        filteredPatients.map((p) => {
+                          const fullName = `${p.firstName || ''} ${p.lastName || ''}`.trim();
+                          return (
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                setSelectedPatient({ id: p.id, name: fullName, phone: p.phone || '' });
+                                setIsPatientDropdownOpen(false);
+                              }}
+                              style={{
+                                padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                                fontSize: '0.88rem', fontWeight: 500, color: '#334155',
+                                background: '#f8fafc', marginBottom: 4, transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = '#f8fafc'}
+                            >
+                              {fullName} {p.phone && ` - ${p.phone}`}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div style={{ padding: '10px 12px', fontSize: '0.85rem', color: '#94a3b8' }}>
+                          Aranan hasta bulunamadı.
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      onClick={() => {
+                        setIsAddingNewPatient(true);
+                        setIsPatientDropdownOpen(false);
+                      }}
+                      style={{
+                        padding: '10px', marginTop: 4, borderRadius: 8, border: '1.5px dashed #cbd5e1',
+                        textAlign: 'center', fontSize: '0.88rem', fontWeight: 600, color: '#334155',
+                        cursor: 'pointer', background: '#ffffff', transition: 'all 0.15s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = '#ffffff'}
+                    >
+                      + 👤 Yeni Hasta Ekle
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ background: '#f8fafc', padding: 12, borderRadius: 10, border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.84rem', fontWeight: 600, color: '#3b82f6' }}>
+                  <span>Yeni Hasta Kaydı</span>
+                  <button type="button" onClick={() => setIsAddingNewPatient(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>
+                    İptal / Listeden Seç
+                  </button>
+                </div>
                 <input
+                  type="text"
+                  placeholder="Hasta Adı Soyadı *"
                   className="form-input"
-                  placeholder="Hasta adı veya TC ile ara..."
-                  value={formData.patientName}
-                  onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+                  value={newPatientName}
+                  onChange={(e) => setNewPatientName(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: '0.88rem' }}
+                />
+                <input
+                  type="text"
+                  placeholder="Telefon (Örn: 0555...)"
+                  className="form-input"
+                  value={newPatientPhone}
+                  onChange={(e) => setNewPatientPhone(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: '0.88rem' }}
                 />
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Tarih</label>
-                  <input
-                    className="form-input"
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Saat</label>
-                  <input
-                    className="form-input"
-                    type="time"
-                    value={formData.time}
-                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                  />
-                </div>
+            )}
+          </div>
+
+          {/* Tarih ve Saat + Randevu Tipi Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            
+            {/* Tarih ve Saat Picker */}
+            <div style={{ position: 'relative' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.86rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                <span style={{ color: '#ef4444' }}>*</span>
+                <span>📅 Tarih ve Saat</span>
+              </label>
+
+              <div 
+                onClick={() => setShowPicker(!showPicker)}
+                style={{
+                  width: '100%', padding: '10px 14px', borderRadius: 10,
+                  border: showPicker ? '2px solid #3b82f6' : '1px solid #cbd5e1',
+                  fontSize: '0.9rem', cursor: 'pointer', background: '#ffffff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#0f172a'
+                }}
+              >
+                <span>{formatDisplayDateTime(selectedDate)}</span>
+                <span style={{ color: '#94a3b8' }}>📅</span>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Randevu Türü</label>
-                  <select
-                    className="form-select"
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  >
-                    <option>İşitme Testi</option>
-                    <option>Cihaz Denemesi</option>
-                    <option>Kontrol</option>
-                    <option>SGK Yenileme</option>
-                    <option>Kalıp Alma</option>
-                    <option>Pil Değişimi</option>
-                  </select>
+
+              {/* Date Time Picker Popover */}
+              {showPicker && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, marginTop: 6,
+                  background: '#ffffff', borderRadius: 14, border: '1px solid #e2e8f0',
+                  boxShadow: '0 15px 35px -5px rgba(0,0,0,0.18)', zIndex: 120, padding: 14,
+                  display: 'flex', flexDirection: 'column', gap: 12, width: 340
+                }}>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    
+                    {/* Left: Calendar */}
+                    <div style={{ flex: 1 }}>
+                      {/* Month Year Nav */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button type="button" onClick={() => setPickerYear(pickerYear - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>«</button>
+                          <button type="button" onClick={() => setPickerMonth(pickerMonth === 0 ? 11 : pickerMonth - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>‹</button>
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
+                          {monthShortNames[pickerMonth]} {pickerYear}
+                        </span>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button type="button" onClick={() => setPickerMonth(pickerMonth === 11 ? 0 : pickerMonth + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>›</button>
+                          <button type="button" onClick={() => setPickerYear(pickerYear + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>»</button>
+                        </div>
+                      </div>
+
+                      {/* Day Names */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', marginBottom: 6 }}>
+                        {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map(d => <div key={d}>{d}</div>)}
+                      </div>
+
+                      {/* Calendar Days */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center' }}>
+                        {calendarDays.map((cell, idx) => {
+                          const isSelected = cell.isCurrent && selectedDate.getDate() === cell.num && selectedDate.getMonth() === pickerMonth && selectedDate.getFullYear() === pickerYear;
+                          return (
+                            <div
+                              key={idx}
+                              onClick={() => {
+                                if (cell.isCurrent) {
+                                  const newD = new Date(selectedDate);
+                                  newD.setFullYear(pickerYear);
+                                  newD.setMonth(pickerMonth);
+                                  newD.setDate(cell.num);
+                                  setSelectedDate(newD);
+                                }
+                              }}
+                              style={{
+                                padding: '5px 0', fontSize: '0.8rem', borderRadius: 6,
+                                cursor: cell.isCurrent ? 'pointer' : 'default',
+                                color: !cell.isCurrent ? '#cbd5e1' : isSelected ? '#ffffff' : '#334155',
+                                background: isSelected ? '#3b82f6' : 'transparent',
+                                fontWeight: isSelected ? 700 : 400
+                              }}
+                            >
+                              {cell.num}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Right: Time picker */}
+                    <div style={{ width: 75, borderLeft: '1px solid #f1f5f9', paddingLeft: 8, display: 'flex', flexDirection: 'column', height: 180, overflowY: 'auto' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Saat</div>
+                      {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'].map((timeStr) => {
+                        const [h, m] = timeStr.split(':').map(Number);
+                        const isTimeSelected = selectedDate.getHours() === h && selectedDate.getMinutes() === m;
+                        return (
+                          <div
+                            key={timeStr}
+                            onClick={() => {
+                              const newD = new Date(selectedDate);
+                              newD.setHours(h);
+                              newD.setMinutes(m);
+                              setSelectedDate(newD);
+                            }}
+                            style={{
+                              padding: '4px 6px', fontSize: '0.78rem', borderRadius: 4, cursor: 'pointer',
+                              background: isTimeSelected ? '#e0f2fe' : 'transparent',
+                              color: isTimeSelected ? '#0284c7' : '#475569',
+                              fontWeight: isTimeSelected ? 700 : 400, marginBottom: 2
+                            }}
+                          >
+                            {timeStr}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                  </div>
+
+                  {/* Popover Footer */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        setSelectedDate(now);
+                        setPickerMonth(now.getMonth());
+                        setPickerYear(now.getFullYear());
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Şimdi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPicker(false)}
+                      style={{ background: '#f1f5f9', border: 'none', padding: '5px 14px', borderRadius: 6, color: '#334155', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Tamam
+                    </button>
+                  </div>
+
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Odyolog</label>
-                  <select
-                    className="form-select"
-                    value={formData.audiologist}
-                    onChange={(e) => setFormData({ ...formData, audiologist: e.target.value })}
-                  >
-                    {audiologists.map(a => <option key={a}>{a}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Şube</label>
-                <select
-                  className="form-select"
-                  value={formData.branch}
-                  onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                >
-                  {branches.map(b => <option key={b}>{b}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Notlar</label>
-                <textarea
-                  className="form-textarea"
-                  placeholder="Randevu hakkında not..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                />
-              </div>
+              )}
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSave}>📅 Randevu Oluştur</button>
+
+            {/* Randevu Tipi Dropdown */}
+            <div style={{ position: 'relative' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.86rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                <span style={{ color: '#ef4444' }}>*</span>
+                <span>🏥 Randevu Tipi</span>
+              </label>
+
+              <div
+                onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
+                style={{
+                  width: '100%', padding: '10px 14px', borderRadius: 10,
+                  border: isTypeDropdownOpen ? '2px solid #3b82f6' : '1px solid #cbd5e1',
+                  fontSize: '0.9rem', cursor: 'pointer', background: '#ffffff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: '#0f172a' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: currentTypeOption.color }} />
+                  <span>{aptType}</span>
+                </div>
+                <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>▼</span>
+              </div>
+
+              {isTypeDropdownOpen && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, width: '100%', marginTop: 6,
+                  background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', zIndex: 100, overflow: 'hidden', padding: 6
+                }}>
+                  {aptTypeOptions.map((opt) => (
+                    <div
+                      key={opt.label}
+                      onClick={() => {
+                        setAptType(opt.label);
+                        setIsTypeDropdownOpen(false);
+                      }}
+                      style={{
+                        padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem',
+                        fontWeight: aptType === opt.label ? 700 : 500,
+                        color: '#334155', background: aptType === opt.label ? '#e0f2fe' : 'transparent',
+                        marginBottom: 2
+                      }}
+                      onMouseEnter={(e) => { if (aptType !== opt.label) e.currentTarget.style.background = '#f8fafc'; }}
+                      onMouseLeave={(e) => { if (aptType !== opt.label) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: opt.color }} />
+                      <span>{opt.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Notlar */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.86rem', fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+              Notlar
+            </label>
+            <textarea
+              className="form-textarea"
+              placeholder="Randevu ile ilgili notlar..."
+              maxLength={500}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              style={{
+                width: '100%', minHeight: 70, borderRadius: 10, border: '1px solid #cbd5e1',
+                padding: 12, fontSize: '0.88rem', outline: 'none', resize: 'vertical'
+              }}
+            />
+            <div style={{ textAlign: 'right', fontSize: '0.74rem', color: '#94a3b8', marginTop: 4 }}>
+              {notes.length} / 500
             </div>
           </div>
-        </div>
-      )}
+
+          {/* Divider 1: Takip Planı */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 14px' }}>
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📅</span> Takip Planı
+              </span>
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={createFollowupPlan}
+                onChange={(e) => setCreateFollowupPlan(e.target.checked)}
+                style={{ width: 18, height: 18, marginTop: 2, accentColor: '#2563eb' }}
+              />
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>Takip planı oluştur</div>
+                <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Randevu tarihinden itibaren periyodik kontrol hatırlatmaları oluşturulur</div>
+              </div>
+            </label>
+          </div>
+
+          {/* Divider 2: WhatsApp Hatırlatma */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 14px' }}>
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>💬</span> WhatsApp Hatırlatma
+              </span>
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+            </div>
+
+            {/* Toggle switch */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#334155' }}>Hatırlatma Gönder</span>
+              <div
+                onClick={() => setSendWhatsappReminder(!sendWhatsappReminder)}
+                style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: sendWhatsappReminder ? '#2563eb' : '#cbd5e1',
+                  position: 'relative', cursor: 'pointer', transition: 'all 0.2s'
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
+                  position: 'absolute', top: 2, left: sendWhatsappReminder ? 22 : 2,
+                  transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                }} />
+              </div>
+            </div>
+
+            {sendWhatsappReminder && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Hızlı Ekle */}
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Hızlı Ekle:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {['15 dakika önce', '30 dakika önce', '1 saat önce', '2 saat önce', '1 gün önce'].map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => handleQuickAddReminder(chip)}
+                        style={{
+                          padding: '5px 10px', borderRadius: 6, border: '1px solid #cbd5e1',
+                          background: reminders.includes(chip) ? '#e0f2fe' : '#ffffff',
+                          borderColor: reminders.includes(chip) ? '#38bdf8' : '#cbd5e1',
+                          color: reminders.includes(chip) ? '#0284c7' : '#475569',
+                          fontSize: '0.8rem', fontWeight: 500, cursor: 'pointer'
+                        }}
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Özel Zaman Ekle */}
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', marginBottom: 6 }}>Özel Zaman Ekle:</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      value={customVal}
+                      onChange={(e) => setCustomVal(Number(e.target.value))}
+                      style={{ width: 65, padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                    />
+                    <select
+                      value={customUnit}
+                      onChange={(e) => setCustomUnit(e.target.value as any)}
+                      style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.88rem', background: '#fff' }}
+                    >
+                      <option value="Dakika">Dakika</option>
+                      <option value="Saat">Saat</option>
+                      <option value="Gün">Gün</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomReminder}
+                      style={{
+                        padding: '6px 14px', borderRadius: 8, border: '1px solid #cbd5e1',
+                        background: '#ffffff', color: '#0f172a', fontWeight: 600, fontSize: '0.84rem', cursor: 'pointer'
+                      }}
+                    >
+                      + Ekle
+                    </button>
+                  </div>
+                </div>
+
+                {/* Seçili Hatırlatmalar Box */}
+                <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 10, padding: 14 }}>
+                  <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>🕒</span> Seçili Hatırlatmalar ({reminders.length})
+                  </div>
+                  {reminders.length === 0 ? (
+                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Henüz hatırlatma eklenmedi.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {reminders.map((rem, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                          <span style={{ fontSize: '0.84rem', fontWeight: 500, color: '#334155', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span>🔔</span> {rem}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveReminder(idx)}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+                            title="Sil"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sky blue info banner */}
+                <div style={{ background: '#e0f2fe', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.8rem', color: '#0369a1' }}>
+                  <span style={{ fontSize: '1rem' }}>💬</span>
+                  <span>Hatırlatmalar seçilen zamanlarda WhatsApp üzerinden hastanın telefonuna gönderilecektir.</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Divider 3: Randevu Mesajı */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '6px 0 14px' }}>
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>✈️</span> Randevu Mesajı
+              </span>
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+            </div>
+
+            {/* Warning banner */}
+            <div style={{ background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#d97706', fontWeight: 700, fontSize: '0.86rem', marginBottom: 6 }}>
+                <span>⚠️</span> WhatsApp bağlı değil — bilgilendirme mesajı gönderilmeyecek
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#78350f', lineHeight: 1.4 }}>
+                Bu şubede WhatsApp entegrasyonu kapalı. Randevu normal şekilde kaydedilir, ancak hastaya otomatik mesaj gitmez. Mesaj göndermek için Uyarlamalar &gt; WhatsApp bölümünden bağlantı kurun.
+              </div>
+            </div>
+
+            {/* Toggle switch */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#334155' }}>Oluştururken WhatsApp Mesajı Gönder</span>
+              <div
+                onClick={() => setSendWhatsappOnCreate(!sendWhatsappOnCreate)}
+                style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: sendWhatsappOnCreate ? '#2563eb' : '#cbd5e1',
+                  position: 'relative', cursor: 'pointer', transition: 'all 0.2s'
+                }}
+              >
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
+                  position: 'absolute', top: 2, left: sendWhatsappOnCreate ? 22 : 2,
+                  transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Modal Footer Buttons */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, borderTop: '1px solid #f1f5f9', paddingTop: 18, marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1',
+                background: '#ffffff', color: '#475569', fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer'
+              }}
+            >
+              Vazgeç
+            </button>
+            <button
+              type="submit"
+              style={{
+                padding: '9px 20px', borderRadius: 8, border: 'none',
+                background: '#2563eb', color: '#ffffff', fontSize: '0.88rem', fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+              }}
+            >
+              <span>📅</span> Randevu Oluştur
+            </button>
+          </div>
+
+        </form>
+      </div>
     </div>
   );
 }
