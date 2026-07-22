@@ -175,6 +175,21 @@ export default function ServicePage() {
   const [moldSearchText, setMoldSearchText] = useState('');
   const [isMoldDropdownOpen, setIsMoldDropdownOpen] = useState(false);
 
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderDate, setReminderDate] = useState('2026-07-25');
+  const [reminderNote, setReminderNote] = useState('');
+
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointmentDateTime, setAppointmentDateTime] = useState('2026-07-25T14:30');
+  const [appointmentType, setAppointmentType] = useState('Servis');
+  const [appointmentNotes, setAppointmentNotes] = useState('');
+  const [createFollowupPlan, setCreateFollowupPlan] = useState(false);
+  const [sendWhatsappReminder, setSendWhatsappReminder] = useState(true);
+  const [sendWhatsappMessageOnCreate, setSendWhatsappMessageOnCreate] = useState(false);
+  const [selectedRemindersList, setSelectedRemindersList] = useState<string[]>(['1 saat önce', '2 saat önce']);
+  const [customTimeVal, setCustomTimeVal] = useState('30');
+  const [customTimeUnit, setCustomTimeUnit] = useState('Dakika');
+
   const patientDropdownRef = useRef<HTMLDivElement>(null);
   const moldDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -773,7 +788,7 @@ export default function ServicePage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => addToast({ type: 'info', message: `${selectedRecord.patientName} için hatırlatma eklendi.` })}
+                  onClick={() => setShowReminderModal(true)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 14px', borderRadius: 6 }}
                 >
                   🔔 Hatırlatma Ekle
@@ -781,7 +796,7 @@ export default function ServicePage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => addToast({ type: 'info', message: `${selectedRecord.patientName} için randevu oluşturma penceresi açıldı.` })}
+                  onClick={() => setShowAppointmentModal(true)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 14px', borderRadius: 6 }}
                 >
                   📅 Randevu Oluştur
@@ -1356,6 +1371,352 @@ export default function ServicePage() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 1. HATIRLATMA EKLE MODAL (Matching Screenshot 1) */}
+      {showReminderModal && selectedRecord && (
+        <div className="modal-overlay" onClick={() => setShowReminderModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, width: '90%', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <span className="modal-title" style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
+                Hatırlatma Ekle
+              </span>
+              <button className="modal-close" onClick={() => setShowReminderModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Info Callout Box */}
+              <div style={{
+                background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: 8,
+                padding: '12px 14px', display: 'flex', gap: 10, alignItems: 'flex-start'
+              }}>
+                <span style={{ fontSize: '1.1rem', color: '#0284c7' }}>ℹ️</span>
+                <span style={{ fontSize: '0.8rem', color: '#0369a1', lineHeight: 1.35 }}>
+                  Bu hatırlatma yalnızca size (Odimax personeline) düşer; hastaya mesaj gönderilmez.
+                </span>
+              </div>
+
+              {/* Tarih Input */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
+                  Tarih
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={reminderDate}
+                  onChange={(e) => setReminderDate(e.target.value)}
+                />
+              </div>
+
+              {/* Hatırlatma Notu Textarea */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
+                  Hatırlatma notu
+                </label>
+                <textarea
+                  className="form-textarea"
+                  style={{ height: 80, fontSize: '0.84rem' }}
+                  placeholder="Örn: Tedarikçiyi ara — parça geldi mi kontrol et"
+                  value={reminderNote}
+                  onChange={(e) => setReminderNote(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="btn btn-secondary" onClick={() => setShowReminderModal(false)}>Vazgeç</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setShowReminderModal(false);
+                  addToast({ type: 'success', message: `${selectedRecord.patientName} için personel hatırlatması oluşturuldu.` });
+                  setReminderNote('');
+                }}
+              >
+                Ekle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. YENİ RANDEVU MODAL (Matching Screenshots 2 & 3) */}
+      {showAppointmentModal && selectedRecord && (
+        <div className="modal-overlay" onClick={() => setShowAppointmentModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, width: '95%', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>📅</span>
+                <span className="modal-title" style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
+                  Yeni Randevu
+                </span>
+              </div>
+              <button className="modal-close" onClick={() => setShowAppointmentModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: 20, maxHeight: '78vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Hasta Dropdown & Selected Card */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
+                  <span style={{ color: '#ef4444' }}>*</span> 👤 Hasta
+                </label>
+                <select className="form-select" value={selectedRecord.patientName} readOnly>
+                  <option>{selectedRecord.patientName} - 05459111099</option>
+                </select>
+
+                <div style={{
+                  background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8,
+                  padding: '12px 14px', marginTop: 8, fontSize: '0.84rem', color: '#1e293b'
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 4 }}>{selectedRecord.patientName}</div>
+                  <div style={{ color: '#64748b', fontSize: '0.8rem' }}>📞 05459111099</div>
+                  <div style={{ color: '#64748b', fontSize: '0.8rem' }}>TC: 12638639514</div>
+                </div>
+              </div>
+
+              {/* Grid: Tarih ve Saat | Randevu Tipi */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
+                    <span style={{ color: '#ef4444' }}>*</span> 📅 Tarih ve Saat
+                  </label>
+                  <input
+                    type="datetime-local"
+                    className="form-input"
+                    value={appointmentDateTime}
+                    onChange={(e) => setAppointmentDateTime(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
+                    <span style={{ color: '#ef4444' }}>*</span> 🏥 Randevu Tipi
+                  </label>
+                  <select
+                    className="form-select"
+                    value={appointmentType}
+                    onChange={(e) => setAppointmentType(e.target.value)}
+                  >
+                    <option value="Servis">● Servis</option>
+                    <option value="Muayene">● Muayene</option>
+                    <option value="Kontrol">● Kontrol</option>
+                    <option value="Kalıp">● Kalıp Prova</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Notlar */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', margin: 0 }}>
+                    Notlar
+                  </label>
+                  <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>{appointmentNotes.length} / 500</span>
+                </div>
+                <textarea
+                  className="form-textarea"
+                  style={{ height: 75, fontSize: '0.84rem' }}
+                  placeholder="Randevu ile ilgili notlar..."
+                  maxLength={500}
+                  value={appointmentNotes}
+                  onChange={(e) => setAppointmentNotes(e.target.value)}
+                />
+              </div>
+
+              {/* Takip Planı Section */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb', marginBottom: 8 }}>
+                  📅 Takip Planı
+                </div>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={createFollowupPlan}
+                    onChange={(e) => setCreateFollowupPlan(e.target.checked)}
+                    style={{ marginTop: 2 }}
+                  />
+                  <div>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>Takip planı oluştur</div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
+                      Randevu tarihinden itibaren periyodik kontrol hatırlatmaları oluşturulur
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* WhatsApp Hatırlatma Section */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#16a34a', marginBottom: 8 }}>
+                  💬 WhatsApp Hatırlatma
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>Hatırlatma Gönder</span>
+                  <button
+                    type="button"
+                    onClick={() => setSendWhatsappReminder(!sendWhatsappReminder)}
+                    style={{
+                      width: 44, height: 24, borderRadius: 12,
+                      background: sendWhatsappReminder ? '#2563eb' : '#cbd5e1',
+                      border: 'none', cursor: 'pointer', position: 'relative',
+                      transition: 'all 0.2s ease', padding: 2
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
+                      position: 'absolute', top: 2,
+                      left: sendWhatsappReminder ? 22 : 2,
+                      transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                    }} />
+                  </button>
+                </div>
+
+                {sendWhatsappReminder && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Hızlı Ekle Badges */}
+                    <div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}>Hızlı Ekle:</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {['15 dakika önce', '30 dakika önce', '1 saat önce', '2 saat önce', '1 gün önce'].map((timeStr) => (
+                          <button
+                            key={timeStr}
+                            type="button"
+                            onClick={() => {
+                              if (!selectedRemindersList.includes(timeStr)) {
+                                setSelectedRemindersList([...selectedRemindersList, timeStr]);
+                              }
+                            }}
+                            style={{
+                              padding: '4px 10px', fontSize: '0.78rem', background: '#f1f5f9',
+                              border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', color: '#1e293b'
+                            }}
+                          >
+                            {timeStr}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Özel Zaman Ekle */}
+                    <div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 4 }}>Özel Zaman Ekle:</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ width: 60, padding: '4px 8px', fontSize: '0.82rem' }}
+                          value={customTimeVal}
+                          onChange={(e) => setCustomTimeVal(e.target.value)}
+                        />
+                        <select
+                          className="form-select"
+                          style={{ width: 100, padding: '4px 8px', fontSize: '0.82rem' }}
+                          value={customTimeUnit}
+                          onChange={(e) => setCustomTimeUnit(e.target.value)}
+                        >
+                          <option value="Dakika">Dakika</option>
+                          <option value="Saat">Saat</option>
+                          <option value="Gün">Gün</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 12px', fontSize: '0.82rem' }}
+                          onClick={() => {
+                            const newReminderStr = `${customTimeVal} ${customTimeUnit.toLowerCase()} önce`;
+                            if (!selectedRemindersList.includes(newReminderStr)) {
+                              setSelectedRemindersList([...selectedRemindersList, newReminderStr]);
+                            }
+                          }}
+                        >
+                          + Ekle
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Seçili Hatırlatmalar */}
+                    <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
+                        ⏰ Seçili Hatırlatmalar ({selectedRemindersList.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {selectedRemindersList.map((rem, idx) => (
+                          <div key={idx} style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            background: '#ffffff', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: 6, fontSize: '0.8rem'
+                          }}>
+                            <span style={{ color: '#1e293b' }}>🔔 {rem}</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRemindersList(selectedRemindersList.filter((_, i) => i !== idx))}
+                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem' }}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* WhatsApp Mesajı Warning Callout & Toggle */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#0284c7', marginBottom: 8 }}>
+                  ✈️ Randevu Mesajı
+                </div>
+
+                <div style={{
+                  background: '#fefce8', border: '1px solid #fef08a', borderRadius: 8,
+                  padding: '12px 14px', marginBottom: 12
+                }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700, color: '#854d0e', fontSize: '0.82rem', marginBottom: 4 }}>
+                    <span>⚠️</span> WhatsApp bağlı değil — bilgilendirme mesajı gönderilmeyecek
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#a16207', lineHeight: 1.35 }}>
+                    Bu şubede WhatsApp entegrasyonu kapalı. Randevu normal şekilde kaydedilir, ancak hastaya otomatik mesaj gitmez. Mesaj göndermek için Uyarlamalar {'>'} WhatsApp bölümünden bağlantı kurun.
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>Oluştururken WhatsApp Mesajı Gönder</span>
+                  <button
+                    type="button"
+                    onClick={() => setSendWhatsappMessageOnCreate(!sendWhatsappMessageOnCreate)}
+                    style={{
+                      width: 44, height: 24, borderRadius: 12,
+                      background: sendWhatsappMessageOnCreate ? '#2563eb' : '#cbd5e1',
+                      border: 'none', cursor: 'pointer', position: 'relative',
+                      transition: 'all 0.2s ease', padding: 2
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
+                      position: 'absolute', top: 2,
+                      left: sendWhatsappMessageOnCreate ? 22 : 2,
+                      transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                    }} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="btn btn-secondary" onClick={() => setShowAppointmentModal(false)}>Vazgeç</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setShowAppointmentModal(false);
+                  addToast({ type: 'success', message: `${selectedRecord.patientName} adına yeni servis randevusu oluşturuldu.` });
+                }}
+              >
+                📅 Randevu Oluştur
+              </button>
+            </div>
           </div>
         </div>
       )}
