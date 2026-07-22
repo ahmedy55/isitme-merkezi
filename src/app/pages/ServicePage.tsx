@@ -850,17 +850,14 @@ export default function ServicePage() {
                     />
                   </div>
                 ) : (
-                  /* Standard Device Dropdown (Matching Odimax UI) */
-                  <select
-                    className="form-select"
+                  /* Standard Device Form Input */
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin"
                     value={newRecordForm.deviceName}
                     onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
-                  >
-                    <option value="">Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin</option>
-                    <option value="Phonak Audéo P90 (SN: PH-2024-00142)">Phonak Audéo P90 (SN: PH-2024-00142)</option>
-                    <option value="Oticon More 1 (SN: OT-2024-00089)">Oticon More 1 (SN: OT-2024-00089)</option>
-                    <option value="Signia Pure 7Nx (SN: SG-2024-00176)">Signia Pure 7Nx (SN: SG-2024-00176)</option>
-                  </select>
+                  />
                 )}
               </div>
 
