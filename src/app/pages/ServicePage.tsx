@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
-import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye } from '../components/Icons';
+import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye, IconSearch } from '../components/Icons';
 
 interface ServiceRecord {
   id: string;
@@ -135,7 +135,8 @@ const statusConfig: Record<string, { color: string; icon: string }> = {
 
 export default function ServicePage() {
   const { addSale, addToast } = useApp();
-  const [filterStatus, setFilterStatus] = useState('Tümü');
+  const [filterStatus, setFilterStatus] = useState<string>('Tümü');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<ServiceRecord | null>(null);
   const [records, setRecords] = useState<ServiceRecord[]>(serviceRecords);
@@ -618,9 +619,19 @@ export default function ServicePage() {
     addToast({ type: 'success', message: `${selectedRecord.patientName} kaydına yeni servis işlemi eklendi.` });
   };
 
-  const filtered = records.filter(r =>
-    filterStatus === 'Tümü' || r.status === filterStatus
-  );
+  const filtered = records.filter(r => {
+    const matchesStatus = filterStatus === 'Tümü' || r.status === filterStatus;
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return matchesStatus;
+
+    const matchesName = (r.patientName || '').toLowerCase().includes(q);
+    const matchesDevice = (r.deviceName || '').toLowerCase().includes(q);
+    const matchesSerial = (r.serialNo || '').toLowerCase().includes(q);
+    const matchesProblem = (r.problem || '').toLowerCase().includes(q);
+    const matchesTechnician = (r.technician || '').toLowerCase().includes(q);
+
+    return matchesStatus && (matchesName || matchesDevice || matchesSerial || matchesProblem || matchesTechnician);
+  });
 
   const activeCount = records.filter(r => !['Teslim Edildi'].includes(r.status)).length;
   const waitingCount = records.filter(r => r.status === 'Hazır').length;
@@ -682,10 +693,16 @@ export default function ServicePage() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters & Search Bar */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ display: 'flex', gap: 12 }}>
-          <div className="tabs">
+        <div className="card-body" style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap'
+        }}>
+          <div className="tabs" style={{ margin: 0 }}>
             {['Tümü', 'Alındı', 'İnceleniyor', 'Tamir Ediliyor', 'Hazır', 'Teslim Edildi'].map(s => (
               <button
                 key={s}
@@ -695,6 +712,63 @@ export default function ServicePage() {
                 {s}
               </button>
             ))}
+          </div>
+
+          {/* Search Box */}
+          <div style={{ position: 'relative', width: 340, maxWidth: '100%' }}>
+            <div style={{
+              position: 'absolute',
+              left: 12,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--gray-400)',
+              display: 'flex',
+              alignItems: 'center',
+              pointerEvents: 'none'
+            }}>
+              <IconSearch size={16} strokeWidth={2} />
+            </div>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Hasta adı, cihaz veya seri no ile ara..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                paddingLeft: 36,
+                paddingRight: searchQuery ? 32 : 12,
+                height: 38,
+                fontSize: '0.84rem',
+                borderRadius: 'var(--radius-md)',
+                borderColor: 'var(--gray-200)',
+                background: 'var(--gray-50)',
+                transition: 'all 0.15s ease'
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--gray-400)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  padding: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title="Aramayı Temizle"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -718,7 +792,16 @@ export default function ServicePage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(record => {
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--gray-500)' }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>🔍</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)' }}>Aranan kriterlere uygun servis kaydı bulunamadı</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Arama terimini veya durum filtresini değiştirerek tekrar deneyebilirsiniz.</div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map(record => {
                 const cfg = statusConfig[record.status];
                 return (
                   <tr key={record.id}>
@@ -775,7 +858,7 @@ export default function ServicePage() {
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>
