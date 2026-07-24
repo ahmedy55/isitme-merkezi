@@ -104,6 +104,7 @@ interface AppContextType {
   addSale: (sale: SaleRecord) => void;
   addStockItem: (item: StockItem) => void;
   updateStockItem: (item: StockItem) => void;
+  deleteStockItem: (id: string) => void;
   updateRecallItemStatus: (id: string, status: RecallItem['status']) => void;
   
   // P0 — Tedarikçi
@@ -507,6 +508,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteStockItem = async (id: string) => {
+    if (currentOrgId) {
+      try {
+        await dbDeleteStockItem(id);
+        setStockList(prev => prev.filter(s => s.id !== id));
+        addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Ürün silinemedi: ${err.message}` });
+      }
+    } else {
+      setStockList(prev => prev.filter(s => s.id !== id));
+    }
+  };
+
   const updateRecallItemStatus = async (id: string, status: RecallItem['status']) => {
     if (currentOrgId) {
       try {
@@ -736,6 +751,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addSale,
       addStockItem,
       updateStockItem,
+      deleteStockItem,
       updateRecallItemStatus,
       
       addSupplier,

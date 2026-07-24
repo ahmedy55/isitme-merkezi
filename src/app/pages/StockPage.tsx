@@ -6,7 +6,7 @@ import { stockItems, formatCurrency, type StockItem, type Patient } from '../dat
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
-  const { stockList, updateStockItem, addStockItem, patientsList, updatePatient, addToast } = useApp();
+  const { stockList, updateStockItem, addStockItem, deleteStockItem, patientsList, updatePatient, addToast } = useApp();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -272,7 +272,7 @@ export default function StockPage() {
                 <th>ÜTS Durumu</th>
                 <th>Fiyat</th>
                 <th>Hasta (Alıcı)</th>
-                <th>İşlem</th>
+                <th>İşlemler</th>
               </tr>
             </thead>
             <tbody>
@@ -346,26 +346,145 @@ export default function StockPage() {
                         {item.assignedPatientName || '—'}
                       </div>
                     </td>
-                    <td data-label="İşlem">
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        {item.category === 'Cihaz' && item.utsStatus === 'Bekliyor' && (
-                          <button 
-                            className="btn btn-sm btn-primary"
-                            disabled={!item.assignedPatientId}
-                            title={!item.assignedPatientId ? "ÜTS bildirimi için önce cihaza hasta atanmalıdır." : ""}
-                            onClick={() => handleUtsNotification(item)}
-                            style={{ fontSize: '0.72rem', padding: '4px 8px' }}
-                          >
-                            ÜTS Bildirimi Yap
-                          </button>
-                        )}
-                        <button className="btn btn-sm btn-ghost btn-icon" 
+                    <td data-label="İşlemler">
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {/* 1. Geçmiş / Log Button */}
+                        <button
+                          type="button"
+                          title="Hareket / İşlem Geçmişi"
+                          onClick={() => addToast({ type: 'info', message: `${item.name} (${item.serialNo}) stok işlem geçmişi görüntülendi.` })}
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 6,
+                            border: '1px solid var(--gray-300)',
+                            background: '#fff',
+                            color: 'var(--gray-700)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                            <path d="M3 3v5h5" />
+                            <path d="M12 7v5l4 2" />
+                          </svg>
+                        </button>
+
+                        {/* 2. Düzenle Button */}
+                        <button
+                          type="button"
+                          title="Ürünü Düzenle"
                           onClick={() => {
                             setEditingItem(item);
                             setShowEditModal(true);
                           }}
-                          aria-label="Düzenle">
-                          <IconEdit size={14} strokeWidth={1.7} />
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 6,
+                            border: '1px solid var(--gray-300)',
+                            background: '#fff',
+                            color: 'var(--gray-700)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                          </svg>
+                        </button>
+
+                        {/* 3. ÜTS Bildirimi / Uarı Button (Red Border) */}
+                        <button
+                          type="button"
+                          title={!item.assignedPatientId ? "ÜTS bildirimi için önce cihaza hasta atanmalıdır." : "ÜTS Bildirimi Yap"}
+                          onClick={() => handleUtsNotification(item)}
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 6,
+                            border: '1px solid #fca5a5',
+                            background: '#fff',
+                            color: '#ef4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: item.assignedPatientId ? 'pointer' : 'not-allowed',
+                            opacity: item.assignedPatientId ? 1 : 0.65,
+                            padding: 0
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                          </svg>
+                        </button>
+
+                        {/* 4. Zimmet / Belge Button */}
+                        <button
+                          type="button"
+                          title="Zimmet / Garanti Belgesi Yazdır"
+                          onClick={() => addToast({ type: 'info', message: `${item.name} (${item.serialNo}) zimmet belgesi oluşturuldu.` })}
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 6,
+                            border: '1px solid var(--gray-300)',
+                            background: '#fff',
+                            color: 'var(--gray-700)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="12" y1="18" x2="12" y2="12" />
+                            <line x1="9" y1="15" x2="15" y2="15" />
+                          </svg>
+                        </button>
+
+                        {/* 5. Sil Button (Red Border) */}
+                        <button
+                          type="button"
+                          title="Ürünü Sil"
+                          onClick={() => {
+                            if (confirm(`${item.name} (${item.serialNo}) ürününü stoktan silmek istediğinize emin misiniz?`)) {
+                              deleteStockItem(item.id);
+                              addToast({ type: 'success', message: `${item.name} stoğundan başarıyla kaldırıldı.` });
+                            }
+                          }}
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 6,
+                            border: '1px solid #fca5a5',
+                            background: '#fff',
+                            color: '#ef4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            <line x1="10" y1="11" x2="10" y2="17" />
+                            <line x1="14" y1="11" x2="14" y2="17" />
+                          </svg>
                         </button>
                       </div>
                     </td>
