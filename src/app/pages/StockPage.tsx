@@ -161,14 +161,87 @@ export default function StockPage() {
           <h2>Stok & Aksesuar Yönetimi</h2>
           <p>{stockList.length} ürün kayıtlı</p>
         </div>
-        <div className="page-header-actions">
-          <button className="btn btn-secondary" 
-            onClick={() => addToast({ type: 'success', message: 'Excel/CSV envanter şablonu başarıyla içeri aktarıldı. 14 yeni ürün stoğa eklendi.' })}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <IconUpload size={15} strokeWidth={1.7} /> İçe Aktar
+        <div className="page-header-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {/* 1. ÜTS'den Sorgula */}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => addToast({ type: 'info', message: 'ÜTS servis bağlantısı kuruldu. Sağlık Bakanlığı envanter sorgulaması yapılıyor...' })}
+            style={{
+              background: '#fff',
+              border: '1px solid var(--gray-300)',
+              color: '#0284c7',
+              fontSize: '0.86rem',
+              fontWeight: 500,
+              padding: '7px 14px',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            <span>ÜTS'den Sorgula</span>
           </button>
+
+          {/* 2. Toplu Ekle */}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => addToast({ type: 'info', message: 'Toplu ürün yüklemek için Excel / CSV dosyanızı seçin.' })}
+            style={{
+              background: '#fff',
+              border: '1px solid var(--gray-300)',
+              color: '#0284c7',
+              fontSize: '0.86rem',
+              fontWeight: 500,
+              padding: '7px 14px',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span>Toplu Ekle</span>
+          </button>
+
+          {/* 3. Hızlı Satış */}
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setCurrentPage('sales')}
+            style={{
+              background: '#fff',
+              border: '1px solid var(--gray-300)',
+              color: '#0284c7',
+              fontSize: '0.86rem',
+              fontWeight: 500,
+              padding: '7px 14px',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span>Hızlı Satış</span>
+          </button>
+
+          {/* 4. Yeni Ürün Ekle */}
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}>
             <IconPlus size={15} strokeWidth={2} /> Yeni Ürün Ekle
           </button>
         </div>
