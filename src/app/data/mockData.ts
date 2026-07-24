@@ -63,7 +63,7 @@ export interface Appointment {
 export interface StockItem {
   id: string;
   name: string;
-  category: 'Cihaz' | 'Pil' | 'Kalıp' | 'Aksesuar';
+  category: string;
   brand: string;
   model: string;
   serialNo: string;

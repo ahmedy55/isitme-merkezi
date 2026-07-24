@@ -445,12 +445,38 @@ export default function StockPage() {
                       <select
                         className="form-select"
                         value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value as StockItem['category'] })}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                       >
-                        <option value="Cihaz">Cihaz</option>
-                        <option value="Pil">Pil</option>
-                        <option value="Kalıp">Kalıp</option>
-                        <option value="Aksesuar">Aksesuar</option>
+                        <optgroup label="Cihazlar">
+                          <option value="Cihaz">Cihaz</option>
+                          <option value="İkinci El">İkinci El</option>
+                          <option value="Yenilenmiş">Yenilenmiş</option>
+                          <option value="Receiver (Hoparlörler)">Receiver (Hoparlörler)</option>
+                        </optgroup>
+                        <optgroup label="Kalıp ve Kulaklık">
+                          <option value="Kulak Kalıpları">Kulak Kalıpları</option>
+                          <option value="Prop / Dome">Prop / Dome</option>
+                          <option value="İnce Tüp ve Hortumlar">İnce Tüp ve Hortumlar</option>
+                        </optgroup>
+                        <optgroup label="Sarf ve Bakım">
+                          <option value="Sarf Malzeme">Sarf Malzeme</option>
+                          <option value="Piller">Piller</option>
+                          <option value="Filtreler (Wax Guard)">Filtreler (Wax Guard)</option>
+                          <option value="Temizlik ve Bakım Ürünleri">Temizlik ve Bakım Ürünleri</option>
+                          <option value="Yedek Parçalar">Yedek Parçalar</option>
+                        </optgroup>
+                        <optgroup label="Aksesuar ve Ekipman">
+                          <option value="Aksesuar">Aksesuar</option>
+                          <option value="Şarj Cihazları">Şarj Cihazları</option>
+                          <option value="Kablosuz Aksesuarlar">Kablosuz Aksesuarlar</option>
+                          <option value="Mikrofonlar">Mikrofonlar</option>
+                          <option value="Bağlantı Cihazları (TV, Bluetooth vb.)">Bağlantı Cihazları (TV, Bluetooth vb.)</option>
+                          <option value="Programlama Ekipmanları">Programlama Ekipmanları</option>
+                        </optgroup>
+                        <optgroup label="Diğer">
+                          <option value="Diğer">Diğer</option>
+                          <option value="UTS Dışı">UTS Dışı</option>
+                        </optgroup>
                       </select>
                     </div>
                   </div>
@@ -496,11 +522,10 @@ export default function StockPage() {
                     >
                       <option value="">Cihaz tipi seçin (örn: Kulak Arkası (BTE)...)</option>
                       <option value="Kulak Arkası (BTE)">Kulak Arkası (BTE)</option>
-                      <option value="Kanal İçi (ITE/CIC/IIC)">Kanal İçi (ITE/CIC/IIC)</option>
-                      <option value="Hoparlör Kanal İçinde (RIC/RITE)">Hoparlör Kanal İçinde (RIC/RITE)</option>
-                      <option value="İşitme Cihazı Pili">İşitme Cihazı Pili</option>
-                      <option value="Kulak Kalıbı / Tıkaç">Kulak Kalıbı / Tıkaç</option>
-                      <option value="Temizlik / Bakım Aksesuarı">Temizlik / Bakım Aksesuarı</option>
+                      <option value="Kulak Arkası (RIC)">Kulak Arkası (RIC)</option>
+                      <option value="Kulak İçi (ITE)">Kulak İçi (ITE)</option>
+                      <option value="Kulak İçi - Kanal (ITC)">Kulak İçi - Kanal (ITC)</option>
+                      <option value="Tam Kanal (CIC)">Tam Kanal (CIC)</option>
                     </select>
                   </div>
 
@@ -669,9 +694,9 @@ export default function StockPage() {
                         value={formData.utsTrackType}
                         onChange={(e) => setFormData({ ...formData, utsTrackType: e.target.value })}
                       >
+                        <option value="Tekil (Seri No ile Takip)">Tekil (Seri No ile Takip)</option>
+                        <option value="Lot (Parti No ile Takip)">Lot (Parti No ile Takip)</option>
                         <option value="Takip Yok">Takip Yok</option>
-                        <option value="Tekil Takip (Seri No)">Tekil Takip (Seri No)</option>
-                        <option value="Lot / Parti Takibi">Lot / Parti Takibi</option>
                       </select>
                     </div>
                     <div className="form-group">
@@ -787,12 +812,38 @@ export default function StockPage() {
                   <select
                     className="form-select"
                     value={editingItem.category}
-                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value as StockItem['category'] })}
+                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
                   >
-                    <option>Cihaz</option>
-                    <option>Pil</option>
-                    <option>Kalıp</option>
-                    <option>Aksesuar</option>
+                    <optgroup label="Cihazlar">
+                      <option value="Cihaz">Cihaz</option>
+                      <option value="İkinci El">İkinci El</option>
+                      <option value="Yenilenmiş">Yenilenmiş</option>
+                      <option value="Receiver (Hoparlörler)">Receiver (Hoparlörler)</option>
+                    </optgroup>
+                    <optgroup label="Kalıp ve Kulaklık">
+                      <option value="Kulak Kalıpları">Kulak Kalıpları</option>
+                      <option value="Prop / Dome">Prop / Dome</option>
+                      <option value="İnce Tüp ve Hortumlar">İnce Tüp ve Hortumlar</option>
+                    </optgroup>
+                    <optgroup label="Sarf ve Bakım">
+                      <option value="Sarf Malzeme">Sarf Malzeme</option>
+                      <option value="Piller">Piller</option>
+                      <option value="Filtreler (Wax Guard)">Filtreler (Wax Guard)</option>
+                      <option value="Temizlik ve Bakım Ürünleri">Temizlik ve Bakım Ürünleri</option>
+                      <option value="Yedek Parçalar">Yedek Parçalar</option>
+                    </optgroup>
+                    <optgroup label="Aksesuar ve Ekipman">
+                      <option value="Aksesuar">Aksesuar</option>
+                      <option value="Şarj Cihazları">Şarj Cihazları</option>
+                      <option value="Kablosuz Aksesuarlar">Kablosuz Aksesuarlar</option>
+                      <option value="Mikrofonlar">Mikrofonlar</option>
+                      <option value="Bağlantı Cihazları (TV, Bluetooth vb.)">Bağlantı Cihazları (TV, Bluetooth vb.)</option>
+                      <option value="Programlama Ekipmanları">Programlama Ekipmanları</option>
+                    </optgroup>
+                    <optgroup label="Diğer">
+                      <option value="Diğer">Diğer</option>
+                      <option value="UTS Dışı">UTS Dışı</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div className="form-group">
