@@ -18,6 +18,7 @@ export default function StockPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [historyModalItem, setHistoryModalItem] = useState<StockItem | null>(null);
   const [hekModalItem, setHekModalItem] = useState<StockItem | null>(null);
+  const [selectedHekType, setSelectedHekType] = useState<string | null>(null);
   const [adjustmentModalItem, setAdjustmentModalItem] = useState<StockItem | null>(null);
   const [showUtsImportModal, setShowUtsImportModal] = useState(false);
   const [showQuickSaleModal, setShowQuickSaleModal] = useState(false);
@@ -492,7 +493,10 @@ export default function StockPage() {
                         <button
                           type="button"
                           title="HEK / Zayiat Bildirimi"
-                          onClick={() => setHekModalItem(item)}
+                          onClick={() => {
+                            setSelectedHekType(null);
+                            setHekModalItem(item);
+                          }}
                           style={{
                             width: 30,
                             height: 30,
@@ -1736,13 +1740,14 @@ export default function StockPage() {
                     { id: 'CALINMA', title: 'Çalınma', tag: 'CALINMA', desc: 'Ürün çalınmıştır. Hırsızlık sonucu kaybedilen tıbbi cihazlar için bu tür seçilir. Çalıntı bildirimi yapıldığında ilgili yasal süreçlerin de başlatılması önerilir.' },
                     { id: 'STOK_DUZELTME', title: 'Stok Düzeltme', tag: 'STOK_DUZELTME', desc: 'Stok sayımı sonucunda fiziksel olarak bulunamayan ürün için kullanılır. Envanter sayımında eksik çıkan, ancak çalıntı veya kayıp olduğu kesin olmayan ürünler için bu tür tercih edilir. Sayım farkını ÜTS ile uyumlu hale getirir.' },
                     { id: 'DIGER', title: 'Diğer', tag: 'DIGER', desc: 'Yukarıdaki kategorilere uymayan durumlar için kullanılır. Bu tür seçildiğinde açıklama alanı zorunludur ve durumun detaylı açıklaması yazılmalıdır. Örneğin: üretici geri çağırma, yasal el koyma, vb.' }
-                  ].map((option, idx) => (
+                  ].map((option) => (
                     <label key={option.id} style={{ display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
                       <input
                         type="radio"
                         name="hekType"
                         value={option.id}
-                        defaultChecked={idx === 0}
+                        checked={selectedHekType === option.id}
+                        onChange={() => setSelectedHekType(option.id)}
                         style={{ marginTop: 3, accentColor: '#0284c7' }}
                       />
                       <div>
@@ -1816,14 +1821,28 @@ export default function StockPage() {
               <button
                 type="button"
                 className="btn btn-secondary"
+                disabled={!selectedHekType}
                 onClick={() => {
+                  if (!selectedHekType) return;
                   deleteStockItem(hekModalItem.id);
                   addToast({ type: 'warning', message: `${hekModalItem.name} için HEK / Zayiat kaydı oluşturuldu ve ürün stoktan düşürüldü.` });
                   setHekModalItem(null);
                 }}
-                style={{ padding: '8px 20px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gray-700)', fontWeight: 600 }}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  color: selectedHekType ? '#dc2626' : '#94a3b8',
+                  background: selectedHekType ? '#fff' : '#f8fafc',
+                  border: selectedHekType ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                  fontWeight: 600,
+                  cursor: selectedHekType ? 'pointer' : 'not-allowed',
+                  opacity: selectedHekType ? 1 : 0.75
+                }}
               >
-                <span>⚠️</span> HEK/Zayiat Kaydı Oluştur
+                <span style={{ opacity: selectedHekType ? 1 : 0.4 }}>⚠️</span> HEK/Zayiat Kaydı Oluştur
               </button>
             </div>
           </div>
