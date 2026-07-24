@@ -18,6 +18,7 @@ export default function StockPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [historyModalItem, setHistoryModalItem] = useState<StockItem | null>(null);
   const [hekModalItem, setHekModalItem] = useState<StockItem | null>(null);
+  const [adjustmentModalItem, setAdjustmentModalItem] = useState<StockItem | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -432,18 +433,18 @@ export default function StockPage() {
                           </svg>
                         </button>
 
-                        {/* 4. Zimmet / Belge Button */}
+                        {/* 4. Stok Düzeltme / Zayiat (sebepli) Button (Blue Outline) */}
                         <button
                           type="button"
-                          title="Zimmet / Garanti Belgesi Yazdır"
-                          onClick={() => addToast({ type: 'info', message: `${item.name} (${item.serialNo}) zimmet belgesi oluşturuldu.` })}
+                          title="Stok Düzeltme / Zayiat (sebepli)"
+                          onClick={() => setAdjustmentModalItem(item)}
                           style={{
                             width: 30,
                             height: 30,
                             borderRadius: 6,
-                            border: '1px solid var(--gray-300)',
+                            border: '1.5px solid #3b82f6',
                             background: '#fff',
-                            color: 'var(--gray-700)',
+                            color: '#3b82f6',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1741,6 +1742,128 @@ export default function StockPage() {
                 style={{ padding: '8px 20px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gray-700)', fontWeight: 600 }}
               >
                 <span>⚠️</span> HEK/Zayiat Kaydı Oluştur
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stok Düzeltme / Zayiat Modal */}
+      {adjustmentModalItem && (
+        <div className="modal-overlay" onClick={() => setAdjustmentModalItem(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, width: '92%', borderRadius: 12, padding: '20px 24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--gray-900)' }}>
+                  Stok Düzeltme / Zayiat — {adjustmentModalItem.name}
+                </h3>
+                <div style={{ fontSize: '0.82rem', color: 'var(--gray-600)', marginTop: 4 }}>
+                  Mevcut stok: <strong style={{ color: 'var(--gray-900)' }}>{adjustmentModalItem.quantity}</strong>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginTop: 2, lineHeight: 1.4 }}>
+                  Bu işlem satış değildir — stok, seçtiğiniz sebeeple kayıt altına alınarak düşürülür ve ürünün Hareketler penceresinde görünür.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdjustmentModalItem(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: 'var(--gray-400)', cursor: 'pointer', padding: 0 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Blue Callout Info Box */}
+            <div style={{
+              background: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              borderRadius: 8,
+              padding: '12px 14px',
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-start',
+              margin: '14px 0 18px'
+            }}>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>i</div>
+              <div style={{ fontSize: '0.81rem', color: '#0369a1', lineHeight: 1.45 }}>
+                <div style={{ fontWeight: 700, marginBottom: 2, color: '#0c4a6e' }}>Bu ekran sarf malzeme ve ÜTS dışı ürünler içindir.</div>
+                ÜTS'ye kayıtlı (barkodlu) cihazlar bu ekrandan düzeltilemez; onların zayiatı, Bakanlığa bildirim gönderen HEK / Zayiat işlemiyle yapılır. Bu nedenle ÜTS'li cihazların satırında bu buton görünmez.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Field 1: İşlem */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> İşlem
+                </label>
+                <select className="form-select">
+                  <option value="azalt">Stok Azalt (zayiat/kayıp)</option>
+                  <option value="artir">Stok Artır (sayım fazlası)</option>
+                  <option value="duzelt">Stok Düzelt (sayım eşitleme)</option>
+                </select>
+              </div>
+
+              {/* Field 2: Adet */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Adet
+                </label>
+                <input
+                  type="number"
+                  className="form-input"
+                  defaultValue={1}
+                  min={1}
+                />
+              </div>
+
+              {/* Field 3: Sebep */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Sebep
+                </label>
+                <select className="form-select" defaultValue="">
+                  <option value="" disabled>Sebep seçin</option>
+                  <option value="kirilma">Kırılma / Bozulma</option>
+                  <option value="kayıp">Kaybolma / Eksik Sayım</option>
+                  <option value="tarih">Tarihi Geçti / Bozuldu</option>
+                  <option value="test">Test / Numune Kullanımı</option>
+                  <option value="sayim">Sayım Düzeltmesi</option>
+                  <option value="digar">Diğer</option>
+                </select>
+              </div>
+
+              {/* Field 4: Açıklama */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>Açıklama</label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  placeholder="Ne oldu? (opsiyonel, Diğer'de zorunlu)"
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20, borderTop: '1px solid var(--gray-100)', paddingTop: 14 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setAdjustmentModalItem(null)}
+                style={{ padding: '8px 20px', borderRadius: 6 }}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  addToast({ type: 'success', message: `${adjustmentModalItem.name} stok düzeltme işlemi kaydedildi.` });
+                  setAdjustmentModalItem(null);
+                }}
+                style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+              >
+                Kaydet
               </button>
             </div>
           </div>
