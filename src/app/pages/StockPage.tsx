@@ -17,6 +17,7 @@ export default function StockPage() {
   const [activeEditTab, setActiveEditTab] = useState<'info' | 'docs'>('info');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [historyModalItem, setHistoryModalItem] = useState<StockItem | null>(null);
+  const [hekModalItem, setHekModalItem] = useState<StockItem | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -404,11 +405,11 @@ export default function StockPage() {
                           </svg>
                         </button>
 
-                        {/* 3. ÜTS Bildirimi / Uarı Button (Red Border) */}
+                        {/* 3. ÜTS Bildirimi / HEK Zayiat Button (Red Border) */}
                         <button
                           type="button"
-                          title={!item.assignedPatientId ? "ÜTS bildirimi için önce cihaza hasta atanmalıdır." : "ÜTS Bildirimi Yap"}
-                          onClick={() => handleUtsNotification(item)}
+                          title="HEK / Zayiat Bildirimi"
+                          onClick={() => setHekModalItem(item)}
                           style={{
                             width: 30,
                             height: 30,
@@ -1544,6 +1545,203 @@ export default function StockPage() {
               <div style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
                 Bu ürün için hareket kaydı bulunamadı
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HEK / Zayiat Bildirimi Modal */}
+      {hekModalItem && (
+        <div className="modal-overlay" onClick={() => setHekModalItem(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 740, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--gray-200)' }}>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}>
+                <span>⚠️</span> HEK / Zayiat Bildirimi
+              </span>
+              <button className="modal-close" onClick={() => setHekModalItem(null)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Red Warning Callout Box */}
+              <div style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: 8,
+                padding: '16px 18px',
+                display: 'flex',
+                gap: 12,
+                alignItems: 'flex-start'
+              }}>
+                <div style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  marginTop: 2
+                }}>
+                  !
+                </div>
+                <div style={{ fontSize: '0.83rem', color: '#991b1b', lineHeight: 1.5 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 4, color: '#7f1d1d' }}>
+                    Bu işlem geri alınamaz
+                  </div>
+                  <div>
+                    HEK/Zayiat kaydı oluşturulduğunda ürün kalıcı olarak stoktan düşürülür. ÜTS'ye bildirim yapılması durumunda ürün ÜTS'de "HEK" (Hurda/Enkaz/Köhne) durumuna geçer.
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: '0.78rem', color: '#b91c1c' }}>
+                    HEK = Hurda / Enkaz / Köhne kelimelerinin kısaltmasıdır. Ekonomik ömrünü tamamlayan veya zayi olan tıbbi cihazlar için ÜTS'ye yapılan zorunlu bildirimdir.
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 1: Ürün Bilgileri Table Grid */}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 8, color: 'var(--gray-900)' }}>
+                  Ürün Bilgileri
+                </div>
+                <div style={{ border: '1px solid var(--gray-200)', borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', borderBottom: '1px solid var(--gray-200)' }}>
+                    <div style={{ padding: '8px 12px', background: '#f8fafc', fontWeight: 600, fontSize: '0.83rem', color: 'var(--gray-600)', borderRight: '1px solid var(--gray-200)' }}>Ürün Adı</div>
+                    <div style={{ padding: '8px 12px', fontWeight: 600, fontSize: '0.85rem' }}>{hekModalItem.name}</div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 100px 1fr' }}>
+                    <div style={{ padding: '8px 12px', background: '#f8fafc', fontWeight: 600, fontSize: '0.83rem', color: 'var(--gray-600)', borderRight: '1px solid var(--gray-200)' }}>Marka</div>
+                    <div style={{ padding: '8px 12px', fontSize: '0.85rem', borderRight: '1px solid var(--gray-200)' }}>{hekModalItem.brand} / {hekModalItem.model}</div>
+                    <div style={{ padding: '8px 12px', background: '#f8fafc', fontWeight: 600, fontSize: '0.83rem', color: 'var(--gray-600)', borderRight: '1px solid var(--gray-200)' }}>Stok</div>
+                    <div style={{ padding: '8px 12px', fontSize: '0.85rem', fontWeight: 600 }}>{hekModalItem.quantity}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: HEK/Zayiat Türü */}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 8, color: 'var(--gray-900)' }}>
+                  HEK/Zayiat Türü
+                </div>
+
+                {/* Blue Info Callout */}
+                <div style={{
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: 8,
+                  padding: '10px 14px',
+                  display: 'flex',
+                  gap: 10,
+                  alignItems: 'center',
+                  marginBottom: 14
+                }}>
+                  <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>i</div>
+                  <div style={{ fontSize: '0.81rem', color: '#0369a1' }}>
+                    <span style={{ fontWeight: 600 }}>Ürünün neden kullanım dışı bırakıldığını belirten türü seçin</span>
+                    <div style={{ fontSize: '0.76rem', color: '#0284c7', marginTop: 1 }}>Seçtiğiniz tür ÜTS'ye (Ürün Takip Sistemi) bildirilecektir. Her tür için farklı yasal süreçler geçerli olabilir.</div>
+                  </div>
+                </div>
+
+                {/* Radio Options List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {[
+                    { id: 'HEK', title: 'HEK (Hurda/Enkaz/Köhne)', tag: 'HEK', desc: 'Ürün ekonomik ömrünü tamamlamıştır veya tamir edilemez düzeyde arızalıdır. İşitme cihazlarında genellikle tamiri mümkün olmayan elektronik arıza, fiziksel hasar (kırılma, su hasarı) veya teknolojik eskime nedeniyle kullanılır. Ürün artık kullanılamaz durumdadır ve hurdaya ayrılacaktır.' },
+                    { id: 'DOGAL_AFET', title: 'Doğal Afet', tag: 'DOGAL_AFET', desc: 'Ürün deprem, sel, fırtına gibi doğal afet nedeniyle zarar görmüştür. Doğal afet sonucu kullanılamaz hale gelen tüm tıbbi cihazlar için bu tür seçilir.' },
+                    { id: 'YANGIN', title: 'Yangın', tag: 'YANGIN', desc: 'Ürün yangın nedeniyle hasar görmüş ve kullanılamaz hale gelmiştir. Yangın hasarı sonucu fonksiyonunu yitiren cihazlar için kullanılır.' },
+                    { id: 'CALINMA', title: 'Çalınma', tag: 'CALINMA', desc: 'Ürün çalınmıştır. Hırsızlık sonucu kaybedilen tıbbi cihazlar için bu tür seçilir. Çalıntı bildirimi yapıldığında ilgili yasal süreçlerin de başlatılması önerilir.' },
+                    { id: 'STOK_DUZELTME', title: 'Stok Düzeltme', tag: 'STOK_DUZELTME', desc: 'Stok sayımı sonucunda fiziksel olarak bulunamayan ürün için kullanılır. Envanter sayımında eksik çıkan, ancak çalıntı veya kayıp olduğu kesin olmayan ürünler için bu tür tercih edilir. Sayım farkını ÜTS ile uyumlu hale getirir.' },
+                    { id: 'DIGER', title: 'Diğer', tag: 'DIGER', desc: 'Yukarıdaki kategorilere uymayan durumlar için kullanılır. Bu tür seçildiğinde açıklama alanı zorunludur ve durumun detaylı açıklaması yazılmalıdır. Örneğin: üretici geri çağırma, yasal el koyma, vb.' }
+                  ].map((option, idx) => (
+                    <label key={option.id} style={{ display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
+                      <input
+                        type="radio"
+                        name="hekType"
+                        value={option.id}
+                        defaultChecked={idx === 0}
+                        style={{ marginTop: 3, accentColor: '#0284c7' }}
+                      />
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.88rem', color: 'var(--gray-900)' }}>
+                          {option.title}
+                          <span style={{ fontSize: '0.66rem', fontWeight: 600, background: '#fecaca', color: '#dc2626', padding: '1px 5px', borderRadius: 4 }}>{option.tag}</span>
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', lineHeight: 1.45, marginTop: 2 }}>
+                          {option.desc}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 3: Açıklama (isteğe bağlı) */}
+              <div>
+                <label className="form-label" style={{ fontWeight: 600 }}>Açıklama (isteğe bağlı)</label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  placeholder="HEK/Zayiat ile ilgili ek notlar..."
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Section 4: UTS Bildirimi */}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 8, color: 'var(--gray-900)' }}>
+                  ÜTS Bildirimi
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <label style={{ display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
+                    <input type="radio" name="utsOption" defaultChecked style={{ marginTop: 3, accentColor: '#0284c7' }} />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.88rem', color: 'var(--gray-900)' }}>
+                        HEK/Zayiat Bildirimi Gönder
+                        <span style={{ fontSize: '0.66rem', fontWeight: 600, background: '#e0f2fe', color: '#0284c7', padding: '1px 6px', borderRadius: 4 }}>Önerilen</span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', lineHeight: 1.45, marginTop: 2 }}>
+                        ÜTS'ye HEK/Zayiat bildirimi gönderilir. Ürün ÜTS'de kalıcı olarak "HEK" (Hurda/Enkaz/Köhne) durumuna geçer. Bu bildirim, ürünün artık kullanılamaz olduğunu ve stoktan kalıcı olarak çıktığını resmi kayıt altına alır. ÜTS'de bu ürün üzerinde başka bildirim yapılamaz (iptal hariç).
+                      </div>
+                    </div>
+                  </label>
+                  <label style={{ display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
+                    <input type="radio" name="utsOption" style={{ marginTop: 3, accentColor: '#0284c7' }} />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.88rem', color: 'var(--gray-900)' }}>
+                        ÜTS İşlemi Yapma
+                        <span style={{ fontSize: '0.66rem', fontWeight: 600, background: 'var(--gray-100)', color: 'var(--gray-600)', padding: '1px 6px', borderRadius: 4 }}>ÜTS'ye bildirim gitmez</span>
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', lineHeight: 1.45, marginTop: 2 }}>
+                        Hiçbir ÜTS bildirimi gönderilmez. Sadece CRM'deki HEK kaydı oluşturulur ve ürün stoktan düşürülür. ÜTS'deki ürün durumu değişmez. Bu seçenek, ÜTS bildirimi daha sonra manuel yapılacaksa kullanılabilir.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setHekModalItem(null)}
+                style={{ padding: '8px 20px', borderRadius: 6 }}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  deleteStockItem(hekModalItem.id);
+                  addToast({ type: 'warning', message: `${hekModalItem.name} için HEK / Zayiat kaydı oluşturuldu ve ürün stoktan düşürüldü.` });
+                  setHekModalItem(null);
+                }}
+                style={{ padding: '8px 20px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gray-700)', fontWeight: 600 }}
+              >
+                <span>⚠️</span> HEK/Zayiat Kaydı Oluştur
+              </button>
             </div>
           </div>
         </div>
