@@ -6,7 +6,7 @@ import { stockItems, formatCurrency, type StockItem, type Patient } from '../dat
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
-  const { stockList, updateStockItem, addStockItem, deleteStockItem, patientsList, updatePatient, addToast } = useApp();
+  const { stockList, updateStockItem, addStockItem, deleteStockItem, patientsList, updatePatient, addToast, setCurrentPage } = useApp();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -19,6 +19,15 @@ export default function StockPage() {
   const [historyModalItem, setHistoryModalItem] = useState<StockItem | null>(null);
   const [hekModalItem, setHekModalItem] = useState<StockItem | null>(null);
   const [adjustmentModalItem, setAdjustmentModalItem] = useState<StockItem | null>(null);
+  const [showUtsImportModal, setShowUtsImportModal] = useState(false);
+  const [showQuickSaleModal, setShowQuickSaleModal] = useState(false);
+  const [quickSaleForm, setQuickSaleForm] = useState({
+    customerName: '',
+    items: [{ productId: '', qty: 1, price: 0 }],
+    cashId: 'ana',
+    paymentMethod: 'Nakit',
+    paidAmount: 0
+  });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -166,7 +175,7 @@ export default function StockPage() {
           <button
             type="button"
             className="btn"
-            onClick={() => addToast({ type: 'info', message: 'ÜTS servis bağlantısı kuruldu. Sağlık Bakanlığı envanter sorgulaması yapılıyor...' })}
+            onClick={() => setShowUtsImportModal(true)}
             style={{
               background: '#fff',
               border: '1px solid var(--gray-300)',
@@ -219,7 +228,7 @@ export default function StockPage() {
           <button
             type="button"
             className="btn"
-            onClick={() => setCurrentPage('sales')}
+            onClick={() => setShowQuickSaleModal(true)}
             style={{
               background: '#fff',
               border: '1px solid var(--gray-300)',
@@ -1937,6 +1946,357 @@ export default function StockPage() {
                 style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
               >
                 Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ÜTS Envanter İçe Aktar Modal */}
+      {showUtsImportModal && (
+        <div className="modal-overlay" onClick={() => setShowUtsImportModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, width: '92%', borderRadius: 12, padding: '24px 28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--gray-900)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+                ÜTS Envanter İçe Aktar
+              </span>
+              <button className="modal-close" onClick={() => setShowUtsImportModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: 'var(--gray-400)', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {/* Otomatik Kayıt Tercihleri */}
+            <div style={{ background: '#fafafa', borderRadius: 8, padding: '16px 18px', border: '1px solid var(--gray-200)', marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--gray-900)', marginBottom: 2 }}>
+                Otomatik Kayıt Tercihleri
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginBottom: 14 }}>
+                Marka ve model serbest metin olarak ÜTS ürün tanımından otomatik yazılır (ön kayıt gerekmez).
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <input
+                  type="checkbox"
+                  defaultChecked
+                  id="autoCreateManufacturer"
+                  style={{ width: 18, height: 18, marginTop: 2, accentColor: '#0284c7', cursor: 'pointer' }}
+                />
+                <label htmlFor="autoCreateManufacturer" style={{ cursor: 'pointer' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-900)' }}>
+                    Eksik üretici/ithalatçıları otomatik oluştur
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginTop: 2, lineHeight: 1.4 }}>
+                    ÜTS'den gelen üretici/ithalatçı firmalar 'Uyarlamalar &gt; Üretici Yönetimi' sayfasına otomatik eklenecek (firma unvanı ÜTS'den çekilir).
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Red Error Box */}
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: 8,
+              padding: '16px 18px',
+              display: 'flex',
+              gap: 12,
+              alignItems: 'flex-start',
+              position: 'relative'
+            }}>
+              <div style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: '#ef4444',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                flexShrink: 0,
+                marginTop: 1
+              }}>
+                ✕
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#991b1b' }}>Hata</span>
+                  <span style={{ cursor: 'pointer', color: '#991b1b', fontSize: '0.9rem' }} onClick={() => setShowUtsImportModal(false)}>✕</span>
+                </div>
+                <div style={{ fontSize: '0.84rem', color: '#b91c1c', marginTop: 4 }}>
+                  ÜTS ayarları tamamlanmamış (token + enabled gerekli)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hızlı Satış Modal */}
+      {showQuickSaleModal && (
+        <div className="modal-overlay" onClick={() => setShowQuickSaleModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 740, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--gray-200)' }}>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--gray-900)' }}>
+                <span>⚡</span> Hızlı Satış
+              </span>
+              <button className="modal-close" onClick={() => setShowQuickSaleModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Blue Info Callout */}
+              <div style={{
+                background: '#f0f9ff',
+                border: '1px solid #bae6fd',
+                borderRadius: 8,
+                padding: '14px 16px',
+                display: 'flex',
+                gap: 12,
+                alignItems: 'flex-start'
+              }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.78rem', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>i</div>
+                <div style={{ fontSize: '0.83rem', color: '#0369a1', lineHeight: 1.45 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 3, color: '#0c4a6e' }}>Hızlı Satış (Hastasız)</div>
+                  Hasta/tedarikçi seçmeden yalnızca ÜTS'siz (Takipsiz) ürünler satılır. Belge ve ÜTS bildirimi üretilmez; stok düşer, kasaya işlenir.
+                </div>
+              </div>
+
+              {/* Müşteri Adı */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 500, color: 'var(--gray-700)' }}>
+                  Müşteri Adı <span style={{ color: 'var(--gray-400)', fontWeight: 400 }}>(opsiyonel)</span>
+                </label>
+                <input
+                  className="form-input"
+                  placeholder="İsteğe bağlı"
+                  value={quickSaleForm.customerName}
+                  onChange={(e) => setQuickSaleForm({ ...quickSaleForm, customerName: e.target.value })}
+                />
+              </div>
+
+              {/* Ürünler Section */}
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 10, color: 'var(--gray-900)' }}>
+                  Ürünler
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {quickSaleForm.items.map((row, idx) => (
+                    <div key={idx} style={{ border: '1px solid var(--gray-200)', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+                      <div style={{ padding: '8px 14px', background: '#fafafa', borderBottom: '1px solid var(--gray-200)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--gray-700)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Ürün {idx + 1}</span>
+                        {quickSaleForm.items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = quickSaleForm.items.filter((_, i) => i !== idx);
+                              setQuickSaleForm({ ...quickSaleForm, items: next });
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.78rem' }}
+                          >
+                            Kaldır
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ padding: 14 }}>
+                        <div className="form-row-3">
+                          <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Ürün</label>
+                            <select
+                              className="form-select"
+                              value={row.productId}
+                              onChange={(e) => {
+                                const p = stockList.find(s => s.id === e.target.value);
+                                const next = [...quickSaleForm.items];
+                                next[idx] = { ...next[idx], productId: e.target.value, price: p ? p.price : 0 };
+                                setQuickSaleForm({ ...quickSaleForm, items: next });
+                              }}
+                            >
+                              <option value="">Ürün seçin</option>
+                              {stockList.map(s => (
+                                <option key={s.id} value={s.id}>{s.name} - {s.brand} (Stok: {s.quantity})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Adet</label>
+                            <input
+                              type="number"
+                              className="form-input"
+                              value={row.qty}
+                              onChange={(e) => {
+                                const next = [...quickSaleForm.items];
+                                next[idx] = { ...next[idx], qty: Number(e.target.value) };
+                                setQuickSaleForm({ ...quickSaleForm, items: next });
+                              }}
+                              min={1}
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: '0.8rem' }}>Birim Fiyat</label>
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={row.price}
+                                onChange={(e) => {
+                                  const next = [...quickSaleForm.items];
+                                  next[idx] = { ...next[idx], price: Number(e.target.value) };
+                                  setQuickSaleForm({ ...quickSaleForm, items: next });
+                                }}
+                                style={{ paddingRight: 24 }}
+                              />
+                              <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.82rem' }}>₺</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Dashed Add Product Button */}
+                  <button
+                    type="button"
+                    onClick={() => setQuickSaleForm({
+                      ...quickSaleForm,
+                      items: [...quickSaleForm.items, { productId: '', qty: 1, price: 0 }]
+                    })}
+                    style={{
+                      border: '2px dashed #bae6fd',
+                      background: '#f0f9ff',
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      color: '#0284c7',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                  >
+                    + Ürün Ekle
+                  </button>
+                </div>
+              </div>
+
+              {/* Ödeme Bilgileri */}
+              <div style={{ border: '1px solid var(--gray-200)', borderRadius: 8, padding: 14, background: '#fff' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 12, color: 'var(--gray-900)' }}>
+                  Ödeme Bilgileri
+                </div>
+                <div className="form-row-3">
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>
+                      Kasa <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <select
+                      className="form-select"
+                      value={quickSaleForm.cashId}
+                      onChange={(e) => setQuickSaleForm({ ...quickSaleForm, cashId: e.target.value })}
+                    >
+                      <option value="">Kasa seçin</option>
+                      <option value="ana">Ana Kasa</option>
+                      <option value="kadikoy">Kadıköy Kasa</option>
+                      <option value="besiktas">Beşiktaş Kasa</option>
+                      <option value="banka">Banka - Garanti</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Ödeme Yöntemi</label>
+                    <select
+                      className="form-select"
+                      value={quickSaleForm.paymentMethod}
+                      onChange={(e) => setQuickSaleForm({ ...quickSaleForm, paymentMethod: e.target.value })}
+                    >
+                      <option value="Nakit">Nakit</option>
+                      <option value="Kredi Kartı">Kredi Kartı</option>
+                      <option value="Havale / EFT">Havale / EFT</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Ödenen Tutar</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={quickSaleForm.paidAmount}
+                        onChange={(e) => setQuickSaleForm({ ...quickSaleForm, paidAmount: Number(e.target.value) })}
+                        style={{ paddingRight: 24 }}
+                      />
+                      <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.82rem' }}>₺</span>
+                    </div>
+                    <div style={{ textAlign: 'right', marginTop: 4 }}>
+                      <span
+                        onClick={() => {
+                          const total = quickSaleForm.items.reduce((sum, i) => sum + (i.price * i.qty), 0);
+                          setQuickSaleForm({ ...quickSaleForm, paidAmount: total });
+                        }}
+                        style={{ color: '#0284c7', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Tamamını Öde
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total Summary Bar */}
+              <div style={{
+                border: '1px solid var(--gray-200)',
+                borderRadius: 8,
+                padding: '16px 20px',
+                background: '#fff',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                gap: 16
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Genel Toplam</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
+                    {quickSaleForm.items.reduce((sum, i) => sum + (i.price * i.qty), 0).toFixed(2)} ₺
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Ödenen</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0284c7' }}>
+                    {quickSaleForm.paidAmount.toFixed(2)} ₺
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Kalan Borç</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
+                    {Math.max(0, quickSaleForm.items.reduce((sum, i) => sum + (i.price * i.qty), 0) - quickSaleForm.paidAmount).toFixed(2)} ₺
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowQuickSaleModal(false)}
+                style={{ padding: '8px 20px', borderRadius: 6 }}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  addToast({ type: 'success', message: 'Hızlı satış başarıyla gerçekleştirildi ve kasaya işlendi.' });
+                  setShowQuickSaleModal(false);
+                }}
+                style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+              >
+                Satışı Kaydet
               </button>
             </div>
           </div>
