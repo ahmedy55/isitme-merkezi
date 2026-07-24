@@ -18,10 +18,72 @@ export default function SuppliersPage() {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
 
+  const [pasifConfirmId, setPasifConfirmId] = useState<string | null>(null);
+  const [actionsModalSupplier, setActionsModalSupplier] = useState<Supplier | null>(null);
+
   // Purchase Modal states
   const [showPurchasesModal, setShowPurchasesModal] = useState<boolean>(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [showNewPurchaseForm, setShowNewPurchaseForm] = useState<boolean>(false);
+
+  // New Modals: Alış Faturası & Satış/Verme
+  const [purchaseModalSupplier, setPurchaseModalSupplier] = useState<Supplier | null>(null);
+  const [purInvoiceDate, setPurInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [purItems, setPurItems] = useState([
+    {
+      name: '',
+      category: 'Cihaz',
+      brand: '',
+      model: '',
+      deviceType: '',
+      salePrice: 0,
+      isAssigned: true,
+      trackingType: 'Tekil (Seri Numaralı)',
+      gtin: '',
+      serials: [] as string[],
+      serialInput: '',
+      mfgDate: '',
+      expDate: '',
+      unitPrice: 0,
+      discount: 0,
+      vat: 0
+    }
+  ]);
+  const [purCashId, setPurCashId] = useState('');
+  const [purPaymentMethodModal, setPurPaymentMethodModal] = useState('Nakit');
+  const [purPaidAmountModal, setPurPaidAmountModal] = useState(0);
+  const [purUtsToggle, setPurUtsToggle] = useState(false);
+
+  const [saleModalSupplier, setSaleModalSupplier] = useState<Supplier | null>(null);
+  const [saleItems, setSaleItems] = useState([
+    { productId: '', qty: 1, unitPrice: 0, discount: 0, vat: 0 }
+  ]);
+  const [saleCashId, setSaleCashId] = useState('');
+  const [salePaymentMethod, setSalePaymentMethod] = useState('Nakit');
+  const [saleCollectedAmount, setSaleCollectedAmount] = useState(0);
+  const [saleNotes, setSaleNotes] = useState('');
+
+  // Tahsilat/Tediye State
+  const [paymentModalSupplier, setPaymentModalSupplier] = useState<Supplier | null>(null);
+  const [payProcessType, setPayProcessType] = useState('Tediye (Tedarikçiye Ödeme - Para Çıkışı)');
+  const [payInvoiceId, setPayInvoiceId] = useState('');
+  const [payAmount, setPayAmount] = useState<number | ''>('');
+  const [payMethod, setPayMethod] = useState('');
+  const [payCashId, setPayCashId] = useState('');
+  const [payDescription, setPayDescription] = useState('');
+
+  // İade State
+  const [returnModalSupplier, setReturnModalSupplier] = useState<Supplier | null>(null);
+  const [returnItemName, setReturnItemName] = useState('');
+  const [returnQty, setReturnQty] = useState(1);
+  const [returnReason, setReturnReason] = useState('Hasarlı / Bozuk');
+  const [returnAmount, setReturnAmount] = useState<number | ''>('');
+  const [returnCashId, setReturnCashId] = useState('');
+  const [returnPaymentMethod, setReturnPaymentMethod] = useState('Nakit');
+
+  // Hareketler Modal State
+  const [movementsModalSupplier, setMovementsModalSupplier] = useState<Supplier | null>(null);
+  const [movementsTab, setMovementsTab] = useState<'kasa' | 'alis' | 'satis' | 'verilen' | 'gelen'>('kasa');
 
   // Form State
   const [addModalTab, setAddModalTab] = useState<'elle' | 'uts'>('elle');
@@ -432,29 +494,134 @@ export default function SuppliersPage() {
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, position: 'relative' }}>
+                        {/* 1. Düzenle Button */}
                         <button
-                          className="btn btn-secondary"
-                          onClick={() => handleOpenPurchases(sup)}
-                          style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                        >
-                          Faturalar ({sup.purchases.length})
-                        </button>
-                        <button
-                          className="btn-icon"
+                          type="button"
+                          className="btn"
                           onClick={() => handleOpenEditModal(sup)}
-                          style={{ color: 'var(--primary-500)', padding: 6 }}
-                          title="Tedarikçiyi Düzenle"
+                          style={{
+                            border: '1px solid var(--gray-300)',
+                            background: '#fff',
+                            color: 'var(--gray-800)',
+                            borderRadius: 6,
+                            padding: '5px 12px',
+                            fontSize: '0.84rem',
+                            fontWeight: 500,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}
                         >
-                          <IconEdit size={16} />
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                          </svg>
+                          Düzenle
                         </button>
+
+                        {/* 2. Pasife Al / Aktife Al Button with Popover */}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => {
+                              if (sup.status === 'Pasif') {
+                                updateSupplier({ ...sup, status: 'Aktif' });
+                                addToast({ type: 'success', message: `${sup.companyName} aktife alındı.` });
+                              } else {
+                                setPasifConfirmId(pasifConfirmId === sup.id ? null : sup.id);
+                              }
+                            }}
+                            style={{
+                              border: sup.status === 'Aktif' ? '1px solid #fca5a5' : '1px solid #86efac',
+                              background: '#fff',
+                              color: sup.status === 'Aktif' ? '#ef4444' : '#16a34a',
+                              borderRadius: 6,
+                              padding: '5px 12px',
+                              fontSize: '0.84rem',
+                              fontWeight: 500,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6
+                            }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                            </svg>
+                            {sup.status === 'Aktif' ? 'Pasife Al' : 'Aktife Al'}
+                          </button>
+
+                          {/* Popover confirmation */}
+                          {pasifConfirmId === sup.id && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: '100%',
+                              right: 0,
+                              marginBottom: 8,
+                              background: '#fff',
+                              border: '1px solid var(--gray-200)',
+                              borderRadius: 8,
+                              padding: '10px 14px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                              zIndex: 100,
+                              whiteSpace: 'nowrap'
+                            }}>
+                              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--gray-800)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span>!</span> Pasife almak istediğinize emin misiniz?
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPasifConfirmId(null)}
+                                  style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid var(--gray-300)', background: '#fff', fontSize: '0.78rem', cursor: 'pointer' }}
+                                >
+                                  Hayır
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateSupplier({ ...sup, status: 'Pasif' });
+                                    addToast({ type: 'warning', message: `${sup.companyName} pasife alındı.` });
+                                    setPasifConfirmId(null);
+                                  }}
+                                  style={{ padding: '3px 10px', borderRadius: 4, border: 'none', background: '#ef4444', color: '#fff', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                  Evet
+                                </button>
+                              </div>
+                              <div style={{
+                                position: 'absolute',
+                                bottom: -5,
+                                right: 24,
+                                width: 8,
+                                height: 8,
+                                background: '#fff',
+                                borderRight: '1px solid var(--gray-200)',
+                                borderBottom: '1px solid var(--gray-200)',
+                                transform: 'rotate(45deg)'
+                              }} />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. İşlemler Blue Button */}
                         <button
-                          className="btn-icon"
-                          onClick={() => handleDelete(sup.id)}
-                          style={{ color: 'var(--danger-500)', padding: 6 }}
-                          title="Tedarikçiyi Sil"
+                          type="button"
+                          className="btn"
+                          onClick={() => setActionsModalSupplier(sup)}
+                          style={{
+                            background: '#0284c7',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 6,
+                            padding: '5px 14px',
+                            fontSize: '0.84rem',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
                         >
-                          <IconDelete size={16} />
+                          İşlemler
                         </button>
                       </div>
                     </td>
@@ -1057,6 +1224,1459 @@ export default function SuppliersPage() {
 
             <div className="card-footer" style={{ padding: '12px 20px', borderTop: '1px solid var(--surface-border)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
               <button className="btn btn-secondary" onClick={() => setShowPurchasesModal(false)}>Kapat</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tedarikçi İşlemler Modal */}
+      {actionsModalSupplier && (
+        <div className="modal-overlay" onClick={() => setActionsModalSupplier(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, width: '92%', borderRadius: 12, padding: '24px 28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--gray-900)' }}>
+                {actionsModalSupplier.companyName} - İşlemler
+              </h3>
+              <button
+                type="button"
+                onClick={() => setActionsModalSupplier(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: 'var(--gray-400)', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              {/* 1. Alış */}
+              <div
+                onClick={() => {
+                  const s = actionsModalSupplier;
+                  setActionsModalSupplier(null);
+                  setPurchaseModalSupplier(s);
+                }}
+                style={{
+                  border: '1px solid var(--gray-200)',
+                  borderRadius: 10,
+                  padding: '24px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  background: '#fff'
+                }}
+              >
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', marginBottom: 12 }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--gray-900)', marginBottom: 4 }}>Alış</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Yeni alış faturası</div>
+              </div>
+
+              {/* 2. Satış / Verme */}
+              <div
+                onClick={() => {
+                  const s = actionsModalSupplier;
+                  setActionsModalSupplier(null);
+                  setSaleModalSupplier(s);
+                }}
+                style={{
+                  border: '1px solid var(--gray-200)',
+                  borderRadius: 10,
+                  padding: '24px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  background: '#fff'
+                }}
+              >
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0d9488', marginBottom: 12 }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--gray-900)', marginBottom: 4 }}>Satış / Verme</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Tedarikçiye veya dış firmaya ürün ver</div>
+              </div>
+
+              {/* 3. Tahsilat/Tediye */}
+              <div
+                onClick={() => {
+                  const s = actionsModalSupplier;
+                  setActionsModalSupplier(null);
+                  setPaymentModalSupplier(s);
+                }}
+                style={{
+                  border: '1px solid var(--gray-200)',
+                  borderRadius: 10,
+                  padding: '24px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  background: '#fff'
+                }}
+              >
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a', marginBottom: 12 }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v12M15 9.5H10.5a2 2 0 0 0 0 4H13.5a2 2 0 0 1 0 4H9" />
+                  </svg>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--gray-900)', marginBottom: 4 }}>Tahsilat/Tediye</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Para giriş/çıkış işlemi</div>
+              </div>
+
+              {/* 4. İade */}
+              <div
+                onClick={() => {
+                  const s = actionsModalSupplier;
+                  setActionsModalSupplier(null);
+                  setReturnModalSupplier(s);
+                }}
+                style={{
+                  border: '1px solid var(--gray-200)',
+                  borderRadius: 10,
+                  padding: '24px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  background: '#fff'
+                }}
+              >
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', marginBottom: 12 }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 14 4 9 9 4" />
+                    <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
+                  </svg>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--gray-900)', marginBottom: 4 }}>İade</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Tedarikçiye ürün iade et</div>
+              </div>
+
+              {/* 5. Hareketler */}
+              <div
+                onClick={() => {
+                  const s = actionsModalSupplier;
+                  setActionsModalSupplier(null);
+                  setMovementsModalSupplier(s);
+                  setMovementsTab('kasa');
+                }}
+                style={{
+                  border: '1px solid var(--gray-200)',
+                  borderRadius: 10,
+                  padding: '24px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  background: '#fff'
+                }}
+              >
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', marginBottom: 12 }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--gray-900)', marginBottom: 4 }}>Hareketler</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Tedarikçi hareketleri</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alış Faturası Modal */}
+      {purchaseModalSupplier && (
+        <div className="modal-overlay" onClick={() => setPurchaseModalSupplier(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 780, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--gray-200)' }}>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--gray-900)' }}>
+                Alış Faturası - {purchaseModalSupplier.companyName}
+              </span>
+              <button className="modal-close" onClick={() => setPurchaseModalSupplier(null)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Fatura Tarihi */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Fatura Tarihi
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={purInvoiceDate}
+                  onChange={(e) => setPurInvoiceDate(e.target.value)}
+                />
+              </div>
+
+              {/* Ürünler Section */}
+              <div>
+                <div style={{ margin: '8px 0 14px', textAlign: 'center', position: 'relative' }}>
+                  <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                  <span style={{ position: 'relative', top: -10, background: '#fff', padding: '0 14px', fontSize: '0.86rem', fontWeight: 600, color: 'var(--gray-700)' }}>
+                    Ürünler
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {purItems.map((item, idx) => {
+                    const lineSubtotal = item.unitPrice * (item.serials.length || 1);
+                    const lineDiscount = lineSubtotal * (item.discount / 100);
+                    const lineVat = (lineSubtotal - lineDiscount) * (item.vat / 100);
+                    const lineTotal = lineSubtotal - lineDiscount + lineVat;
+
+                    return (
+                      <div key={idx} style={{ border: '1px solid var(--gray-200)', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+                        <div style={{ padding: '8px 14px', background: '#fafafa', borderBottom: '1px solid var(--gray-200)', fontSize: '0.84rem', fontWeight: 600, color: 'var(--gray-700)', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Ürün {idx + 1}</span>
+                          {purItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setPurItems(purItems.filter((_, i) => i !== idx))}
+                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.78rem' }}
+                            >
+                              Kaldır
+                            </button>
+                          )}
+                        </div>
+
+                        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          {/* Row 1: Ürün Adı & Kategori */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                                <span style={{ color: '#ef4444' }}>*</span> Ürün Adı
+                              </label>
+                              <input
+                                className="form-input"
+                                placeholder="Ürün adı girin"
+                                value={item.name}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].name = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                                <span style={{ color: '#ef4444' }}>*</span> Kategori
+                              </label>
+                              <select
+                                className="form-select"
+                                value={item.category}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].category = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              >
+                                <option value="Cihaz">Cihaz</option>
+                                <option value="Pil & Aksesuar">Pil & Aksesuar</option>
+                                <option value="Kalıp Malzemesi">Kalıp Malzemesi</option>
+                                <option value="Teknik Servis">Teknik Servis</option>
+                                <option value="Diğer">Diğer</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Row 2: Marka, Model, Cihaz Tipi */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Marka</label>
+                              <input
+                                className="form-input"
+                                placeholder="Marka yazın veya seçin"
+                                value={item.brand}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].brand = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Model</label>
+                              <input
+                                className="form-input"
+                                placeholder="Model yazın veya seçin"
+                                value={item.model}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].model = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Cihaz Tipi</label>
+                              <input
+                                className="form-input"
+                                placeholder="Cihaz tipi yazın veya seçin"
+                                value={item.deviceType}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].deviceType = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Row 3: Satış Fiyatı & Checkbox */}
+                          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                            <div className="form-group" style={{ flex: 1 }}>
+                              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Satış Fiyatı</label>
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  type="number"
+                                  className="form-input"
+                                  value={item.salePrice}
+                                  onChange={(e) => {
+                                    const next = [...purItems];
+                                    next[idx].salePrice = Number(e.target.value);
+                                    setPurItems(next);
+                                  }}
+                                  style={{ paddingRight: 24 }}
+                                />
+                                <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.82rem' }}>₺</span>
+                              </div>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 18 }}>
+                              <input
+                                type="checkbox"
+                                checked={item.isAssigned}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].isAssigned = e.target.checked;
+                                  setPurItems(next);
+                                }}
+                                style={{ width: 16, height: 16, accentColor: '#0284c7' }}
+                              />
+                              <span style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--gray-800)' }}>
+                                Zimmetli Ürün (Hastaya atanabilir)
+                              </span>
+                            </label>
+                          </div>
+
+                          {/* Divider: ÜTS Bilgileri */}
+                          <div style={{ margin: '4px 0', textAlign: 'center', position: 'relative' }}>
+                            <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                            <span style={{ position: 'relative', top: -9, background: '#fff', padding: '0 10px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-500)' }}>
+                              ÜTS Bilgileri
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: 12 }}>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>Takip Tipi</label>
+                              <select
+                                className="form-select"
+                                value={item.trackingType}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].trackingType = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              >
+                                <option value="Tekil (Seri Numaralı)">Tekil (Seri Numaralı)</option>
+                                <option value="Lot / Parti">Lot / Parti</option>
+                                <option value="Takipsiz">Takipsiz</option>
+                              </select>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>GTIN / Barkod</label>
+                              <input
+                                className="form-input"
+                                placeholder="13-14 haneli GTIN"
+                                value={item.gtin}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].gtin = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                                <span style={{ color: '#ef4444' }}>*</span> Seri Numaraları
+                              </label>
+                              <input
+                                className="form-input"
+                                placeholder="Seri no yaz + Enter — her seri no bir cihaz"
+                                value={item.serialInput}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].serialInput = e.target.value;
+                                  setPurItems(next);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && item.serialInput.trim()) {
+                                    e.preventDefault();
+                                    const next = [...purItems];
+                                    next[idx].serials = [...next[idx].serials, item.serialInput.trim()];
+                                    next[idx].serialInput = '';
+                                    setPurItems(next);
+                                  }
+                                }}
+                              />
+                              <div style={{ fontSize: '0.72rem', color: 'var(--gray-400)', marginTop: 2 }}>
+                                {item.serials.length} cihaz — her seri no ayrı kayıt olur, miktar otomatik
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>Üretim Tarihi</label>
+                              <input
+                                type="date"
+                                className="form-input"
+                                value={item.mfgDate}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].mfgDate = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>Son Kullanma Tarihi</label>
+                              <input
+                                type="date"
+                                className="form-input"
+                                value={item.expDate}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].expDate = e.target.value;
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Divider: Fiyatlandırma */}
+                          <div style={{ margin: '4px 0', textAlign: 'center', position: 'relative' }}>
+                            <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                            <span style={{ position: 'relative', top: -9, background: '#fff', padding: '0 10px', fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-500)' }}>
+                              Fiyatlandırma
+                            </span>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>Miktar</label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={item.serials.length || 1}
+                                readOnly
+                                style={{ background: '#f8fafc', color: '#ef4444', fontWeight: 600 }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                                <span style={{ color: '#ef4444' }}>*</span> Alış Fiyatı (Birim)
+                              </label>
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  type="number"
+                                  className="form-input"
+                                  value={item.unitPrice}
+                                  onChange={(e) => {
+                                    const next = [...purItems];
+                                    next[idx].unitPrice = Number(e.target.value);
+                                    setPurItems(next);
+                                  }}
+                                  style={{ paddingRight: 20 }}
+                                />
+                                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.78rem' }}>₺</span>
+                              </div>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>İskonto %</label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={item.discount}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].discount = Number(e.target.value);
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>KDV %</label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={item.vat}
+                                onChange={(e) => {
+                                  const next = [...purItems];
+                                  next[idx].vat = Number(e.target.value);
+                                  setPurItems(next);
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Line Calculations summary bar */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', background: '#fafafa', padding: '8px 12px', borderRadius: 6, color: 'var(--gray-700)' }}>
+                            <span>Ara Toplam: <strong>{lineSubtotal.toFixed(2)} ₺</strong></span>
+                            <span>İskonto: <strong>{lineDiscount.toFixed(2)} ₺</strong></span>
+                            <span>KDV: <strong>{lineVat.toFixed(2)} ₺</strong></span>
+                            <span style={{ color: '#16a34a', fontWeight: 700 }}>Toplam: {lineTotal.toFixed(2)} ₺</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Dashed Add Product Button */}
+                  <button
+                    type="button"
+                    onClick={() => setPurItems([...purItems, {
+                      name: '',
+                      category: 'Cihaz',
+                      brand: '',
+                      model: '',
+                      deviceType: '',
+                      salePrice: 0,
+                      isAssigned: true,
+                      trackingType: 'Tekil (Seri Numaralı)',
+                      gtin: '',
+                      serials: [],
+                      serialInput: '',
+                      mfgDate: '',
+                      expDate: '',
+                      unitPrice: 0,
+                      discount: 0,
+                      vat: 0
+                    }])}
+                    style={{
+                      border: '2px dashed var(--gray-300)',
+                      background: '#fff',
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      color: 'var(--gray-700)',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                  >
+                    + Ürün Ekle
+                  </button>
+                </div>
+              </div>
+
+              {/* Ödeme Bilgileri */}
+              <div>
+                <div style={{ margin: '8px 0 14px', textAlign: 'center', position: 'relative' }}>
+                  <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                  <span style={{ position: 'relative', top: -10, background: '#fff', padding: '0 14px', fontSize: '0.86rem', fontWeight: 600, color: 'var(--gray-700)' }}>
+                    Ödeme Bilgileri
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                      <span style={{ color: '#ef4444' }}>*</span> Kasa
+                    </label>
+                    <select
+                      className="form-select"
+                      value={purCashId}
+                      onChange={(e) => setPurCashId(e.target.value)}
+                    >
+                      <option value="">Kasa seçin</option>
+                      <option value="ana">Ana Kasa</option>
+                      <option value="kadikoy">Kadıköy Kasa</option>
+                      <option value="besiktas">Beşiktaş Kasa</option>
+                      <option value="banka">Banka - Garanti</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Ödeme Yöntemi</label>
+                    <select
+                      className="form-select"
+                      value={purPaymentMethodModal}
+                      onChange={(e) => setPurPaymentMethodModal(e.target.value)}
+                    >
+                      <option value="Nakit">Nakit</option>
+                      <option value="Havale / EFT">Havale / EFT</option>
+                      <option value="Kredi Kartı">Kredi Kartı</option>
+                      <option value="Çek">Çek</option>
+                      <option value="Açık Hesap">Açık Hesap</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Ödenen Tutar</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={purPaidAmountModal}
+                        onChange={(e) => setPurPaidAmountModal(Number(e.target.value))}
+                        style={{ paddingRight: 24 }}
+                      />
+                      <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.82rem' }}>₺</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Light Yellow Warning Callout Box */}
+              <div style={{
+                background: '#fefce8',
+                border: '1px solid #fef08a',
+                borderRadius: 8,
+                padding: '14px 16px',
+                display: 'flex',
+                gap: 12,
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#eab308', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.78rem', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>🔌</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#854d0e', marginBottom: 2 }}>ÜTS Alma Bildirimi (İsteğe Bağlı)</div>
+                    <div style={{ fontSize: '0.78rem', color: '#a16207' }}>ÜTS entegrasyonu aktif değil. Alış işlemi yapılabilir ancak ÜTS bildirimi gönderilmeyecektir.</div>
+                  </div>
+                </div>
+                <div
+                  onClick={() => setPurUtsToggle(!purUtsToggle)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 44,
+                      height: 22,
+                      borderRadius: 11,
+                      background: purUtsToggle ? '#0284c7' : '#cbd5e1',
+                      position: 'relative',
+                      transition: 'background 0.2s ease',
+                      flexShrink: 0
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: '50%',
+                        background: '#fff',
+                        position: 'absolute',
+                        top: 2,
+                        left: purUtsToggle ? 24 : 2,
+                        transition: 'left 0.2s ease',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--gray-500)' }}>
+                    {purUtsToggle ? 'Açık' : 'Kapalı'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Total Summary Bar Card */}
+              <div style={{
+                border: '1px solid var(--gray-200)',
+                borderRadius: 8,
+                padding: '16px 20px',
+                background: '#fff',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr 1.2fr',
+                gap: 16,
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Genel Toplam</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
+                    {purItems.reduce((sum, item) => {
+                      const sub = item.unitPrice * (item.serials.length || 1);
+                      const disc = sub * (item.discount / 100);
+                      const vat = (sub - disc) * (item.vat / 100);
+                      return sum + (sub - disc + vat);
+                    }, 0).toFixed(2)} ₺
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Ödenen</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0284c7' }}>
+                    {purPaidAmountModal.toFixed(2)} ₺
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Kalan Borç</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
+                    {Math.max(0, purItems.reduce((sum, item) => {
+                      const sub = item.unitPrice * (item.serials.length || 1);
+                      const disc = sub * (item.discount / 100);
+                      const vat = (sub - disc) * (item.vat / 100);
+                      return sum + (sub - disc + vat);
+                    }, 0) - purPaidAmountModal).toFixed(2)} ₺
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--gray-400)' }}>
+                  Tedarikçiye ödenecek tutar
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setPurchaseModalSupplier(null)}
+                style={{ padding: '8px 20px', borderRadius: 6 }}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  addToast({ type: 'success', message: `${purchaseModalSupplier.companyName} için alış faturası kaydedildi ve stok eklendi.` });
+                  setPurchaseModalSupplier(null);
+                }}
+                style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+              >
+                Ürün ve Alışı Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Satış / Verme Modal */}
+      {saleModalSupplier && (
+        <div className="modal-overlay" onClick={() => setSaleModalSupplier(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 740, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--gray-200)' }}>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--gray-900)' }}>
+                Satış / Verme - {saleModalSupplier.companyName}
+              </span>
+              <button className="modal-close" onClick={() => setSaleModalSupplier(null)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Ürünler Section */}
+              <div>
+                <div style={{ margin: '4px 0 14px', textAlign: 'center', position: 'relative' }}>
+                  <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                  <span style={{ position: 'relative', top: -10, background: '#fff', padding: '0 14px', fontSize: '0.86rem', fontWeight: 600, color: 'var(--gray-700)' }}>
+                    Ürünler
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {saleItems.map((item, idx) => {
+                    const sub = item.unitPrice * item.qty;
+                    const disc = sub * (item.discount / 100);
+                    const vat = (sub - disc) * (item.vat / 100);
+                    const tot = sub - disc + vat;
+
+                    return (
+                      <div key={idx} style={{ border: '1px solid var(--gray-200)', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+                        <div style={{ padding: '8px 14px', background: '#fafafa', borderBottom: '1px solid var(--gray-200)', fontSize: '0.84rem', fontWeight: 600, color: 'var(--gray-700)', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Ürün {idx + 1}</span>
+                          {saleItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setSaleItems(saleItems.filter((_, i) => i !== idx))}
+                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.78rem' }}
+                            >
+                              Kaldır
+                            </button>
+                          )}
+                        </div>
+
+                        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Ürün / Cihaz</label>
+                            <input
+                              className="form-input"
+                              placeholder="Cihaz/ürün seçin — birden fazla seçebilirsiniz"
+                              value={item.productId}
+                              onChange={(e) => {
+                                const next = [...saleItems];
+                                next[idx].productId = e.target.value;
+                                setSaleItems(next);
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>Miktar</label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={item.qty}
+                                onChange={(e) => {
+                                  const next = [...saleItems];
+                                  next[idx].qty = Number(e.target.value);
+                                  setSaleItems(next);
+                                }}
+                                min={1}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>Birim Fiyat</label>
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  type="number"
+                                  className="form-input"
+                                  value={item.unitPrice}
+                                  onChange={(e) => {
+                                    const next = [...saleItems];
+                                    next[idx].unitPrice = Number(e.target.value);
+                                    setSaleItems(next);
+                                  }}
+                                  style={{ paddingRight: 20 }}
+                                />
+                                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.78rem' }}>₺</span>
+                              </div>
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>İskonto %</label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={item.discount}
+                                onChange={(e) => {
+                                  const next = [...saleItems];
+                                  next[idx].discount = Number(e.target.value);
+                                  setSaleItems(next);
+                                }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>KDV %</label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                value={item.vat}
+                                onChange={(e) => {
+                                  const next = [...saleItems];
+                                  next[idx].vat = Number(e.target.value);
+                                  setSaleItems(next);
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', background: '#fafafa', padding: '8px 12px', borderRadius: 6, color: 'var(--gray-700)' }}>
+                            <span>Ara Toplam: <strong>{sub.toFixed(2)} ₺</strong></span>
+                            <span>İskonto: <strong>{disc.toFixed(2)} ₺</strong></span>
+                            <span>KDV: <strong>{vat.toFixed(2)} ₺</strong></span>
+                            <span style={{ color: '#16a34a', fontWeight: 700 }}>Toplam: {tot.toFixed(2)} ₺</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Dashed Add Product Button */}
+                  <button
+                    type="button"
+                    onClick={() => setSaleItems([...saleItems, { productId: '', qty: 1, unitPrice: 0, discount: 0, vat: 0 }])}
+                    style={{
+                      border: '2px dashed var(--gray-300)',
+                      background: '#fff',
+                      borderRadius: 8,
+                      padding: '10px 16px',
+                      color: 'var(--gray-700)',
+                      fontSize: '0.86rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                  >
+                    + Ürün Ekle
+                  </button>
+                </div>
+              </div>
+
+              {/* Ödeme Bilgileri */}
+              <div>
+                <div style={{ margin: '8px 0 14px', textAlign: 'center', position: 'relative' }}>
+                  <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                  <span style={{ position: 'relative', top: -10, background: '#fff', padding: '0 14px', fontSize: '0.86rem', fontWeight: 600, color: 'var(--gray-700)' }}>
+                    Ödeme Bilgileri
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                      <span style={{ color: '#ef4444' }}>*</span> Kasa
+                    </label>
+                    <select
+                      className="form-select"
+                      value={saleCashId}
+                      onChange={(e) => setSaleCashId(e.target.value)}
+                    >
+                      <option value="">Kasa seçin</option>
+                      <option value="ana">Ana Kasa</option>
+                      <option value="kadikoy">Kadıköy Kasa</option>
+                      <option value="besiktas">Beşiktaş Kasa</option>
+                      <option value="banka">Banka - Garanti</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Ödeme Yöntemi</label>
+                    <select
+                      className="form-select"
+                      value={salePaymentMethod}
+                      onChange={(e) => setSalePaymentMethod(e.target.value)}
+                    >
+                      <option value="Nakit">Nakit</option>
+                      <option value="Havale / EFT">Havale / EFT</option>
+                      <option value="Kredi Kartı">Kredi Kartı</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>Peşin Tahsilat Tutarı</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={saleCollectedAmount}
+                        onChange={(e) => setSaleCollectedAmount(Number(e.target.value))}
+                        style={{ paddingRight: 24 }}
+                      />
+                      <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.82rem' }}>₺</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notlar */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>Notlar</label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  placeholder="Ek notlar (opsiyonel)"
+                  value={saleNotes}
+                  onChange={(e) => setSaleNotes(e.target.value)}
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Total Summary Bar Card */}
+              <div style={{
+                border: '1px solid var(--gray-200)',
+                borderRadius: 8,
+                padding: '16px 20px',
+                background: '#fff',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr 1.2fr',
+                gap: 16,
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Genel Toplam</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
+                    {saleItems.reduce((sum, item) => {
+                      const sub = item.unitPrice * item.qty;
+                      const disc = sub * (item.discount / 100);
+                      const vat = (sub - disc) * (item.vat / 100);
+                      return sum + (sub - disc + vat);
+                    }, 0).toFixed(2)} ₺
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Tahsil Edilen</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0284c7' }}>
+                    {saleCollectedAmount.toFixed(2)} ₺
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', marginBottom: 4 }}>Kalan Alacak</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#16a34a' }}>
+                    {Math.max(0, saleItems.reduce((sum, item) => {
+                      const sub = item.unitPrice * item.qty;
+                      const disc = sub * (item.discount / 100);
+                      const vat = (sub - disc) * (item.vat / 100);
+                      return sum + (sub - disc + vat);
+                    }, 0) - saleCollectedAmount).toFixed(2)} ₺
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--gray-400)' }}>
+                  Firmadan tahsil edilecek tutar
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSaleModalSupplier(null)}
+                style={{ padding: '8px 20px', borderRadius: 6 }}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  addToast({ type: 'success', message: `${saleModalSupplier.companyName} için ürün çıkış / satış kaydı oluşturuldu.` });
+                  setSaleModalSupplier(null);
+                }}
+                style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+              >
+                Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tahsilat / Tediye Modal */}
+      {paymentModalSupplier && (
+        <div className="modal-overlay" onClick={() => setPaymentModalSupplier(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, width: '92%', borderRadius: 12, padding: '24px 28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--gray-900)' }}>
+                Tahsilat/Tediye - {paymentModalSupplier.companyName}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPaymentModalSupplier(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: 'var(--gray-400)', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              addToast({ type: 'success', message: `${paymentModalSupplier.companyName} için ${payProcessType.startsWith('Tediye') ? 'Tediye (Ödeme)' : 'Tahsilat'} işlemi kaydedildi.` });
+              setPaymentModalSupplier(null);
+            }} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* 1. İşlem Tipi */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> İşlem Tipi
+                </label>
+                <select
+                  className="form-select"
+                  value={payProcessType}
+                  onChange={(e) => setPayProcessType(e.target.value)}
+                >
+                  <option value="Tediye (Tedarikçiye Ödeme - Para Çıkışı)">Tediye (Tedarikçiye Ödeme - Para Çıkışı)</option>
+                  <option value="Tahsilat (Tedarikçiden Alacak - Para Girişi)">Tahsilat (Tedarikçiden Alacak - Para Girişi)</option>
+                </select>
+              </div>
+
+              {/* 2. Alış Faturası */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Alış Faturası
+                </label>
+                <select
+                  className="form-select"
+                  value={payInvoiceId}
+                  onChange={(e) => setPayInvoiceId(e.target.value)}
+                >
+                  <option value="">Ödeme yapılacak alış faturasını seçin</option>
+                  {paymentModalSupplier.purchases.map(p => (
+                    <option key={p.id} value={p.id}>{p.invoiceNo} - {p.date} ({p.total} ₺)</option>
+                  ))}
+                  <option value="serbest">Faturasız Serbest Ödeme</option>
+                </select>
+              </div>
+
+              {/* 3. Tutar */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>
+                  <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Tutar
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="Tutar"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                    style={{ paddingRight: 24 }}
+                    required
+                  />
+                  <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.82rem' }}>₺</span>
+                </div>
+              </div>
+
+              {/* 4. Ödeme Yöntemi & Kasa */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 600 }}>
+                    <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Ödeme Yöntemi
+                  </label>
+                  <select
+                    className="form-select"
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value)}
+                    required
+                  >
+                    <option value="">Ödeme yöntemi</option>
+                    <option value="Nakit">Nakit</option>
+                    <option value="Havale / EFT">Havale / EFT</option>
+                    <option value="Kredi Kartı">Kredi Kartı</option>
+                    <option value="Çek">Çek</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 600 }}>
+                    <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Kasa
+                  </label>
+                  <select
+                    className="form-select"
+                    value={payCashId}
+                    onChange={(e) => setPayCashId(e.target.value)}
+                    required
+                  >
+                    <option value="">Kasa seçin</option>
+                    <option value="ana">Ana Kasa</option>
+                    <option value="kadikoy">Kadıköy Kasa</option>
+                    <option value="besiktas">Beşiktaş Kasa</option>
+                    <option value="banka">Banka - Garanti</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 5. Açıklama */}
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 600 }}>Açıklama</label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  placeholder="Açıklama (opsiyonel)"
+                  value={payDescription}
+                  onChange={(e) => setPayDescription(e.target.value)}
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setPaymentModalSupplier(null)}
+                  style={{ padding: '8px 20px', borderRadius: 6 }}
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+                >
+                  Kaydet
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Tedarikçiye İade Modal */}
+      {returnModalSupplier && (
+        <div className="modal-overlay" onClick={() => setReturnModalSupplier(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580, width: '92%', borderRadius: 12, padding: '24px 28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: 'var(--gray-900)' }}>
+                Tedarikçiye İade - {returnModalSupplier.companyName}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReturnModalSupplier(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: 'var(--gray-400)', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Blue Callout Box */}
+            <div style={{
+              background: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              borderRadius: 8,
+              padding: '16px 18px',
+              display: 'flex',
+              gap: 12,
+              alignItems: 'flex-start',
+              marginBottom: 24
+            }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>i</div>
+              <div style={{ fontSize: '0.81rem', lineHeight: 1.5 }}>
+                <div style={{ fontWeight: 700, color: '#0c4a6e', fontSize: '0.88rem', marginBottom: 4 }}>
+                  Tedarikçiye iade edilecek alış faturasını seçin
+                </div>
+                <div style={{ fontWeight: 600, color: '#0369a1', marginBottom: 6 }}>
+                  Seçtiğiniz faturadaki ürünler stoktan düşürülecek ve tedarikçiye iade kaydı oluşturulacaktır.
+                </div>
+                <div style={{ color: '#64748b', fontSize: '0.79rem' }}>
+                  Bir sonraki adımda UTS (Ürün Takip Sistemi) bildirim seçeneklerini göreceksiniz. UTS bildirimi sayesinde ürünün firma stoğundan çıkarak tedarikçiye geri döndüğü resmi olarak kayıt altına alınır.
+                </div>
+              </div>
+            </div>
+
+            {/* Empty State / Invoices list */}
+            {returnModalSupplier.purchases.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '30px 20px 20px', textAlign: 'center' }}>
+                {/* Tray & Document Illustration */}
+                <div style={{ width: 64, height: 64, position: 'relative', marginBottom: 14 }}>
+                  <div style={{ width: 44, height: 44, background: '#e2e8f0', borderRadius: 6, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 4, padding: 8 }}>
+                    <div style={{ height: 4, background: '#cbd5e1', borderRadius: 2, width: '80%' }} />
+                    <div style={{ height: 4, background: '#cbd5e1', borderRadius: 2, width: '60%' }} />
+                    <div style={{ height: 4, background: '#cbd5e1', borderRadius: 2, width: '90%' }} />
+                  </div>
+                  <div style={{ position: 'absolute', top: -6, right: 4, width: 20, height: 16, background: '#cbd5e1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                    <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#94a3b8' }} />
+                    <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#94a3b8' }} />
+                    <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#94a3b8' }} />
+                  </div>
+                  <div style={{ position: 'absolute', bottom: 6, left: 6, right: 6, height: 16, background: '#cbd5e1', borderRadius: '0 0 6px 6px' }} />
+                </div>
+                <div style={{ fontSize: '0.86rem', color: 'var(--gray-500)', fontWeight: 500 }}>
+                  İade edilebilecek alış faturası bulunamadı
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {returnModalSupplier.purchases.map(p => (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      addToast({ type: 'success', message: `${p.invoiceNo} numaralı alış faturası için iade talebi oluşturuldu.` });
+                      setReturnModalSupplier(null);
+                    }}
+                    style={{
+                      border: '1px solid var(--gray-200)',
+                      borderRadius: 8,
+                      padding: 12,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      background: '#fff'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--gray-900)' }}>Fatura No: {p.invoiceNo}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Tarih: {p.date} · Yöntem: {p.paymentMethod}</div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: '#0284c7', fontSize: '0.9rem' }}>
+                      {formatCurrency(p.total)} ➔ İade Et
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Hareketler Modal */}
+      {movementsModalSupplier && (
+        <div className="modal-overlay" onClick={() => setMovementsModalSupplier(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 840, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 12 }}>
+            {/* Modal Header */}
+            <div className="modal-header" style={{ padding: '16px 24px 0', borderBottom: 'none' }}>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--gray-900)' }}>
+                Hareketler - {movementsModalSupplier.companyName}
+              </span>
+              <button className="modal-close" onClick={() => setMovementsModalSupplier(null)}>✕</button>
+            </div>
+
+            {/* Sub-Header Tabs */}
+            <div style={{ padding: '12px 24px 0', borderBottom: '1px solid var(--gray-200)', display: 'flex', gap: 20 }}>
+              <button
+                type="button"
+                onClick={() => setMovementsTab('kasa')}
+                style={{
+                  padding: '8px 0',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: movementsTab === 'kasa' ? '2px solid #0284c7' : '2px solid transparent',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  color: movementsTab === 'kasa' ? '#0284c7' : 'var(--gray-600)',
+                  cursor: 'pointer'
+                }}
+              >
+                Kasa Hareketleri
+              </button>
+              <button
+                type="button"
+                onClick={() => setMovementsTab('alis')}
+                style={{
+                  padding: '8px 0',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: movementsTab === 'alis' ? '2px solid #0284c7' : '2px solid transparent',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  color: movementsTab === 'alis' ? '#0284c7' : 'var(--gray-600)',
+                  cursor: 'pointer'
+                }}
+              >
+                Alış Hareketleri
+              </button>
+              <button
+                type="button"
+                onClick={() => setMovementsTab('satis')}
+                style={{
+                  padding: '8px 0',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: movementsTab === 'satis' ? '2px solid #0284c7' : '2px solid transparent',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  color: movementsTab === 'satis' ? '#0284c7' : 'var(--gray-600)',
+                  cursor: 'pointer'
+                }}
+              >
+                Satış Hareketleri
+              </button>
+              <button
+                type="button"
+                onClick={() => setMovementsTab('verilen')}
+                style={{
+                  padding: '8px 0',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: movementsTab === 'verilen' ? '2px solid #0284c7' : '2px solid transparent',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  color: movementsTab === 'verilen' ? '#0284c7' : 'var(--gray-600)',
+                  cursor: 'pointer'
+                }}
+              >
+                Verilen Cihazlar
+              </button>
+              <button
+                type="button"
+                onClick={() => setMovementsTab('gelen')}
+                style={{
+                  padding: '8px 0',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: movementsTab === 'gelen' ? '2px solid #0284c7' : '2px solid transparent',
+                  fontWeight: 600,
+                  fontSize: '0.86rem',
+                  color: movementsTab === 'gelen' ? '#0284c7' : 'var(--gray-600)',
+                  cursor: 'pointer'
+                }}
+              >
+                Gelen Cihazlar
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '16px 24px 30px', overflowY: 'auto' }}>
+              {/* Table Header */}
+              <div style={{ background: '#fafafa', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--gray-200)', marginBottom: 20 }}>
+                {movementsTab === 'kasa' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr 1fr 1fr 1.2fr 1fr 1.5fr', fontSize: '0.82rem', fontWeight: 700, color: '#0284c7' }}>
+                    <div>İşlem No</div>
+                    <div>Tarih ⇅</div>
+                    <div>İşlem Tipi</div>
+                    <div>Kaynak</div>
+                    <div>Tutar ⇅</div>
+                    <div>Ödeme Yöntemi</div>
+                    <div>Kasa</div>
+                    <div>Açıklama</div>
+                  </div>
+                )}
+                {movementsTab === 'alis' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr 1fr 1fr 1fr', fontSize: '0.82rem', fontWeight: 700, color: '#0284c7' }}>
+                    <div>Fatura No</div>
+                    <div>Tarih ⇅</div>
+                    <div>Tedarikçi</div>
+                    <div>Tutar ⇅</div>
+                    <div>Ödeme Yöntemi</div>
+                    <div>Ödeme Durumu</div>
+                  </div>
+                )}
+                {movementsTab === 'satis' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr 1fr 1fr 1fr', fontSize: '0.82rem', fontWeight: 700, color: '#0284c7' }}>
+                    <div>Fatura/İşlem No</div>
+                    <div>Tarih ⇅</div>
+                    <div>Müşteri/Firma</div>
+                    <div>Tutar ⇅</div>
+                    <div>Ödeme Yöntemi</div>
+                    <div>Durum</div>
+                  </div>
+                )}
+                {movementsTab === 'verilen' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1fr 1.5fr 1fr 1fr', fontSize: '0.82rem', fontWeight: 700, color: '#0284c7' }}>
+                    <div>Cihaz Adı</div>
+                    <div>Seri No</div>
+                    <div>Tarih ⇅</div>
+                    <div>Verilen Taraf</div>
+                    <div>Tutar ⇅</div>
+                    <div>Durum</div>
+                  </div>
+                )}
+                {movementsTab === 'gelen' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1fr 1.5fr 1.2fr 1fr', fontSize: '0.82rem', fontWeight: 700, color: '#0284c7' }}>
+                    <div>Cihaz Adı</div>
+                    <div>Seri No</div>
+                    <div>Tarih ⇅</div>
+                    <div>Geliş Sebebi</div>
+                    <div>Fatura No</div>
+                    <div>Durum</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Empty State Tray Graphic */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px 20px', textAlign: 'center' }}>
+                <div style={{ width: 56, height: 44, background: '#f1f5f9', border: '2px solid #e2e8f0', borderRadius: '4px 4px 8px 8px', position: 'relative', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 28, height: 6, background: '#cbd5e1', borderRadius: 3, position: 'absolute', top: 6 }} />
+                </div>
+                <div style={{ fontSize: '0.84rem', color: 'var(--gray-400)', fontWeight: 500 }}>
+                  Veri Yok
+                </div>
+              </div>
             </div>
           </div>
         </div>
