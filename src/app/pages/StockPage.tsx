@@ -14,6 +14,9 @@ export default function StockPage() {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const [activeAddTab, setActiveAddTab] = useState<'info' | 'docs'>('info');
+  const [activeEditTab, setActiveEditTab] = useState<'info' | 'docs'>('info');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [historyModalItem, setHistoryModalItem] = useState<StockItem | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -348,11 +351,11 @@ export default function StockPage() {
                     </td>
                     <td data-label="İşlemler">
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        {/* 1. Geçmiş / Log Button */}
+                        {/* 1. Geçmiş / Hareketler Button */}
                         <button
                           type="button"
                           title="Hareket / İşlem Geçmişi"
-                          onClick={() => addToast({ type: 'info', message: `${item.name} (${item.serialNo}) stok işlem geçmişi görüntülendi.` })}
+                          onClick={() => setHistoryModalItem(item)}
                           style={{
                             width: 30,
                             height: 30,
@@ -455,37 +458,119 @@ export default function StockPage() {
                           </svg>
                         </button>
 
-                        {/* 5. Sil Button (Red Border) */}
-                        <button
-                          type="button"
-                          title="Ürünü Sil"
-                          onClick={() => {
-                            if (confirm(`${item.name} (${item.serialNo}) ürününü stoktan silmek istediğinize emin misiniz?`)) {
-                              deleteStockItem(item.id);
-                              addToast({ type: 'success', message: `${item.name} stoğundan başarıyla kaldırıldı.` });
-                            }
-                          }}
-                          style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: 6,
-                            border: '1px solid #fca5a5',
-                            background: '#fff',
-                            color: '#ef4444',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            padding: 0
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            <line x1="10" y1="11" x2="10" y2="17" />
-                            <line x1="14" y1="11" x2="14" y2="17" />
-                          </svg>
-                        </button>
+                        {/* 5. Sil Button (Red Border & Inline Popover Confirmation) */}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            type="button"
+                            title="Ürünü Sil"
+                            onClick={() => setDeleteConfirmId(deleteConfirmId === item.id ? null : item.id)}
+                            style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 6,
+                              border: deleteConfirmId === item.id ? '1.5px solid #0284c7' : '1px solid #fca5a5',
+                              background: '#fff',
+                              color: '#ef4444',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                          </button>
+
+                          {deleteConfirmId === item.id && (
+                            <div style={{
+                              position: 'absolute',
+                              bottom: '100%',
+                              right: 0,
+                              marginBottom: 8,
+                              background: '#fff',
+                              borderRadius: 8,
+                              padding: '12px 14px',
+                              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                              border: '1px solid var(--gray-200)',
+                              zIndex: 50,
+                              whiteSpace: 'nowrap',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 10
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 500, color: 'var(--gray-800)' }}>
+                                <span style={{
+                                  width: 18,
+                                  height: 18,
+                                  borderRadius: '50%',
+                                  background: '#f59e0b',
+                                  color: '#fff',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700
+                                }}>!</span>
+                                Silmek istediğinize emin misiniz?
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmId(null)}
+                                  style={{
+                                    padding: '4px 12px',
+                                    borderRadius: 6,
+                                    border: '1px solid var(--gray-300)',
+                                    background: '#fff',
+                                    fontSize: '0.8rem',
+                                    color: 'var(--gray-700)',
+                                    cursor: 'pointer',
+                                    fontWeight: 500
+                                  }}
+                                >
+                                  Hayır
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    deleteStockItem(item.id);
+                                    addToast({ type: 'success', message: `${item.name} stoğundan kaldırıldı.` });
+                                    setDeleteConfirmId(null);
+                                  }}
+                                  style={{
+                                    padding: '4px 14px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    background: '#0284c7',
+                                    color: '#fff',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  Evet
+                                </button>
+                              </div>
+
+                              {/* Arrow */}
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                right: 10,
+                                width: 0,
+                                height: 0,
+                                borderLeft: '6px solid transparent',
+                                borderRight: '6px solid transparent',
+                                borderTop: '6px solid #fff'
+                              }} />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -959,188 +1044,506 @@ export default function StockPage() {
       {/* Edit Stock Modal */}
       {showEditModal && editingItem && (
         <div className="modal-overlay" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
-            <div className="modal-header">
-              <span className="modal-title">Ürün Düzenle — {editingItem.name}</span>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 740, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header" style={{ paddingBottom: 12 }}>
+              <span className="modal-title" style={{ fontSize: '1.15rem', fontWeight: 700 }}>Ürün Düzenle</span>
               <button className="modal-close" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>✕</button>
             </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Ürün Adı</label>
-                <input
-                  className="form-input"
-                  value={editingItem.name}
-                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Kategori</label>
-                  <select
-                    className="form-select"
-                    value={editingItem.category}
-                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
-                  >
-                    <optgroup label="Cihazlar">
-                      <option value="Cihaz">Cihaz</option>
-                      <option value="İkinci El">İkinci El</option>
-                      <option value="Yenilenmiş">Yenilenmiş</option>
-                      <option value="Receiver (Hoparlörler)">Receiver (Hoparlörler)</option>
-                    </optgroup>
-                    <optgroup label="Kalıp ve Kulaklık">
-                      <option value="Kulak Kalıpları">Kulak Kalıpları</option>
-                      <option value="Prop / Dome">Prop / Dome</option>
-                      <option value="İnce Tüp ve Hortumlar">İnce Tüp ve Hortumlar</option>
-                    </optgroup>
-                    <optgroup label="Sarf ve Bakım">
-                      <option value="Sarf Malzeme">Sarf Malzeme</option>
-                      <option value="Piller">Piller</option>
-                      <option value="Filtreler (Wax Guard)">Filtreler (Wax Guard)</option>
-                      <option value="Temizlik ve Bakım Ürünleri">Temizlik ve Bakım Ürünleri</option>
-                      <option value="Yedek Parçalar">Yedek Parçalar</option>
-                    </optgroup>
-                    <optgroup label="Aksesuar ve Ekipman">
-                      <option value="Aksesuar">Aksesuar</option>
-                      <option value="Şarj Cihazları">Şarj Cihazları</option>
-                      <option value="Kablosuz Aksesuarlar">Kablosuz Aksesuarlar</option>
-                      <option value="Mikrofonlar">Mikrofonlar</option>
-                      <option value="Bağlantı Cihazları (TV, Bluetooth vb.)">Bağlantı Cihazları (TV, Bluetooth vb.)</option>
-                      <option value="Programlama Ekipmanları">Programlama Ekipmanları</option>
-                    </optgroup>
-                    <optgroup label="Diğer">
-                      <option value="Diğer">Diğer</option>
-                      <option value="UTS Dışı">UTS Dışı</option>
-                    </optgroup>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Marka</label>
-                  <input
-                    className="form-input"
-                    value={editingItem.brand}
-                    onChange={(e) => setEditingItem({ ...editingItem, brand: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Seri No</label>
-                  <input
-                    className="form-input"
-                    value={editingItem.serialNo}
-                    onChange={(e) => setEditingItem({ ...editingItem, serialNo: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">ÜTS Durumu</label>
-                  <select
-                    className="form-select"
-                    value={editingItem.utsStatus}
-                    onChange={(e) => setEditingItem({ ...editingItem, utsStatus: e.target.value as StockItem['utsStatus'] })}
-                  >
-                    <option>Bekliyor</option>
-                    <option>Bildirildi</option>
-                    <option>Hata</option>
-                    <option>Gerekli Değil</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-row-3">
-                <div className="form-group">
-                  <label className="form-label">Adet</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={editingItem.quantity}
-                    onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Kritik Seviye</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={editingItem.criticalLevel}
-                    onChange={(e) => setEditingItem({ ...editingItem, criticalLevel: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Lokasyon / Şube</label>
-                  <select
-                    className="form-select"
-                    value={editingItem.branch}
-                    onChange={(e) => setEditingItem({ ...editingItem, branch: e.target.value as StockItem['branch'] })}
-                  >
-                    <option>Merkez 1 - Kadıköy</option>
-                    <option>Merkez 2 - Beşiktaş</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-row-3">
-                <div className="form-group">
-                  <label className="form-label">Alış Fiyatı (₺)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={editingItem.purchasePrice || Math.round(editingItem.price * 0.1)}
-                    onChange={(e) => setEditingItem({ ...editingItem, purchasePrice: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Satış Fiyatı (₺)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={editingItem.price}
-                    onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Cihaz Statüsü</label>
-                  <select
-                    className="form-select"
-                    value={editingItem.status}
-                    onChange={(e) => setEditingItem({ ...editingItem, status: e.target.value as StockItem['status'] })}
-                  >
-                    <option>Stokta</option>
-                    <option>Hastaya Ayrıldı</option>
-                    <option>Satıldı</option>
-                    <option>Serviste</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* Yasal ÜTS / GLN / MERSİS Bilgileri */}
-              <div className="form-row-3" style={{ marginTop: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">ÜTS Kurum No (UIK)</label>
-                  <input
-                    className="form-input"
-                    value={editingItem.utsKurumNo || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, utsKurumNo: e.target.value })}
-                  />
+            {/* Modal Navigation Tabs */}
+            <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--gray-200)', padding: '0 24px' }}>
+              <button
+                type="button"
+                onClick={() => setActiveEditTab('info')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '10px 0',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  color: activeEditTab === 'info' ? '#0284c7' : 'var(--gray-500)',
+                  borderBottom: activeEditTab === 'info' ? '2.5px solid #0284c7' : '2.5px solid transparent',
+                  cursor: 'pointer'
+                }}
+              >
+                Ürün Bilgileri
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveEditTab('docs')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '10px 0',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  color: activeEditTab === 'docs' ? '#0284c7' : 'var(--gray-500)',
+                  borderBottom: activeEditTab === 'docs' ? '2.5px solid #0284c7' : '2.5px solid transparent',
+                  cursor: 'pointer'
+                }}
+              >
+                Dökümanlar
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px' }}>
+              {activeEditTab === 'info' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Row 1: Ürün Adı & Kategori */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Ürün Adı
+                      </label>
+                      <input
+                        className="form-input"
+                        placeholder="Ürün Adı"
+                        value={editingItem.name}
+                        onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Kategori
+                      </label>
+                      <select
+                        className="form-select"
+                        value={editingItem.category}
+                        onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                      >
+                        <optgroup label="Cihazlar">
+                          <option value="Cihaz">Cihaz</option>
+                          <option value="İkinci El">İkinci El</option>
+                          <option value="Yenilenmiş">Yenilenmiş</option>
+                          <option value="Receiver (Hoparlörler)">Receiver (Hoparlörler)</option>
+                        </optgroup>
+                        <optgroup label="Kalıp ve Kulaklık">
+                          <option value="Kulak Kalıpları">Kulak Kalıpları</option>
+                          <option value="Prop / Dome">Prop / Dome</option>
+                          <option value="İnce Tüp ve Hortumlar">İnce Tüp ve Hortumlar</option>
+                        </optgroup>
+                        <optgroup label="Sarf ve Bakım">
+                          <option value="Sarf Malzeme">Sarf Malzeme</option>
+                          <option value="Piller">Piller</option>
+                          <option value="Filtreler (Wax Guard)">Filtreler (Wax Guard)</option>
+                          <option value="Temizlik ve Bakım Ürünleri">Temizlik ve Bakım Ürünleri</option>
+                          <option value="Yedek Parçalar">Yedek Parçalar</option>
+                        </optgroup>
+                        <optgroup label="Aksesuar ve Ekipman">
+                          <option value="Aksesuar">Aksesuar</option>
+                          <option value="Şarj Cihazları">Şarj Cihazları</option>
+                          <option value="Kablosuz Aksesuarlar">Kablosuz Aksesuarlar</option>
+                          <option value="Mikrofonlar">Mikrofonlar</option>
+                          <option value="Bağlantı Cihazları (TV, Bluetooth vb.)">Bağlantı Cihazları (TV, Bluetooth vb.)</option>
+                          <option value="Programlama Ekipmanları">Programlama Ekipmanları</option>
+                        </optgroup>
+                        <optgroup label="Diğer">
+                          <option value="Diğer">Diğer</option>
+                          <option value="UTS Dışı">UTS Dışı</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Marka, Model, SKU */}
+                  <div className="form-row-3">
+                    <div className="form-group">
+                      <label className="form-label">Marka</label>
+                      <input
+                        className="form-input"
+                        placeholder="Marka"
+                        value={editingItem.brand}
+                        onChange={(e) => setEditingItem({ ...editingItem, brand: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Model</label>
+                      <input
+                        className="form-input"
+                        placeholder="Model"
+                        value={editingItem.model}
+                        onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Ürün Kodu (SKU)</label>
+                      <input
+                        className="form-input"
+                        placeholder="SKU"
+                        value={editingItem.serialNo || '11'}
+                        onChange={(e) => setEditingItem({ ...editingItem, serialNo: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 3: Cihaz Tipi */}
+                  <div className="form-group">
+                    <label className="form-label">Cihaz Tipi</label>
+                    <select
+                      className="form-select"
+                      value={editingItem.category === 'Cihaz' ? 'Kulak Arkası (BTE)' : 'Kulak Arkası (BTE)'}
+                      onChange={() => {}}
+                    >
+                      <option value="Kulak Arkası (BTE)">Kulak Arkası (BTE)</option>
+                      <option value="Kulak Arkası (RIC)">Kulak Arkası (RIC)</option>
+                      <option value="Kulak İçi (ITE)">Kulak İçi (ITE)</option>
+                      <option value="Kulak İçi - Kanal (ITC)">Kulak İçi - Kanal (ITC)</option>
+                      <option value="Tam Kanal (CIC)">Tam Kanal (CIC)</option>
+                    </select>
+                  </div>
+
+                  {/* Row 4: Üretici & Tedarikçi */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Üretici/İthalatçı (Opsiyonel)
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="Üretici / İthalatçı firma">ⓘ</span>
+                      </label>
+                      <select className="form-select">
+                        <option value="">Üretici seçin</option>
+                        <option value="Phonak">Phonak Turkey</option>
+                        <option value="Oticon">Oticon İşitme A.Ş.</option>
+                        <option value="Signia">Signia Türkiye</option>
+                        <option value="Widex">Widex Medikal</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Tedarikçi (Opsiyonel)
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="Tedarikçi distribütör firma">ⓘ</span>
+                      </label>
+                      <select className="form-select">
+                        <option value="">Tedarikçi seçin</option>
+                        <option value="Ana Distribütör">Ana Distribütör</option>
+                        <option value="Yerel Depo">Yerel Depo</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 5: Fiyatlar & KDV */}
+                  <div className="form-row-3">
+                    <div className="form-group">
+                      <label className="form-label">Alış Fiyatı</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          className="form-input"
+                          value={editingItem.purchasePrice || Math.round(editingItem.price * 0.1)}
+                          onChange={(e) => setEditingItem({ ...editingItem, purchasePrice: Number(e.target.value) })}
+                          style={{ paddingRight: 28 }}
+                        />
+                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.88rem' }}>₺</span>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Satış Fiyatı</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="number"
+                          className="form-input"
+                          value={editingItem.price}
+                          onChange={(e) => setEditingItem({ ...editingItem, price: Number(e.target.value) })}
+                          style={{ paddingRight: 28 }}
+                        />
+                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.88rem' }}>₺</span>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">KDV Oranı %</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        defaultValue={15}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 6: Stok & Zimmet */}
+                  <div className="form-row-3">
+                    <div className="form-group">
+                      <label className="form-label">Mevcut Stok</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={editingItem.quantity}
+                        onChange={(e) => setEditingItem({ ...editingItem, quantity: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Minimum Stok Seviyesi</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={editingItem.criticalLevel}
+                        onChange={(e) => setEditingItem({ ...editingItem, criticalLevel: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Zimmetli mi?</label>
+                      <select
+                        className="form-select"
+                        value={editingItem.assignedPatientId ? 'Evet (Zimmetli)' : 'Evet (Zimmetli)'}
+                        onChange={() => {}}
+                      >
+                        <option value="Evet (Zimmetli)">Evet (Zimmetli)</option>
+                        <option value="Hayır (Zimmetsiz)">Hayır (Zimmetsiz)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Section Divider */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    margin: '8px 0 4px',
+                    color: 'var(--gray-700)',
+                    fontSize: '0.9rem',
+                    fontWeight: 700
+                  }}>
+                    <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+                    Ürün Kimlik Bilgileri
+                    <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+                  </div>
+
+                  {/* Info Callout Box */}
+                  <div style={{
+                    background: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: 8,
+                    padding: '12px 14px',
+                    display: 'flex',
+                    gap: 10,
+                    alignItems: 'flex-start'
+                  }}>
+                    <div style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: '#0284c7',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      marginTop: 1
+                    }}>
+                      i
+                    </div>
+                    <div style={{ fontSize: '0.81rem', color: '#0369a1', lineHeight: 1.45 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 2 }}>Bu alanlar zorunlu değil</div>
+                      Elle eklenen ürüne de seri no / GTIN girebilirsiniz. Bu bilgileri girmeniz ürünü ÜTS'ye BİLDİRMEZ — ÜTS bildirimi yalnızca ÜTS envanterinden gelen ürünlerde yapılır.
+                    </div>
+                  </div>
+
+                  {/* Row 7: ÜTS Takip Tipi & GTIN / Barkod */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: '#ef4444' }}>*</span> ÜTS Takip Tipi
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="ÜTS cihaz ve ürün seri numarası takip şekli">ⓘ</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={editingItem.utsStatus === 'Gerekli Değil' ? 'Takip Yok' : 'Takip Yok'}
+                        onChange={() => {}}
+                      >
+                        <option value="Tekil (Seri No ile Takip)">Tekil (Seri No ile Takip)</option>
+                        <option value="Lot (Parti No ile Takip)">Lot (Parti No ile Takip)</option>
+                        <option value="Takip Yok">Takip Yok</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        GTIN / Barkod (UNO)
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="Küresel Ticari Ürün Numarası (GTIN)">ⓘ</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.85rem' }}>║▌</span>
+                        <input
+                          className="form-input"
+                          placeholder="Örn: 05714880198904"
+                          defaultValue="05714880198904"
+                          style={{ paddingLeft: 34 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 8: Üretim Tarihi & Son Kullanma Tarihi */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Üretim Tarihi (URT)</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        defaultValue="2026-07-23"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Son Kullanma Tarihi (SKT)</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        defaultValue="2026-09-30"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">GLN Kodu</label>
-                  <input
-                    className="form-input"
-                    value={editingItem.gln || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, gln: e.target.value })}
-                  />
+              ) : (
+                /* Tab 2: Dökümanlar */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {[
+                    { id: 'tech', title: 'Teknik Döküman' },
+                    { id: 'manual', title: 'Kullanım Kılavuzu' },
+                    { id: 'cert', title: 'Sertifika' },
+                    { id: 'warranty', title: 'Garanti' },
+                    { id: 'other', title: 'Diğer' }
+                  ].map(doc => (
+                    <div key={doc.id} style={{
+                      border: '1px solid var(--gray-200)',
+                      borderRadius: 8,
+                      background: '#fff',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        padding: '10px 16px',
+                        borderBottom: '1px solid var(--gray-200)',
+                        fontSize: '0.86rem',
+                        fontWeight: 600,
+                        color: 'var(--gray-800)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="16" y1="13" x2="8" y2="13" />
+                          <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                        {doc.title}
+                      </div>
+                      <div style={{ padding: 12 }}>
+                        <div style={{
+                          border: '2px dashed #cbd5e1',
+                          borderRadius: 8,
+                          padding: '22px 16px',
+                          background: '#f8fafc',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 6,
+                          cursor: 'pointer'
+                        }}>
+                          <div style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 8,
+                            border: '1.5px solid #3b82f6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#3b82f6',
+                            background: '#eff6ff',
+                            marginBottom: 2
+                          }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                            </svg>
+                          </div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 500, color: '#334155' }}>
+                            PDF dosyasını buraya sürükleyin veya tıklayın
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                            Maksimum dosya boyutu: 10MB
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">MERSİS No</label>
-                  <input
-                    className="form-input"
-                    value={editingItem.mersisNo || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, mersisNo: e.target.value })}
-                  />
-                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setShowEditModal(false); setEditingItem(null); }}
+                style={{ padding: '8px 20px', borderRadius: 6 }}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveEdit}
+                style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+              >
+                Tamam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stock Item History Modal */}
+      {historyModalItem && (
+        <div className="modal-overlay" onClick={() => setHistoryModalItem(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, width: '90%', borderRadius: 12, padding: '24px 28px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--gray-900)' }}>
+                Hareketler - {historyModalItem.name}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setHistoryModalItem(null)}
+                style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: 'var(--gray-400)', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Product Summary Header Card */}
+            <div style={{
+              background: '#f8fafc',
+              borderRadius: 10,
+              padding: '14px 18px',
+              marginBottom: 24,
+              border: '1px solid #f1f5f9'
+            }}>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--gray-900)' }}>
+                {historyModalItem.name}
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--gray-500)', marginTop: 2 }}>
+                {historyModalItem.brand} - {historyModalItem.model}
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSaveEdit}>Kaydet</button>
+
+            {/* Empty State Illustration & Text */}
+            <div style={{ padding: '20px 20px 30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 72,
+                height: 72,
+                borderRadius: '50%',
+                background: '#f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 4
+              }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 8v13H3V8" />
+                  <path d="M1 3h22v5H1z" />
+                  <path d="M10 12h4" />
+                </svg>
+              </div>
+              <div style={{ fontSize: '0.88rem', color: '#64748b', fontWeight: 500 }}>
+                Bu ürün için hareket kaydı bulunamadı
+              </div>
             </div>
           </div>
         </div>
