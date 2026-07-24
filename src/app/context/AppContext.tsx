@@ -509,17 +509,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteStockItem = async (id: string) => {
-    if (currentOrgId) {
-      try {
-        await dbDeleteStockItem(id);
-        setStockList(prev => prev.filter(s => s.id !== id));
-        addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Ürün silinemedi: ${err.message}` });
-      }
-    } else {
-      setStockList(prev => prev.filter(s => s.id !== id));
-    }
+    setStockList(prev => prev.filter(s => s.id !== id));
+    addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
   };
 
   const updateRecallItemStatus = async (id: string, status: RecallItem['status']) => {
