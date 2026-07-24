@@ -21,6 +21,7 @@ export default function StockPage() {
   const [selectedHekType, setSelectedHekType] = useState<string | null>(null);
   const [adjustmentModalItem, setAdjustmentModalItem] = useState<StockItem | null>(null);
   const [showUtsImportModal, setShowUtsImportModal] = useState(false);
+  const [autoCreateManufacturerToggle, setAutoCreateManufacturerToggle] = useState(true);
   const [showQuickSaleModal, setShowQuickSaleModal] = useState(false);
   const [quickSaleForm, setQuickSaleForm] = useState({
     customerName: '',
@@ -1998,20 +1999,47 @@ export default function StockPage() {
               </div>
 
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  id="autoCreateManufacturer"
-                  style={{ width: 18, height: 18, marginTop: 2, accentColor: '#0284c7', cursor: 'pointer' }}
-                />
-                <label htmlFor="autoCreateManufacturer" style={{ cursor: 'pointer' }}>
+                {/* Toggle Switch */}
+                <div
+                  onClick={() => setAutoCreateManufacturerToggle(!autoCreateManufacturerToggle)}
+                  style={{
+                    width: 38,
+                    height: 22,
+                    borderRadius: 11,
+                    background: autoCreateManufacturerToggle ? '#0284c7' : '#cbd5e1',
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s ease',
+                    flexShrink: 0,
+                    marginTop: 2
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      background: '#fff',
+                      position: 'absolute',
+                      top: 2,
+                      left: autoCreateManufacturerToggle ? 18 : 2,
+                      transition: 'left 0.2s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                    }}
+                  />
+                </div>
+
+                <div
+                  onClick={() => setAutoCreateManufacturerToggle(!autoCreateManufacturerToggle)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-900)' }}>
                     Eksik üretici/ithalatçıları otomatik oluştur
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginTop: 2, lineHeight: 1.4 }}>
                     ÜTS'den gelen üretici/ithalatçı firmalar 'Uyarlamalar &gt; Üretici Yönetimi' sayfasına otomatik eklenecek (firma unvanı ÜTS'den çekilir).
                   </div>
-                </label>
+                </div>
               </div>
             </div>
 
