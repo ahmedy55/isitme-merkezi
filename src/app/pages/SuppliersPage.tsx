@@ -24,16 +24,35 @@ export default function SuppliersPage() {
   const [showNewPurchaseForm, setShowNewPurchaseForm] = useState<boolean>(false);
 
   // Form State
+  const [addModalTab, setAddModalTab] = useState<'elle' | 'uts'>('elle');
   const [formCompanyName, setFormCompanyName] = useState('');
   const [formContactPerson, setFormContactPerson] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formAddress, setFormAddress] = useState('');
   const [formTaxNo, setFormTaxNo] = useState('');
+  const [formVergiDairesi, setFormVergiDairesi] = useState('');
   const [formCategory, setFormCategory] = useState<'İşitme Cihazı' | 'Pil & Aksesuar' | 'Kalıp Malzemesi' | 'Teknik Servis' | 'Diğer'>('İşitme Cihazı');
   const [formStatus, setFormStatus] = useState<'Aktif' | 'Pasif'>('Aktif');
   const [formBalance, setFormBalance] = useState<number>(0);
   const [formNotes, setFormNotes] = useState('');
+
+  // UTS Bilgileri & Bayilik Bilgileri States
+  const [formUtsKurumNo, setFormUtsKurumNo] = useState('');
+  const [formMersisNo, setFormMersisNo] = useState('');
+  const [formGln, setFormGln] = useState('');
+  const [formBayilikBasvuruDate, setFormBayilikBasvuruDate] = useState('');
+  const [formBayilikKararDate, setFormBayilikKararDate] = useState('');
+  const [formBayilikBaslangicDate, setFormBayilikBaslangicDate] = useState('');
+  const [formBayilikBitisDate, setFormBayilikBitisDate] = useState('');
+  const [formBayilikDurum, setFormBayilikDurum] = useState('');
+  const [formBayilikIller, setFormBayilikIller] = useState('');
+  const [formIthalatYetkisi, setFormIthalatYetkisi] = useState(false);
+
+  // UTS Search State (in UTS tab)
+  const [utsSearchMersis, setUtsSearchMersis] = useState('');
+  const [utsSearchVergiNo, setUtsSearchVergiNo] = useState('');
+  const [utsSearchTitle, setUtsSearchTitle] = useState('');
 
   // Purchase Form State
   const [purInvoiceNo, setPurInvoiceNo] = useState('');
@@ -48,16 +67,34 @@ export default function SuppliersPage() {
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setEditingSupplierId(null);
+    setAddModalTab('elle');
     setFormCompanyName('');
     setFormContactPerson('');
     setFormPhone('');
     setFormEmail('');
     setFormAddress('');
     setFormTaxNo('');
+    setFormVergiDairesi('');
     setFormCategory('İşitme Cihazı');
     setFormStatus('Aktif');
     setFormBalance(0);
     setFormNotes('');
+
+    setFormUtsKurumNo('');
+    setFormMersisNo('');
+    setFormGln('');
+    setFormBayilikBasvuruDate('');
+    setFormBayilikKararDate('');
+    setFormBayilikBaslangicDate('');
+    setFormBayilikBitisDate('');
+    setFormBayilikDurum('');
+    setFormBayilikIller('');
+    setFormIthalatYetkisi(false);
+
+    setUtsSearchMersis('');
+    setUtsSearchVergiNo('');
+    setUtsSearchTitle('');
+
     setErrors({});
     setShowModal(true);
   };
@@ -71,10 +108,23 @@ export default function SuppliersPage() {
     setFormEmail(supplier.email);
     setFormAddress(supplier.address);
     setFormTaxNo(supplier.taxNo);
-    setFormCategory(supplier.category);
+    setFormVergiDairesi((supplier as any).vergiDairesi || '');
+    setFormCategory(supplier.category as any);
     setFormStatus(supplier.status);
     setFormBalance(supplier.balance);
     setFormNotes(supplier.notes || '');
+
+    setFormUtsKurumNo((supplier as any).utsKurumNo || '');
+    setFormMersisNo((supplier as any).mersisNo || '');
+    setFormGln((supplier as any).gln || '');
+    setFormBayilikBasvuruDate((supplier as any).bayilikBasvuruDate || '');
+    setFormBayilikKararDate((supplier as any).bayilikKararDate || '');
+    setFormBayilikBaslangicDate((supplier as any).bayilikBaslangicDate || '');
+    setFormBayilikBitisDate((supplier as any).bayilikBitisDate || '');
+    setFormBayilikDurum((supplier as any).bayilikDurum || '');
+    setFormBayilikIller((supplier as any).bayilikIller || '');
+    setFormIthalatYetkisi((supplier as any).ithalatYetkisi || false);
+
     setErrors({});
     setShowModal(true);
   };
@@ -418,88 +468,229 @@ export default function SuppliersPage() {
 
       {/* Add / Edit Tedarikçi Modal */}
       {showModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(3px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <div className="card" style={{ width: 500, maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--surface-border)' }}>
-              <span className="card-title" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                {isEditing ? 'Tedarikçi Bilgilerini Düzenle' : 'Yeni Tedarikçi Firma Ekle'}
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 12 }}>
+            <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--gray-200)' }}>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--gray-900)' }}>
+                {isEditing ? 'Tedarikçi Bilgilerini Düzenle' : 'Yeni Tedarikçi'}
               </span>
-              <button onClick={() => setShowModal(false)} style={{ color: 'var(--gray-400)', fontSize: '1.4rem' }}>&times;</button>
+              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
-            <form onSubmit={handleSave}>
-              <div className="card-body" style={{ padding: 20 }}>
-                <div className="form-group" style={{ marginBottom: 12 }}>
-                  <label className="form-label">Firma Adı</label>
+
+            {/* Sub-Header Tabs: Elle Ekle / ÜTS'den Ekle */}
+            {!isEditing && (
+              <div style={{ padding: '12px 24px 0', background: '#fafafa', borderBottom: '1px solid var(--gray-200)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: '#f1f5f9', padding: 4, borderRadius: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setAddModalTab('elle')}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: addModalTab === 'elle' ? '#fff' : 'transparent',
+                      fontWeight: 600,
+                      fontSize: '0.86rem',
+                      color: addModalTab === 'elle' ? 'var(--gray-900)' : 'var(--gray-600)',
+                      boxShadow: addModalTab === 'elle' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                  >
+                    Elle Ekle
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddModalTab('uts')}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: addModalTab === 'uts' ? '#fff' : 'transparent',
+                      fontWeight: 600,
+                      fontSize: '0.86rem',
+                      color: addModalTab === 'uts' ? '#0284c7' : 'var(--gray-600)',
+                      boxShadow: addModalTab === 'uts' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                    ÜTS'den Ekle
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                
+                {/* ÜTS Firma Sorgu Box (Only in ÜTS tab) */}
+                {addModalTab === 'uts' && !isEditing && (
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 14 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--gray-900)', marginBottom: 10 }}>
+                      UTS Firma Sorgu
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 8 }}>
+                      <input
+                        className="form-input"
+                        placeholder="MERSİS No"
+                        value={utsSearchMersis}
+                        onChange={(e) => setUtsSearchMersis(e.target.value)}
+                      />
+                      <input
+                        className="form-input"
+                        placeholder="Vergi No"
+                        value={utsSearchVergiNo}
+                        onChange={(e) => setUtsSearchVergiNo(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          addToast({ type: 'info', message: 'ÜTS veritabanında firma sorgulaması yapılıyor...' });
+                        }}
+                        style={{
+                          background: '#0284c7',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 6,
+                          padding: '0 16px',
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="11" cy="11" r="8" />
+                          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                        Sorgula
+                      </button>
+                    </div>
+                    <input
+                      className="form-input"
+                      placeholder="Ünvan (opsiyonel daraltma)"
+                      value={utsSearchTitle}
+                      onChange={(e) => setUtsSearchTitle(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {/* 1. Firma Adı */}
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 600 }}>
+                    <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Firma Adı
+                  </label>
                   <input
                     className="form-input"
+                    placeholder="Firma Adı"
                     value={formCompanyName}
                     onChange={(e) => setFormCompanyName(e.target.value)}
                   />
-                  {errors.companyName && <span style={{ fontSize: '0.78rem', color: 'var(--danger-500)' }}>{errors.companyName}</span>}
+                  {errors.companyName && <span style={{ fontSize: '0.78rem', color: '#ef4444' }}>{errors.companyName}</span>}
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Yetkili Kişi (Ad Soyad)</label>
-                    <input
-                      className="form-input"
-                      value={formContactPerson}
-                      onChange={(e) => setFormContactPerson(e.target.value)}
-                    />
-                    {errors.contactPerson && <span style={{ fontSize: '0.78rem', color: 'var(--danger-500)' }}>{errors.contactPerson}</span>}
-                  </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Vergi Numarası / TCKN</label>
-                    <input
-                      className="form-input"
-                      value={formTaxNo}
-                      onChange={(e) => setFormTaxNo(e.target.value)}
-                    />
-                    {errors.taxNo && <span style={{ fontSize: '0.78rem', color: 'var(--danger-500)' }}>{errors.taxNo}</span>}
-                  </div>
+                {/* 2. Yetkili Kişi */}
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 600 }}>
+                    <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Yetkili Kişi
+                  </label>
+                  <input
+                    className="form-input"
+                    placeholder="Yetkili Kişi"
+                    value={formContactPerson}
+                    onChange={(e) => setFormContactPerson(e.target.value)}
+                  />
+                  {errors.contactPerson && <span style={{ fontSize: '0.78rem', color: '#ef4444' }}>{errors.contactPerson}</span>}
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Telefon</label>
+                {/* 3. Telefon & Email */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>
+                      <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Telefon
+                    </label>
                     <input
                       className="form-input"
+                      placeholder="05XX XXX XX XX"
                       value={formPhone}
                       onChange={(e) => setFormPhone(e.target.value)}
                     />
-                    {errors.phone && <span style={{ fontSize: '0.78rem', color: 'var(--danger-500)' }}>{errors.phone}</span>}
+                    {errors.phone && <span style={{ fontSize: '0.78rem', color: '#ef4444' }}>{errors.phone}</span>}
                   </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">E-posta</label>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>Email</label>
                     <input
                       type="email"
                       className="form-input"
+                      placeholder="Email"
                       value={formEmail}
                       onChange={(e) => setFormEmail(e.target.value)}
                     />
-                    {errors.email && <span style={{ fontSize: '0.78rem', color: 'var(--danger-500)' }}>{errors.email}</span>}
+                    {errors.email && <span style={{ fontSize: '0.78rem', color: '#ef4444' }}>{errors.email}</span>}
                   </div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: 12 }}>
-                  <label className="form-label">Tedarik Kapsamı / Kategori</label>
-                  <select
+                {/* 4. Adres */}
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 600 }}>
+                    <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Adres
+                  </label>
+                  <textarea
                     className="form-input"
+                    rows={2}
+                    placeholder="Adres"
+                    value={formAddress}
+                    onChange={(e) => setFormAddress(e.target.value)}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                {/* 5. Vergi Numarası & Vergi Dairesi */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>Vergi Numarası</label>
+                    <input
+                      className="form-input"
+                      placeholder="Vergi Numarası"
+                      value={formTaxNo}
+                      onChange={(e) => setFormTaxNo(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>Vergi Dairesi</label>
+                    <input
+                      className="form-input"
+                      placeholder="Vergi Dairesi"
+                      value={formVergiDairesi}
+                      onChange={(e) => setFormVergiDairesi(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* 6. Kategori */}
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Kategori <span style={{ fontSize: '0.75rem', color: 'var(--gray-400)' }} title="Tedarikçinin hizmet alanı">ⓘ</span>
+                  </label>
+                  <select
+                    className="form-select"
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value as any)}
                   >
+                    <option value="" disabled>Kategori seçin</option>
+                    <option value="Cihaz Üreticisi">Cihaz Üreticisi</option>
                     <option value="İşitme Cihazı">İşitme Cihazı</option>
                     <option value="Pil & Aksesuar">Pil & Aksesuar</option>
                     <option value="Kalıp Malzemesi">Kalıp Malzemesi</option>
@@ -508,55 +699,216 @@ export default function SuppliersPage() {
                   </select>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: 12 }}>
-                  <label className="form-label">Adres</label>
-                  <textarea
-                    className="form-input"
-                    rows={2}
-                    value={formAddress}
-                    onChange={(e) => setFormAddress(e.target.value)}
-                    style={{ resize: 'none' }}
-                  />
+                {/* Section 7: UTS Bilgileri Divider */}
+                <div style={{ margin: '8px 0 4px', textAlign: 'center', position: 'relative' }}>
+                  <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                  <span style={{ position: 'relative', top: -10, background: '#fff', padding: '0 12px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--gray-500)' }}>
+                    UTS Bilgileri
+                  </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Bakiye (TL)</label>
+                {/* UTS Bilgileri 3 columns */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                      UTS Kurum No (UIK) <span style={{ fontSize: '0.72rem', color: 'var(--gray-400)' }}>ⓘ</span>
+                    </label>
                     <input
-                      type="number"
                       className="form-input"
-                      value={formBalance}
-                      onChange={(e) => setFormBalance(Number(e.target.value))}
-                      placeholder="Negatif ise borcumuz"
+                      placeholder="UTS Kurum Numarası"
+                      value={formUtsKurumNo}
+                      onChange={(e) => setFormUtsKurumNo(e.target.value)}
                     />
-                    <span style={{ fontSize: '0.74rem', color: 'var(--gray-400)' }}>Negatif = Borcumuz, Pozitif = Alacağımız</span>
                   </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Durum</label>
-                    <select
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>MERSİS No</label>
+                    <input
                       className="form-input"
-                      value={formStatus}
-                      onChange={(e) => setFormStatus(e.target.value as any)}
+                      placeholder="MERSİS Numarası"
+                      value={formMersisNo}
+                      onChange={(e) => setFormMersisNo(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 600 }}>
+                      GLN <span style={{ fontSize: '0.72rem', color: 'var(--gray-400)' }}>ⓘ</span>
+                    </label>
+                    <input
+                      className="form-input"
+                      placeholder="GLN (13 haneli)"
+                      value={formGln}
+                      onChange={(e) => setFormGln(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Section 8: Bayilik Bilgileri Divider */}
+                <div style={{ margin: '12px 0 4px', textAlign: 'center', position: 'relative' }}>
+                  <hr style={{ border: 'none', borderTop: '1px dashed var(--gray-300)', margin: 0 }} />
+                  <span style={{ position: 'relative', top: -10, background: '#fff', padding: '0 12px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--gray-500)' }}>
+                    Bayilik Bilgileri
+                  </span>
+                </div>
+
+                {/* Blue Info Callout Box */}
+                <div style={{
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: 8,
+                  padding: '12px 14px',
+                  display: 'flex',
+                  gap: 10,
+                  alignItems: 'flex-start'
+                }}>
+                  <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>i</div>
+                  <div style={{ fontSize: '0.81rem', color: '#0369a1', lineHeight: 1.45 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 2, color: '#0c4a6e' }}>Bu bilgiler ÜTS'den otomatik alınamıyor</div>
+                    ÜTS web servisi bayilik sorgulamayı desteklemiyor. Bilgileri <strong>ÜTS portalı ➔ Bayilik Bilgileri</strong> ekranından bakıp bir kez buraya girin; hasta belgelerindeki <strong>Bayilik Bilgisi</strong> ve <strong>Tıbbi Cihaz Durumu</strong> evrakları bu kayıttan doldurulur.
+                  </div>
+                </div>
+
+                {/* Dates Row 1 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem' }}>Bayilik Başvuru Tarihi</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formBayilikBasvuruDate}
+                      onChange={(e) => setFormBayilikBasvuruDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem' }}>Karar Tarihi</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formBayilikKararDate}
+                      onChange={(e) => setFormBayilikKararDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Dates Row 2 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem' }}>Bayilik Başlangıç Tarihi</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formBayilikBaslangicDate}
+                      onChange={(e) => setFormBayilikBaslangicDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                      Planlanan Bitiş Tarihi <span style={{ color: 'var(--gray-400)' }}>ⓘ</span>
+                    </label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formBayilikBitisDate}
+                      onChange={(e) => setFormBayilikBitisDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Durum, İller & İthalat Bildirimi Yetkisi */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: 12, alignItems: 'center' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem' }}>Durum</label>
+                    <select
+                      className="form-select"
+                      value={formBayilikDurum}
+                      onChange={(e) => setFormBayilikDurum(e.target.value)}
                     >
+                      <option value="">Seçiniz</option>
                       <option value="Aktif">Aktif</option>
                       <option value="Pasif">Pasif</option>
+                      <option value="Onay Bekliyor">Onay Bekliyor</option>
+                      <option value="İptal">İptal</option>
                     </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                      İller <span style={{ color: 'var(--gray-400)' }}>ⓘ</span>
+                    </label>
+                    <select
+                      className="form-select"
+                      value={formBayilikIller}
+                      onChange={(e) => setFormBayilikIller(e.target.value)}
+                    >
+                      <option value="">Örn: İZMİR</option>
+                      <option value="İZMİR">İZMİR</option>
+                      <option value="İSTANBUL">İSTANBUL</option>
+                      <option value="ANKARA">ANKARA</option>
+                      <option value="BURSA">BURSA</option>
+                      <option value="TÜM TÜRKİYE">TÜM TÜRKİYE</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', marginBottom: 0 }}>
+                      İthalat Bildirimi Yetkisi
+                    </label>
+                    <div
+                      onClick={() => setFormIthalatYetkisi(!formIthalatYetkisi)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 44,
+                          height: 22,
+                          borderRadius: 11,
+                          background: formIthalatYetkisi ? '#0284c7' : '#cbd5e1',
+                          position: 'relative',
+                          transition: 'background 0.2s ease',
+                          flexShrink: 0
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: '50%',
+                            background: '#fff',
+                            position: 'absolute',
+                            top: 2,
+                            left: formIthalatYetkisi ? 24 : 2,
+                            transition: 'left 0.2s ease',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: formIthalatYetkisi ? '#0284c7' : 'var(--gray-500)' }}>
+                        {formIthalatYetkisi ? 'Evet' : 'Hayır'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Özel Notlar</label>
-                  <input
-                    className="form-input"
-                    value={formNotes}
-                    onChange={(e) => setFormNotes(e.target.value)}
-                  />
-                </div>
               </div>
 
-              <div className="card-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--surface-border)' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>İptal</button>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowModal(false)}
+                  style={{ padding: '8px 20px', borderRadius: 6 }}
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+                >
+                  Tamam
+                </button>
               </div>
             </form>
           </div>
