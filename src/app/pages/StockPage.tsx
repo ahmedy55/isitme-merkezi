@@ -741,28 +741,76 @@ export default function StockPage() {
                 </div>
               ) : (
                 /* Tab 2: Dökümanlar */
-                <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-                  <div style={{
-                    border: '2px dashed var(--gray-300)',
-                    borderRadius: 12,
-                    padding: '36px 20px',
-                    background: 'var(--gray-50)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 12
-                  }}>
-                    <div style={{ fontSize: '2.4rem' }}>📁</div>
-                    <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--gray-800)' }}>
-                      Ürün Broşürü, Kullanım Kılavuzu veya Garanti Belgesi Yükleyin
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {[
+                    { id: 'tech', title: 'Teknik Döküman' },
+                    { id: 'manual', title: 'Kullanım Kılavuzu' },
+                    { id: 'cert', title: 'Sertifika' },
+                    { id: 'warranty', title: 'Garanti' },
+                    { id: 'other', title: 'Diğer' }
+                  ].map(doc => (
+                    <div key={doc.id} style={{
+                      border: '1px solid var(--gray-200)',
+                      borderRadius: 8,
+                      background: '#fff',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        padding: '10px 16px',
+                        borderBottom: '1px solid var(--gray-200)',
+                        fontSize: '0.86rem',
+                        fontWeight: 600,
+                        color: 'var(--gray-800)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="16" y1="13" x2="8" y2="13" />
+                          <line x1="16" y1="17" x2="8" y2="17" />
+                        </svg>
+                        {doc.title}
+                      </div>
+                      <div style={{ padding: 12 }}>
+                        <div style={{
+                          border: '2px dashed #cbd5e1',
+                          borderRadius: 8,
+                          padding: '22px 16px',
+                          background: '#f8fafc',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 6,
+                          cursor: 'pointer'
+                        }}>
+                          <div style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 8,
+                            border: '1.5px solid #3b82f6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#3b82f6',
+                            background: '#eff6ff',
+                            marginBottom: 2
+                          }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                            </svg>
+                          </div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 500, color: '#334155' }}>
+                            PDF dosyasını buraya sürükleyin veya tıklayın
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                            Maksimum dosya boyutu: 10MB
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', maxWidth: 400 }}>
-                      PDF, JPG veya PNG formatındaki belgeleri sürükleyip bırakın veya bilgisayarınızdan seçin.
-                    </div>
-                    <button type="button" className="btn btn-secondary" style={{ marginTop: 8 }}>
-                      Dosya Seç
-                    </button>
-                  </div>
+                  ))}
                 </div>
               )}
             </div>
