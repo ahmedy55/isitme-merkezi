@@ -13,81 +13,92 @@ export default function StockPage() {
   const [editingItem, setEditingItem] = useState<StockItem | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  const [formData, setFormData] = useState<{
-    name: string;
-    brand: string;
-    category: StockItem['category'];
-    quantity: number;
-    price: number;
-    purchasePrice: number;
-    serialNo: string;
-    utsStatus: StockItem['utsStatus'];
-    branch: StockItem['branch'];
-    criticalLevel: number;
-    status: StockItem['status'];
-    utsKurumNo: string;
-    gln: string;
-    mersisNo: string;
-  }>({
+  const [activeAddTab, setActiveAddTab] = useState<'info' | 'docs'>('info');
+
+  const [formData, setFormData] = useState({
     name: '',
+    category: 'Cihaz' as StockItem['category'],
     brand: '',
-    category: 'Cihaz',
-    quantity: 1,
-    price: 15000,
-    purchasePrice: 1500,
+    model: '',
+    sku: '',
+    deviceType: '',
+    manufacturer: '',
+    supplier: '',
+    purchasePrice: 0,
+    price: 0,
+    vatRate: 10,
+    quantity: 0,
+    criticalLevel: 0,
+    isAssigned: 'Evet (Zimmetli)',
+    utsTrackType: 'Takip Yok',
+    gtin: '',
     serialNo: '',
-    utsStatus: 'Bekliyor',
-    branch: 'Merkez 1 - Kadıköy',
-    criticalLevel: 5,
-    status: 'Stokta',
-    utsKurumNo: '',
+    productionDate: '',
+    expiryDate: '',
+    utsStatus: 'Bekliyor' as StockItem['utsStatus'],
+    branch: 'Merkez 1 - Kadıköy' as StockItem['branch'],
+    status: 'Stokta' as StockItem['status'],
+    utsKurumNo: '954201',
     gln: '',
     mersisNo: ''
   });
 
   const handleSaveNew = () => {
-    if (!formData.name || !formData.brand) {
-      alert('Lütfen ürün adı ve markasını girin.');
+    if (!formData.name) {
+      alert('Lütfen Ürün Adı alanını doldurunuz.');
       return;
     }
     const newItem: StockItem = {
       id: `s-${Date.now().toString().slice(-6)}`,
       name: formData.name,
-      brand: formData.brand,
-      model: formData.brand,
+      brand: formData.brand || 'Genel',
+      model: formData.model || formData.brand || 'Standart',
       category: formData.category,
-      quantity: Number(formData.quantity),
-      price: Number(formData.price),
-      purchasePrice: Number(formData.purchasePrice),
+      quantity: Number(formData.quantity) || 1,
+      price: Number(formData.price) || 0,
+      purchasePrice: Number(formData.purchasePrice) || 0,
       sgkPrice: Number(formData.price) * 0.4,
-      warrantyExpiry: '2028-07-10',
+      warrantyExpiry: formData.expiryDate || '2028-07-10',
       location: 'Depo',
-      serialNo: formData.serialNo || `SN-${Math.floor(Math.random() * 900000 + 100000)}`,
-      utsStatus: formData.utsStatus,
+      serialNo: formData.serialNo || (formData.utsTrackType !== 'Takip Yok' ? `SN-${Math.floor(Math.random() * 900000 + 100000)}` : '—'),
+      utsStatus: formData.utsTrackType !== 'Takip Yok' ? 'Bekliyor' : 'Gerekli Değil',
       branch: formData.branch,
-      criticalLevel: Number(formData.criticalLevel),
+      criticalLevel: Number(formData.criticalLevel) || 0,
       status: formData.status,
       utsKurumNo: formData.utsKurumNo || '954201',
+      gln: formData.gtin || ''
     };
     addStockItem(newItem);
     setShowAddModal(false);
     // Reset form
     setFormData({
       name: '',
-      brand: '',
       category: 'Cihaz',
-      quantity: 1,
-      price: 15000,
-      purchasePrice: 1500,
+      brand: '',
+      model: '',
+      sku: '',
+      deviceType: '',
+      manufacturer: '',
+      supplier: '',
+      purchasePrice: 0,
+      price: 0,
+      vatRate: 10,
+      quantity: 0,
+      criticalLevel: 0,
+      isAssigned: 'Evet (Zimmetli)',
+      utsTrackType: 'Takip Yok',
+      gtin: '',
       serialNo: '',
+      productionDate: '',
+      expiryDate: '',
       utsStatus: 'Bekliyor',
       branch: 'Merkez 1 - Kadıköy',
-      criticalLevel: 5,
       status: 'Stokta',
-      utsKurumNo: '',
+      utsKurumNo: '954201',
       gln: '',
       mersisNo: ''
     });
+    addToast({ type: 'success', message: `${newItem.name} ürünü stoğa başarıyla eklendi.` });
   };
 
   const handleSaveEdit = () => {
@@ -369,168 +380,385 @@ export default function StockPage() {
       {/* Add Stock Modal */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
-            <div className="modal-header">
-              <span className="modal-title">Yeni Ürün Ekle</span>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 740, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header" style={{ paddingBottom: 12 }}>
+              <span className="modal-title" style={{ fontSize: '1.15rem', fontWeight: 700 }}>Yeni Ürün</span>
               <button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button>
             </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">Ürün Adı</label>
-                <input
-                  className="form-input"
-                  placeholder="Örn: Phonak Audéo P90"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Kategori</label>
-                  <select
-                    className="form-select"
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value as StockItem['category'] })}
-                  >
-                    <option>Cihaz</option>
-                    <option>Pil</option>
-                    <option>Kalıp</option>
-                    <option>Aksesuar</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Marka</label>
-                  <input
-                    className="form-input"
-                    placeholder="Marka adı"
-                    value={formData.brand}
-                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Seri No</label>
-                  <input
-                    className="form-input"
-                    placeholder="Seri/garanti numarası"
-                    value={formData.serialNo}
-                    onChange={(e) => setFormData({ ...formData, serialNo: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">ÜTS Durumu</label>
-                  <select
-                    className="form-select"
-                    value={formData.utsStatus}
-                    onChange={(e) => setFormData({ ...formData, utsStatus: e.target.value as StockItem['utsStatus'] })}
-                  >
-                    <option>Bekliyor</option>
-                    <option>Bildirildi</option>
-                    <option>Hata</option>
-                    <option>Gerekli Değil</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-row-3">
-                <div className="form-group">
-                  <label className="form-label">Adet</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Kritik Seviye</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={formData.criticalLevel}
-                    onChange={(e) => setFormData({ ...formData, criticalLevel: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Lokasyon / Şube</label>
-                  <select
-                    className="form-select"
-                    value={formData.branch}
-                    onChange={(e) => setFormData({ ...formData, branch: e.target.value as StockItem['branch'] })}
-                  >
-                    <option>Merkez 1 - Kadıköy</option>
-                    <option>Merkez 2 - Beşiktaş</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-row-3">
-                <div className="form-group">
-                  <label className="form-label">Alış Fiyatı (₺)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={formData.purchasePrice}
-                    onChange={(e) => setFormData({ ...formData, purchasePrice: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Satış Fiyatı (₺)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Cihaz Statüsü</label>
-                  <select
-                    className="form-select"
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as StockItem['status'] })}
-                  >
-                    <option>Stokta</option>
-                    <option>Hastaya Ayrıldı</option>
-                    <option>Satıldı</option>
-                    <option>Serviste</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* Yasal ÜTS / GLN / MERSİS Bilgileri */}
-              <div className="form-row-3" style={{ marginTop: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">ÜTS Kurum No (UIK)</label>
-                  <input
-                    className="form-input"
-                    placeholder="Örn: 954201"
-                    value={formData.utsKurumNo}
-                    onChange={(e) => setFormData({ ...formData, utsKurumNo: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">GLN Kodu</label>
-                  <input
-                    className="form-input"
-                    placeholder="Örn: 8680001402361"
-                    value={formData.gln}
-                    onChange={(e) => setFormData({ ...formData, gln: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">MERSİS No</label>
-                  <input
-                    className="form-input"
-                    placeholder="Örn: 012345..."
-                    value={formData.mersisNo}
-                    onChange={(e) => setFormData({ ...formData, mersisNo: e.target.value })}
-                  />
-                </div>
-              </div>
+            {/* Modal Navigation Tabs */}
+            <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--gray-200)', padding: '0 24px' }}>
+              <button
+                type="button"
+                onClick={() => setActiveAddTab('info')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '10px 0',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  color: activeAddTab === 'info' ? '#0284c7' : 'var(--gray-500)',
+                  borderBottom: activeAddTab === 'info' ? '2.5px solid #0284c7' : '2.5px solid transparent',
+                  cursor: 'pointer'
+                }}
+              >
+                Ürün Bilgileri
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveAddTab('docs')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '10px 0',
+                  fontWeight: 600,
+                  fontSize: '0.88rem',
+                  color: activeAddTab === 'docs' ? '#0284c7' : 'var(--gray-500)',
+                  borderBottom: activeAddTab === 'docs' ? '2.5px solid #0284c7' : '2.5px solid transparent',
+                  cursor: 'pointer'
+                }}
+              >
+                Dökümanlar
+              </button>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSaveNew}>Kaydet</button>
+
+            <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px' }}>
+              {activeAddTab === 'info' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Row 1: Ürün Adı & Kategori */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Ürün Adı
+                      </label>
+                      <input
+                        className="form-input"
+                        placeholder="Ürün Adı"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600 }}>
+                        <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Kategori
+                      </label>
+                      <select
+                        className="form-select"
+                        value={formData.category}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value as StockItem['category'] })}
+                      >
+                        <option value="Cihaz">Cihaz</option>
+                        <option value="Pil">Pil</option>
+                        <option value="Kalıp">Kalıp</option>
+                        <option value="Aksesuar">Aksesuar</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Marka, Model, SKU */}
+                  <div className="form-row-3">
+                    <div className="form-group">
+                      <label className="form-label">Marka</label>
+                      <input
+                        className="form-input"
+                        placeholder="Marka yazın veya seçin"
+                        value={formData.brand}
+                        onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Model</label>
+                      <input
+                        className="form-input"
+                        placeholder="Model yazın veya seçin"
+                        value={formData.model}
+                        onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Ürün Kodu (SKU)</label>
+                      <input
+                        className="form-input"
+                        placeholder="SKU"
+                        value={formData.sku}
+                        onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 3: Cihaz Tipi */}
+                  <div className="form-group">
+                    <label className="form-label">Cihaz Tipi</label>
+                    <select
+                      className="form-select"
+                      value={formData.deviceType}
+                      onChange={(e) => setFormData({ ...formData, deviceType: e.target.value })}
+                    >
+                      <option value="">Cihaz tipi seçin (örn: Kulak Arkası (BTE)...)</option>
+                      <option value="Kulak Arkası (BTE)">Kulak Arkası (BTE)</option>
+                      <option value="Kanal İçi (ITE/CIC/IIC)">Kanal İçi (ITE/CIC/IIC)</option>
+                      <option value="Hoparlör Kanal İçinde (RIC/RITE)">Hoparlör Kanal İçinde (RIC/RITE)</option>
+                      <option value="İşitme Cihazı Pili">İşitme Cihazı Pili</option>
+                      <option value="Kulak Kalıbı / Tıkaç">Kulak Kalıbı / Tıkaç</option>
+                      <option value="Temizlik / Bakım Aksesuarı">Temizlik / Bakım Aksesuarı</option>
+                    </select>
+                  </div>
+
+                  {/* Row 4: Üretici/İthalatçı & Tedarikçi */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Üretici/İthalatçı (Opsiyonel)
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="Ürünün üreticisi veya Türkiye ithalatçı firma bilgisi">ⓘ</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={formData.manufacturer}
+                        onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                      >
+                        <option value="">Üretici seçin</option>
+                        <option value="Demant / Oticon Turkey">Demant / Oticon Turkey</option>
+                        <option value="Sonova / Phonak Turkey">Sonova / Phonak Turkey</option>
+                        <option value="GN Hearing / ReSound">GN Hearing / ReSound</option>
+                        <option value="WSAudiology / Signia">WSAudiology / Signia</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        Tedarikçi (Opsiyonel)
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="Ürünün tedarik edildiği toptancı/satıcı">ⓘ</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={formData.supplier}
+                        onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                      >
+                        <option value="">Tedarikçi seçin</option>
+                        <option value="Ana Depo">Ana Depo</option>
+                        <option value="Medikal Tedarik A.Ş.">Medikal Tedarik A.Ş.</option>
+                        <option value="Doğrudan İthalat">Doğrudan İthalat</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Row 5: Alış Fiyatı, Satış Fiyatı, KDV Oranı */}
+                  <div className="form-row-3">
+                    <div className="form-group">
+                      <label className="form-label">Alış Fiyatı</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          className="form-input"
+                          type="number"
+                          placeholder="Alış Fiyatı"
+                          value={formData.purchasePrice || ''}
+                          onChange={(e) => setFormData({ ...formData, purchasePrice: Number(e.target.value) })}
+                          style={{ paddingRight: 28 }}
+                        />
+                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.85rem' }}>₺</span>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Satış Fiyatı</label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          className="form-input"
+                          type="number"
+                          placeholder="Satış Fiyatı"
+                          value={formData.price || ''}
+                          onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                          style={{ paddingRight: 28 }}
+                        />
+                        <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.85rem' }}>₺</span>
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">KDV Oranı %</label>
+                      <input
+                        className="form-input"
+                        type="number"
+                        placeholder="10"
+                        value={formData.vatRate}
+                        onChange={(e) => setFormData({ ...formData, vatRate: Number(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 6: Mevcut Stok, Minimum Stok, Zimmetli mi? */}
+                  <div className="form-row-3">
+                    <div className="form-group">
+                      <label className="form-label">Mevcut Stok</label>
+                      <input
+                        className="form-input"
+                        type="number"
+                        placeholder="0"
+                        value={formData.quantity}
+                        onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Minimum Stok Seviyesi</label>
+                      <input
+                        className="form-input"
+                        type="number"
+                        placeholder="0"
+                        value={formData.criticalLevel}
+                        onChange={(e) => setFormData({ ...formData, criticalLevel: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Zimmetli mi?</label>
+                      <select
+                        className="form-select"
+                        value={formData.isAssigned}
+                        onChange={(e) => setFormData({ ...formData, isAssigned: e.target.value })}
+                      >
+                        <option value="Evet (Zimmetli)">Evet (Zimmetli)</option>
+                        <option value="Hayır (Zimmetsiz)">Hayır (Zimmetsiz)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Section Divider: Ürün Kimlik Bilgileri */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '14px 0 8px' }}>
+                    <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+                    <span style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--gray-700)' }}>Ürün Kimlik Bilgileri</span>
+                    <div style={{ flex: 1, height: 1, background: 'var(--gray-200)' }} />
+                  </div>
+
+                  {/* Blue Info Callout Box */}
+                  <div style={{
+                    background: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: 8,
+                    padding: '12px 14px',
+                    display: 'flex',
+                    gap: 12,
+                    alignItems: 'flex-start'
+                  }}>
+                    <div style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      background: '#0284c7',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      marginTop: 1
+                    }}>
+                      i
+                    </div>
+                    <div style={{ fontSize: '0.81rem', color: '#0369a1', lineHeight: 1.45 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 2 }}>Bu alanlar zorunlu değil</div>
+                      Elle eklenen ürüne de seri no / GTIN girebilirsiniz. Bu bilgileri girmeniz ürünü ÜTS'ye BİLDİRMEZ — ÜTS bildirimi yalnızca ÜTS envanterinden gelen ürünlerde yapılır.
+                    </div>
+                  </div>
+
+                  {/* Row 7: ÜTS Takip Tipi & GTIN / Barkod */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ color: '#ef4444' }}>*</span> ÜTS Takip Tipi
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="ÜTS cihaz ve ürün seri numarası takip şekli">ⓘ</span>
+                      </label>
+                      <select
+                        className="form-select"
+                        value={formData.utsTrackType}
+                        onChange={(e) => setFormData({ ...formData, utsTrackType: e.target.value })}
+                      >
+                        <option value="Takip Yok">Takip Yok</option>
+                        <option value="Tekil Takip (Seri No)">Tekil Takip (Seri No)</option>
+                        <option value="Lot / Parti Takibi">Lot / Parti Takibi</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        GTIN / Barkod (UNO)
+                        <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="Küresel Ticari Ürün Numarası (GTIN)">ⓘ</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', fontSize: '0.85rem' }}>║▌</span>
+                        <input
+                          className="form-input"
+                          placeholder="Örn: 05714880198904"
+                          value={formData.gtin}
+                          onChange={(e) => setFormData({ ...formData, gtin: e.target.value })}
+                          style={{ paddingLeft: 34 }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 8: Üretim Tarihi & Son Kullanma Tarihi */}
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">Üretim Tarihi (URT)</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={formData.productionDate}
+                        onChange={(e) => setFormData({ ...formData, productionDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Son Kullanma Tarihi (SKT)</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={formData.expiryDate}
+                        onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Tab 2: Dökümanlar */
+                <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+                  <div style={{
+                    border: '2px dashed var(--gray-300)',
+                    borderRadius: 12,
+                    padding: '36px 20px',
+                    background: 'var(--gray-50)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 12
+                  }}>
+                    <div style={{ fontSize: '2.4rem' }}>📁</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'var(--gray-800)' }}>
+                      Ürün Broşürü, Kullanım Kılavuzu veya Garanti Belgesi Yükleyin
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)', maxWidth: 400 }}>
+                      PDF, JPG veya PNG formatındaki belgeleri sürükleyip bırakın veya bilgisayarınızdan seçin.
+                    </div>
+                    <button type="button" className="btn btn-secondary" style={{ marginTop: 8 }}>
+                      Dosya Seç
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowAddModal(false)}
+                style={{ padding: '8px 20px', borderRadius: 6 }}
+              >
+                İptal
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveNew}
+                style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
+              >
+                Tamam
+              </button>
             </div>
           </div>
         </div>
