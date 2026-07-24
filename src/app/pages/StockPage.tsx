@@ -100,7 +100,10 @@ export default function StockPage() {
   });
 
   const totalValue = stockList.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+  const totalQuantity = stockList.reduce((sum, i) => sum + i.quantity, 0);
   const lowStockCount = stockList.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel).length;
+  const utsCount = stockList.filter(s => s.utsStatus === 'Bildirildi').length;
+  const utsDisiCount = stockList.filter(s => s.utsStatus !== 'Bildirildi').length;
 
   const handleUtsNotification = (item: StockItem) => {
     if (!item.assignedPatientId) return;
@@ -151,15 +154,24 @@ export default function StockPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="stats-grid">
+      {/* Stats Widgets */}
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 20 }}>
         <div className="stat-card">
           <div className="stat-icon primary">
             <IconStock size={18} />
           </div>
           <div className="stat-content">
-            <div className="stat-label">Toplam Ürün Çeşidi</div>
+            <div className="stat-label">Toplam Ürün</div>
             <div className="stat-value">{stockList.length}</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon info">
+            <IconStock size={18} />
+          </div>
+          <div className="stat-content">
+            <div className="stat-label">Toplam Stok</div>
+            <div className="stat-value">{totalQuantity}</div>
           </div>
         </div>
         <div className="stat-card">
@@ -167,8 +179,27 @@ export default function StockPage() {
             <IconCash size={18} />
           </div>
           <div className="stat-content">
-            <div className="stat-label">Toplam Stok Değeri</div>
+            <div className="stat-label">Stok Değeri</div>
             <div className="stat-value">{formatCurrency(totalValue)}</div>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon info">
+            <IconHearing size={18} />
+          </div>
+          <div className="stat-content">
+            <div className="stat-label">ÜTS Durumu</div>
+            <div className="stat-value" style={{ fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, fontWeight: 600 }}>
+              <span style={{ color: 'var(--success-600)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                {utsCount} ÜTS'li
+              </span>
+              <span style={{ color: 'var(--gray-400)' }}>-</span>
+              <span style={{ color: 'var(--gray-600)' }}>{utsDisiCount} ÜTS Dışı</span>
+            </div>
           </div>
         </div>
         <div className="stat-card">
@@ -179,15 +210,6 @@ export default function StockPage() {
             <div className="stat-label">Kritik Stok</div>
             <div className="stat-value">{lowStockCount}</div>
             <span className="stat-change down">Sipariş gerekli</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon info">
-            <IconHearing size={18} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Cihaz Adedi</div>
-            <div className="stat-value">{stockList.filter(s => s.category === 'Cihaz').reduce((sum, s) => sum + s.quantity, 0)}</div>
           </div>
         </div>
       </div>
