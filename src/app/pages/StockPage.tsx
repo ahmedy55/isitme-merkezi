@@ -19,6 +19,7 @@ export default function StockPage() {
     category: StockItem['category'];
     quantity: number;
     price: number;
+    purchasePrice: number;
     serialNo: string;
     utsStatus: StockItem['utsStatus'];
     branch: StockItem['branch'];
@@ -33,6 +34,7 @@ export default function StockPage() {
     category: 'Cihaz',
     quantity: 1,
     price: 15000,
+    purchasePrice: 1500,
     serialNo: '',
     utsStatus: 'Bekliyor',
     branch: 'Merkez 1 - Kadıköy',
@@ -56,6 +58,7 @@ export default function StockPage() {
       category: formData.category,
       quantity: Number(formData.quantity),
       price: Number(formData.price),
+      purchasePrice: Number(formData.purchasePrice),
       sgkPrice: Number(formData.price) * 0.4,
       warrantyExpiry: '2028-07-10',
       location: 'Depo',
@@ -75,6 +78,7 @@ export default function StockPage() {
       category: 'Cihaz',
       quantity: 1,
       price: 15000,
+      purchasePrice: 1500,
       serialNo: '',
       utsStatus: 'Bekliyor',
       branch: 'Merkez 1 - Kadıköy',
@@ -252,6 +256,7 @@ export default function StockPage() {
                 <th>Ürün</th>
                 <th>Kategori</th>
                 <th>Seri No / Şube</th>
+                <th>Stok Adedi</th>
                 <th>Cihaz Durumu</th>
                 <th>ÜTS Durumu</th>
                 <th>Fiyat</th>
@@ -295,6 +300,11 @@ export default function StockPage() {
                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{item.branch}</div>
                       </div>
                     </td>
+                    <td data-label="Stok Adedi">
+                      <span className={`badge badge-${item.quantity <= item.criticalLevel ? 'danger' : 'neutral'}`} style={{ fontWeight: 700 }}>
+                        {item.quantity} Adet
+                      </span>
+                    </td>
                     <td data-label="Cihaz Durumu">
                       <span className={`badge badge-${
                         item.status === 'Stokta' ? 'success' :
@@ -312,7 +322,14 @@ export default function StockPage() {
                         {item.utsStatus}
                       </span>
                     </td>
-                    <td data-label="Fiyat" style={{ fontWeight: 600 }}>{formatCurrency(item.price)}</td>
+                    <td data-label="Fiyat">
+                      <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginBottom: 2 }}>
+                        Alış: {formatCurrency(item.purchasePrice || Math.round(item.price * 0.1))}
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: '0.86rem', color: 'var(--gray-900)' }}>
+                        Satış: {formatCurrency(item.price)}
+                      </div>
+                    </td>
                     <td data-label="Hasta (Alıcı)">
                       <div style={{ fontWeight: 500, fontSize: '0.84rem' }}>
                         {item.assignedPatientName || '—'}
@@ -446,7 +463,16 @@ export default function StockPage() {
                   </select>
                 </div>
               </div>
-              <div className="form-row">
+              <div className="form-row-3">
+                <div className="form-group">
+                  <label className="form-label">Alış Fiyatı (₺)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={formData.purchasePrice}
+                    onChange={(e) => setFormData({ ...formData, purchasePrice: Number(e.target.value) })}
+                  />
+                </div>
                 <div className="form-group">
                   <label className="form-label">Satış Fiyatı (₺)</label>
                   <input
@@ -604,7 +630,16 @@ export default function StockPage() {
                   </select>
                 </div>
               </div>
-              <div className="form-row">
+              <div className="form-row-3">
+                <div className="form-group">
+                  <label className="form-label">Alış Fiyatı (₺)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={editingItem.purchasePrice || Math.round(editingItem.price * 0.1)}
+                    onChange={(e) => setEditingItem({ ...editingItem, purchasePrice: Number(e.target.value) })}
+                  />
+                </div>
                 <div className="form-group">
                   <label className="form-label">Satış Fiyatı (₺)</label>
                   <input

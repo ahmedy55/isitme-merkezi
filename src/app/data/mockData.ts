@@ -70,6 +70,7 @@ export interface StockItem {
   quantity: number;
   criticalLevel: number;
   price: number;
+  purchasePrice?: number;
   sgkPrice: number;
   warrantyExpiry: string;
   location: string;
@@ -338,6 +339,7 @@ export const stockItems: StockItem[] = [
     quantity: 1,
     criticalLevel: 0,
     price: 48000,
+    purchasePrice: 4800,
     sgkPrice: 6200,
     warrantyExpiry: '2028-07-10',
     location: 'A-Rafı, Kutu 4',
@@ -355,6 +357,7 @@ export const stockItems: StockItem[] = [
     quantity: 1,
     criticalLevel: 0,
     price: 52000,
+    purchasePrice: 5000,
     sgkPrice: 6200,
     warrantyExpiry: '2028-05-15',
     location: 'B-Rafı, Kutu 2',
@@ -374,6 +377,7 @@ export const stockItems: StockItem[] = [
     quantity: 1,
     criticalLevel: 0,
     price: 36000,
+    purchasePrice: 3600,
     sgkPrice: 6200,
     warrantyExpiry: '2027-11-20',
     location: 'A-Rafı, Kutu 9',
@@ -391,6 +395,7 @@ export const stockItems: StockItem[] = [
     quantity: 120,
     criticalLevel: 50,
     price: 150,
+    purchasePrice: 45,
     sgkPrice: 0,
     warrantyExpiry: '2029-12-31',
     location: 'Pil Kutusu A',
@@ -408,12 +413,13 @@ export const stockItems: StockItem[] = [
     quantity: 15,
     criticalLevel: 40,
     price: 150,
+    purchasePrice: 45,
     sgkPrice: 0,
     warrantyExpiry: '2029-10-30',
     location: 'Pil Kutusu B',
     status: 'Stokta',
     utsStatus: 'Gerekli Değil',
-    branch: 'Merkez 1 - Kadıköy' // Kadıköy stok kritik (15 adet var, kritik seviye 40), Beşiktaş'ta fazla olabilir
+    branch: 'Merkez 1 - Kadıköy'
   },
   {
     id: 's6',
@@ -425,12 +431,13 @@ export const stockItems: StockItem[] = [
     quantity: 80,
     criticalLevel: 10,
     price: 150,
+    purchasePrice: 45,
     sgkPrice: 0,
     warrantyExpiry: '2029-10-30',
     location: 'Pil Kutusu B',
     status: 'Stokta',
     utsStatus: 'Gerekli Değil',
-    branch: 'Merkez 2 - Beşiktaş' // Beşiktaş'ta fazla stok var, transfer önerilebilir
+    branch: 'Merkez 2 - Beşiktaş'
   }
 ];
 
