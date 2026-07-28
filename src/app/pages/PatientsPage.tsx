@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import CustomSelect from '../components/CustomSelect';
+import { useDebounce } from '../hooks/useDebounce';
 import * as XLSX from 'xlsx';
 import { ResponsivePie } from '@nivo/pie';
 import {
@@ -322,30 +323,36 @@ export default function PatientsPage() {
     });
   }, [patientsList, activeBranch]);
 
-  const filtered = branchFilteredPatients.filter((p) => {
-    const matchSearch =
-      `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-      p.tc.includes(search) ||
-      p.phone.includes(search) ||
-      (p.address || '').toLowerCase().includes(search.toLowerCase());
+  const debouncedSearch = useDebounce(search, 300);
+
+  const filtered = useMemo(() => {
+    const searchLower = debouncedSearch.toLowerCase().trim();
+    return branchFilteredPatients.filter((p) => {
+      const matchSearch =
+        !searchLower ||
+        `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchLower) ||
+        p.tc.includes(searchLower) ||
+        p.phone.includes(searchLower) ||
+        (p.address || '').toLowerCase().includes(searchLower);
+        
+      const matchLoss = filterLoss === 'Tümü' || p.hearingLoss === filterLoss;
+      const matchStatus = filterStatus === 'Tümü' || (p.patientStatus || 'Potansiyel') === filterStatus;
+      const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
       
-    const matchLoss = filterLoss === 'Tümü' || p.hearingLoss === filterLoss;
-    const matchStatus = filterStatus === 'Tümü' || (p.patientStatus || 'Potansiyel') === filterStatus;
-    const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
-    
-    let matchDate = true;
-    const itemDate = p.createdAt || p.lastVisit || '';
-    if (itemDate) {
-      if (filterStartDate) {
-        matchDate = matchDate && itemDate >= filterStartDate;
+      let matchDate = true;
+      const itemDate = p.createdAt || p.lastVisit || '';
+      if (itemDate) {
+        if (filterStartDate) {
+          matchDate = matchDate && itemDate >= filterStartDate;
+        }
+        if (filterEndDate) {
+          matchDate = matchDate && itemDate <= filterEndDate;
+        }
       }
-      if (filterEndDate) {
-        matchDate = matchDate && itemDate <= filterEndDate;
-      }
-    }
-    
-    return matchSearch && matchLoss && matchStatus && matchSource && matchDate;
-  });
+      
+      return matchSearch && matchLoss && matchStatus && matchSource && matchDate;
+    });
+  }, [branchFilteredPatients, debouncedSearch, filterLoss, filterStatus, filterSource, filterStartDate, filterEndDate]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
