@@ -1,36 +1,10 @@
 import { supabase } from './supabase';
 import { SystemUser, UserRole } from '../data/mockData';
+import { toCamelGeneric, toSnakeGeneric } from '../repositories/BaseRepository';
 
-// Key Case Converters (snake_case <-> camelCase)
-export const toCamel = (obj: any): any => {
-  if (Array.isArray(obj)) {
-    return obj.map(v => toCamel(v));
-  } else if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
-    return Object.keys(obj).reduce((result, key) => {
-      const camelKey = key.replace(/_([a-z])/g, (_, g) => g.toUpperCase());
-      return {
-        ...result,
-        [camelKey]: toCamel(obj[key]),
-      };
-    }, {});
-  }
-  return obj;
-};
-
-export const toSnake = (obj: any): any => {
-  if (Array.isArray(obj)) {
-    return obj.map(v => toSnake(v));
-  } else if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
-    return Object.keys(obj).reduce((result, key) => {
-      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      return {
-        ...result,
-        [snakeKey]: toSnake(obj[key]),
-      };
-    }, {});
-  }
-  return obj;
-};
+// Key Case Converters (snake_case <-> camelCase) with Typesafe Generics <T>
+export const toCamel = <T = any>(obj: unknown): T => toCamelGeneric<T>(obj);
+export const toSnake = <T = any>(obj: unknown): T => toSnakeGeneric<T>(obj);
 
 // Aktif kullanıcının organizasyon ID'sini JWT oturumundan çeker
 export const getActiveOrgId = async (): Promise<string | null> => {
