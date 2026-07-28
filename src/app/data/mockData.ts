@@ -917,6 +917,7 @@ export const auditLog: AuditLogEntry[] = [
 export interface Branch {
   id: string;
   name: string;
+  slug?: string;
   address: string;
   phone: string;
   patientsCount: number;
