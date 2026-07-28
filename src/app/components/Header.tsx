@@ -126,7 +126,9 @@ export default function Header() {
             <span>
               {activeBranch.mode === 'all'
                 ? 'Tüm Şubeler (Konsolide)'
-                : (activeBranch.branch?.name || activeBranch.slug)}
+                : activeBranch.mode === 'single'
+                ? (activeBranch.branch?.name || activeBranch.slug)
+                : 'Şube'}
             </span>
             <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▼</span>
           </button>
