@@ -640,17 +640,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // P0 — Masraf CRUD
-  const addExpense = async (expense: Expense) => {
-    if (currentOrgId) {
-      try {
-        const created = await dbInsertExpense(expense);
-        setExpensesList(prev => [created, ...prev]);
-        addToast({ type: 'success', message: 'Gider başarıyla kaydedildi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Gider eklenemedi: ${err.message}` });
-      }
-    } else {
+  const addExpense = async (expense: Expense, cashRegisterId?: string) => {
+    try {
+      CashDomainService.recordTransaction({
+        cashRegisterId: cashRegisterId || 'kas-1',
+        type: 'EXPENSE',
+        amount: expense.amount,
+        category: expense.category,
+        referenceEntity: 'expense',
+        referenceId: expense.id,
+        organizationId: currentOrgId || undefined,
+        description: expense.description
+      });
       setExpensesList(prev => [expense, ...prev]);
+      addToast({ type: 'success', message: 'Gider başarıyla kaydedildi ve kasadan düşüldü.' });
+
+      if (currentOrgId) {
+        await dbInsertExpense(expense);
+      }
+
+      await EventBus.publish({
+        type: 'EXPENSE_CREATED',
+        payload: expense,
+        timestamp: new Date().toISOString(),
+        organizationId: currentOrgId || undefined
+      });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Gider eklenemedi: ${err.message}` });
     }
   };
   const updateExpense = async (updatedExpense: Expense) => {
