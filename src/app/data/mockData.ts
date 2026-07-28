@@ -45,6 +45,8 @@ export interface Patient {
   consentGiven?: boolean;
   consentDate?: string;
   photoUrl?: string;
+  branchId?: string;
+  branch?: string;
 }
 
 export interface Appointment {
@@ -57,6 +59,7 @@ export interface Appointment {
   audiologist: string;
   status: 'Bekliyor' | 'Geldi' | 'Gelmedi' | 'İptal' | 'Hatırlatıldı';
   branch: string;
+  branchId?: string;
   notes: string;
 }
 
