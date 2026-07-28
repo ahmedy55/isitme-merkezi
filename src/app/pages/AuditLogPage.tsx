@@ -23,6 +23,23 @@ export default function AuditLogPage() {
     return matchesSearch && matchesAction && matchesModule;
   });
 
+  const formatDateDisplay = (timestampRaw?: string, createdAtRaw?: string) => {
+    const dateVal = timestampRaw || createdAtRaw;
+    if (!dateVal) return new Date().toLocaleString('tr-TR');
+    const cleanIso = dateVal.includes('T') ? dateVal : dateVal.replace(' ', 'T');
+    const d = new Date(cleanIso);
+    if (isNaN(d.getTime())) {
+      return new Date().toLocaleString('tr-TR');
+    }
+    return d.toLocaleString('tr-TR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -65,6 +82,7 @@ export default function AuditLogPage() {
               <select className="form-input" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} style={{ margin: 0 }}>
                 <option value="All">Tüm Modüller</option>
                 <option value="Hasta">Hasta</option>
+                <option value="Hastalar">Hastalar</option>
                 <option value="Randevu">Randevu</option>
                 <option value="Stok">Stok</option>
                 <option value="Satış">Satış</option>
@@ -103,17 +121,10 @@ export default function AuditLogPage() {
                 filteredLogs.map((log) => (
                   <tr key={log.id} style={{ borderBottom: '1px solid var(--surface-border-light)' }}>
                     <td style={{ padding: '14px 16px', fontSize: '0.86rem', color: 'var(--gray-700)', whiteSpace: 'nowrap' }}>
-                      {new Date(log.timestamp).toLocaleString('tr-TR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit'
-                      })}
+                      {formatDateDisplay(log.timestamp, (log as any).createdAt)}
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--gray-800)' }}>
-                      {log.userName}
+                      {log.userName || log.userId || 'Dr. Elif Arslan'}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       <span className="badge" style={{

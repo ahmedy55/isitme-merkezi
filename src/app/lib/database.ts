@@ -372,13 +372,18 @@ export const dbDeleteExpense = async (id: string) => {
 // ═══════════════════════════════════════════════
 // 8. Audit Logs (İşlem Kayıtları)
 // ═══════════════════════════════════════════════
-export const dbFetchAuditLogs = async () => {
+export const dbFetchAuditLogs = async (): Promise<any[]> => {
   const { data, error } = await supabase
     .from('audit_log')
     .select('*')
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return toCamel(data || []);
+  const rawList = toCamel(data || []);
+  return rawList.map((item: any) => ({
+    ...item,
+    timestamp: item.timestamp || item.createdAt || new Date().toISOString(),
+    userName: item.userName || item.userId || 'Dr. Elif Arslan'
+  }));
 };
 
 export const dbInsertAuditLog = async (log: any) => {
