@@ -51,7 +51,7 @@ export class AuditServiceEnriched {
    * Role-Based Authorization Guard for Service Layer
    */
   static checkPermission(userRoles: UserRole[], requiredRole: UserRole): void {
-    const isAuthorized = userRoles.includes('Yönetici') || userRoles.includes('Firma Yöneticisi') || userRoles.includes(requiredRole);
+    const isAuthorized = userRoles.includes('Firma Yöneticisi') || userRoles.includes(requiredRole);
     if (!isAuthorized) {
       throw new Error(`[Security Permission Error] Bu işlemi gerçekleştirmek için '${requiredRole}' yetkisi gereklidir.`);
     }
