@@ -1,12 +1,12 @@
 import { supabase } from '../lib/supabase';
 
 export interface AuditLogPayload {
-  organizationId?: string;
-  branchId?: string;
-  userId?: string;
+  organizationId?: string | null;
+  branchId?: string | null;
+  userId?: string | null;
   action: string;
   entity: string;
-  entityId?: string;
+  entityId?: string | null;
   details?: Record<string, any>;
   ip?: string;
   userAgent?: string;
@@ -45,8 +45,8 @@ export class AuditService {
    * Dedicated helper for logging branch switches
    */
   static async logBranchChange(
-    userId: string | undefined,
-    organizationId: string | undefined,
+    userId: string | null | undefined,
+    organizationId: string | null | undefined,
     fromBranch: string,
     toBranch: string
   ): Promise<void> {
