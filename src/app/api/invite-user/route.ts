@@ -4,10 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(request: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://znktitzknixpbakfrnzk.supabase.co';
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+    // Critical Security Guard 1: Require explicit SUPABASE_SERVICE_ROLE_KEY without Anon Key fallback
     if (!supabaseUrl) {
-      return NextResponse.json({ error: 'Supabase URL yapılandırılmamış.' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'Supabase URL yapılandırılmamış.' }, { status: 500 });
+    }
+
+    if (!supabaseServiceKey) {
+      return NextResponse.json({
+        success: false,
+        error: 'Güvenlik Hatası: SUPABASE_SERVICE_ROLE_KEY yapılandırılmamış. Anon Key yetkisiyle davet işlemi yapılamaz.'
+      }, { status: 500 });
     }
 
     // 1. Yetki Kontrolü: İsteği atan kullanıcının Bearer JWT Token kontrolü
@@ -15,7 +23,7 @@ export async function POST(request: Request) {
     const token = authHeader?.replace('Bearer ', '').trim();
 
     if (!token) {
-      return NextResponse.json({ error: 'Yetkisiz erişim. Lütfen oturum açın.' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Yetkisiz erişim. Lütfen oturum açın.' }, { status: 401 });
     }
 
     const supabaseUserClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
@@ -25,15 +33,19 @@ export async function POST(request: Request) {
     const { data: { user: requesterUser }, error: authErr } = await supabaseUserClient.auth.getUser(token);
 
     if (authErr || !requesterUser) {
-      return NextResponse.json({ error: 'Geçersiz veya süresi dolmuş oturum.' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Geçersiz veya süresi dolmuş oturum.' }, { status: 401 });
     }
 
     const body = await request.json();
     const { email, firstName, lastName, phone, roles, branchId, orgId } = body;
 
     if (!email || !orgId) {
-      return NextResponse.json({ error: 'E-posta ve Organizasyon ID zorunludur.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'E-posta ve Organizasyon ID zorunludur.' }, { status: 400 });
     }
+
+    // Input Normalization
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedPhone = phone ? phone.replace(/\s+/g, '') : '';
 
     // 2. Rol Yetki Denetimi: İsteği atan kullanıcı bu organizasyonun "Firma Yöneticisi" mi veya Platform Admin mi?
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -63,27 +75,31 @@ export async function POST(request: Request) {
 
       if (!isOrgManager) {
         return NextResponse.json({ 
+          success: false,
           error: 'Yetkisiz işlem. Kullanıcı davet etme yetkisi sadece Firma Yöneticisi veya Platform Yöneticisine aittir.' 
         }, { status: 403 });
       }
     }
 
-    // 3. Supabase Auth Admin SDK ile Güvenli Kullanıcı Daveti / Hesabı (auth.users + auth.identities)
+    // 3. Performance Optimization: O(1) single profile lookup instead of O(N) listUsers()
     let invitedUserId: string;
 
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const foundUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase().trim());
+    const { data: existingMembership } = await supabaseAdmin
+      .from('memberships')
+      .select('user_id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
 
-    if (foundUser) {
-      invitedUserId = foundUser.id;
+    if (existingMembership?.user_id) {
+      invitedUserId = existingMembership.user_id;
     } else {
       const { data: newAuthUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail,
         email_confirm: true,
         user_metadata: {
           first_name: firstName || '',
           last_name: lastName || '',
-          phone: phone || ''
+          phone: normalizedPhone
         },
         app_metadata: {
           organization_id: orgId
@@ -102,7 +118,7 @@ export async function POST(request: Request) {
       id: invitedUserId,
       first_name: firstName || '',
       last_name: lastName || '',
-      phone: phone || ''
+      phone: normalizedPhone
     });
 
     // 5. Memberships tablosuna ilişkili organizasyon kaydı ekleme
@@ -116,8 +132,8 @@ export async function POST(request: Request) {
         status: 'active',
         first_name: firstName || '',
         last_name: lastName || '',
-        email: email.toLowerCase().trim(),
-        phone: phone || ''
+        email: normalizedEmail,
+        phone: normalizedPhone
       }, { onConflict: 'user_id, organization_id' })
       .select('id, joined_at');
 
@@ -132,8 +148,8 @@ export async function POST(request: Request) {
         userId: invitedUserId,
         firstName,
         lastName,
-        email: email.toLowerCase().trim(),
-        phone,
+        email: normalizedEmail,
+        phone: normalizedPhone,
         roles: roles || ['Odyometrist'],
         branch: 'Tüm Şubeler',
         status: 'Aktif',
@@ -143,6 +159,6 @@ export async function POST(request: Request) {
 
   } catch (err: any) {
     console.error('Invite API secure route error:', err);
-    return NextResponse.json({ error: err.message || 'Sunucu hatası' }, { status: 500 });
+    return NextResponse.json({ success: false, error: err.message || 'Sunucu hatası' }, { status: 500 });
   }
 }
