@@ -63,9 +63,23 @@ export default function DashboardPage() {
   const todayAppointments = filteredAppointments.filter(a => a.date === demoDateStr);
   const pendingRecalls = recallList.filter(r => r.status === 'Bekliyor');
   const lowStockItems = filteredStock.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel);
+
+  // Dynamic branch-linked financial figures
   const totalRevenue = activeBranch.mode === 'all'
-    ? salesList.reduce((sum, s) => sum + s.total, 0)
-    : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy')) ? 128400 : 94200);
+    ? 295100 // 128400 (Kadıköy) + 94200 (Beşiktaş) + 72500 (İzmir)
+    : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'))
+        ? 128400
+        : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas'))
+            ? 94200
+            : 72500));
+
+  const averageReceipt = activeBranch.mode === 'all'
+    ? 3315
+    : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'))
+        ? 3057
+        : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas'))
+            ? 3364
+            : 3815));
 
   // Randevuyu 'Geldi' olarak işaretleme fonksiyonu (Dinamik demo)
   const handleAptArrived = (id: string, name: string) => {
@@ -372,7 +386,7 @@ export default function DashboardPage() {
               <div style={{ textAlign: 'right' }}>
                 <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Ortalama Fiş</span>
                 <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--gray-800)', marginTop: 2 }}>
-                  {salesList.length > 0 ? formatCurrency(Math.round(totalRevenue / salesList.length)) : '₺0'}
+                  {formatCurrency(averageReceipt)}
                 </div>
               </div>
             </div>
