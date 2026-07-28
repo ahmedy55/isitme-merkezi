@@ -6,7 +6,7 @@ import { Supplier, SupplierPurchase } from '../data/mockData';
 import { IconSearch, IconPlus, IconEdit, IconDelete, IconFilter, IconCheck, IconWarning, IconDownload } from '../components/Icons';
 
 export default function SuppliersPage() {
-  const { suppliersList, addSupplier, updateSupplier, deleteSupplier, addToast } = useApp();
+  const { suppliersList, addSupplier, updateSupplier, deleteSupplier, addSupplierPurchaseTransaction, addToast } = useApp();
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
