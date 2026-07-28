@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { BranchProvider, useBranch } from './context/BranchContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -133,10 +134,41 @@ function AppContent() {
   );
 }
 
+function BranchWrapper({ children }: { children: React.ReactNode }) {
+  const { branchesList, currentUser, currentOrgId, addToast } = useApp();
+
+  return (
+    <BranchProvider
+      branchesList={branchesList}
+      currentUser={currentUser}
+      currentOrgId={currentOrgId}
+    >
+      <BranchInnerWrapper addToast={addToast}>
+        {children}
+      </BranchInnerWrapper>
+    </BranchProvider>
+  );
+}
+
+function BranchInnerWrapper({ children, addToast }: { children: React.ReactNode; addToast: any }) {
+  const { isFallbackRedirected, fallbackMessage, clearFallbackMessage } = useBranch();
+
+  React.useEffect(() => {
+    if (isFallbackRedirected && fallbackMessage) {
+      addToast({ type: 'warning', message: fallbackMessage });
+      clearFallbackMessage();
+    }
+  }, [isFallbackRedirected, fallbackMessage]);
+
+  return <>{children}</>;
+}
+
 export default function Home() {
   return (
     <AppProvider>
-      <AppContent />
+      <BranchWrapper>
+        <AppContent />
+      </BranchWrapper>
     </AppProvider>
   );
 }

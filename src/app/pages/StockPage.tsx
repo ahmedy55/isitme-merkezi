@@ -2,11 +2,13 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranch } from '../context/BranchContext';
 import { stockItems, formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
   const { stockList, updateStockItem, addStockItem, deleteStockItem, patientsList, updatePatient, addToast, setCurrentPage } = useApp();
+  const { activeBranch } = useBranch();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);

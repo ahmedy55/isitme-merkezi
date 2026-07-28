@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranch } from '../context/BranchContext';
 import { getAvatarColor } from '../data/mockData';
 import { IconPlus, IconSGK, IconCalendar, IconCheck, IconClose } from '../components/Icons';
 
@@ -17,7 +18,13 @@ const statusColors: Record<string, string> = {
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 export default function AppointmentsPage() {
-  const { appointmentsList, patientsList, addAppointment, updateAppointmentStatus, addToast } = useApp();
+  const { appointmentsList: rawAppointmentsList, patientsList, addAppointment, updateAppointmentStatus, addToast } = useApp();
+  const { activeBranch } = useBranch();
+
+  const appointmentsList = React.useMemo(() => {
+    if (activeBranch.mode === 'all') return rawAppointmentsList;
+    return rawAppointmentsList.filter(a => !a.branchId || a.branchId === activeBranch.branchId || (a.branch || '').includes(activeBranch.branch?.name || activeBranch.slug));
+  }, [rawAppointmentsList, activeBranch]);
   
   const stats = React.useMemo(() => {
     const total = appointmentsList.length;

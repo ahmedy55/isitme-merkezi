@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranch } from '../context/BranchContext';
+import { BranchService } from '../services/BranchService';
 import { IconMenu, IconSearch, IconBell } from './Icons';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
@@ -22,15 +24,23 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 
 export default function Header() {
   const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList } = useApp();
+  const { activeBranch, selectBranchBySlug, isLoadingBranch, allowedBranches } = useBranch();
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
   const dropdownRef = React.useRef<HTMLDivElement | null>(null);
+  const branchDropdownRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
+      }
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(event.target as Node)) {
+        setShowBranchDropdown(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -92,6 +102,144 @@ export default function Header() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </form>
+        {/* Şube Seçici Dropdown */}
+        <div ref={branchDropdownRef} style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#f8fafc',
+              border: '1px solid var(--gray-200)',
+              borderRadius: 8,
+              padding: '6px 14px',
+              fontSize: '0.84rem',
+              fontWeight: 600,
+              color: activeBranch.mode === 'all' ? '#0284c7' : 'var(--gray-800)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>{activeBranch.mode === 'all' ? '🏢' : '📍'}</span>
+            <span>
+              {activeBranch.mode === 'all'
+                ? 'Tüm Şubeler (Konsolide)'
+                : (activeBranch.branch?.name || activeBranch.slug)}
+            </span>
+            <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▼</span>
+          </button>
+
+          {showBranchDropdown && (
+            <div style={{
+              position: 'absolute',
+              top: '44px',
+              right: 0,
+              width: 250,
+              backgroundColor: '#fff',
+              border: '1px solid var(--gray-200)',
+              borderRadius: 10,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              zIndex: 1000,
+              padding: '8px 0',
+              overflow: 'hidden'
+            }}>
+              <div style={{ padding: '6px 14px 8px', fontSize: '0.74rem', fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', borderBottom: '1px solid var(--gray-100)' }}>
+                Aktif Şube Seçimi
+              </div>
+
+              <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                {/* 1. Tüm Şubeler (if permitted) */}
+                {(!allowedBranches || allowedBranches.length > 1) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      selectBranchBySlug('all');
+                      setShowBranchDropdown(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '10px 14px',
+                      border: 'none',
+                      background: activeBranch.mode === 'all' ? '#f0f9ff' : 'transparent',
+                      color: activeBranch.mode === 'all' ? '#0284c7' : 'var(--gray-800)',
+                      fontWeight: activeBranch.mode === 'all' ? 700 : 500,
+                      fontSize: '0.84rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span>🏢 Tüm Şubeler (Konsolide)</span>
+                    {activeBranch.mode === 'all' && <span style={{ fontSize: '0.8rem', color: '#0284c7' }}>✓</span>}
+                  </button>
+                )}
+
+                {/* 2. Branches list */}
+                {branchesList.map(b => {
+                  const slug = BranchService.generateSlug(b);
+                  const isSelected = activeBranch.mode === 'single' && (activeBranch.branchId === b.id || activeBranch.slug === slug);
+                  const isPermitted = !allowedBranches || allowedBranches.includes(b.id);
+
+                  if (!isPermitted) return null;
+
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        selectBranchBySlug(slug);
+                        setShowBranchDropdown(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 14px',
+                        border: 'none',
+                        background: isSelected ? '#f0f9ff' : 'transparent',
+                        color: isSelected ? '#0284c7' : 'var(--gray-800)',
+                        fontWeight: isSelected ? 700 : 500,
+                        fontSize: '0.84rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span>📍 {b.name}</span>
+                      {isSelected && <span style={{ fontSize: '0.8rem', color: '#0284c7' }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--gray-100)', padding: '6px 14px 2px', marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentPage('branches');
+                    setShowBranchDropdown(false);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#0284c7',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: 0
+                  }}
+                >
+                  ⚙️ Şube Yönetimi ➔
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button 
             className="header-btn" 

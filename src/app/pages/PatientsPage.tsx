@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranch } from '../context/BranchContext';
 import CustomSelect from '../components/CustomSelect';
 import * as XLSX from 'xlsx';
 import { ResponsivePie } from '@nivo/pie';
@@ -308,7 +309,14 @@ export default function PatientsPage() {
     }
   };
 
-  const filtered = patientsList.filter((p) => {
+  const { activeBranch } = useBranch();
+
+  const branchFilteredPatients = useMemo(() => {
+    if (activeBranch.mode === 'all') return patientsList;
+    return patientsList.filter(p => !p.branchId || p.branchId === activeBranch.branchId || p.branch === activeBranch.branch?.name);
+  }, [patientsList, activeBranch]);
+
+  const filtered = branchFilteredPatients.filter((p) => {
     const matchSearch =
       `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
       p.tc.includes(search) ||
