@@ -119,6 +119,8 @@ export default function Sidebar() {
                       className={`sidebar-link ${currentPage === item.id ? 'active' : ''}`}
                       onClick={() => { setCurrentPage(item.id); setSidebarOpen(false); }}
                       title={item.label}
+                      aria-label={item.label}
+                      aria-current={currentPage === item.id ? 'page' : undefined}
                     >
                       <span className="sidebar-link-icon">
                         {Icon && <Icon size={17} strokeWidth={1.7} />}

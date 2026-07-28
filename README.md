@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🎧 AudiPro — İşitme Merkezi Yönetim Otomasyon Sistemi
 
-## Getting Started
+> **Enterprise ERP Mimarisinde İşitme Cihazı Merkezleri için Profesyonel Otomasyon Platformu**
 
-First, run the development server:
+![Next.js](https://img.shields.io/badge/Next.js-16.2.10-black?logo=next.js)
+![React](https://img.shields.io/badge/React-19.2.4-blue?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)
+![Supabase](https://img.shields.io/badge/Supabase-SSR-emerald?logo=supabase)
+![Vitest](https://img.shields.io/badge/Vitest-4.1-yellow?logo=vitest)
+![Build](https://img.shields.io/badge/Build-Passing-brightgreen)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## 🏛️ Mimari Katman Yapısı (Architecture Layering)
+
+AudiPro mimarisi, UI katmanını doğrudan veri tabanına bağlamak yerine **DDD (Domain-Driven Design)** ve **Repository Pattern** ilkelerini benimseyen 4 katmanlı kurumsal bir yapıdır:
+
+```
+[ UI (Pages & Components) ]
+            │
+            ▼
+[ Service Layer (Domain Services & EventBus) ]
+            │
+            ▼
+[ Data Access Layer (Repositories & Mappers) ]
+            │
+            ▼
+[ Database & External APIs (Supabase SSR & Medula) ]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 📂 Klasör Dizini
+- `src/app/pages/`: 23 modüler sayfa bileşeni (Hastalar, Randevular, Stok, Kasa, SGK, Servis vb.).
+- `src/app/services/`: İş kurallarını yöneten Domain Servisleri (`StockDomainService`, `SGKDomainService`, `CashDomainService`, `EventBus`, `MemoryCache`, `AuditServiceEnriched`).
+- `src/app/repositories/`: Tip güvenliğini sağlayan Jenerik Repository yapısı (`BaseRepository`, `PatientRepository`, `StockRepository`, `CashRepository`).
+- `src/app/lib/mappers/`: Özyinelemeli döngüleri kaldıran doğrudan varlık dönüştürücüleri (`entityMappers.ts`).
+- `src/app/lib/errors/`: Hata hiyerarşisi (`DatabaseError`, `ValidationError`, `PermissionError`).
+- `src/app/components/`: Reusable UI bileşenleri (`ErrorBoundary`, `StatCard`, `Sidebar`, `Header`, `BottomNav`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ⚡ Kurulum ve Çalıştırma (Getting Started)
 
-## Learn More
+### 1. Depoyu Klonlayın ve Bağımlılıkları Yükleyin
+```bash
+git clone https://github.com/ahmedy55/isitme-merkezi.git
+cd isitme-merkezi
+npm install
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Ortam Değişkenlerini Tanımlayın (`.env.local`)
+Kök dizinde bir `.env.local` dosyası oluşturun:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Geliştirici Sunucusunu Başlatın
+```bash
+npm run dev
+```
+Uygulama `http://localhost:3000` adresinde çalışacaktır.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🧪 Test ve Derleme Komutları
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Komut | Açıklama |
+|:---|:---|
+| `npm run test` | Vitest otomatik birim test suitini çalıştırır. |
+| `npm run build` | Next.js üretken derleme kontrolünü sıfır hatayla gerçekleştirir. |
+| `npm run lint` | ESLint statik kod analizini yürütür. |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 🛡️ Güvenlik ve Multi-Tenant Mimarisi
+- **JWT & Role Authentication:** Tüm sunucu isteklerinde JWT token doğrulaması yapılır.
+- **Service Role Key Isolation:** Service Role Key asla tarayıcıya sızmaz; yalnızca korumalı API yollarında kullanılır.
+- **Audit Trail & JSON Diffs:** Tüm kritik değişiklikler `AuditServiceEnriched` ile nesne öncesi/sonrası JSON farklarıyla loglanır.
+
+---
+
+## 📜 Lisans
+Gizli ve Özel Mülk — Tüm Hakları Saklıdır.
