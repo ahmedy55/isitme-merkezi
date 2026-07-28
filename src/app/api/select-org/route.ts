@@ -4,10 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(request: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://znktitzknixpbakfrnzk.supabase.co';
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json({ error: 'Supabase servis anahtarı yapılandırılmamış.' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'Supabase servis anahtarı yapılandırılmamış.' }, { status: 500 });
     }
 
     // 1. Yetki Kontrolü: İsteği atan kullanıcının Bearer JWT Token kontrolü

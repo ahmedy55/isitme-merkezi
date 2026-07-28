@@ -1,54 +1,80 @@
 import { supabase } from './supabase';
 import { SystemUser, UserRole } from '../data/mockData';
 import { toCamelGeneric, toSnakeGeneric } from '../repositories/BaseRepository';
+import { DatabaseError } from './errors/DatabaseError';
 
 // Key Case Converters (snake_case <-> camelCase) with Typesafe Generics <T>
 export const toCamel = <T = any>(obj: unknown): T => toCamelGeneric<T>(obj);
 export const toSnake = <T = any>(obj: unknown): T => toSnakeGeneric<T>(obj);
 
+/**
+ * Universal Database Query Executor with Exception Catching & Slow Query Logging (>500ms)
+ */
+export const executeDbQuery = async <T>(queryFn: () => Promise<T>, queryName: string): Promise<T> => {
+  const startTime = Date.now();
+  try {
+    const result = await queryFn();
+    const durationMs = Date.now() - startTime;
+    if (durationMs > 500) {
+      console.warn(`[Database Slow Query Alert] ${queryName} executed in ${durationMs}ms`);
+    }
+    return result;
+  } catch (error: any) {
+    console.error(`[DatabaseError in ${queryName}]:`, error);
+    if (error instanceof DatabaseError) throw error;
+    throw new DatabaseError(`Veritabanı işlem hatası (${queryName}): ${error.message || 'Bilinmeyen hata'}`, error);
+  }
+};
+
 // Aktif kullanıcının organizasyon ID'sini JWT oturumundan çeker
 export const getActiveOrgId = async (): Promise<string | null> => {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user.app_metadata?.organization_id || null;
+  return executeDbQuery(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user.app_metadata?.organization_id || null;
+  }, 'getActiveOrgId');
 };
 
 // ═══════════════════════════════════════════════
 // 1. Patients (Hastalar)
 // ═══════════════════════════════════════════════
 export const dbFetchPatients = async () => {
-  const { data, error } = await supabase
-    .from('patients')
-    .select('*, patient_timeline(*)')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  
-  // Format timeline structure if needed to match frontend
-  return toCamel(data || []);
+  return executeDbQuery(async () => {
+    const { data, error } = await supabase
+      .from('patients')
+      .select('*, patient_timeline(*)')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return toCamel(data || []);
+  }, 'dbFetchPatients');
 };
 
 export const dbInsertPatient = async (patient: any) => {
-  const orgId = await getActiveOrgId();
-  if (!orgId) throw new Error('Aktif organizasyon bulunamadı.');
-  
-  const { id, timeline, ...payload } = toSnake(patient);
-  
-  const { data, error } = await supabase
-    .from('patients')
-    .insert([{ ...payload, organization_id: orgId }])
-    .select();
-  if (error) throw error;
-  return toCamel(data?.[0]);
+  return executeDbQuery(async () => {
+    const orgId = await getActiveOrgId();
+    if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
+    
+    const { id, timeline, ...payload } = toSnake(patient);
+    
+    const { data, error } = await supabase
+      .from('patients')
+      .insert([{ ...payload, organization_id: orgId }])
+      .select();
+    if (error) throw error;
+    return toCamel(data?.[0]);
+  }, 'dbInsertPatient');
 };
 
 export const dbUpdatePatient = async (id: string, patient: any) => {
-  const { id: _, timeline, ...payload } = toSnake(patient);
-  const { data, error } = await supabase
-    .from('patients')
-    .update(payload)
-    .eq('id', id)
-    .select();
-  if (error) throw error;
-  return toCamel(data?.[0]);
+  return executeDbQuery(async () => {
+    const { id: _, timeline, ...payload } = toSnake(patient);
+    const { data, error } = await supabase
+      .from('patients')
+      .update(payload)
+      .eq('id', id)
+      .select();
+    if (error) throw error;
+    return toCamel(data?.[0]);
+  }, 'dbUpdatePatient');
 };
 
 // ═══════════════════════════════════════════════

@@ -4,8 +4,7 @@
    Mobile-First, Vanilla CSS + CSS Custom Properties
    ============================================================ */
 
-/* ── Tipografi İmport ── */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Manrope:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* ── Tipografi: next/font/google ile Inter + Outfit yükleniyor (layout.tsx) ── */
 
 /* ── CSS Design Tokens ── */
 :root {

@@ -3,6 +3,7 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { BranchProvider, useBranch } from './context/BranchContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -165,10 +166,12 @@ function BranchInnerWrapper({ children, addToast }: { children: React.ReactNode;
 
 export default function Home() {
   return (
-    <AppProvider>
-      <BranchWrapper>
-        <AppContent />
-      </BranchWrapper>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <BranchWrapper>
+          <AppContent />
+        </BranchWrapper>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
