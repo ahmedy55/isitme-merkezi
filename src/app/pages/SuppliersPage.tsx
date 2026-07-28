@@ -518,7 +518,9 @@ export default function SuppliersPage() {
                             className="btn"
                             onClick={() => {
                               if (sup.status === 'Pasif') {
-                                updateSupplier({ ...sup, status: 'Aktif' });
+                                const updated = { ...sup, status: 'Aktif' as const };
+                                updateSupplier(updated);
+                                if (selectedSupplier?.id === sup.id) setSelectedSupplier(updated);
                                 addToast({ type: 'success', message: `${sup.companyName} aktife alındı.` });
                               } else {
                                 setPasifConfirmId(pasifConfirmId === sup.id ? null : sup.id);
@@ -573,7 +575,9 @@ export default function SuppliersPage() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    updateSupplier({ ...sup, status: 'Pasif' });
+                                    const updated = { ...sup, status: 'Pasif' as const };
+                                    updateSupplier(updated);
+                                    if (selectedSupplier?.id === sup.id) setSelectedSupplier(updated);
                                     addToast({ type: 'warning', message: `${sup.companyName} pasife alındı.` });
                                     setPasifConfirmId(null);
                                   }}

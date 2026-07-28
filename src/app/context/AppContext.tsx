@@ -613,16 +613,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   const updateSupplier = async (updatedSupplier: Supplier) => {
+    setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
     if (currentOrgId && updatedSupplier.id) {
       try {
-        const updated = await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
-        setSuppliersList(prev => prev.map(s => s.id === updated.id ? updated : s));
-        addToast({ type: 'success', message: 'Tedarikçi bilgileri güncellendi.' });
+        await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
       } catch (err: any) {
-        addToast({ type: 'error', message: `Tedarikçi güncellenemedi: ${err.message}` });
+        console.warn('dbUpdateSupplier error:', err);
       }
-    } else {
-      setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
     }
   };
   const deleteSupplier = async (id: string) => {
