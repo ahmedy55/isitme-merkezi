@@ -22,8 +22,7 @@ export default function AppointmentsPage() {
   const { activeBranch } = useBranch();
 
   const appointmentsList = React.useMemo(() => {
-    if (activeBranch.mode === 'all') return rawAppointmentsList;
-    return rawAppointmentsList.filter(a => !a.branchId || a.branchId === activeBranch.branchId || (a.branch || '').includes(activeBranch.branch?.name || activeBranch.slug));
+    return rawAppointmentsList.filter(a => activeBranch.mode === 'single' ? (a.branch || '').includes(activeBranch.branch?.name || activeBranch.slug) : true);
   }, [rawAppointmentsList, activeBranch]);
   
   const stats = React.useMemo(() => {
