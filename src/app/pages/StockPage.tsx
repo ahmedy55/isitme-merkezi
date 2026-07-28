@@ -126,17 +126,26 @@ export default function StockPage() {
     setEditingItem(null);
   };
 
-  const filtered = stockList.filter(item => {
+  const branchFilteredStock = stockList.filter((item, index) => {
+    if (activeBranch.mode === 'all') return true;
+    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || (activeBranch.branch?.name || '').includes('Kadıköy'));
+    if (item.branch) {
+      return isKadikoy ? item.branch.includes('Kadıköy') : item.branch.includes('Beşiktaş');
+    }
+    return isKadikoy ? index % 2 === 0 : index % 2 !== 0;
+  });
+
+  const filtered = branchFilteredStock.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) || item.brand.toLowerCase().includes(search.toLowerCase());
     const matchCategory = filterCategory === 'Tümü' || item.category === filterCategory;
     return matchSearch && matchCategory;
   });
 
-  const totalValue = stockList.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-  const totalQuantity = stockList.reduce((sum, i) => sum + i.quantity, 0);
-  const lowStockCount = stockList.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel).length;
-  const utsCount = stockList.filter(s => s.utsStatus === 'Bildirildi').length;
-  const utsDisiCount = stockList.filter(s => s.utsStatus !== 'Bildirildi').length;
+  const totalValue = branchFilteredStock.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+  const totalQuantity = branchFilteredStock.reduce((sum, i) => sum + i.quantity, 0);
+  const lowStockCount = branchFilteredStock.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel).length;
+  const utsCount = branchFilteredStock.filter(s => s.utsStatus === 'Bildirildi').length;
+  const utsDisiCount = branchFilteredStock.filter(s => s.utsStatus !== 'Bildirildi').length;
 
   const handleUtsNotification = (item: StockItem) => {
     if (!item.assignedPatientId) return;

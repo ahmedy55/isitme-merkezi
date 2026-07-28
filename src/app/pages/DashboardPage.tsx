@@ -36,10 +36,36 @@ export default function DashboardPage() {
   // Demo günü tarihi: 10.07.2026
   const demoDateStr = '2026-07-10';
 
-  const todayAppointments = appointmentsList.filter(a => a.date === demoDateStr);
+  const filteredPatients = React.useMemo(() => {
+    if (activeBranch.mode === 'all') return patientsList;
+    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
+    return patientsList.filter((p, i) => isKadikoy ? i % 2 === 0 : i % 2 !== 0);
+  }, [patientsList, activeBranch]);
+
+  const filteredAppointments = React.useMemo(() => {
+    if (activeBranch.mode === 'all') return appointmentsList;
+    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
+    return appointmentsList.filter(a => isKadikoy ? (a.branch || '').includes('Kadıköy') : (a.branch || '').includes('Beşiktaş'));
+  }, [appointmentsList, activeBranch]);
+
+  const filteredStock = React.useMemo(() => {
+    if (activeBranch.mode === 'all') return stockList;
+    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
+    return stockList.filter(s => isKadikoy ? (s.branch || '').includes('Kadıköy') : (s.branch || '').includes('Beşiktaş'));
+  }, [stockList, activeBranch]);
+
+  const filteredSales = React.useMemo(() => {
+    if (activeBranch.mode === 'all') return salesList;
+    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
+    return salesList.filter((s, i) => isKadikoy ? i % 2 === 0 : i % 2 !== 0);
+  }, [salesList, activeBranch]);
+
+  const todayAppointments = filteredAppointments.filter(a => a.date === demoDateStr);
   const pendingRecalls = recallList.filter(r => r.status === 'Bekliyor');
-  const lowStockItems = stockList.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel);
-  const totalRevenue = salesList.reduce((sum, s) => sum + s.total, 0);
+  const lowStockItems = filteredStock.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel);
+  const totalRevenue = activeBranch.mode === 'all'
+    ? salesList.reduce((sum, s) => sum + s.total, 0)
+    : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy')) ? 128400 : 94200);
 
   // Randevuyu 'Geldi' olarak işaretleme fonksiyonu (Dinamik demo)
   const handleAptArrived = (id: string, name: string) => {
@@ -154,7 +180,7 @@ export default function DashboardPage() {
           </div>
           <div className="stat-content">
             <div className="stat-label">Toplam Hasta</div>
-            <div className="stat-value">{patientsList.length}</div>
+            <div className="stat-value">{filteredPatients.length}</div>
             <span className="stat-change up">
               <IconTrendUp size={12} /> Bu Ay +2
             </span>

@@ -312,9 +312,14 @@ export default function PatientsPage() {
   const { activeBranch } = useBranch();
 
   const branchFilteredPatients = useMemo(() => {
-    if (activeBranch.mode !== 'single') return patientsList;
-    const branchTarget = activeBranch.branch?.name || activeBranch.slug;
-    return patientsList.filter(p => !p.branch || (p.branch || '').includes(branchTarget));
+    if (activeBranch.mode === 'all') return patientsList;
+    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || (activeBranch.branch?.name || '').includes('Kadıköy'));
+    return patientsList.filter((p, i) => {
+      if (p.branch) {
+        return isKadikoy ? p.branch.includes('Kadıköy') : p.branch.includes('Beşiktaş');
+      }
+      return isKadikoy ? i % 2 === 0 : i % 2 !== 0;
+    });
   }, [patientsList, activeBranch]);
 
   const filtered = branchFilteredPatients.filter((p) => {
