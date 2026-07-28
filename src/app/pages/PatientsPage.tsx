@@ -312,8 +312,9 @@ export default function PatientsPage() {
   const { activeBranch } = useBranch();
 
   const branchFilteredPatients = useMemo(() => {
-    if (activeBranch.mode === 'all') return patientsList;
-    return patientsList.filter(p => !p.branch || (p.branch || '').includes(activeBranch.branch?.name || activeBranch.slug));
+    if (activeBranch.mode !== 'single') return patientsList;
+    const branchTarget = activeBranch.branch?.name || activeBranch.slug;
+    return patientsList.filter(p => !p.branch || (p.branch || '').includes(branchTarget));
   }, [patientsList, activeBranch]);
 
   const filtered = branchFilteredPatients.filter((p) => {
