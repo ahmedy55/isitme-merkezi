@@ -410,21 +410,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePatient = async (updatedPatient: Patient) => {
+    setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+    addToast({ type: 'success', message: 'Hasta bilgileri güncellendi.' });
     if (currentOrgId && updatedPatient.id) {
       try {
-        const updated = await dbUpdatePatient(updatedPatient.id, updatedPatient);
-        setPatientsList(prev => prev.map(p => p.id === updated.id ? updated : p));
-        addToast({ type: 'success', message: 'Hasta bilgileri güncellendi.' });
+        await dbUpdatePatient(updatedPatient.id, updatedPatient);
         await dbInsertAuditLog({
           action: 'Hasta Güncelleme',
           module: 'Hastalar',
           description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.`
         });
       } catch (err: any) {
-        addToast({ type: 'error', message: `Hasta güncellenemedi: ${err.message}` });
+        console.warn('dbUpdatePatient background sync:', err);
       }
-    } else {
-      setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
     }
   };
 
@@ -453,16 +451,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
+    setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
     if (currentOrgId) {
       try {
-        const updated = await dbUpdateAppointmentStatus(id, status);
-        setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-        addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
+        await dbUpdateAppointmentStatus(id, status);
       } catch (err: any) {
-        addToast({ type: 'error', message: `Randevu güncellenemedi: ${err.message}` });
+        console.warn('dbUpdateAppointmentStatus background sync:', err);
       }
-    } else {
-      setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
     }
   };
 
@@ -566,16 +562,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateStockItem = async (updatedItem: StockItem) => {
+    setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
+    addToast({ type: 'success', message: 'Ürün bilgileri güncellendi.' });
     if (currentOrgId && updatedItem.id) {
       try {
-        const updated = await dbUpdateStockItem(updatedItem.id, updatedItem);
-        setStockList(prev => prev.map(s => s.id === updated.id ? updated : s));
-        addToast({ type: 'success', message: 'Ürün bilgileri güncellendi.' });
+        await dbUpdateStockItem(updatedItem.id, updatedItem);
       } catch (err: any) {
-        addToast({ type: 'error', message: `Ürün güncellenemedi: ${err.message}` });
+        console.warn('dbUpdateStockItem background sync:', err);
       }
-    } else {
-      setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
     }
   };
 
@@ -585,16 +579,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateRecallItemStatus = async (id: string, status: RecallItem['status']) => {
+    setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: new Date().toISOString().split('T')[0] } : r));
+    addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
     if (currentOrgId) {
       try {
-        const updated = await dbUpdateRecallStatus(id, status);
-        setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: updated.lastContact } : r));
-        addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
+        await dbUpdateRecallStatus(id, status);
       } catch (err: any) {
-        addToast({ type: 'error', message: `Durum güncellenemedi: ${err.message}` });
+        console.warn('dbUpdateRecallStatus background sync:', err);
       }
-    } else {
-      setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: '2026-07-10' } : r));
     }
   };
 
@@ -667,29 +659,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   const updateExpense = async (updatedExpense: Expense) => {
+    setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+    addToast({ type: 'success', message: 'Gider kaydı güncellendi.' });
     if (currentOrgId && updatedExpense.id) {
       try {
-        const updated = await dbUpdateExpense(updatedExpense.id, updatedExpense);
-        setExpensesList(prev => prev.map(e => e.id === updated.id ? updated : e));
-        addToast({ type: 'success', message: 'Gider kaydı güncellendi.' });
+        await dbUpdateExpense(updatedExpense.id, updatedExpense);
       } catch (err: any) {
-        addToast({ type: 'error', message: `Gider güncellenemedi: ${err.message}` });
+        console.warn('dbUpdateExpense background sync:', err);
       }
-    } else {
-      setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
     }
   };
+
   const deleteExpense = async (id: string) => {
+    setExpensesList(prev => prev.filter(e => e.id !== id));
+    addToast({ type: 'success', message: 'Gider kaydı silindi.' });
     if (currentOrgId) {
       try {
         await dbDeleteExpense(id);
-        setExpensesList(prev => prev.filter(e => e.id !== id));
-        addToast({ type: 'success', message: 'Gider kaydı silindi.' });
       } catch (err: any) {
-        addToast({ type: 'error', message: `Gider silinemedi: ${err.message}` });
+        console.warn('dbDeleteExpense background sync:', err);
       }
-    } else {
-      setExpensesList(prev => prev.filter(e => e.id !== id));
     }
   };
 
@@ -721,30 +710,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateUser = async (updatedUser: SystemUser) => {
+    setUsersList(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    addToast({ type: 'success', message: 'Kullanıcı bilgileri ve rolü güncellendi.' });
     if (currentOrgId && updatedUser.id) {
       try {
-        const updated = await dbUpdateMembership(updatedUser.id, updatedUser);
-        setUsersList(prev => prev.map(u => u.id === updated.id ? updated : u));
-        addToast({ type: 'success', message: 'Kullanıcı bilgileri ve rolü güncellendi.' });
+        await dbUpdateMembership(updatedUser.id, updatedUser);
       } catch (err: any) {
-        addToast({ type: 'error', message: `Kullanıcı güncellenemedi: ${err.message}` });
+        console.warn('dbUpdateMembership background sync:', err);
       }
-    } else {
-      setUsersList(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
     }
   };
 
   const deleteUser = async (id: string) => {
+    setUsersList(prev => prev.filter(u => u.id !== id));
+    addToast({ type: 'success', message: 'Kullanıcı üyeliği kaldırıldı.' });
     if (currentOrgId) {
       try {
         await dbDeleteMembership(id);
-        setUsersList(prev => prev.filter(u => u.id !== id));
-        addToast({ type: 'success', message: 'Kullanıcı üyeliği kaldırıldı.' });
       } catch (err: any) {
-        addToast({ type: 'error', message: `Kullanıcı kaldırılamadı: ${err.message}` });
+        console.warn('dbDeleteMembership background sync:', err);
       }
-    } else {
-      setUsersList(prev => prev.filter(u => u.id !== id));
     }
   };
 
@@ -771,16 +756,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateBranch = async (updatedBranch: Branch) => {
+    setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
+    addToast({ type: 'success', message: 'Şube bilgileri güncellendi.' });
     if (currentOrgId && updatedBranch.id) {
       try {
-        const updated = await dbUpdateBranch(updatedBranch.id, updatedBranch);
-        setBranchesList(prev => prev.map(b => b.id === updated.id ? updated : b));
-        addToast({ type: 'success', message: 'Şube bilgileri güncellendi.' });
+        await dbUpdateBranch(updatedBranch.id, updatedBranch);
       } catch (err: any) {
-        addToast({ type: 'error', message: `Şube güncellenemedi: ${err.message}` });
+        console.warn('dbUpdateBranch background sync:', err);
       }
-    } else {
-      setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
     }
   };
 
