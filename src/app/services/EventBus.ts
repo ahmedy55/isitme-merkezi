@@ -4,7 +4,8 @@ export type DomainEventType =
   | 'SERVICE_COMPLETED' 
   | 'SGK_APPROVED' 
   | 'EXPENSE_CREATED' 
-  | 'CRITICAL_STOCK_ALERT';
+  | 'CRITICAL_STOCK_ALERT'
+  | 'AUDIT_LOGGED';
 
 export interface DomainEvent<T = any> {
   type: DomainEventType;

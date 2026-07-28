@@ -1,4 +1,4 @@
-import { CashTransaction, CashAccount } from '../data/mockData';
+import { CashTransaction } from '../data/mockData';
 import { toCamelGeneric, toSnakeGeneric } from './BaseRepository';
 
 /**
@@ -9,7 +9,7 @@ export class CashRepository {
     return toCamelGeneric<T>(raw);
   }
 
-  static formatAccount<T = CashAccount>(raw: unknown): T {
+  static formatAccount<T = Record<string, unknown>>(raw: unknown): T {
     return toCamelGeneric<T>(raw);
   }
 
