@@ -134,7 +134,7 @@ const statusConfig: Record<string, { color: string; icon: string }> = {
 };
 
 export default function ServicePage() {
-  const { addSale, addToast } = useApp();
+  const { addSale, addToast, completeServiceTicket } = useApp();
   const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);

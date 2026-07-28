@@ -104,6 +104,56 @@ export interface SaleRecord {
   audiologist?: string;
 }
 
+// ── Enterprise Domain Ledgers & Policies ──
+export type StockMovementType = 'PURCHASE' | 'SALE' | 'TRANSFER' | 'RETURN' | 'ADJUSTMENT' | 'SERVICE' | 'LOSS';
+
+export interface StockMovement {
+  id: string;
+  organizationId?: string;
+  branchId?: string;
+  stockItemId: string;
+  stockItemName: string;
+  type: StockMovementType;
+  quantityChange: number;
+  unitPrice: number;
+  referenceEntity: 'sale' | 'purchase' | 'service' | 'adjustment';
+  referenceId: string;
+  performedByUserId?: string;
+  createdAt: string;
+  notes?: string;
+}
+
+export type CashTransactionType = 'INCOME' | 'EXPENSE' | 'PAYOUT' | 'TRANSFER' | 'REFUND';
+
+export interface CashTransaction {
+  id: string;
+  organizationId?: string;
+  branchId?: string;
+  cashRegisterId: string;
+  type: CashTransactionType;
+  amount: number;
+  category: string;
+  referenceEntity?: 'sale' | 'expense' | 'purchase' | 'service';
+  referenceId?: string;
+  performedByUserId?: string;
+  createdAt: string;
+  description?: string;
+}
+
+export interface RecallPolicy {
+  policyType: 'SGK' | 'PRIVATE_INSURANCE' | 'DEVICE_CHECK' | 'TRIAL';
+  durationYears: number;
+  durationMonths: number;
+  description: string;
+}
+
+export const RECALL_POLICIES: Record<string, RecallPolicy> = {
+  SGK: { policyType: 'SGK', durationYears: 5, durationMonths: 0, description: 'SGK 5 Yıllık Cihaz Yenileme Hakkı' },
+  PRIVATE_INSURANCE: { policyType: 'PRIVATE_INSURANCE', durationYears: 2, durationMonths: 0, description: 'Özel Sigorta Yenileme' },
+  DEVICE_CHECK: { policyType: 'DEVICE_CHECK', durationYears: 1, durationMonths: 0, description: 'Yıllık Cihaz Kontrolü' },
+  TRIAL: { policyType: 'TRIAL', durationYears: 0, durationMonths: 1, description: 'Cihaz Deneme Takibi' }
+};
+
 export interface RecallItem {
   id: string;
   patientId: string;

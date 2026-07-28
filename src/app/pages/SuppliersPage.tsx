@@ -301,16 +301,8 @@ export default function SuppliersPage() {
       balanceChange = -(purTotal / 2); // Simüle yarısı
     }
 
-    const updatedSupplier: Supplier = {
-      ...selectedSupplier,
-      balance: selectedSupplier.balance + balanceChange,
-      purchases: [newPurchase, ...selectedSupplier.purchases]
-    };
-
-    updateSupplier(updatedSupplier);
-    setSelectedSupplier(updatedSupplier); // Refresh view
+    addSupplierPurchaseTransaction(selectedSupplier.id, newPurchase);
     setShowNewPurchaseForm(false);
-    addToast({ type: 'success', message: 'Fatura/Alış kaydı başarıyla eklendi.' });
   };
 
   const formatCurrency = (val: number) => {

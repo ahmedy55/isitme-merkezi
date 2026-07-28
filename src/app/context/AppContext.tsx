@@ -13,9 +13,16 @@ import {
   auditLog as initialAuditLog,
   initialBranches,
   Patient, Appointment, StockItem, SaleRecord, RecallItem,
-  Supplier, Expense, SystemUser, AuditLogEntry, Branch
+  Supplier, Expense, SystemUser, AuditLogEntry, Branch, SupplierPurchase
 } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import { SaleDomainService } from '../services/SaleDomainService';
+import { StockDomainService } from '../services/StockDomainService';
+import { CashDomainService } from '../services/CashDomainService';
+import { PurchaseDomainService } from '../services/PurchaseDomainService';
+import { SGKDomainService } from '../services/SGKDomainService';
+import { ServiceDomainService } from '../services/ServiceDomainService';
+import { EventBus } from '../services/EventBus';
 import {
   dbFetchPatients, dbInsertPatient, dbUpdatePatient,
   dbFetchAppointments, dbInsertAppointment, dbUpdateAppointmentStatus,
@@ -101,7 +108,10 @@ interface AppContextType {
   updatePatient: (patient: Patient) => void;
   addAppointment: (appointment: Appointment) => void;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
-  addSale: (sale: SaleRecord) => void;
+  addSale: (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => Promise<void>;
+  addSupplierPurchaseTransaction: (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => Promise<void>;
+  approveSGKPrescription: (patientId: string, prescriptionNo: string, reportNo: string) => Promise<void>;
+  completeServiceTicket: (ticketId: string, patientName: string, serviceFee: number, partsUsed?: { stockItemId: string; stockItemName: string; quantity: number; price: number }[], cashRegisterId?: string) => Promise<void>;
   addStockItem: (item: StockItem) => void;
   updateStockItem: (item: StockItem) => void;
   deleteStockItem: (id: string) => void;
@@ -456,27 +466,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addSale = async (sale: SaleRecord) => {
-    if (currentOrgId) {
-      try {
-        const created = await dbInsertSale(sale);
-        // patientName JOIN eşlemesi yapalım
-        const pat = patientsList.find(p => p.id === sale.patientId);
-        const patientName = pat ? `${pat.firstName} ${pat.lastName}` : 'Bilinmeyen Hasta';
-        const createdWithPatName = { ...created, patientName };
+  const addSale = async (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => {
+    try {
+      const result = await SaleDomainService.executeSaleTransaction(stockList, {
+        sale,
+        stockItemId,
+        cashRegisterId,
+        organizationId: currentOrgId || undefined
+      });
 
-        setSalesList(prev => [createdWithPatName, ...prev]);
-        addToast({ type: 'success', message: 'Satış işlemi başarıyla kaydedildi.' });
+      setStockList(result.updatedStockList);
+      setSalesList(prev => [result.createdSale, ...prev]);
+      addToast({ type: 'success', message: 'Satış kaydedildi, stok ve kasa bakiyesi güncellendi.' });
+
+      if (currentOrgId) {
+        await dbInsertSale(sale);
         await dbInsertAuditLog({
           action: 'Satış Ekleme',
           module: 'Kasa',
-          description: `${patientName} adına ${sale.total} TL tutarında satış.`
+          description: `${sale.patientName} adına ${sale.total} TL tutarında atomik satış.`
         });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Satış kaydedilemedi: ${err.message}` });
       }
-    } else {
-      setSalesList(prev => [sale, ...prev]);
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Satış kaydedilemedi: ${err.message}` });
+      console.error('[addSale Exception]', err);
+    }
+  };
+
+  const addSupplierPurchaseTransaction = async (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => {
+    try {
+      const result = await PurchaseDomainService.executePurchaseTransaction(suppliersList, stockList, {
+        supplierId,
+        purchase,
+        cashRegisterId,
+        organizationId: currentOrgId || undefined
+      });
+
+      setSuppliersList(result.updatedSuppliers);
+      setStockList(result.updatedStockList);
+      addToast({ type: 'success', message: 'Alış faturası kaydedildi, tedarikçi borcu ve stoklar güncellendi.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Alış faturası işlenemedi: ${err.message}` });
+    }
+  };
+
+  const approveSGKPrescription = async (patientId: string, prescriptionNo: string, reportNo: string) => {
+    try {
+      const result = await SGKDomainService.approvePrescription(patientsList, recallList, {
+        patientId,
+        prescriptionNo,
+        reportNo,
+        organizationId: currentOrgId || undefined
+      });
+
+      setPatientsList(result.updatedPatients);
+      setRecallList(result.updatedRecalls);
+      addToast({ type: 'success', message: 'SGK Reçetesi onaylandı ve 5 yıllık yenileme takibi kuruldu.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `SGK Reçetesi onaylanamadı: ${err.message}` });
+    }
+  };
+
+  const completeServiceTicket = async (
+    ticketId: string,
+    patientName: string,
+    serviceFee: number,
+    partsUsed: { stockItemId: string; stockItemName: string; quantity: number; price: number }[] = [],
+    cashRegisterId?: string
+  ) => {
+    try {
+      const result = await ServiceDomainService.completeServiceTicket(stockList, {
+        ticketId,
+        patientName,
+        serviceFee,
+        partsUsed,
+        cashRegisterId,
+        organizationId: currentOrgId || undefined
+      });
+
+      setStockList(result.updatedStockList);
+      addToast({ type: 'success', message: 'Teknik servis işlemi kapatıldı, kullanılan parçalar stoktan düşüldü.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Teknik servis kapatılamadı: ${err.message}` });
     }
   };
 
@@ -740,6 +811,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addAppointment,
       updateAppointmentStatus,
       addSale,
+      addSupplierPurchaseTransaction,
+      approveSGKPrescription,
+      completeServiceTicket,
       addStockItem,
       updateStockItem,
       deleteStockItem,

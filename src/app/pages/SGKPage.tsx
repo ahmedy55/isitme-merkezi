@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { IconSearch, IconCheck, IconWarning, IconRefresh, IconDownload, IconPlus, IconClose } from '../components/Icons';
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage, patientsList } = useApp();
+  const { addToast, setCurrentPage, patientsList, approveSGKPrescription } = useApp();
   const [tc, setTc] = useState('');
   const [queryResult, setQueryResult] = useState<null | 'success' | 'loading'>(null);
   const [matchedPatient, setMatchedPatient] = useState<any | null>(null);
@@ -224,8 +224,10 @@ export default function SGKPage() {
                   </div>
 
                   <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
-                    <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'E-reçete / rapor girişi için Medula onay belgesi üretildi.' })}>
-                      Reçete/Rapor Bağla
+                    <button className="btn btn-primary" onClick={() => {
+                      approveSGKPrescription(matchedPatient.id, `REC-2026-${Math.floor(1000 + Math.random() * 9000)}`, `RAP-2026-${Math.floor(1000 + Math.random() * 9000)}`);
+                    }}>
+                      Reçete/Rapor Bağla (5 Yıllık Otomatik Recall Kur)
                     </button>
                     <button className="btn btn-secondary" onClick={() => setCurrentPage('appointments')}>
                       Randevu Planla

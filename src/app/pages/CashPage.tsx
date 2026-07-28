@@ -89,18 +89,8 @@ export default function CashPage() {
       paymentMethod: formData.paymentMethod as any,
       status: 'Tahsil Edildi' as const
     };
-    addSale(newSale);
-
-    // Update matching stock item status
-    const matchingStockItem = stockList.find(s => s.name.includes(formData.itemName) && s.status === 'Stokta');
-    if (matchingStockItem) {
-      updateStockItem({
-        ...matchingStockItem,
-        status: 'Satıldı',
-        assignedPatientId: 'p-1',
-        assignedPatientName: formData.patientName
-      });
-    }
+    const matchingStockItem = stockList.find(s => s.name.includes(formData.itemName) && s.quantity > 0);
+    addSale(newSale, matchingStockItem?.id, formData.targetAccountId);
 
     // Add cash transaction & update account balance
     const targetAcc = accounts.find(a => a.id === formData.targetAccountId);
