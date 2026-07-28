@@ -61,7 +61,7 @@ export function BranchProvider({
 
   const selectBranchBySlug = (slug: string) => {
     setIsLoadingBranch(true);
-    const prevSlug = activeBranch.mode === 'all' ? 'all' : activeBranch.slug;
+    const prevSlug = activeBranch.mode === 'single' ? activeBranch.slug : 'all';
 
     if (slug === 'all') {
       const newMode: BranchMode = { mode: 'all' };
