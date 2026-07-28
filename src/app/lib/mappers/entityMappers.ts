@@ -1,4 +1,4 @@
-import { Patient, StockItem, Appointment, CashTransaction, Supplier, Expense, AuditLogEntry } from '../../data/mockData';
+import { Patient, StockItem, Appointment, AuditLogEntry } from '../../data/mockData';
 
 /**
  * Direct explicit entity mappers (Zero CPU overhead compared to recursive Object.keys)
@@ -10,10 +10,12 @@ export const mapPatientRowToDomain = (row: any): Patient => ({
   lastName: row.last_name || '',
   tc: row.tc || '',
   phone: row.phone || '',
+  email: row.email || '',
   birthDate: row.birth_date || '1985-01-01',
-  gender: row.gender || 'Erkek',
-  city: row.city || 'İstanbul',
-  hearingLoss: row.hearing_loss || 'Orta',
+  gender: (row.gender as 'Erkek' | 'Kadın') || 'Erkek',
+  address: row.address || 'İstanbul',
+  hearingLoss: (row.hearing_loss as Patient['hearingLoss']) || 'Orta',
+  hearingLossSide: (row.hearing_loss_side as Patient['hearingLossSide']) || 'Her İki Kulak',
   currentDevice: row.current_device || undefined,
   sgkStatus: row.sgk_status || 'Aktif',
   sgkRenewalDate: row.sgk_renewal_date || undefined,
@@ -21,7 +23,6 @@ export const mapPatientRowToDomain = (row: any): Patient => ({
   reportNo: row.report_no || undefined,
   salesStage: row.sales_stage || 'Potansiyel',
   notes: row.notes || undefined,
-  organizationId: row.organization_id || undefined,
   branchId: row.branch_id || undefined,
   createdAt: row.created_at || undefined
 });
@@ -51,10 +52,11 @@ export const mapAppointmentRowToDomain = (row: any): Appointment => ({
   patientName: row.patient_name || row.patientName || 'Bilinmeyen Hasta',
   date: row.date || new Date().toISOString().split('T')[0],
   time: row.time || '10:00',
-  type: row.type || 'İlk Muayene',
-  status: row.status || 'Bekliyor',
+  type: (row.type as Appointment['type']) || 'İşitme Testi',
+  audiologist: row.audiologist || row.doctor_name || 'Dr. Elif Arslan',
+  status: (row.status as Appointment['status']) || 'Bekliyor',
   branch: row.branch || 'Merkez 1 - Kadıköy',
-  notes: row.notes || undefined
+  notes: row.notes || ''
 });
 
 export const mapAuditLogRowToDomain = (row: any): AuditLogEntry => ({
