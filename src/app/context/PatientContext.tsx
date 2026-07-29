@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Patient, initialPatients } from '../data/mockData';
+import { Patient, patients as initialPatients } from '../data/mockData';
 import { dbInsertPatient, dbUpdatePatient, dbInsertAuditLog } from '../lib/database';
 import { logger } from '../lib/logger';
 

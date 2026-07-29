@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { StockItem, initialStock } from '../data/mockData';
+import { StockItem, stockItems as initialStock } from '../data/mockData';
 import { dbInsertStockItem, dbUpdateStockItem } from '../lib/database';
 import { logger } from '../lib/logger';
 
