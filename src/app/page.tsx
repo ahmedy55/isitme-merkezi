@@ -5,6 +5,8 @@ import { AppProvider, useApp } from './context/AppContext';
 import { BranchProvider, useBranch } from './context/BranchContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NetworkStatusNotifier } from './components/NetworkStatusNotifier';
+import { PatientProvider } from './context/PatientContext';
+import { StockProvider } from './context/StockContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -172,9 +174,13 @@ export default function Home() {
   return (
     <ErrorBoundary>
       <AppProvider>
-        <BranchWrapper>
-          <AppContent />
-        </BranchWrapper>
+        <PatientProvider>
+          <StockProvider>
+            <BranchWrapper>
+              <AppContent />
+            </BranchWrapper>
+          </StockProvider>
+        </PatientProvider>
       </AppProvider>
     </ErrorBoundary>
   );
