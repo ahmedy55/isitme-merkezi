@@ -7,6 +7,8 @@ interface StatCardProps {
   subtitle?: string;
   badgeText?: string;
   badgeType?: 'success' | 'warning' | 'info' | 'danger';
+  onClick?: () => void;
+  className?: string;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -15,10 +17,18 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon,
   subtitle,
   badgeText,
-  badgeType = 'info'
+  badgeType = 'info',
+  onClick,
+  className = ''
 }) => {
   return (
-    <div className="card" style={{ display: 'flex', alignItems: 'center' }}>
+    <div 
+      className={`card ${className}`} 
+      onClick={onClick} 
+      style={{ display: 'flex', alignItems: 'center', cursor: onClick ? 'pointer' : 'default' }}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%' }}>
         {icon && (
           <div style={{

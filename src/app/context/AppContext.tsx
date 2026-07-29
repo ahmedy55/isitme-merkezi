@@ -16,6 +16,7 @@ import {
   Supplier, Expense, SystemUser, AuditLogEntry, Branch, SupplierPurchase
 } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 import { SaleDomainService } from '../services/SaleDomainService';
 import { StockDomainService } from '../services/StockDomainService';
 import { CashDomainService } from '../services/CashDomainService';
@@ -421,7 +422,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.`
         });
       } catch (err: any) {
-        console.warn('dbUpdatePatient background sync:', err);
+        logger.warn(`dbUpdatePatient background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Hasta verisi yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -430,7 +432,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (currentOrgId) {
       try {
         const created = await dbInsertAppointment(appointment);
-        // dbInsertAppointment patientName'i JOIN ile getirmez, bu yüzden yerel eşleme yapalım
         const pat = patientsList.find(p => p.id === appointment.patientId);
         const patientName = pat ? `${pat.firstName} ${pat.lastName}` : 'Bilinmeyen Hasta';
         const createdWithPatName = { ...created, patientName };
@@ -457,7 +458,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateAppointmentStatus(id, status);
       } catch (err: any) {
-        console.warn('dbUpdateAppointmentStatus background sync:', err);
+        logger.warn(`dbUpdateAppointmentStatus background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Randevu durumu yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -568,7 +570,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateStockItem(updatedItem.id, updatedItem);
       } catch (err: any) {
-        console.warn('dbUpdateStockItem background sync:', err);
+        logger.warn(`dbUpdateStockItem background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Stok ürünü yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -585,7 +588,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateRecallStatus(id, status);
       } catch (err: any) {
-        console.warn('dbUpdateRecallStatus background sync:', err);
+        logger.warn(`dbUpdateRecallStatus background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Hatırlatma kaydı yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -610,7 +614,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
       } catch (err: any) {
-        console.warn('dbUpdateSupplier error:', err);
+        logger.warn(`dbUpdateSupplier background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Tedarikçi bilgileri yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -665,7 +670,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateExpense(updatedExpense.id, updatedExpense);
       } catch (err: any) {
-        console.warn('dbUpdateExpense background sync:', err);
+        logger.warn(`dbUpdateExpense background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Gider kaydı yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -677,7 +683,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbDeleteExpense(id);
       } catch (err: any) {
-        console.warn('dbDeleteExpense background sync:', err);
+        logger.warn(`dbDeleteExpense background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Gider silme işlemi yerelde gerçekleşti ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -716,7 +723,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateMembership(updatedUser.id, updatedUser);
       } catch (err: any) {
-        console.warn('dbUpdateMembership background sync:', err);
+        logger.warn(`dbUpdateMembership background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Kullanıcı bilgileri yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -728,7 +736,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbDeleteMembership(id);
       } catch (err: any) {
-        console.warn('dbDeleteMembership background sync:', err);
+        logger.warn(`dbDeleteMembership background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Kullanıcı silme işlemi yerelde gerçekleşti ancak veritabanına eşlenemedi.' });
       }
     }
   };
@@ -762,7 +771,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateBranch(updatedBranch.id, updatedBranch);
       } catch (err: any) {
-        console.warn('dbUpdateBranch background sync:', err);
+        logger.warn(`dbUpdateBranch background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Şube bilgileri yerelde güncellendi ancak veritabanına eşlenemedi.' });
       }
     }
   };

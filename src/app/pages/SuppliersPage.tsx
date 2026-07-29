@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Supplier, SupplierPurchase } from '../data/mockData';
+import { useDebounce } from '../hooks/useDebounce';
 import { IconSearch, IconPlus, IconEdit, IconDelete, IconFilter, IconCheck, IconWarning, IconDownload } from '../components/Icons';
 
 export default function SuppliersPage() {
@@ -309,13 +310,17 @@ export default function SuppliersPage() {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
   };
 
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
   // Filters logic
   const filteredSuppliers = suppliersList.filter(s => {
+    const searchLower = debouncedSearch.toLowerCase().trim();
     const matchesSearch = 
-      (s.companyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.contactPerson || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.phone || '').includes(searchTerm);
+      !searchLower ||
+      (s.companyName || '').toLowerCase().includes(searchLower) ||
+      (s.contactPerson || '').toLowerCase().includes(searchLower) ||
+      (s.email || '').toLowerCase().includes(searchLower) ||
+      (s.phone || '').includes(searchLower);
 
     const matchesCategory = categoryFilter === 'All' || s.category === categoryFilter;
     const matchesStatus = statusFilter === 'All' || s.status === statusFilter;

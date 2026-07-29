@@ -16,6 +16,7 @@ import {
   IconPlus, IconSGK, IconArrowRight,
   IconTrendUp, IconWarning, IconCheck, IconReports,
 } from '../components/Icons';
+import { StatCard } from '../components/StatCard';
 
 export default function DashboardPage() {
   const { 
@@ -188,55 +189,38 @@ export default function DashboardPage() {
 
       {/* Hızlı İstatistikler */}
       <div className="stats-grid">
-        <div className="stat-card" onClick={() => setCurrentPage('patients')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon primary">
-            <IconPatients size={22} strokeWidth={1.6} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Toplam Hasta</div>
-            <div className="stat-value">{filteredPatients.length}</div>
-            <span className="stat-change up">
-              <IconTrendUp size={12} /> Bu Ay +2
-            </span>
-          </div>
-        </div>
-
-        <div className="stat-card" onClick={() => setCurrentPage('appointments')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon success">
-            <IconCalendar size={22} strokeWidth={1.6} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Bugünkü Randevular</div>
-            <div className="stat-value">{todayAppointments.length}</div>
-            <span className="stat-change info">Takvime Git</span>
-          </div>
-        </div>
-
-        <div className="stat-card" onClick={() => setCurrentPage('cash')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon warning">
-            <IconCash size={22} strokeWidth={1.6} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Toplam Ciro</div>
-            <div className="stat-value">{formatCurrency(totalRevenue)}</div>
-            <span className="stat-change up">
-              <IconTrendUp size={12} /> Hedef %85
-            </span>
-          </div>
-        </div>
-
-        <div className="stat-card" onClick={() => setCurrentPage('recall')} style={{ cursor: 'pointer' }}>
-          <div className="stat-icon info">
-            <IconRecall size={22} strokeWidth={1.6} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Aktif Recall Takibi</div>
-            <div className="stat-value">{recallList.length} Fırsat</div>
-            <span className="stat-change warning">
-              {pendingRecalls.length} Bekleyen
-            </span>
-          </div>
-        </div>
+        <StatCard
+          title="Toplam Hasta"
+          value={filteredPatients.length}
+          icon={<IconPatients size={22} strokeWidth={1.6} />}
+          badgeText="Bu Ay +2"
+          badgeType="success"
+          onClick={() => setCurrentPage('patients')}
+        />
+        <StatCard
+          title="Bugünkü Randevular"
+          value={todayAppointments.length}
+          icon={<IconCalendar size={22} strokeWidth={1.6} />}
+          badgeText="Takvime Git"
+          badgeType="info"
+          onClick={() => setCurrentPage('appointments')}
+        />
+        <StatCard
+          title="Toplam Ciro"
+          value={formatCurrency(totalRevenue)}
+          icon={<IconCash size={22} strokeWidth={1.6} />}
+          badgeText="Hedef %85"
+          badgeType="success"
+          onClick={() => setCurrentPage('cash')}
+        />
+        <StatCard
+          title="Aktif Recall Takibi"
+          value={`${recallList.length} Fırsat`}
+          icon={<IconRecall size={22} strokeWidth={1.6} />}
+          badgeText={`${pendingRecalls.length} Bekleyen`}
+          badgeType="warning"
+          onClick={() => setCurrentPage('recall')}
+        />
       </div>
 
       {/* Ana Grid */}

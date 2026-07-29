@@ -1,21 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
+import { logger } from './logger';
 
-let supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-let supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-const isConfigured = 
-  supabaseUrl && 
-  supabaseAnonKey && 
+const isConfigured = Boolean(
+  supabaseUrl &&
+  supabaseAnonKey &&
   supabaseUrl !== 'YOUR_SUPABASE_URL' &&
-  supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY';
+  supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY'
+);
 
 if (!isConfigured) {
-  console.warn(
-    'Supabase URL veya Anon Key eksik ya da doldurulmamış. Lütfen .env.local dosyasını güncelleyin.'
+  logger.warn(
+    'Supabase URL veya Anon Key environment variables eksik. Lütfen .env.local dosyasını yapılandırın.',
+    'SupabaseClient'
   );
-  // Derleme hatasını önlemek için geçerli biçimli placeholder'lar atayalım
-  supabaseUrl = 'https://placeholder-project.supabase.co';
-  supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder';
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Singleton Supabase Client
+export const supabase = createClient(
+  isConfigured ? supabaseUrl : 'https://znktitzknixpbakfrnzk.supabase.co',
+  isConfigured ? supabaseAnonKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.demo'
+);

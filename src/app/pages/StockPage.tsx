@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { stockItems, formatCurrency, type StockItem, type Patient } from '../data/mockData';
+import { useDebounce } from '../hooks/useDebounce';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
@@ -135,8 +136,11 @@ export default function StockPage() {
     return isKadikoy ? index % 2 === 0 : index % 2 !== 0;
   });
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const filtered = branchFilteredStock.filter(item => {
-    const matchSearch = item.name.toLowerCase().includes(search.toLowerCase()) || item.brand.toLowerCase().includes(search.toLowerCase());
+    const searchLower = debouncedSearch.toLowerCase().trim();
+    const matchSearch = !searchLower || item.name.toLowerCase().includes(searchLower) || item.brand.toLowerCase().includes(searchLower);
     const matchCategory = filterCategory === 'Tümü' || item.category === filterCategory;
     return matchSearch && matchCategory;
   });
