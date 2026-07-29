@@ -4,6 +4,7 @@ import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { BranchProvider, useBranch } from './context/BranchContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { NetworkStatusNotifier } from './components/NetworkStatusNotifier';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
@@ -131,6 +132,9 @@ function AppContent() {
 
       {/* Toast Bildirimleri */}
       {toasts.length > 0 && renderToastContainer()}
+
+      {/* Çevrimdışı / Network Durum Takipçisi */}
+      <NetworkStatusNotifier />
     </div>
   );
 }
