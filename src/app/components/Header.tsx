@@ -107,6 +107,8 @@ export default function Header() {
           <button
             type="button"
             onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+            aria-label="Aktif şube seçin"
+            aria-expanded={showBranchDropdown}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -247,6 +249,7 @@ export default function Header() {
             className="header-btn" 
             title="Bildirimler" 
             aria-label="Bildirimler"
+            aria-expanded={showNotifications}
             onClick={() => setShowNotifications(!showNotifications)}
           >
             <IconBell size={18} strokeWidth={1.7} />
