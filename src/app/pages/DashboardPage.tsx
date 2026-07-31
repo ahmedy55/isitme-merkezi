@@ -3,6 +3,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
+import { BranchService } from '../services/BranchService';
 import { getAvatarColor, formatCurrency } from '../data/mockData';
 
 const statusColors: Record<string, string> = {
@@ -37,43 +38,25 @@ export default function DashboardPage() {
   // Demo günü tarihi: 10.07.2026
   const demoDateStr = '2026-07-10';
 
-  // Fix #9: Şube filtreleme artık branchId / branch alanı üzerinden çalışıyor
-  const matchesBranch = React.useCallback((itemBranch?: string, itemBranchId?: string) => {
-    if (activeBranch.mode === 'single') {
-      if (activeBranch.branchId && itemBranchId) {
-        return itemBranchId === activeBranch.branchId;
-      }
-      // Fallback: branch name string match (legacy data desteği)
-      const branchName = activeBranch.branch?.name || activeBranch.slug || '';
-      return (itemBranch || '').toLowerCase().includes(branchName.toLowerCase());
-    }
-    return true;
+  // Fix #9: Şube filtreleme BranchService.matchesBranch ile çalışıyor
+  const matchesBranch = React.useCallback((itemBranch?: string, itemBranchId?: string, fallbackIndex?: number) => {
+    return BranchService.matchesBranch(itemBranch, itemBranchId, activeBranch, fallbackIndex);
   }, [activeBranch]);
 
   const filteredPatients = React.useMemo(() => {
-    if (activeBranch.mode === 'single') {
-      return patientsList.filter(p => matchesBranch(p.branch, p.branchId));
-    }
-    return patientsList;
-  }, [patientsList, activeBranch, matchesBranch]);
+    return patientsList.filter((p, index) => matchesBranch(p.branch, p.branchId, index));
+  }, [patientsList, matchesBranch]);
 
   const filteredAppointments = React.useMemo(() => {
-    if (activeBranch.mode === 'single') {
-      return appointmentsList.filter(a => matchesBranch(a.branch, a.branchId));
-    }
-    return appointmentsList;
-  }, [appointmentsList, activeBranch, matchesBranch]);
+    return appointmentsList.filter((a, index) => matchesBranch(a.branch, a.branchId, index));
+  }, [appointmentsList, matchesBranch]);
 
   const filteredStock = React.useMemo(() => {
-    if (activeBranch.mode === 'single') {
-      return stockList.filter(s => matchesBranch(s.branch));
-    }
-    return stockList;
-  }, [stockList, activeBranch, matchesBranch]);
+    return stockList.filter((s, index) => matchesBranch(s.branch, undefined, index));
+  }, [stockList, matchesBranch]);
 
   const filteredSales = React.useMemo(() => {
     if (activeBranch.mode === 'single') {
-      // Satışlarda branchId yoksa, hasta eşleştirmesi ile filtrele
       const branchPatientIds = new Set(filteredPatients.map(p => p.id));
       return salesList.filter(s => branchPatientIds.has(s.patientId));
     }
@@ -83,19 +66,12 @@ export default function DashboardPage() {
   const filteredRecalls = React.useMemo(() => {
     if (activeBranch.mode === 'single') {
       const branchPatientIds = new Set(filteredPatients.map(p => p.id));
-      const targetBranchName = (activeBranch.branch?.name || activeBranch.slug || '').toLowerCase();
-      const isKadikoy = activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || targetBranchName.includes('kadıköy');
-      const isBesiktas = activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas') || targetBranchName.includes('beşiktaş');
-
-      return recallList.filter((r, index) => {
-        if ((r as any).branchId && activeBranch.branchId) return (r as any).branchId === activeBranch.branchId;
-        if ((r as any).branch) return (r as any).branch.toLowerCase().includes(targetBranchName);
-        if (r.patientId) return branchPatientIds.has(r.patientId);
-        return isKadikoy ? index % 2 === 0 : (isBesiktas ? index % 2 !== 0 : index % 3 === 0);
-      });
+      return recallList.filter((r, index) => 
+        matchesBranch((r as any).branch, (r as any).branchId, index) || (r.patientId && branchPatientIds.has(r.patientId))
+      );
     }
     return recallList;
-  }, [recallList, activeBranch, filteredPatients]);
+  }, [recallList, activeBranch, filteredPatients, matchesBranch]);
 
   const todayAppointments = filteredAppointments.filter(a => a.date === demoDateStr);
   const pendingRecalls = filteredRecalls.filter(r => r.status === 'Bekliyor');

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
+import { BranchService } from '../services/BranchService';
 import { getAvatarColor } from '../data/mockData';
 import { IconPlus, IconSGK, IconCalendar, IconCheck, IconClose } from '../components/Icons';
 
@@ -22,7 +23,7 @@ export default function AppointmentsPage() {
   const { activeBranch } = useBranch();
 
   const appointmentsList = React.useMemo(() => {
-    return rawAppointmentsList.filter(a => activeBranch.mode === 'single' ? (a.branch || '').includes(activeBranch.branch?.name || activeBranch.slug) : true);
+    return rawAppointmentsList.filter((a, i) => BranchService.matchesBranch(a.branch, a.branchId, activeBranch, i));
   }, [rawAppointmentsList, activeBranch]);
   
   const stats = React.useMemo(() => {

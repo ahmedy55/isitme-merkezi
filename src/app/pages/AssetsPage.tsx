@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranch } from '../context/BranchContext';
+import { BranchService } from '../services/BranchService';
 import { IconSearch, IconPlus, IconEdit, IconDelete, IconCheck, IconWarning, IconRefresh } from '../components/Icons';
 
 interface Asset {
@@ -21,6 +23,7 @@ interface Asset {
 
 export default function AssetsPage() {
   const { addToast } = useApp();
+  const { activeBranch } = useBranch();
 
   const [assets, setAssets] = useState<Asset[]>([
     {
@@ -225,22 +228,27 @@ export default function AssetsPage() {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0 }).format(val);
   };
 
+  // Branch Filtered Assets
+  const branchFilteredAssets = assets.filter((a, index) => 
+    BranchService.matchesBranch(a.branch, undefined, activeBranch, index)
+  );
+
   // Filter Logic
-  const filteredAssets = assets.filter(a => {
+  const filteredAssets = branchFilteredAssets.filter(a => {
     const matchesSearch = 
       a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.serialNo.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesCategory = categoryFilter === 'All' || a.category === categoryFilter;
-    const matchesBranch = branchFilter === 'All' || a.branch === branchFilter;
+    const matchesLocalBranch = branchFilter === 'All' || a.branch === branchFilter;
     const matchesStatus = statusFilter === 'All' || a.status === statusFilter;
 
-    return matchesSearch && matchesCategory && matchesBranch && matchesStatus;
+    return matchesSearch && matchesCategory && matchesLocalBranch && matchesStatus;
   });
 
   // Calculate metrics
-  const totalValue = assets.filter(a => a.status !== 'Hek/Iskarta').reduce((sum, a) => sum + a.cost, 0);
-  const maintenanceAlertsCount = assets.filter(a => {
+  const totalValue = branchFilteredAssets.filter(a => a.status !== 'Hek/Iskarta').reduce((sum, a) => sum + a.cost, 0);
+  const maintenanceAlertsCount = branchFilteredAssets.filter(a => {
     if (a.status !== 'Aktif') return false;
     const lastDate = new Date(a.lastMaintenance);
     const nextDate = new Date(lastDate.setMonth(lastDate.getMonth() + a.maintenanceIntervalMonths));

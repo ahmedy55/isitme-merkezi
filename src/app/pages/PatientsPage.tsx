@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
+import { BranchService } from '../services/BranchService';
 import CustomSelect from '../components/CustomSelect';
 import { useDebounce } from '../hooks/useDebounce';
 import * as XLSX from 'xlsx';
@@ -313,14 +314,9 @@ export default function PatientsPage() {
   const { activeBranch } = useBranch();
 
   const branchFilteredPatients = useMemo(() => {
-    if (activeBranch.mode === 'all') return patientsList;
-    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || (activeBranch.branch?.name || '').includes('Kadıköy'));
-    return patientsList.filter((p, i) => {
-      if (p.branch) {
-        return isKadikoy ? p.branch.includes('Kadıköy') : p.branch.includes('Beşiktaş');
-      }
-      return isKadikoy ? i % 2 === 0 : i % 2 !== 0;
-    });
+    return patientsList.filter((p, i) => 
+      BranchService.matchesBranch(p.branch, p.branchId, activeBranch, i)
+    );
   }, [patientsList, activeBranch]);
 
   const debouncedSearch = useDebounce(search, 300);

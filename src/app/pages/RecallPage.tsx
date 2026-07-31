@@ -110,6 +110,7 @@ const enhancedRecallData: EnhancedRecallItem[] = [
 
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
+import { BranchService } from '../services/BranchService';
 
 export default function RecallPage() {
   const { addToast, addAppointment, setCurrentPage, setSelectedPatientId, setActiveDetailTab } = useApp();
@@ -128,14 +129,9 @@ export default function RecallPage() {
   };
 
   const branchFilteredChains = React.useMemo(() => {
-    if (activeBranch.mode === 'single') {
-      const isKadikoy = activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || (activeBranch.branch?.name || '').includes('Kadıköy');
-      const isBesiktas = activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas') || (activeBranch.branch?.name || '').includes('Beşiktaş');
-      return recallChains.filter((r, idx) => {
-        return isKadikoy ? idx % 2 === 0 : (isBesiktas ? idx % 2 !== 0 : idx % 3 === 0);
-      });
-    }
-    return recallChains;
+    return recallChains.filter((r, idx) => 
+      BranchService.matchesBranch((r as any).branch, (r as any).branchId, activeBranch, idx)
+    );
   }, [recallChains, activeBranch]);
 
   const filtered = branchFilteredChains.filter(r => {

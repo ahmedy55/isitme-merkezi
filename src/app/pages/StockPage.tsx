@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
+import { BranchService } from '../services/BranchService';
 import { stockItems, formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { useDebounce } from '../hooks/useDebounce';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
@@ -127,15 +128,10 @@ export default function StockPage() {
     setEditingItem(null);
   };
 
-  // Fix #9: Şube filtresi artık dinamik branch name eşleştirmesi ile çalışıyor
-  const branchFilteredStock = stockList.filter((item) => {
-    if (activeBranch.mode !== 'single') return true;
-    const branchName = activeBranch.branch?.name || activeBranch.slug || '';
-    if (item.branch) {
-      return item.branch.toLowerCase().includes(branchName.toLowerCase());
-    }
-    return true; // branch bilgisi yoksa göster
-  });
+  // Fix #9: Şube filtresi BranchService.matchesBranch ile çalışıyor
+  const branchFilteredStock = stockList.filter((item, index) => 
+    BranchService.matchesBranch(item.branch, undefined, activeBranch, index)
+  );
 
   const debouncedSearch = useDebounce(search, 300);
 
