@@ -17,16 +17,19 @@ export default function Sidebar() {
   }, [recallList]);
 
   const activeSections = React.useMemo(() => {
-    // Fix #11: Kullanıcı rolünü belirle
-    const userRoles: string[] = currentUser?.user_metadata?.roles || currentUser?.user_metadata?.role
-      ? [currentUser?.user_metadata?.role || 'Odyometrist']
-      : ['Firma Yöneticisi']; // Varsayılan
+    // Kullanıcı rolünü belirle
+    const userRole = getUserRole(currentUser, usersList);
+    const userRoles: string[] = Array.isArray(currentUser?.user_metadata?.roles)
+      ? currentUser.user_metadata.roles
+      : (currentUser?.user_metadata?.role ? [currentUser.user_metadata.role] : [userRole]);
 
     const hasRole = (required?: string[]) => {
       if (!required || required.length === 0) return true;
       if (isPlatformAdmin) return true;
-      if (userRoles.includes('Firma Yöneticisi')) return true;
-      return required.some(r => userRoles.includes(r));
+      if (userRoles.some(r => r.toLowerCase().includes('firma') || r.toLowerCase().includes('yönetici'))) return true;
+      return required.some(req => 
+        userRoles.some(ur => ur.toLowerCase().includes(req.toLowerCase()) || req.toLowerCase().includes(ur.toLowerCase()))
+      );
     };
 
     const dynamicSections = [
@@ -34,29 +37,29 @@ export default function Sidebar() {
         title: 'Ana Menü',
         items: [
           { id: 'dashboard'    as const, label: 'Dashboard', badge: null },
-          { id: 'patients'     as const, label: 'Hastalar', badge: null },
-          { id: 'appointments' as const, label: 'Randevular', badge: pendingAppointmentsCount > 0 ? String(pendingAppointmentsCount) : null },
-        ],
+          { id: 'patients'     as const, label: 'Hastalar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
+          { id: 'appointments' as const, label: 'Randevular', badge: pendingAppointmentsCount > 0 ? String(pendingAppointmentsCount) : null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
+        ].filter(item => hasRole((item as any).requiredRoles)),
       },
       {
         title: 'İşlemler',
         items: [
-          { id: 'recall'          as const, label: 'Recall', badge: pendingRecallCount > 0 ? String(pendingRecallCount) : null },
-          { id: 'activity-log'    as const, label: 'Aktivite Kaydı', badge: null },
-          { id: 'sgk'             as const, label: 'SGK & Reçete', badge: null },
-          { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
-          { id: 'stock'           as const, label: 'Stok & Aksesuar', badge: null },
-          { id: 'assets'          as const, label: 'Demirbaşlar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
-          { id: 'cash'            as const, label: 'Kasa & Tahsilat', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
-          { id: 'service'         as const, label: 'Teknik Servis', badge: null },
-          { id: 'suppliers'       as const, label: 'Tedarikçiler', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
-          { id: 'expenses'        as const, label: 'Masraflar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
+          { id: 'recall'          as const, label: 'Recall', badge: pendingRecallCount > 0 ? String(pendingRecallCount) : null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
+          { id: 'activity-log'    as const, label: 'Aktivite Kaydı', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
+          { id: 'sgk'             as const, label: 'SGK & Reçete', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog'] },
+          { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
+          { id: 'stock'           as const, label: 'Stok & Aksesuar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter', 'Muhasebe'] },
+          { id: 'assets'          as const, label: 'Demirbaşlar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Muhasebe'] },
+          { id: 'cash'            as const, label: 'Kasa & Tahsilat', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
+          { id: 'service'         as const, label: 'Teknik Servis', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog'] },
+          { id: 'suppliers'       as const, label: 'Tedarikçiler', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
+          { id: 'expenses'        as const, label: 'Masraflar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
         ].filter(item => hasRole((item as any).requiredRoles)),
       },
       {
         title: 'Yönetim',
         items: [
-          { id: 'reports'           as const, label: 'Raporlar', badge: null, requiredRoles: ['Firma Yöneticisi'] },
+          { id: 'reports'           as const, label: 'Raporlar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
           { id: 'branches'          as const, label: 'Şubeler & Yetki', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'audit-log'         as const, label: 'İşlem Kayıtları', badge: null, requiredRoles: ['Firma Yöneticisi'] },
