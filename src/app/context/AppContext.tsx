@@ -15,7 +15,7 @@ import {
   Patient, Appointment, StockItem, SaleRecord, RecallItem,
   Supplier, Expense, SystemUser, AuditLogEntry, Branch, SupplierPurchase
 } from '../data/mockData';
-import { supabase } from '../lib/supabase';
+import { supabase, isConfigured } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { SaleDomainService } from '../services/SaleDomainService';
 import { StockDomainService } from '../services/StockDomainService';
@@ -27,14 +27,15 @@ import { EventBus } from '../services/EventBus';
 import {
   dbFetchPatients, dbInsertPatient, dbUpdatePatient,
   dbFetchAppointments, dbInsertAppointment, dbUpdateAppointmentStatus,
-  dbFetchStockItems, dbInsertStockItem, dbUpdateStockItem,
+  dbFetchStockItems, dbInsertStockItem, dbUpdateStockItem, dbDeleteStockItem,
   dbFetchSales, dbInsertSale,
   dbFetchRecallItems, dbUpdateRecallStatus,
   dbFetchSuppliers, dbInsertSupplier, dbUpdateSupplier, dbDeleteSupplier,
   dbFetchExpenses, dbInsertExpense, dbUpdateExpense, dbDeleteExpense,
   dbFetchBranches, dbInsertBranch, dbUpdateBranch,
   dbFetchAuditLogs, dbInsertAuditLog,
-  dbFetchMemberships, dbInsertMembership, dbUpdateMembership, dbDeleteMembership
+  dbFetchMemberships, dbInsertMembership, dbUpdateMembership, dbDeleteMembership,
+  dbInsertCashTransaction, dbInsertStockMovement
 } from '../lib/database';
 
 type Page = 
@@ -124,7 +125,7 @@ interface AppContextType {
   deleteSupplier: (id: string) => void;
   
   // P0 — Masraf
-  addExpense: (expense: Expense) => void;
+  addExpense: (expense: Expense, cashRegisterId?: string) => void;
   updateExpense: (expense: Expense) => void;
   deleteExpense: (id: string) => void;
   
@@ -189,6 +190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Veri Listeleri State
+  // Fix #1: State boş başlar, mock data sadece demo modda (orgId yoksa) yüklenir
   const [patientsList, setPatientsList] = useState<Patient[]>([]);
   const [appointmentsList, setAppointmentsList] = useState<Appointment[]>([]);
   const [stockList, setStockList] = useState<StockItem[]>([]);
@@ -199,6 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [usersList, setUsersList] = useState<SystemUser[]>([]);
   const [auditLogList, setAuditLogList] = useState<AuditLogEntry[]>([]);
   const [branchesList, setBranchesList] = useState<Branch[]>([]);
+  const [mockDataLoaded, setMockDataLoaded] = useState(false);
 
   // Auth Eyaletleri State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -266,27 +269,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Organizasyon seçimi değiştiğinde verileri otomatik yükle
+  // Fix #1: Organizasyon seçimi değiştiğinde verileri otomatik yükle
   useEffect(() => {
     if (currentOrgId) {
       loadAllData();
+    } else if (!mockDataLoaded) {
+      // Demo mod: orgId yoksa mock veriyi yükle (sadece bir kez)
+      setPatientsList(initialPatients);
+      setAppointmentsList(initialAppointments);
+      setStockList(initialStock);
+      setSalesList(initialSales);
+      setRecallList(initialRecall);
+      setSuppliersList(initialSuppliers);
+      setExpensesList(initialExpenses);
+      setUsersList(initialUsers);
+      setAuditLogList(initialAuditLog);
+      setBranchesList(initialBranches);
+      setMockDataLoaded(true);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrgId]);
 
-  // İlk yüklemede mock verileri set et & Auth kontrolü yap
+  // Fix #1: İlk yüklemede Auth kontrolü yap (mock data yukarıda orgId yoksa yüklenir)
   useEffect(() => {
-    // 1. Mock veriler
-    setPatientsList(initialPatients);
-    setAppointmentsList(initialAppointments);
-    setStockList(initialStock);
-    setSalesList(initialSales);
-    setRecallList(initialRecall);
-    setSuppliersList(initialSuppliers);
-    setExpensesList(initialExpenses);
-    setUsersList(initialUsers);
-    setAuditLogList(initialAuditLog);
-    setBranchesList(initialBranches);
-
     // Platform admin kontrol helper'ı
     const checkAdminStatus = async (uid: string) => {
       try {
@@ -479,6 +484,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (currentOrgId) {
         await dbInsertSale(sale);
+        // Fix #3: Kasa hareketini DB'ye persist et
+        await dbInsertCashTransaction({
+          cashRegisterId: cashRegisterId || 'kas-1',
+          type: 'INCOME',
+          amount: sale.total,
+          category: 'Cihaz Satışı',
+          referenceEntity: 'sale',
+          referenceId: sale.id,
+          description: `${sale.patientName} — Satış tahsilatı`
+        });
         await dbInsertAuditLog({
           action: 'Satış Ekleme',
           module: 'Kasa',
@@ -576,9 +591,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Fix #2: Stok silme artık DB'ye de yazılıyor
   const deleteStockItem = async (id: string) => {
     setStockList(prev => prev.filter(s => s.id !== id));
     addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
+    if (currentOrgId) {
+      try {
+        await dbDeleteStockItem(id);
+        await dbInsertAuditLog({
+          action: 'Stok Silme',
+          module: 'Stok',
+          description: `Stok ürünü (${id}) envanterden silindi.`
+        });
+      } catch (err: any) {
+        logger.warn(`dbDeleteStockItem background sync error: ${err.message}`, 'AppContext');
+        addToast({ type: 'warning', message: 'Ürün yerelde silindi ancak veritabanına eşlenemedi.' });
+      }
+    }
   };
 
   const updateRecallItemStatus = async (id: string, status: RecallItem['status']) => {
@@ -634,6 +663,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // P0 — Masraf CRUD
+  // Fix #12: Interface artık cashRegisterId parametresini de kabul ediyor
   const addExpense = async (expense: Expense, cashRegisterId?: string) => {
     try {
       CashDomainService.recordTransaction({
@@ -651,6 +681,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (currentOrgId) {
         await dbInsertExpense(expense);
+        // Fix #3: Kasa hareketini DB'ye persist et
+        await dbInsertCashTransaction({
+          cashRegisterId: cashRegisterId || 'kas-1',
+          type: 'EXPENSE',
+          amount: expense.amount,
+          category: expense.category,
+          referenceEntity: 'expense',
+          referenceId: expense.id,
+          description: expense.description
+        });
       }
 
       await EventBus.publish({

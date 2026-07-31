@@ -122,6 +122,8 @@ export async function POST(request: Request) {
     });
 
     // 5. Memberships tablosuna ilişkili organizasyon kaydı ekleme
+    // Fix #14: Profil bilgileri (first_name, last_name, phone) profiles tablosunda zaten var
+    // Memberships'te sadece ilişki ve rol bilgisi tutulur
     const { data: memData, error: memErr } = await supabaseAdmin
       .from('memberships')
       .upsert({
@@ -130,10 +132,7 @@ export async function POST(request: Request) {
         roles: roles || ['Odyometrist'],
         branch_id: branchId || null,
         status: 'active',
-        first_name: firstName || '',
-        last_name: lastName || '',
-        email: normalizedEmail,
-        phone: normalizedPhone
+        email: normalizedEmail
       }, { onConflict: 'user_id, organization_id' })
       .select('id, joined_at');
 

@@ -37,50 +37,75 @@ export default function DashboardPage() {
   // Demo günü tarihi: 10.07.2026
   const demoDateStr = '2026-07-10';
 
+  // Fix #9: Şube filtreleme artık branchId / branch alanı üzerinden çalışıyor
+  const matchesBranch = React.useCallback((itemBranch?: string, itemBranchId?: string) => {
+    if (activeBranch.mode === 'single') {
+      if (activeBranch.branchId && itemBranchId) {
+        return itemBranchId === activeBranch.branchId;
+      }
+      // Fallback: branch name string match (legacy data desteği)
+      const branchName = activeBranch.branch?.name || activeBranch.slug || '';
+      return (itemBranch || '').toLowerCase().includes(branchName.toLowerCase());
+    }
+    return true;
+  }, [activeBranch]);
+
   const filteredPatients = React.useMemo(() => {
-    if (activeBranch.mode === 'all') return patientsList;
-    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
-    return patientsList.filter((p, i) => isKadikoy ? i % 2 === 0 : i % 2 !== 0);
-  }, [patientsList, activeBranch]);
+    if (activeBranch.mode === 'single') {
+      return patientsList.filter(p => matchesBranch(p.branch, p.branchId));
+    }
+    return patientsList;
+  }, [patientsList, activeBranch, matchesBranch]);
 
   const filteredAppointments = React.useMemo(() => {
-    if (activeBranch.mode === 'all') return appointmentsList;
-    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
-    return appointmentsList.filter(a => isKadikoy ? (a.branch || '').includes('Kadıköy') : (a.branch || '').includes('Beşiktaş'));
-  }, [appointmentsList, activeBranch]);
+    if (activeBranch.mode === 'single') {
+      return appointmentsList.filter(a => matchesBranch(a.branch, a.branchId));
+    }
+    return appointmentsList;
+  }, [appointmentsList, activeBranch, matchesBranch]);
 
   const filteredStock = React.useMemo(() => {
-    if (activeBranch.mode === 'all') return stockList;
-    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
-    return stockList.filter(s => isKadikoy ? (s.branch || '').includes('Kadıköy') : (s.branch || '').includes('Beşiktaş'));
-  }, [stockList, activeBranch]);
+    if (activeBranch.mode === 'single') {
+      return stockList.filter(s => matchesBranch(s.branch));
+    }
+    return stockList;
+  }, [stockList, activeBranch, matchesBranch]);
 
   const filteredSales = React.useMemo(() => {
-    if (activeBranch.mode === 'all') return salesList;
-    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'));
-    return salesList.filter((s, i) => isKadikoy ? i % 2 === 0 : i % 2 !== 0);
-  }, [salesList, activeBranch]);
+    if (activeBranch.mode === 'single') {
+      // Satışlarda branchId yoksa, hasta eşleştirmesi ile filtrele
+      const branchPatientIds = new Set(filteredPatients.map(p => p.id));
+      return salesList.filter(s => branchPatientIds.has(s.patientId));
+    }
+    return salesList;
+  }, [salesList, activeBranch, filteredPatients]);
+
+  const filteredRecalls = React.useMemo(() => {
+    if (activeBranch.mode === 'single') {
+      const branchPatientIds = new Set(filteredPatients.map(p => p.id));
+      const targetBranchName = (activeBranch.branch?.name || activeBranch.slug || '').toLowerCase();
+      const isKadikoy = activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || targetBranchName.includes('kadıköy');
+      const isBesiktas = activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas') || targetBranchName.includes('beşiktaş');
+
+      return recallList.filter((r, index) => {
+        if ((r as any).branchId && activeBranch.branchId) return (r as any).branchId === activeBranch.branchId;
+        if ((r as any).branch) return (r as any).branch.toLowerCase().includes(targetBranchName);
+        if (r.patientId) return branchPatientIds.has(r.patientId);
+        return isKadikoy ? index % 2 === 0 : (isBesiktas ? index % 2 !== 0 : index % 3 === 0);
+      });
+    }
+    return recallList;
+  }, [recallList, activeBranch, filteredPatients]);
 
   const todayAppointments = filteredAppointments.filter(a => a.date === demoDateStr);
-  const pendingRecalls = recallList.filter(r => r.status === 'Bekliyor');
+  const pendingRecalls = filteredRecalls.filter(r => r.status === 'Bekliyor');
   const lowStockItems = filteredStock.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel);
 
-  // Dynamic branch-linked financial figures
-  const totalRevenue = activeBranch.mode === 'all'
-    ? 295100 // 128400 (Kadıköy) + 94200 (Beşiktaş) + 72500 (İzmir)
-    : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'))
-        ? 128400
-        : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas'))
-            ? 94200
-            : 72500));
-
-  const averageReceipt = activeBranch.mode === 'all'
-    ? 3315
-    : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy'))
-        ? 3057
-        : (activeBranch.mode === 'single' && (activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas'))
-            ? 3364
-            : 3815));
+  // Fix #10: KPI'lar gerçek satış verisinden hesaplanıyor
+  const totalRevenue = filteredSales.reduce((sum, s) => sum + (s.total || 0), 0);
+  const averageReceipt = filteredSales.length > 0
+    ? Math.round(totalRevenue / filteredSales.length)
+    : 0;
 
   // Randevuyu 'Geldi' olarak işaretleme fonksiyonu (Dinamik demo)
   const handleAptArrived = (id: string, name: string) => {
@@ -215,7 +240,7 @@ export default function DashboardPage() {
         />
         <StatCard
           title="Aktif Recall Takibi"
-          value={`${recallList.length} Fırsat`}
+          value={`${filteredRecalls.length} Fırsat`}
           icon={<IconRecall size={22} strokeWidth={1.6} />}
           badgeText={`${pendingRecalls.length} Bekleyen`}
           badgeType="warning"
@@ -289,26 +314,32 @@ export default function DashboardPage() {
             </button>
           </div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {recallList.slice(0, 4).map((item) => (
-              <div key={item.id} className="recall-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--surface-border-light)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div className="avatar" style={{ background: getAvatarColor(item.patientName), width: 32, height: 32, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700 }}>
-                    {item.patientName.split(' ').map(n => n[0]).join('')}
+            {filteredRecalls.length > 0 ? (
+              filteredRecalls.slice(0, 4).map((item) => (
+                <div key={item.id} className="recall-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--surface-border-light)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div className="avatar" style={{ background: getAvatarColor(item.patientName), width: 32, height: 32, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700 }}>
+                      {item.patientName.split(' ').map(n => n[0]).join('')}
+                    </div>
+                    <div>
+                      <div className="recall-name" style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.patientName}</div>
+                      <div className="recall-reason" style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{item.reason} · <span style={{ fontWeight: 600, color: 'var(--accent-600)' }}>{formatCurrency(item.estimatedRevenue)}</span></div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="recall-name" style={{ fontWeight: 600, fontSize: '0.9rem' }}>{item.patientName}</div>
-                    <div className="recall-reason" style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{item.reason} · <span style={{ fontWeight: 600, color: 'var(--accent-600)' }}>{formatCurrency(item.estimatedRevenue)}</span></div>
-                  </div>
+                  {item.status === 'Bekliyor' ? (
+                    <button className="btn btn-sm btn-primary" onClick={() => handleSendRecall(item.id, item.patientName, item.reason)}>Gönder</button>
+                  ) : (
+                    <span className={`badge badge-${item.status === 'Randevu Alındı' ? 'success' : 'info'}`}>
+                      {item.status}
+                    </span>
+                  )}
                 </div>
-                {item.status === 'Bekliyor' ? (
-                  <button className="btn btn-sm btn-primary" onClick={() => handleSendRecall(item.id, item.patientName, item.reason)}>Gönder</button>
-                ) : (
-                  <span className={`badge badge-${item.status === 'Randevu Alındı' ? 'success' : 'info'}`}>
-                    {item.status}
-                  </span>
-                )}
+              ))
+            ) : (
+              <div className="empty-state" style={{ padding: '20px 0' }}>
+                <p style={{ color: 'var(--gray-500)', margin: 0, fontSize: '0.85rem' }}>Bu şube için bekleyen fırsat bulunmamaktadır.</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 

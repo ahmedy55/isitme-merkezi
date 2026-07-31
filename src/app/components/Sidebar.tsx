@@ -3,9 +3,10 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { IconLogo, IconClose, navIcons } from './Icons';
+import { getDisplayName, getUserRole, getUserInitials } from '../lib/userHelpers';
 
 export default function Sidebar() {
-  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, isPlatformAdmin, appointmentsList, recallList } = useApp();
+  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, isPlatformAdmin, appointmentsList, recallList, usersList } = useApp();
 
   const pendingAppointmentsCount = React.useMemo(() => {
     return (appointmentsList || []).filter(a => a.status === 'Bekliyor').length;
@@ -16,40 +17,52 @@ export default function Sidebar() {
   }, [recallList]);
 
   const activeSections = React.useMemo(() => {
+    // Fix #11: Kullanıcı rolünü belirle
+    const userRoles: string[] = currentUser?.user_metadata?.roles || currentUser?.user_metadata?.role
+      ? [currentUser?.user_metadata?.role || 'Odyometrist']
+      : ['Firma Yöneticisi']; // Varsayılan
+
+    const hasRole = (required?: string[]) => {
+      if (!required || required.length === 0) return true;
+      if (isPlatformAdmin) return true;
+      if (userRoles.includes('Firma Yöneticisi')) return true;
+      return required.some(r => userRoles.includes(r));
+    };
+
     const dynamicSections = [
       {
         title: 'Ana Menü',
         items: [
-          { id: 'dashboard'    as const, label: 'Dashboard' },
-          { id: 'patients'     as const, label: 'Hastalar',      badge: null },
-          { id: 'appointments' as const, label: 'Randevular',    badge: pendingAppointmentsCount > 0 ? String(pendingAppointmentsCount) : null },
+          { id: 'dashboard'    as const, label: 'Dashboard', badge: null },
+          { id: 'patients'     as const, label: 'Hastalar', badge: null },
+          { id: 'appointments' as const, label: 'Randevular', badge: pendingAppointmentsCount > 0 ? String(pendingAppointmentsCount) : null },
         ],
       },
       {
         title: 'İşlemler',
         items: [
-          { id: 'recall'          as const, label: 'Recall',              badge: pendingRecallCount > 0 ? String(pendingRecallCount) : null },
-          { id: 'activity-log'    as const, label: 'Aktivite Kaydı',      badge: null },
-          { id: 'sgk'             as const, label: 'SGK & Reçete',        badge: null },
-          { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null },
-          { id: 'stock'           as const, label: 'Stok & Aksesuar',     badge: null },
-          { id: 'assets'          as const, label: 'Demirbaşlar',         badge: null },
-          { id: 'cash'            as const, label: 'Kasa & Tahsilat',     badge: null },
-          { id: 'service'         as const, label: 'Teknik Servis',       badge: null },
-          { id: 'suppliers'       as const, label: 'Tedarikçiler',        badge: null },
-          { id: 'expenses'        as const, label: 'Masraflar',           badge: null },
-        ],
+          { id: 'recall'          as const, label: 'Recall', badge: pendingRecallCount > 0 ? String(pendingRecallCount) : null },
+          { id: 'activity-log'    as const, label: 'Aktivite Kaydı', badge: null },
+          { id: 'sgk'             as const, label: 'SGK & Reçete', badge: null },
+          { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
+          { id: 'stock'           as const, label: 'Stok & Aksesuar', badge: null },
+          { id: 'assets'          as const, label: 'Demirbaşlar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
+          { id: 'cash'            as const, label: 'Kasa & Tahsilat', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
+          { id: 'service'         as const, label: 'Teknik Servis', badge: null },
+          { id: 'suppliers'       as const, label: 'Tedarikçiler', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
+          { id: 'expenses'        as const, label: 'Masraflar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Muhasebe'] },
+        ].filter(item => hasRole((item as any).requiredRoles)),
       },
       {
         title: 'Yönetim',
         items: [
-          { id: 'reports'           as const, label: 'Raporlar',          badge: null },
-          { id: 'branches'          as const, label: 'Şubeler & Yetki',   badge: null },
-          { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null },
-          { id: 'audit-log'         as const, label: 'İşlem Kayıtları',   badge: null },
-          { id: 'settings'          as const, label: 'Ayarlar',           badge: null },
-          { id: 'support'           as const, label: 'Destek',            badge: null },
-        ],
+          { id: 'reports'           as const, label: 'Raporlar', badge: null, requiredRoles: ['Firma Yöneticisi'] },
+          { id: 'branches'          as const, label: 'Şubeler & Yetki', badge: null, requiredRoles: ['Firma Yöneticisi'] },
+          { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null, requiredRoles: ['Firma Yöneticisi'] },
+          { id: 'audit-log'         as const, label: 'İşlem Kayıtları', badge: null, requiredRoles: ['Firma Yöneticisi'] },
+          { id: 'settings'          as const, label: 'Ayarlar', badge: null, requiredRoles: ['Firma Yöneticisi'] },
+          { id: 'support'           as const, label: 'Destek', badge: null },
+        ].filter(item => hasRole((item as any).requiredRoles)),
       },
     ];
 
@@ -65,7 +78,7 @@ export default function Sidebar() {
       ];
     }
     return dynamicSections;
-  }, [isPlatformAdmin, pendingAppointmentsCount, pendingRecallCount]);
+  }, [isPlatformAdmin, pendingAppointmentsCount, pendingRecallCount, currentUser]);
 
   return (
     <>
@@ -142,20 +155,14 @@ export default function Sidebar() {
           <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div className="sidebar-user-avatar" style={{ background: 'var(--primary-600)', color: 'white', fontWeight: 600 }}>
-                {currentUser 
-                  ? `${currentUser.user_metadata?.first_name?.[0] || ''}${currentUser.user_metadata?.last_name?.[0] || ''}`.toUpperCase() || 'U'
-                  : 'EA'}
+                {getUserInitials(getDisplayName(currentUser, usersList))}
               </div>
               <div className="sidebar-user-info">
                 <div className="sidebar-user-name" style={{ color: 'var(--gray-200)', fontWeight: 600, fontSize: '0.82rem' }}>
-                  {currentUser 
-                    ? `${currentUser.user_metadata?.first_name || ''} ${currentUser.user_metadata?.last_name || ''}`.trim() || currentUser.email 
-                    : 'Dr. Elif Arslan'}
+                  {getDisplayName(currentUser, usersList)}
                 </div>
                 <div className="sidebar-user-role" style={{ fontSize: '0.7rem', color: 'var(--gray-400)' }}>
-                  {currentUser 
-                    ? (currentUser.user_metadata?.role || 'Odyolog') 
-                    : 'Odyolog · Kadıköy'}
+                  {getUserRole(currentUser, usersList)}
                 </div>
               </div>
             </div>

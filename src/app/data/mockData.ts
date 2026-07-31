@@ -83,7 +83,7 @@ export interface StockItem {
   utsStatus: 'Bekliyor' | 'Bildirildi' | 'Hata' | 'Gerekli Değil';
   assignedPatientId?: string;
   assignedPatientName?: string;
-  branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş';
+  branch: string;
   utsKurumNo?: string;
   gln?: string;
   mersisNo?: string;

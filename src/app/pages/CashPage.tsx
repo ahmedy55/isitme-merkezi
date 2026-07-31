@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, SaleRecord } from '../data/mockData';
+import { dbFetchCashTransactions, dbInsertCashTransaction } from '../lib/database';
 import { IconPlus, IconDownload, IconCash, IconCheck, IconRecall, IconShield, IconClose, IconSearch, IconFilter, IconWarning } from '../components/Icons';
 
 interface CashAccount {
@@ -26,7 +27,7 @@ interface CashTransaction {
 }
 
 export default function CashPage() {
-  const { salesList, commissionRate, addSale, stockList, updateStockItem, addToast } = useApp();
+  const { salesList, commissionRate, addSale, stockList, updateStockItem, addToast, currentOrgId } = useApp();
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<SaleRecord | null>(null);
@@ -46,6 +47,28 @@ export default function CashPage() {
     { id: 'tx-3', date: '2026-07-18', accountId: 'acc-4', accountName: 'Garanti POS Hesabı', type: 'Giriş', category: 'Satış Geliri', amount: 95000, description: 'Ahmet Yılmaz cihaz satışı POS çekimi', createdBy: 'Ody. Hasan Kaya' },
     { id: 'tx-4', date: '2026-07-15', accountId: 'acc-1', accountName: 'Kadıköy Nakit Kasası', type: 'Çıkış', category: 'Ofis Gideri', amount: 1400, description: 'Kırtasiye ve toneri alımı', createdBy: 'Sek. Zeynep Acar' }
   ]);
+
+  // Fix #15: DB'den kasa hareketlerini çek
+  React.useEffect(() => {
+    if (currentOrgId) {
+      dbFetchCashTransactions().then((dbTxs: any[]) => {
+        if (dbTxs && dbTxs.length > 0) {
+          const mapped: CashTransaction[] = dbTxs.map(t => ({
+            id: t.id,
+            date: t.createdAt ? t.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+            accountId: t.cashRegisterId || 'acc-1',
+            accountName: t.accountName || 'Kadıköy Nakit Kasası',
+            type: t.type === 'INCOME' ? 'Giriş' : 'Çıkış',
+            category: t.category || 'Genel',
+            amount: t.amount,
+            description: t.description || '',
+            createdBy: 'Sistem'
+          }));
+          setTransactions(prev => [...mapped, ...prev]);
+        }
+      }).catch(err => console.warn('[CashPage] dbFetchCashTransactions warning:', err.message));
+    }
+  }, [currentOrgId]);
 
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [selectedAccountIdFilter, setSelectedAccountIdFilter] = useState('All');
@@ -71,7 +94,7 @@ export default function CashPage() {
 
   const handleSaveSale = () => {
     if (!formData.patientName) {
-      alert('Lütfen hasta adı girin.');
+      addToast({ type: 'warning', message: 'Lütfen hasta adı girin.' });
       return;
     }
     const patientAmt = formData.itemPrice * formData.quantity - formData.sgkAmount;
@@ -90,26 +113,14 @@ export default function CashPage() {
       status: 'Tahsil Edildi' as const
     };
     const matchingStockItem = stockList.find(s => s.name.includes(formData.itemName) && s.quantity > 0);
+    
+    // Fix #4: addSale artık tek noktadan kasa + stok + DB işlemlerini yönetiyor
+    // Sayfa seviyesinde duplicate transaction oluşturmuyoruz
     addSale(newSale, matchingStockItem?.id, formData.targetAccountId);
 
-    // Add cash transaction & update account balance
+    // Sayfa-local hesap bakiyesini güncelle (sadece UI gösterimi için)
     const targetAcc = accounts.find(a => a.id === formData.targetAccountId);
     if (targetAcc) {
-      // Add transaction
-      const newTx: CashTransaction = {
-        id: 'tx-' + Date.now(),
-        date: new Date().toISOString().split('T')[0],
-        accountId: targetAcc.id,
-        accountName: targetAcc.name,
-        type: 'Giriş',
-        category: 'Satış Geliri',
-        amount: patientAmt,
-        description: `${formData.patientName} — ${formData.itemName} Satış Tahsilatı`,
-        createdBy: 'Dr. Elif Arslan'
-      };
-      setTransactions(prev => [newTx, ...prev]);
-
-      // Update account balance
       setAccounts(prev => prev.map(a => {
         if (a.id === targetAcc.id) {
           return { ...a, balance: a.balance + patientAmt };
@@ -119,7 +130,6 @@ export default function CashPage() {
     }
 
     setShowSaleModal(false);
-    addToast({ type: 'success', message: 'Satış kaydı kasaya başarıyla işlendi ve ciro güncellendi.' });
     setFormData({
       patientName: '',
       itemName: 'Phonak Audéo P90',
@@ -135,16 +145,14 @@ export default function CashPage() {
   const handleSaveTransaction = (e: React.FormEvent) => {
     e.preventDefault();
     if (txAmount <= 0) {
-      alert('Tutar 0\'dan büyük olmalıdır');
+      addToast({ type: 'warning', message: 'Tutar 0\'dan büyük olmalıdır.' });
       return;
     }
     const targetAcc = accounts.find(a => a.id === txAccountId);
     if (!targetAcc) return;
 
     if (txType === 'Çıkış' && targetAcc.balance < txAmount) {
-      if (!confirm('Kasada yetersiz bakiye var. Yine de devam etmek istiyor musunuz?')) {
-        return;
-      }
+      addToast({ type: 'warning', message: `${targetAcc.name} kasasında yetersiz bakiye (${formatCurrency(targetAcc.balance)}). İşlem devam ediyor.` });
     }
 
     const newTx: CashTransaction = {

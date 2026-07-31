@@ -64,7 +64,7 @@ export default function StockPage() {
 
   const handleSaveNew = () => {
     if (!formData.name) {
-      alert('Lütfen Ürün Adı alanını doldurunuz.');
+      addToast({ type: 'warning', message: 'Lütfen Ürün Adı alanını doldurunuz.' });
       return;
     }
     const newItem: StockItem = {
@@ -127,13 +127,14 @@ export default function StockPage() {
     setEditingItem(null);
   };
 
-  const branchFilteredStock = stockList.filter((item, index) => {
-    if (activeBranch.mode === 'all') return true;
-    const isKadikoy = activeBranch.mode === 'single' && (activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || (activeBranch.branch?.name || '').includes('Kadıköy'));
+  // Fix #9: Şube filtresi artık dinamik branch name eşleştirmesi ile çalışıyor
+  const branchFilteredStock = stockList.filter((item) => {
+    if (activeBranch.mode !== 'single') return true;
+    const branchName = activeBranch.branch?.name || activeBranch.slug || '';
     if (item.branch) {
-      return isKadikoy ? item.branch.includes('Kadıköy') : item.branch.includes('Beşiktaş');
+      return item.branch.toLowerCase().includes(branchName.toLowerCase());
     }
-    return isKadikoy ? index % 2 === 0 : index % 2 !== 0;
+    return true; // branch bilgisi yoksa göster
   });
 
   const debouncedSearch = useDebounce(search, 300);

@@ -6,6 +6,8 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { IconMenu, IconSearch, IconBell } from './Icons';
 
+import { getDisplayName, getUserRole, getUserInitials } from '../lib/userHelpers';
+
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   dashboard:        { title: 'Dashboard',            subtitle: 'Merkezin genel durumu' },
   patients:         { title: 'Hastalar',              subtitle: 'Hasta kayıtları ve odyogram yönetimi' },
@@ -23,13 +25,51 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 };
 
 export default function Header() {
-  const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList } = useApp();
+  const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList, stockList, usersList } = useApp();
   const { activeBranch, selectBranchBySlug, isLoadingBranch, allowedBranches } = useBranch();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Fix #8: Dinamik bildirimler — stok, recall, randevu durumundan hesaplanır
+  const dynamicNotifications = React.useMemo(() => {
+    const notifs: { id: number; title: string; desc: string; time: string; page: string }[] = [];
+    let idCounter = 1;
+
+    // Kritik stok uyarıları
+    const lowStockItems = stockList.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel);
+    lowStockItems.forEach(item => {
+      notifs.push({
+        id: idCounter++,
+        title: 'Kritik Stok Uyarısı',
+        desc: `${item.name} stok seviyesi kritik düzeyde (${item.quantity} adet kaldı).`,
+        time: 'Şimdi',
+        page: 'stock'
+      });
+    });
+
+    // SGK yenileme fırsatları
+    const renewalPatients = patientsList.filter(p => p.sgkStatus === 'Yenileme Hakkı Var');
+    renewalPatients.slice(0, 2).forEach(p => {
+      notifs.push({
+        id: idCounter++,
+        title: 'SGK Yenileme Hakkı',
+        desc: `${p.firstName} ${p.lastName}'ın SGK yenileme hakkı açıldı.`,
+        time: 'Bugün',
+        page: 'sgk'
+      });
+    });
+
+    // Hiç bildirim yoksa varsayılan
+    if (notifs.length === 0) {
+      notifs.push({ id: 1, title: 'Bildirim Yok', desc: 'Şu anda bekleyen bildiriminiz bulunmuyor.', time: '', page: 'dashboard' });
+      setHasUnreadNotifications(false);
+    }
+
+    return notifs;
+  }, [stockList, patientsList]);
 
   const dropdownRef = React.useRef<HTMLDivElement | null>(null);
   const branchDropdownRef = React.useRef<HTMLDivElement | null>(null);
@@ -283,15 +323,11 @@ export default function Header() {
                 </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  { id: 1, title: 'SGK Yenileme Hakkı', desc: 'Ayşe Yılmaz\'ın SGK yenileme hakkı açıldı.', time: '1 saat önce', page: 'sgk' as const },
-                  { id: 2, title: 'Pil Yenileme Uyarısı', desc: 'Hasan Çelik\'in pil bitişi (15 Temmuz) yaklaşıyor.', time: '3 saat önce', page: 'recall' as const },
-                  { id: 3, title: 'Kritik Stok Uyarısı', desc: 'Mikrofon stok seviyesi kritik düzeyde (2 adet kaldı).', time: 'Dün', page: 'stock' as const }
-                ].map((notif, index, arr) => (
+                {dynamicNotifications.map((notif, index, arr) => (
                   <div 
                     key={notif.id} 
                     onClick={() => {
-                      setCurrentPage(notif.page);
+                      setCurrentPage(notif.page as any);
                       setShowNotifications(false);
                     }}
                     style={{ 
@@ -319,14 +355,10 @@ export default function Header() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '1px solid var(--gray-200)', paddingLeft: 12, marginLeft: 4 }}>
           <div style={{ textAlign: 'right' }} className="hide-tablet">
             <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-800)', lineHeight: '1.2' }}>
-              {currentUser 
-                ? `${currentUser.user_metadata?.first_name || ''} ${currentUser.user_metadata?.last_name || ''}`.trim() || currentUser.email 
-                : 'Dr. Elif Arslan'}
+              {getDisplayName(currentUser, usersList)}
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', lineHeight: '1.2' }}>
-              {currentUser 
-                ? (currentUser.user_metadata?.role || 'Firma Yöneticisi') 
-                : 'Odyolog · Kadıköy'}
+              {getUserRole(currentUser, usersList)}
             </div>
           </div>
           <div 
@@ -345,9 +377,7 @@ export default function Header() {
               boxShadow: 'var(--shadow-xs)'
             }}
           >
-            {currentUser 
-              ? `${currentUser.user_metadata?.first_name?.[0] || ''}${currentUser.user_metadata?.last_name?.[0] || ''}`.toUpperCase() || 'U'
-              : 'EA'}
+            {getUserInitials(getDisplayName(currentUser, usersList))}
           </div>
         </div>
       </div>

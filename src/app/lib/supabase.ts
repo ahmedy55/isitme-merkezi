@@ -18,8 +18,10 @@ if (!isConfigured) {
   );
 }
 
-// Singleton Supabase Client
+// Singleton Supabase Client — Demo modunda boş URL ile oluşturulur (işlemler graceful fail eder)
 export const supabase = createClient(
-  isConfigured ? supabaseUrl : 'https://znktitzknixpbakfrnzk.supabase.co',
-  isConfigured ? supabaseAnonKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSJ9.demo'
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.placeholder'
 );
+
+export { isConfigured };

@@ -1,12 +1,16 @@
 import { supabase } from './supabase';
 import { SystemUser, UserRole } from '../data/mockData';
 import { toCamelGeneric, toSnakeGeneric } from '../repositories/BaseRepository';
+import { patientRepository } from '../repositories/PatientRepository';
+import { StockRepository } from '../repositories/StockRepository';
+import { CashRepository } from '../repositories/CashRepository';
 import { DatabaseError } from './errors/DatabaseError';
 import { logger } from './logger';
 
 // Key Case Converters (snake_case <-> camelCase) with Typesafe Generics <T>
 export const toCamel = <T = any>(obj: unknown): T => toCamelGeneric<T>(obj);
 export const toSnake = <T = any>(obj: unknown): T => toSnakeGeneric<T>(obj);
+export { patientRepository, StockRepository, CashRepository };
 
 /**
  * Universal Database Query Executor with Exception Catching & Slow Query Logging (>500ms)
@@ -178,6 +182,63 @@ export const dbUpdateStockItem = async (id: string, item: any) => {
     if (error) throw error;
     return toCamel(data?.[0]);
   }, 'dbUpdateStockItem');
+};
+
+export const dbDeleteStockItem = async (id: string) => {
+  return executeDbQuery(async () => {
+    const { error } = await supabase
+      .from('stock_items')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  }, 'dbDeleteStockItem');
+};
+
+// ═══════════════════════════════════════════════
+// 3b. Cash Transactions (Kasa Hareketleri)
+// ═══════════════════════════════════════════════
+export const dbFetchCashTransactions = async () => {
+  return executeDbQuery(async () => {
+    const { data, error } = await supabase
+      .from('cash_transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return toCamel(data || []);
+  }, 'dbFetchCashTransactions');
+};
+
+export const dbInsertCashTransaction = async (tx: any) => {
+  return executeDbQuery(async () => {
+    const orgId = await getActiveOrgId();
+    if (!orgId) return tx; // Demo modda sadece local kalır
+    
+    const { id, ...payload } = toSnake(tx);
+    const { data, error } = await supabase
+      .from('cash_transactions')
+      .insert([{ ...payload, organization_id: orgId }])
+      .select();
+    if (error) throw error;
+    return toCamel(data?.[0]);
+  }, 'dbInsertCashTransaction');
+};
+
+// ═══════════════════════════════════════════════
+// 3c. Stock Movements (Stok Hareketleri)
+// ═══════════════════════════════════════════════
+export const dbInsertStockMovement = async (movement: any) => {
+  return executeDbQuery(async () => {
+    const orgId = await getActiveOrgId();
+    if (!orgId) return movement; // Demo modda sadece local kalır
+    
+    const { id, ...payload } = toSnake(movement);
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .insert([{ ...payload, organization_id: orgId }])
+      .select();
+    if (error) throw error;
+    return toCamel(data?.[0]);
+  }, 'dbInsertStockMovement');
 };
 
 // ═══════════════════════════════════════════════

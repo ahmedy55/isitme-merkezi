@@ -32,7 +32,7 @@ export class AuditService {
 
     try {
       if (payload.organizationId) {
-        await supabase.from('audit_logs').insert([logEntry]);
+        await supabase.from('audit_log').insert([logEntry]);
       } else {
         console.log('[AuditLog]', logEntry);
       }

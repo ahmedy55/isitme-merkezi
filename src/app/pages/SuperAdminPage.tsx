@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 
 export default function SuperAdminPage() {
-  const { addToast } = useApp();
+  const { addToast, isPlatformAdmin } = useApp();
   const [orgs, setOrgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,6 +130,17 @@ export default function SuperAdminPage() {
   const activeCount = orgs.filter(o => o.subscription_status === 'active').length;
   const proCount = orgs.filter(o => o.plan_type === 'pro').length;
   const enterpriseCount = orgs.filter(o => o.plan_type === 'enterprise').length;
+  if (!isPlatformAdmin) {
+    return (
+      <div className="page" style={{ padding: 40, textAlign: 'center' }}>
+        <div style={{ fontSize: '3rem', marginBottom: 16 }}>🔒</div>
+        <h2>Yetkisiz Erişim (403)</h2>
+        <p style={{ color: 'var(--gray-500)', marginTop: 8 }}>
+          SaaS Yönetim Paneline sadece platform yöneticileri erişebilir.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container" style={{ padding: '24px', animation: 'fadeIn 0.3s ease' }}>

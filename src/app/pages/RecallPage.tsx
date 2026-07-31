@@ -109,9 +109,11 @@ const enhancedRecallData: EnhancedRecallItem[] = [
 ];
 
 import { useApp } from '../context/AppContext';
+import { useBranch } from '../context/BranchContext';
 
 export default function RecallPage() {
   const { addToast, addAppointment, setCurrentPage, setSelectedPatientId, setActiveDetailTab } = useApp();
+  const { activeBranch } = useBranch();
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [selectedChain, setSelectedChain] = useState<EnhancedRecallItem | null>(null);
   const [recallChains, setRecallChains] = useState<EnhancedRecallItem[]>(enhancedRecallData);
@@ -125,7 +127,18 @@ export default function RecallPage() {
     return 0.2;
   };
 
-  const filtered = recallChains.filter(r => {
+  const branchFilteredChains = React.useMemo(() => {
+    if (activeBranch.mode === 'single') {
+      const isKadikoy = activeBranch.branchId === 'br-1' || activeBranch.slug.includes('kadikoy') || (activeBranch.branch?.name || '').includes('Kadıköy');
+      const isBesiktas = activeBranch.branchId === 'br-2' || activeBranch.slug.includes('besiktas') || (activeBranch.branch?.name || '').includes('Beşiktaş');
+      return recallChains.filter((r, idx) => {
+        return isKadikoy ? idx % 2 === 0 : (isBesiktas ? idx % 2 !== 0 : idx % 3 === 0);
+      });
+    }
+    return recallChains;
+  }, [recallChains, activeBranch]);
+
+  const filtered = branchFilteredChains.filter(r => {
     if (filterStatus === 'Tümü') return true;
     if (filterStatus === 'Bekleyenler') return r.steps.some(s => s.status === 'Bekliyor');
     if (filterStatus === 'Pil Yenileme') return r.reason === 'Pil Siparişi';
@@ -133,8 +146,8 @@ export default function RecallPage() {
     return true;
   });
 
-  const totalFirsat = recallChains.reduce((sum, r) => sum + r.estimatedRevenue, 0);
-  const weightedRevenue = recallChains.reduce((sum, r) => sum + (r.estimatedRevenue * getProbabilityWeight(r.probability)), 0);
+  const totalFirsat = branchFilteredChains.reduce((sum, r) => sum + r.estimatedRevenue, 0);
+  const weightedRevenue = branchFilteredChains.reduce((sum, r) => sum + (r.estimatedRevenue * getProbabilityWeight(r.probability)), 0);
 
   const handleTriggerRecallAction = (chain: EnhancedRecallItem) => {
     const updatedChains = recallChains.map(c => {
