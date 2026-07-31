@@ -10,24 +10,26 @@ interface IconProps {
   size?: number;
   className?: string;
   strokeWidth?: number;
+  color?: string;
 }
 
-const defaultProps: Required<IconProps> = {
+const defaultProps = {
   size: 20,
   className: '',
   strokeWidth: 1.65,
+  color: 'currentColor'
 };
 
 /* ── Temel SVG Sarmalayıcı ── */
-const Svg: React.FC<{ size: number; className: string; children: React.ReactNode }> = ({
-  size, className, children
+const Svg: React.FC<{ size: number; className: string; color?: string; children: React.ReactNode }> = ({
+  size, className, color = 'currentColor', children
 }) => (
   <svg
     width={size}
     height={size}
     viewBox="0 0 24 24"
     fill="none"
-    stroke="currentColor"
+    stroke={color}
     strokeLinecap="round"
     strokeLinejoin="round"
     aria-hidden="true"
@@ -628,6 +630,56 @@ export const IconBranchActivity: React.FC<IconProps> = (p = {}) => {
     <Svg size={size} className={className}>
       <path d="M18 20V10M12 20V4M6 20v10" strokeWidth={strokeWidth} />
       <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconCrown: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.3 8.87l5.443-2.722a.5.5 0 0 1 .715.545l-1.636 11.455A2 2 0 0 1 17.84 20H6.16a2 2 0 0 1-1.982-1.852L2.542 6.693a.5.5 0 0 1 .715-.545L8.7 8.87l2.862-5.604Z" strokeWidth={strokeWidth} fill="currentColor" />
+    </Svg>
+  );
+};
+
+export const IconStore: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" strokeWidth={strokeWidth} />
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" strokeWidth={strokeWidth} />
+      <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" strokeWidth={strokeWidth} />
+      <path d="M2 7h20v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7Z" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconStethoscope: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="M4.8 2.3A.3.3 0 0 0 4.5 2.6V11a5 5 0 0 0 10 0V2.6a.3.3 0 0 0-.3-.3h-1.4a.3.3 0 0 0-.3.3V11a3 3 0 0 1-6 0V2.6a.3.3 0 0 0-.3-.3H4.8Z" strokeWidth={strokeWidth} />
+      <path d="M9.5 16v3a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-3" strokeWidth={strokeWidth} />
+      <circle cx="15.5" cy="14.5" r="2.5" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconCalculator: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <rect width="16" height="20" x="4" y="2" rx="2" strokeWidth={strokeWidth} />
+      <line x1="8" x2="16" y1="6" y2="6" strokeWidth={strokeWidth} />
+      <line x1="16" x2="16" y1="14" y2="18" strokeWidth={strokeWidth} />
+      <path d="M16 10h.01" strokeWidth={strokeWidth} />
+      <path d="M12 10h.01" strokeWidth={strokeWidth} />
+      <path d="M8 10h.01" strokeWidth={strokeWidth} />
+      <path d="M12 14h.01" strokeWidth={strokeWidth} />
+      <path d="M8 14h.01" strokeWidth={strokeWidth} />
+      <path d="M12 18h.01" strokeWidth={strokeWidth} />
+      <path d="M8 18h.01" strokeWidth={strokeWidth} />
     </Svg>
   );
 };

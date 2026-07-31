@@ -5,7 +5,8 @@ import { useApp } from '../context/AppContext';
 import {
   IconSearch, IconPlus, IconCheck, IconWarning, IconRefresh, IconClose,
   IconMessage, IconBack, IconUsers, IconCalendar, IconSGK, IconCash,
-  IconStock, IconPatients, IconChevronDown
+  IconStock, IconPatients, IconChevronDown, IconCrown, IconStore,
+  IconStethoscope, IconSupport, IconCalculator
 } from '../components/Icons';
 
 interface FAQ {
@@ -19,6 +20,7 @@ interface RoleInfo {
   badge: string;
   badgeType: 'admin' | 'standard';
   desc: string;
+  icon: string;
 }
 
 interface ModuleGuide {
@@ -70,31 +72,36 @@ export default function SupportPage() {
       title: 'Firma yöneticisi',
       badge: 'Tam yetki',
       badgeType: 'admin',
-      desc: 'Tüm şubeleri konsolide görür, kullanıcı ve yetki tanımlar, mali raporlara erişir, SaaS panel ayarlarını yönetir.'
+      desc: 'Tüm şubeleri konsolide görür, kullanıcı ve yetki tanımlar, mali raporlara erişir, SaaS panel ayarlarını yönetir.',
+      icon: 'crown'
     },
     {
       title: 'Şube yöneticisi',
       badge: 'Şube bazlı',
       badgeType: 'standard',
-      desc: 'Kendi şubesindeki randevu, stok ve kasa hareketlerini yönetir; diğer şubeleri görüntüleyemez.'
+      desc: 'Kendi şubesindeki randevu, stok ve kasa hareketlerini yönetir; diğer şubeleri görüntüleyemez.',
+      icon: 'store'
     },
     {
       title: 'Odyolog / teknisyen',
       badge: 'Klinik',
       badgeType: 'standard',
-      desc: 'Hasta kartı, odyogram ve teknik servis kayıtlarına erişir; kasa ve muhasebe ekranlarını göremez.'
+      desc: 'Hasta kartı, odyogram ve teknik servis kayıtlarına erişir; kasa ve muhasebe ekranlarını göremez.',
+      icon: 'stethoscope'
     },
     {
       title: 'Resepsiyon / sekreterya',
       badge: 'Ön büro',
       badgeType: 'standard',
-      desc: 'Randevu oluşturur, hasta kaydı açar, recall listesini takip eder. SGK ve raporlama menülerine erişemez.'
+      desc: 'Randevu oluşturur, hasta kaydı açar, recall listesini takip eder. SGK ve raporlama menülerine erişemez.',
+      icon: 'support'
     },
     {
       title: 'Muhasebe',
       badge: 'Mali',
       badgeType: 'standard',
-      desc: 'Kasa, tahsilat, masraf ve tedarikçi faturalarını işler; hasta klinik verilerini göremez.'
+      desc: 'Kasa, tahsilat, masraf ve tedarikçi faturalarını işler; hasta klinik verilerini göremez.',
+      icon: 'calculator'
     }
   ];
 
@@ -410,31 +417,64 @@ export default function SupportPage() {
           </div>
         )}
 
-        {/* TAB 2: Roller ve yetkiler */}
+        {/* TAB 2: Roller ve yetkiler (Geliştirilmiş İkonlu & Hiyerarşili Tasarım) */}
         {activeTab === 'roller' && (
           <div className="km-panel">
             <div style={{ fontSize: 13, color: '#6B685E', marginBottom: 16 }}>
               Her rolün panelde görebildiği bölümler ve yapabileceği işlemler.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {rolesData.map((role, idx) => (
-                <div key={idx} style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 10, padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#22281F' }}>{role.title}</div>
-                    <span style={{
-                      fontSize: 11,
-                      background: role.badgeType === 'admin' ? '#0F5C43' : '#EAF1EC',
-                      color: role.badgeType === 'admin' ? '#fff' : '#0F5C43',
-                      padding: '2px 8px',
-                      borderRadius: 20,
-                      fontWeight: 600
+              {rolesData.map((role, idx) => {
+                const isAdmin = role.badgeType === 'admin';
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      background: '#fff',
+                      border: isAdmin ? '1.5px solid #0F5C43' : '0.5px solid #E2DED0',
+                      borderRadius: 10,
+                      padding: isAdmin ? '16px 18px' : '14px 18px',
+                      display: 'flex',
+                      gap: 14,
+                      alignItems: 'flex-start'
+                    }}
+                  >
+                    <div style={{
+                      width: isAdmin ? 38 : 34,
+                      height: isAdmin ? 38 : 34,
+                      flexShrink: 0,
+                      borderRadius: isAdmin ? 9 : 8,
+                      background: isAdmin ? '#0F5C43' : '#E1F0E8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isAdmin ? '#fff' : '#0F5C43'
                     }}>
-                      {role.badge}
-                    </span>
+                      {role.icon === 'crown' && <IconCrown size={isAdmin ? 20 : 18} color={isAdmin ? '#fff' : '#0F5C43'} />}
+                      {role.icon === 'store' && <IconStore size={18} color="#0F5C43" />}
+                      {role.icon === 'stethoscope' && <IconStethoscope size={18} color="#0F5C43" />}
+                      {role.icon === 'support' && <IconSupport size={18} color="#0F5C43" />}
+                      {role.icon === 'calculator' && <IconCalculator size={18} color="#0F5C43" />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: isAdmin ? 14 : 13, fontWeight: 600, color: '#22281F' }}>{role.title}</span>
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: isAdmin ? '#0F5C43' : '#EAF1EC',
+                          color: isAdmin ? '#fff' : '#0F5C43',
+                          padding: '2px 9px',
+                          borderRadius: 20
+                        }}>
+                          {role.badge}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B685E', lineHeight: '1.5' }}>{role.desc}</div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#6B685E', lineHeight: '1.5' }}>{role.desc}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
