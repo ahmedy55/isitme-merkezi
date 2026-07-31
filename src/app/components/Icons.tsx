@@ -684,6 +684,91 @@ export const IconCalculator: React.FC<IconProps> = (p = {}) => {
   );
 };
 
+export const IconBuilding: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <rect width="16" height="20" x="4" y="2" rx="2" strokeWidth={strokeWidth} />
+      <path d="M9 22v-4h6v4" strokeWidth={strokeWidth} />
+      <path d="M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconTag: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="M12 2H2v10l10 10 10-10L12 2Z" strokeWidth={strokeWidth} />
+      <circle cx="7" cy="7" r="1.5" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconDocument: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2Z" strokeWidth={strokeWidth} />
+      <polyline points="14 2 14 8 20 8" strokeWidth={strokeWidth} />
+      <line x1="8" x2="16" y1="13" y2="13" strokeWidth={strokeWidth} />
+      <line x1="8" x2="14" y1="17" y2="17" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconLock: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" strokeWidth={strokeWidth} />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconMail: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <rect width="20" height="16" x="2" y="4" rx="2" strokeWidth={strokeWidth} />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconMapPin: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" strokeWidth={strokeWidth} />
+      <circle cx="12" cy="10" r="3" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconSave: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" strokeWidth={strokeWidth} />
+      <polyline points="17 21 17 13 7 13 7 21" strokeWidth={strokeWidth} />
+      <polyline points="7 3 7 8 15 8" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
+export const IconDatabase: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <ellipse cx="12" cy="5" rx="9" ry="3" strokeWidth={strokeWidth} />
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" strokeWidth={strokeWidth} />
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
 /* ============================================================
    İKON HARİTASI — Sidebar için
    ============================================================ */
