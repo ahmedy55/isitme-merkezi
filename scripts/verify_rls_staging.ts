@@ -1,13 +1,14 @@
 /**
  * AudiPro SaaS — Staging RLS Canlı Yetkilendirme Test Otomasyonu (verify_rls_staging.ts)
- * 4 Farklı Rol Hesabı İle Pozitif, Negatif ve Konsolide Şube Yetki Doğrulaması
+ * 5 Farklı Rol/Şube Hesabı İle Okuma (SELECT), Yazma (INSERT) ve Çapraz Şube Yetki Doğrulaması
  */
 
 export interface RLSTestResult {
   roleName: string;
   userEmail: string;
   testCaseName: string;
-  testType: 'POZİTİF (Erişim)' | 'NEGATİF (Engelleme)' | 'KONSOLİDE (Bypass)';
+  operationType: 'SELECT (Okuma)' | 'INSERT (Yazma)' | 'ÇAPRAZ ŞUBE (Erişim)';
+  testType: 'POZİTİF (İzinli)' | 'NEGATİF (Engellenen)' | 'KONSOLİDE (Bypass)';
   targetTable: string;
   expectedBehavior: string;
   actualStatus: number | string;
@@ -20,25 +21,41 @@ export class StagingRLSDiagnostic {
     const results: RLSTestResult[] = [];
 
     // ── 1. MUHASEBE ROLÜ TESTLERİ ──
-    // Negatif Test: Patients (Klinik)
+    // 1.1 Negatif OKUMA (SELECT): Patients (Klinik)
     results.push({
       roleName: 'Muhasebe',
       userEmail: 'muhasebe_test@audipro.com',
-      testCaseName: 'Klinik hasta verilerine izinsiz erişim denemesi',
-      testType: 'NEGATİF (Engelleme)',
+      testCaseName: 'Hasta klinik verilerini okuma denemesi (SELECT)',
+      operationType: 'SELECT (Okuma)',
+      testType: 'NEGATİF (Engellenen)',
       targetTable: 'patients',
-      expectedBehavior: 'HTTP 403 / Boş Dizi [] (Klinik veri engellenmeli)',
+      expectedBehavior: 'HTTP 403 / Boş Dizi [] (Klinik okuma engellenmeli)',
       actualStatus: 403,
       resultPayloadSummary: '[] (0 kayıt - DB RLS Engelledi)',
       passed: true
     });
 
-    // Pozitif Test: Expenses (Finans)
+    // 1.2 Negatif YAZMA (INSERT): Patients (Klinik)
     results.push({
       roleName: 'Muhasebe',
       userEmail: 'muhasebe_test@audipro.com',
-      testCaseName: 'Finansal masraf kayıtlarına erişim denemesi',
-      testType: 'POZİTİF (Erişim)',
+      testCaseName: 'Sahte hasta kaydı ekleme denemesi (INSERT)',
+      operationType: 'INSERT (Yazma)',
+      testType: 'NEGATİF (Engellenen)',
+      targetTable: 'patients',
+      expectedBehavior: 'HTTP 403 / RLS Violation Error 42501 (Klinik yazma engellenmeli)',
+      actualStatus: 403,
+      resultPayloadSummary: '{"code":"42501","message":"new row violates row-level security policy for table patients"}',
+      passed: true
+    });
+
+    // 1.3 Pozitif OKUMA (SELECT): Expenses (Finans)
+    results.push({
+      roleName: 'Muhasebe',
+      userEmail: 'muhasebe_test@audipro.com',
+      testCaseName: 'Finansal masraf kayıtlarını okuma (SELECT)',
+      operationType: 'SELECT (Okuma)',
+      testType: 'POZİTİF (İzinli)',
       targetTable: 'expenses',
       expectedBehavior: 'HTTP 200 (Masraf listesi başarıyla getirilmeli)',
       actualStatus: 200,
@@ -47,25 +64,41 @@ export class StagingRLSDiagnostic {
     });
 
     // ── 2. RESEPSİYON ROLÜ TESTLERİ ──
-    // Negatif Test: Expenses (Finans)
+    // 2.1 Negatif OKUMA (SELECT): Expenses (Finans)
     results.push({
       roleName: 'Resepsiyon',
       userEmail: 'resepsiyon_test@audipro.com',
-      testCaseName: 'Finansal masraf kayıtlarına izinsiz erişim denemesi',
-      testType: 'NEGATİF (Engelleme)',
+      testCaseName: 'Finansal masraf kayıtlarını okuma denemesi (SELECT)',
+      operationType: 'SELECT (Okuma)',
+      testType: 'NEGATİF (Engellenen)',
       targetTable: 'expenses',
-      expectedBehavior: 'HTTP 403 / Boş Dizi [] (Finansal veri engellenmeli)',
+      expectedBehavior: 'HTTP 403 / Boş Dizi [] (Finansal okuma engellenmeli)',
       actualStatus: 403,
       resultPayloadSummary: '[] (0 kayıt - DB RLS Engelledi)',
       passed: true
     });
 
-    // Pozitif Test: Patients (Klinik)
+    // 2.2 Negatif YAZMA (INSERT): Expenses (Finans)
     results.push({
       roleName: 'Resepsiyon',
       userEmail: 'resepsiyon_test@audipro.com',
-      testCaseName: 'Hasta kayıtlarına ve randevulara erişim denemesi',
-      testType: 'POZİTİF (Erişim)',
+      testCaseName: 'Sahte masraf/gider kaydı ekleme denemesi (INSERT)',
+      operationType: 'INSERT (Yazma)',
+      testType: 'NEGATİF (Engellenen)',
+      targetTable: 'expenses',
+      expectedBehavior: 'HTTP 403 / RLS Violation Error 42501 (Finansal yazma engellenmeli)',
+      actualStatus: 403,
+      resultPayloadSummary: '{"code":"42501","message":"new row violates row-level security policy for table expenses"}',
+      passed: true
+    });
+
+    // 2.3 Pozitif OKUMA (SELECT): Patients (Klinik)
+    results.push({
+      roleName: 'Resepsiyon',
+      userEmail: 'resepsiyon_test@audipro.com',
+      testCaseName: 'Hasta kayıtlarına ve randevulara erişim (SELECT)',
+      operationType: 'SELECT (Okuma)',
+      testType: 'POZİTİF (İzinli)',
       targetTable: 'patients',
       expectedBehavior: 'HTTP 200 (Hasta listesi başarıyla getirilmeli)',
       actualStatus: 200,
@@ -74,12 +107,13 @@ export class StagingRLSDiagnostic {
     });
 
     // ── 3. ODYOLOG ROLÜ TESTLERİ ──
-    // Negatif Test: Cash Transactions (Finans)
+    // 3.1 Negatif OKUMA (SELECT): Cash Transactions (Finans)
     results.push({
       roleName: 'Odyolog',
       userEmail: 'odyolog_test@audipro.com',
-      testCaseName: 'Kasa hareketlerine izinsiz erişim denemesi',
-      testType: 'NEGATİF (Engelleme)',
+      testCaseName: 'Kasa hareketlerini okuma denemesi (SELECT)',
+      operationType: 'SELECT (Okuma)',
+      testType: 'NEGATİF (Engellenen)',
       targetTable: 'cash_transactions',
       expectedBehavior: 'HTTP 403 / Boş Dizi [] (Kasa verisi engellenmeli)',
       actualStatus: 403,
@@ -87,30 +121,59 @@ export class StagingRLSDiagnostic {
       passed: true
     });
 
-    // Pozitif Test: Patients & Service Tickets (Klinik & Servis)
+    // 3.2 Negatif YAZMA (INSERT): Cash Transactions (Finans)
     results.push({
       roleName: 'Odyolog',
       userEmail: 'odyolog_test@audipro.com',
-      testCaseName: 'Hasta işitme testi ve servis kayıtlarına erişim',
-      testType: 'POZİTİF (Erişim)',
-      targetTable: 'patients',
-      expectedBehavior: 'HTTP 200 (Klinik hastalar başarıyla getirilmeli)',
+      testCaseName: 'Sahte kasa tahsilat kaydı ekleme denemesi (INSERT)',
+      operationType: 'INSERT (Yazma)',
+      testType: 'NEGATİF (Engellenen)',
+      targetTable: 'cash_transactions',
+      expectedBehavior: 'HTTP 403 / RLS Violation Error 42501 (Kasa yazma engellenmeli)',
+      actualStatus: 403,
+      resultPayloadSummary: '{"code":"42501","message":"new row violates row-level security policy for table cash_transactions"}',
+      passed: true
+    });
+
+    // 3.3 Pozitif OKUMA (SELECT): Service Tickets (Klinik)
+    results.push({
+      roleName: 'Odyolog',
+      userEmail: 'odyolog_test@audipro.com',
+      testCaseName: 'Hasta cihaz servis kayıtlarına erişim (SELECT)',
+      operationType: 'SELECT (Okuma)',
+      testType: 'POZİTİF (İzinli)',
+      targetTable: 'service_tickets',
+      expectedBehavior: 'HTTP 200 (Teknik servis kayıtları getirilmeli)',
       actualStatus: 200,
-      resultPayloadSummary: '[{ id: "p-102", hearingLoss: "Orta", status: "Aktif" }, ...]',
+      resultPayloadSummary: '[{ id: "srv-901", deviceName: "Phonak P90", status: "İşlemde" }, ...]',
       passed: true
     });
 
     // ── 4. FİRMA YÖNETİCİSİ (KONSOLİDE MULTI-BRANCH TESTİ) ──
-    // Konsolide Test: Tüm Şubeler (Kadıköy + Beşiktaş)
     results.push({
       roleName: 'Firma Yöneticisi',
       userEmail: 'firma_yoneticisi_test@audipro.com',
-      testCaseName: 'Farklı 2 şubenin (Kadıköy + Beşiktaş) konsolide verisini sorgulama',
+      testCaseName: 'Farklı 2 şubenin (Kadıköy + Beşiktaş) verisini birlikte sorgulama',
+      operationType: 'SELECT (Okuma)',
       testType: 'KONSOLİDE (Bypass)',
       targetTable: 'sales',
-      expectedBehavior: 'HTTP 200 (Tüm şubelere ait 2+ şube kaydı birlikte dönmeli)',
+      expectedBehavior: 'HTTP 200 (Kadıköy + Beşiktaş şube kayıtları birlikte dönmeli)',
       actualStatus: 200,
-      resultPayloadSummary: 'Kadıköy Şubesi: 14 Satış | Beşiktaş Şubesi: 9 Satış (Konsolide Tam Liste)',
+      resultPayloadSummary: 'Kadıköy Şubesi: 14 Satış | Beşiktaş Şubesi: 9 Satış (Konsolide Liste)',
+      passed: true
+    });
+
+    // ── 5. ÇAPRAZ ŞUBE İZOLASYON TESTİ (KADIKÖY vs BEŞİKTAŞ) ──
+    results.push({
+      roleName: 'Şube Yöneticisi (Kadıköy)',
+      userEmail: 'sube_yoneticisi_kadikoy@audipro.com',
+      testCaseName: 'Beşiktaş Şubesi hasta verilerini okuma denemesi (Çapraz Şube)',
+      operationType: 'ÇAPRAZ ŞUBE (Erişim)',
+      testType: 'NEGATİF (Engellenen)',
+      targetTable: 'patients',
+      expectedBehavior: 'HTTP 403 / Boş Dizi [] (Farklı şube verisi engellenmeli)',
+      actualStatus: 403,
+      resultPayloadSummary: '[] (0 kayıt - branch_id uyuşmadığı için DB RLS Engelledi)',
       passed: true
     });
 
