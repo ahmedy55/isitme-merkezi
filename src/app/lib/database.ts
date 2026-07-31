@@ -214,11 +214,20 @@ export const dbInsertCashTransaction = async (tx: any) => {
     if (!orgId) return tx; // Demo modda sadece local kalır
     
     const { id, ...payload } = toSnake(tx);
+    const idempotencyKey = payload.idempotency_key || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
+
     const { data, error } = await supabase
       .from('cash_transactions')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...payload, organization_id: orgId, idempotency_key: idempotencyKey }])
       .select();
-    if (error) throw error;
+
+    if (error) {
+      if (error.code === '23505' || error.message?.includes('idempotency')) {
+        console.warn('[IdempotencyGuard] Mükerrer kasa hareketi engellendi. Key:', idempotencyKey);
+        return tx;
+      }
+      throw error;
+    }
     return toCamel(data?.[0]);
   }, 'dbInsertCashTransaction');
 };
@@ -273,13 +282,20 @@ export const dbInsertSale = async (sale: any) => {
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     
     const { id, patientName, items, installments, ...payload } = toSnake(sale);
+    const idempotencyKey = payload.idempotency_key || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
     
     const { data: mainSale, error: saleError } = await supabase
       .from('sales')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...payload, organization_id: orgId, idempotency_key: idempotencyKey }])
       .select();
       
-    if (saleError) throw saleError;
+    if (saleError) {
+      if (saleError.code === '23505' || saleError.message?.includes('idempotency')) {
+        console.warn('[IdempotencyGuard] Mükerrer satış kaydı engellendi. Key:', idempotencyKey);
+        return sale;
+      }
+      throw saleError;
+    }
     const createdSale = mainSale?.[0];
     if (!createdSale) throw new DatabaseError('Satış kaydı oluşturulamadı.');
 
@@ -431,11 +447,20 @@ export const dbInsertExpense = async (expense: any) => {
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     
     const { id, ...payload } = toSnake(expense);
+    const idempotencyKey = payload.idempotency_key || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
+
     const { data, error } = await supabase
       .from('expenses')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...payload, organization_id: orgId, idempotency_key: idempotencyKey }])
       .select();
-    if (error) throw error;
+
+    if (error) {
+      if (error.code === '23505' || error.message?.includes('idempotency')) {
+        console.warn('[IdempotencyGuard] Mükerrer masraf kaydı engellendi. Key:', idempotencyKey);
+        return expense;
+      }
+      throw error;
+    }
     return toCamel(data?.[0]);
   }, 'dbInsertExpense');
 };

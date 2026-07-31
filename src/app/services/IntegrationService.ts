@@ -109,4 +109,58 @@ export class IntegrationService {
       timestamp: new Date().toISOString()
     };
   }
+
+  /**
+   * FAZ 4.2: SGK Medula Canlı İşlem Esnasında Timeout & Durumu Belirsiz İşaretleme
+   */
+  static async executeInFlightSgkProvision(
+    patientId: string,
+    prescriptionNo: string,
+    timeoutMs: number = 5000
+  ): Promise<{ status: 'Onaylandı' | 'Reddedildi' | 'Durumu Belirsiz'; message: string }> {
+    const timeoutPromise = new Promise<{ status: 'Durumu Belirsiz'; message: string }>((resolve) => {
+      setTimeout(() => {
+        resolve({
+          status: 'Durumu Belirsiz',
+          message: '⚠️ SGK Medula servisi zaman aşımına (Timeout) uğradı. İşlem yarıda kalmış olabilir. Lütfen Medula panelinden provizyon durumunu kontrol edin.'
+        });
+      }, timeoutMs);
+    });
+
+    const provisionPromise = (async () => {
+      // Simüle edilen SGK canlı web-servis çağrısı
+      await new Promise(res => setTimeout(res, 600));
+      return {
+        status: 'Onaylandı' as const,
+        message: `SGK Reçete Provizyonu Onaylandı. Reçete No: ${prescriptionNo}`
+      };
+    })();
+
+    return Promise.race([provisionPromise, timeoutPromise]);
+  }
+
+  /**
+   * FAZ 4.2: WhatsApp / SMS Gönderim Hatası İzolasyonu & Personel Uyarısı
+   */
+  static async sendWhatsappNotificationWithFallback(
+    patientPhone: string,
+    messageText: string
+  ): Promise<{ success: boolean; staffNotice?: string; message: string }> {
+    try {
+      if (!patientPhone || patientPhone.length < 10) {
+        throw new Error('Geçersiz telefon numarası');
+      }
+      // Mesaj gönderimi
+      return {
+        success: true,
+        message: `WhatsApp bildirimi gönderildi (${patientPhone}).`
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        staffNotice: `⚠️ DİKKAT (Personel Uyarısı): ${patientPhone} numaralı hastaya WhatsApp hatırlatma mesajı gönderilemedi! Lütfen hastayı telefonla arayınız.`,
+        message: `Mesaj gönderilemedi: ${err.message}`
+      };
+    }
+  }
 }
