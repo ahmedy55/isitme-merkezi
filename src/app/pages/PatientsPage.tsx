@@ -170,7 +170,11 @@ export default function PatientsPage() {
 
   const handleSave = () => {
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.tc.trim() || !formData.phone.trim() || !formData.address.trim()) {
-      alert('Lütfen zorunlu alanları (* işaretli: Ad, Soyad, TC Kimlik No, Telefon, Adres) doldurunuz.');
+      addToast({ type: 'warning', message: 'Lütfen zorunlu alanları (* işaretli: Ad, Soyad, TC Kimlik No, Telefon, Adres) doldurunuz.' });
+      return;
+    }
+    if (!formData.consentGiven) {
+      addToast({ type: 'warning', message: '⚠️ DİKKAT: Kişisel Sağlık Verilerinin İşlenmesine İlişkin KVKK Açık Rıza Onayı verilmeden hasta kaydı oluşturulamaz.' });
       return;
     }
     const newPatient: Patient = {

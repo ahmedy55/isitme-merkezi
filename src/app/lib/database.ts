@@ -76,10 +76,19 @@ export const dbUpdatePatient = async (id: string, patient: any) => {
       .from('patients')
       .update(payload)
       .eq('id', id)
-      .select();
     if (error) throw error;
     return toCamel(data?.[0]);
   }, 'dbUpdatePatient');
+};
+
+export const dbDeletePatient = async (id: string) => {
+  return executeDbQuery(async () => {
+    const { error } = await supabase
+      .from('patients')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  }, 'dbDeletePatient');
 };
 
 // ═══════════════════════════════════════════════
