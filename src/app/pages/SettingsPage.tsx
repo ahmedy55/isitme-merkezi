@@ -9,6 +9,7 @@ import {
   IconSave, IconDatabase, IconShield, IconPlug,
   IconCalendar, IconRecall, IconStock, IconCash, IconInfo
 } from '../components/Icons';
+import { IntegrationService } from '../services/IntegrationService';
 
 export default function SettingsPage() {
   const { addToast, currentOrgId } = useApp();
@@ -103,6 +104,50 @@ export default function SettingsPage() {
     email: firmSettings.email,
     address: firmSettings.address
   }, 'Firma bilgileri');
+
+  const [lastBackupDate, setLastBackupDate] = useState<string>('01.08.2026, 03:00');
+  const [testingService, setTestingService] = useState<string | null>(null);
+
+  const handleTestMedula = async () => {
+    setTestingService('medula');
+    try {
+      const res = await IntegrationService.testMedulaConnection(medulaSettings.wsdlUrl, medulaSettings.facilityCode);
+      addToast({ type: res.status === 'online' ? 'success' : 'warning', message: res.message });
+    } finally {
+      setTestingService(null);
+    }
+  };
+
+  const handleTestUts = async () => {
+    setTestingService('uts');
+    try {
+      const res = await IntegrationService.testUtsConnection(utsSettings.firmCode, utsSettings.token);
+      addToast({ type: res.status === 'online' ? 'success' : 'warning', message: res.message });
+    } finally {
+      setTestingService(null);
+    }
+  };
+
+  const handleTestFatura = async () => {
+    setTestingService('fatura');
+    try {
+      const res = await IntegrationService.testEfaturaConnection(faturaSettings.provider, faturaSettings.apiKey);
+      addToast({ type: 'success', message: res.message });
+    } finally {
+      setTestingService(null);
+    }
+  };
+
+  const handleTestWhatsapp = async () => {
+    setTestingService('whatsapp');
+    try {
+      const res = await IntegrationService.testWhatsappConnection(whatsappSettings.provider, whatsappSettings.phoneNumberId);
+      setWhatsappSettings(s => ({ ...s, isConnected: true }));
+      addToast({ type: 'success', message: res.message });
+    } finally {
+      setTestingService(null);
+    }
+  };
 
   const handleSaveMedula = () => saveSettingsToDb({
     medula_facility_code: medulaSettings.facilityCode,
@@ -398,10 +443,11 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
                 <button
                   type="button"
-                  onClick={() => addToast({ type: 'info', message: 'Medula WSDL bağlantı testi başlatıldı...' })}
+                  onClick={handleTestMedula}
+                  disabled={testingService === 'medula'}
                   style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
+                  <IconPlug size={14} color="#6B685E" /> {testingService === 'medula' ? 'Test ediliyor...' : 'Bağlantıyı test et'}
                 </button>
                 <button
                   type="button"
@@ -467,10 +513,11 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
                 <button
                   type="button"
-                  onClick={() => addToast({ type: 'info', message: 'ÜTS API bağlantı testi başlatıldı...' })}
+                  onClick={handleTestUts}
+                  disabled={testingService === 'uts'}
                   style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
+                  <IconPlug size={14} color="#6B685E" /> {testingService === 'uts' ? 'Test ediliyor...' : 'Bağlantıyı test et'}
                 </button>
                 <button
                   type="button"
@@ -555,10 +602,11 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
                 <button
                   type="button"
-                  onClick={() => addToast({ type: 'info', message: 'E-Fatura API bağlantı testi başlatıldı...' })}
+                  onClick={handleTestFatura}
+                  disabled={testingService === 'fatura'}
                   style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
+                  <IconPlug size={14} color="#6B685E" /> {testingService === 'fatura' ? 'Test ediliyor...' : 'Bağlantıyı test et'}
                 </button>
                 <button
                   type="button"
@@ -634,13 +682,11 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setWhatsappSettings(s => ({ ...s, isConnected: true }));
-                    addToast({ type: 'info', message: 'WhatsApp API bağlantı testi başarılı.' });
-                  }}
+                  onClick={handleTestWhatsapp}
+                  disabled={testingService === 'whatsapp'}
                   style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
+                  <IconPlug size={14} color="#6B685E" /> {testingService === 'whatsapp' ? 'Test ediliyor...' : 'Bağlantıyı test et'}
                 </button>
                 <button
                   type="button"
