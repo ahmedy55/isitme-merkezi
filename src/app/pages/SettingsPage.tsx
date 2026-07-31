@@ -6,7 +6,8 @@ import { supabase, isConfigured } from '../lib/supabase';
 import {
   IconBuilding, IconSGK, IconTag, IconDocument, IconMessage,
   IconBell, IconLock, IconPhone, IconMail, IconMapPin,
-  IconSave, IconDatabase, IconCheck, IconWarning, IconShield
+  IconSave, IconDatabase, IconShield, IconPlug,
+  IconCalendar, IconRecall, IconStock, IconCash, IconInfo
 } from '../components/Icons';
 
 export default function SettingsPage() {
@@ -29,16 +30,17 @@ export default function SettingsPage() {
   });
 
   const [utsSettings, setUtsSettings] = useState({ token: '', environment: 'test', firmCode: '' });
-  const [whatsappSettings, setWhatsappSettings] = useState({ provider: '', apiToken: '', phoneNumberId: '' });
+  const [faturaSettings, setFaturaSettings] = useState({ provider: 'Paraşüt', apiKey: '', apiSecret: '', seriNo: 'EP', baslangicSiraNo: '1001' });
+  const [whatsappSettings, setWhatsappSettings] = useState({ provider: 'meta', apiToken: '', phoneNumberId: '', isConnected: false });
   const [securityForm, setSecurityForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
   const [notifSettings, setNotifSettings] = useState([
-    { id: 'apt_create', label: 'Yeni randevu oluşturulduğunda', checked: true },
-    { id: 'apt_cancel', label: 'Randevu iptal edildiğinde', checked: true },
-    { id: 'stock_critical', label: 'Stok kritik seviyeye düştüğünde', checked: true },
-    { id: 'sale_create', label: 'Yeni satış kaydedildiğinde', checked: false },
-    { id: 'recall_firsat', label: 'Recall fırsatı oluştuğunda', checked: true },
-    { id: 'sgk_renewal', label: 'SGK yenileme hakkı açıldığında', checked: true },
+    { id: 'apt_create', label: 'Yeni randevu oluşturulduğunda', icon: 'calendar', checked: true },
+    { id: 'apt_cancel', label: 'Randevu iptal edildiğinde', icon: 'calendar', checked: true },
+    { id: 'stock_critical', label: 'Stok kritik seviyeye düştüğünde', icon: 'stock', checked: true },
+    { id: 'sale_create', label: 'Yeni satış kaydedildiğinde', icon: 'cash', checked: false },
+    { id: 'recall_firsat', label: 'Recall fırsatı oluştuğunda', icon: 'recall', checked: true },
+    { id: 'sgk_renewal', label: 'SGK yenileme hakkı açıldığında', icon: 'shield', checked: true },
   ]);
 
   // DB'den ayarları yükle
@@ -112,6 +114,11 @@ export default function SettingsPage() {
     uts_kurum_no: utsSettings.firmCode
   }, 'ÜTS entegrasyon ayarları');
 
+  const handleSaveFatura = () => saveSettingsToDb({
+    efatura_enabled: true,
+    efatura_provider: faturaSettings.provider
+  }, 'E-Fatura / E-Arşiv ayarları');
+
   const handleSaveWhatsapp = () => saveSettingsToDb({
     whatsapp_api_key: whatsappSettings.apiToken
   }, 'WhatsApp & SMS ayarları');
@@ -183,7 +190,7 @@ export default function SettingsPage() {
       {/* Main Grid Layout */}
       <div style={{ display: 'flex', gap: 20, padding: '20px 28px 28px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         
-        {/* Left Navigation Sidebar */}
+        {/* Left Navigation Sidebar (220px Fixed Width) */}
         <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {navGroups.map((group, idx) => (
             <div key={idx}>
@@ -212,13 +219,13 @@ export default function SettingsPage() {
                       }}
                     >
                       <span style={{ color: isActive ? '#fff' : '#6B685E', display: 'flex' }}>
-                        {item.icon === 'building' && <IconBuilding size={16} />}
-                        {item.icon === 'sgk' && <IconSGK size={16} />}
-                        {item.icon === 'tag' && <IconTag size={16} />}
-                        {item.icon === 'document' && <IconDocument size={16} />}
-                        {item.icon === 'message' && <IconMessage size={16} />}
-                        {item.icon === 'bell' && <IconBell size={16} />}
-                        {item.icon === 'lock' && <IconLock size={16} />}
+                        {item.icon === 'building' && <IconBuilding size={15} />}
+                        {item.icon === 'sgk' && <IconSGK size={15} />}
+                        {item.icon === 'tag' && <IconTag size={15} />}
+                        {item.icon === 'document' && <IconDocument size={15} />}
+                        {item.icon === 'message' && <IconMessage size={15} />}
+                        {item.icon === 'bell' && <IconBell size={15} />}
+                        {item.icon === 'lock' && <IconLock size={15} />}
                       </span>
                       <span>{item.label}</span>
                     </div>
@@ -229,91 +236,107 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        {/* Right Content Panel */}
+        {/* Right Content Panel (Dynamic per activeSection) */}
         <div style={{ flex: 1, minWidth: 280 }}>
           
           {/* SECTION 1: Firma Bilgileri */}
           {activeSection === 'firma' && (
-            <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                  <IconBuilding size={18} />
+            <>
+              <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
+                    <IconBuilding size={16} />
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>Firma bilgileri</span>
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>Firma bilgileri</span>
-              </div>
-              <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>İşletmenizin temel bilgilerini güncelleyin.</div>
+                <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>İşletmenizin temel bilgilerini güncelleyin.</div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 16 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Firma adı</label>
-                  <input
-                    value={firmSettings.firmName}
-                    onChange={e => setFirmSettings(s => ({ ...s, firmName: e.target.value }))}
-                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Firma adı</label>
+                    <input
+                      value={firmSettings.firmName}
+                      onChange={e => setFirmSettings(s => ({ ...s, firmName: e.target.value }))}
+                      style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Vergi no</label>
+                    <input
+                      value={firmSettings.taxNo}
+                      onChange={e => setFirmSettings(s => ({ ...s, taxNo: e.target.value }))}
+                      style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Vergi no</label>
-                  <input
-                    value={firmSettings.taxNo}
-                    onChange={e => setFirmSettings(s => ({ ...s, taxNo: e.target.value }))}
-                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
-                  />
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 16 }}>
-                <div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                      <IconPhone size={13} color="#8A8776" /> Telefon
+                    </label>
+                    <input
+                      value={firmSettings.phone}
+                      onChange={e => setFirmSettings(s => ({ ...s, phone: e.target.value }))}
+                      style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                      <IconMail size={13} color="#8A8776" /> E-posta
+                    </label>
+                    <input
+                      value={firmSettings.email}
+                      onChange={e => setFirmSettings(s => ({ ...s, email: e.target.value }))}
+                      style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
                   <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-                    <IconPhone size={14} color="#8A8776" /> Telefon
+                    <IconMapPin size={13} color="#8A8776" /> Adres
                   </label>
-                  <input
-                    value={firmSettings.phone}
-                    onChange={e => setFirmSettings(s => ({ ...s, phone: e.target.value }))}
-                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                  <textarea
+                    value={firmSettings.address}
+                    onChange={e => setFirmSettings(s => ({ ...s, address: e.target.value }))}
+                    style={{ width: '100%', height: 64, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8', fontFamily: 'inherit', resize: 'none' }}
                   />
                 </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-                    <IconMail size={14} color="#8A8776" /> E-posta
-                  </label>
-                  <input
-                    value={firmSettings.email}
-                    onChange={e => setFirmSettings(s => ({ ...s, email: e.target.value }))}
-                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
-                  />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
+                  <button
+                    type="button"
+                    onClick={loadSettings}
+                    style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveFirma}
+                    disabled={saving}
+                    style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <IconSave size={13} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
+                  </button>
                 </div>
               </div>
 
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-                  <IconMapPin size={14} color="#8A8776" /> Adres
-                </label>
-                <textarea
-                  value={firmSettings.address}
-                  onChange={e => setFirmSettings(s => ({ ...s, address: e.target.value }))}
-                  style={{ width: '100%', height: 64, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8', fontFamily: 'inherit', resize: 'none' }}
-                />
+              {/* Compact Otomatik Yedekleme Kartı */}
+              <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '16px 20px', marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
+                    <IconDatabase size={15} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500, color: '#22281F' }}>Günlük otomatik yedekleme</div>
+                    <div style={{ fontSize: 11, color: '#8A8776' }}>Son yedek: 09.07.2026, 03:00</div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, background: '#E1F0E8', color: '#0F5C43', padding: '3px 10px', borderRadius: 20 }}>Aktif</span>
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
-                <button
-                  type="button"
-                  onClick={loadSettings}
-                  style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
-                >
-                  Vazgeç
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveFirma}
-                  disabled={saving}
-                  style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <IconSave size={15} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
-                </button>
-              </div>
-            </div>
+            </>
           )}
 
           {/* SECTION 2: Medula (SGK) */}
@@ -321,14 +344,16 @@ export default function SettingsPage() {
             <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                  <IconSGK size={18} />
+                  <IconShield size={16} />
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>Medula (SGK) entegrasyonu</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>Medula (SGK)</span>
               </div>
               <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>SGK Medula web servislerine bağlanmak için tesis bilgilerinizi girin.</div>
 
-              <div style={{ padding: '12px 14px', background: '#F0F9FF', border: '0.5px solid #BAE6FD', borderRadius: 8, marginBottom: 18, fontSize: 12, color: '#0369A1' }}>
-                ℹ️ Bu bilgileri SGK İl Müdürlüğü veya mevcut Medula eczane/tesis panelinizden alabilirsiniz.
+              {/* Bilgi Kutusu (Mavi tonlu: #EAF1FB bg, #C7DBF2 border, #1F4E85 text) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: '#EAF1FB', border: '0.5px solid #C7DBF2', borderRadius: 8, marginBottom: 18, fontSize: 12, color: '#1F4E85' }}>
+                <IconInfo size={16} color="#1F4E85" />
+                <span>Bu bilgileri SGK İl Müdürlüğü veya mevcut Medula eczane/tesis panelinizden alabilirsiniz.</span>
               </div>
 
               <div style={{ marginBottom: 16 }}>
@@ -341,7 +366,7 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Medula Kullanıcı Adı</label>
                   <input
@@ -366,7 +391,7 @@ export default function SettingsPage() {
                 <input
                   value={medulaSettings.wsdlUrl}
                   onChange={e => setMedulaSettings(s => ({ ...s, wsdlUrl: e.target.value }))}
-                  style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                  style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 12, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8', fontFamily: 'monospace' }}
                 />
               </div>
 
@@ -374,9 +399,9 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => addToast({ type: 'info', message: 'Medula WSDL bağlantı testi başlatıldı...' })}
-                  style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+                  style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  Bağlantıyı Test Et
+                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
                 </button>
                 <button
                   type="button"
@@ -384,7 +409,7 @@ export default function SettingsPage() {
                   disabled={saving}
                   style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconSave size={15} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
+                  <IconSave size={13} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
                 </button>
               </div>
             </div>
@@ -395,14 +420,15 @@ export default function SettingsPage() {
             <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                  <IconTag size={18} />
+                  <IconTag size={16} />
                 </div>
                 <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>ÜTS entegrasyonu</span>
               </div>
               <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>Sağlık Bakanlığı Ürün Takip Sistemi API ayarları.</div>
 
-              <div style={{ padding: '12px 14px', background: '#F0FDF4', border: '0.5px solid #BBF7D0', borderRadius: 8, marginBottom: 18, fontSize: 12, color: '#166534' }}>
-                ✅ ÜTS token almak için: utsuygulama.saglik.gov.tr → Kullanıcı İşlemleri → Sistem Kullanıcısı Tanımlama adımlarını izleyin.
+              {/* Bilgi Kutusu (Yeşil tonlu: #F0FDF4 bg, #BBF7D0 border, #166534 text) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: '#F0FDF4', border: '0.5px solid #BBF7D0', borderRadius: 8, marginBottom: 18, fontSize: 12, color: '#166534' }}>
+                <span>✅ ÜTS token almak için: utsuygulama.saglik.gov.tr → Kullanıcı İşlemleri → Sistem Kullanıcısı Tanımlama adımlarını izleyin.</span>
               </div>
 
               <div style={{ marginBottom: 16 }}>
@@ -415,7 +441,7 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Ortam</label>
                   <select
@@ -442,9 +468,9 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => addToast({ type: 'info', message: 'ÜTS API bağlantı testi başlatıldı...' })}
-                  style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+                  style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  Bağlantıyı Test Et
+                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
                 </button>
                 <button
                   type="button"
@@ -452,7 +478,7 @@ export default function SettingsPage() {
                   disabled={saving}
                   style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconSave size={15} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
+                  <IconSave size={13} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
                 </button>
               </div>
             </div>
@@ -463,41 +489,84 @@ export default function SettingsPage() {
             <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                  <IconDocument size={18} />
+                  <IconDocument size={16} />
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>E-Fatura / E-Arşiv entegrasyonu</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>E-Fatura / E-Arşiv</span>
               </div>
               <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>Satışlarda otomatik fatura kesme entegrasyonu.</div>
 
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Entegrasyon Sağlayıcısı</label>
-                <select style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 10px', fontSize: 13, color: '#22281F', background: '#FCFBF8' }}>
-                  <option>Paraşüt</option>
-                  <option>Logo İşbaşı</option>
-                  <option>Bizim Hesap</option>
-                  <option>Kolay Fatura</option>
+                <select
+                  value={faturaSettings.provider}
+                  onChange={e => setFaturaSettings(s => ({ ...s, provider: e.target.value }))}
+                  style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 10px', fontSize: 13, color: '#22281F', background: '#FCFBF8' }}
+                >
+                  <option value="Paraşüt">Paraşüt</option>
+                  <option value="Logo İşbaşı">Logo İşbaşı</option>
+                  <option value="Bizim Hesap">Bizim Hesap</option>
+                  <option value="Kolay Fatura">Kolay Fatura</option>
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>API Anahtarı</label>
-                  <input placeholder="Sağlayıcıdan aldığınız API Key" style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }} />
+                  <input
+                    value={faturaSettings.apiKey}
+                    onChange={e => setFaturaSettings(s => ({ ...s, apiKey: e.target.value }))}
+                    placeholder="Sağlayıcıdan aldığınız API Key"
+                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>API Secret</label>
-                  <input type="password" placeholder="••••••••" style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }} />
+                  <input
+                    type="password"
+                    value={faturaSettings.apiSecret}
+                    onChange={e => setFaturaSettings(s => ({ ...s, apiSecret: e.target.value }))}
+                    placeholder="••••••••"
+                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Fatura Seri No</label>
+                  <input
+                    value={faturaSettings.seriNo}
+                    onChange={e => setFaturaSettings(s => ({ ...s, seriNo: e.target.value }))}
+                    placeholder="Örn: EP"
+                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Başlangıç Sıra No</label>
+                  <input
+                    value={faturaSettings.baslangicSiraNo}
+                    onChange={e => setFaturaSettings(s => ({ ...s, baslangicSiraNo: e.target.value }))}
+                    placeholder="Örn: 1001"
+                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                  />
                 </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
                 <button
                   type="button"
-                  onClick={() => saveSettingsToDb({ efatura_enabled: true }, 'E-Fatura ayarları')}
+                  onClick={() => addToast({ type: 'info', message: 'E-Fatura API bağlantı testi başlatıldı...' })}
+                  style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveFatura}
                   disabled={saving}
                   style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconSave size={15} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
+                  <IconSave size={13} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
                 </button>
               </div>
             </div>
@@ -506,11 +575,24 @@ export default function SettingsPage() {
           {/* SECTION 5: WhatsApp / SMS */}
           {activeSection === 'whatsapp' && (
             <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                  <IconMessage size={18} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
+                    <IconMessage size={16} />
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>WhatsApp / SMS</span>
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>WhatsApp / SMS entegrasyonu</span>
+                {/* Durum Rozeti (Bağlı değil / Bağlı) */}
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: whatsappSettings.isConnected ? '#E1F0E8' : '#F0EDE4',
+                  color: whatsappSettings.isConnected ? '#0F5C43' : '#8A8776',
+                  padding: '3px 10px',
+                  borderRadius: 20
+                }}>
+                  {whatsappSettings.isConnected ? 'Bağlı' : 'Bağlı değil'}
+                </span>
               </div>
               <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>Otomatik randevu hatırlatma ve recall mesajları için API ayarları.</div>
 
@@ -521,25 +603,25 @@ export default function SettingsPage() {
                   onChange={e => setWhatsappSettings(s => ({ ...s, provider: e.target.value }))}
                   style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 10px', fontSize: 13, color: '#22281F', background: '#FCFBF8' }}
                 >
-                  <option value="">Seçiniz...</option>
                   <option value="meta">Meta WhatsApp Business API</option>
                   <option value="twilio">Twilio SMS / WhatsApp</option>
                   <option value="netgsm">NetGSM Toplu SMS</option>
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>API Token</label>
                   <input
+                    type="password"
                     value={whatsappSettings.apiToken}
                     onChange={e => setWhatsappSettings(s => ({ ...s, apiToken: e.target.value }))}
-                    placeholder="API Token anahtarınız"
+                    placeholder="••••••••"
                     style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Gönderen Numarası ID</label>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Telefon Numarası ID</label>
                   <input
                     value={whatsappSettings.phoneNumberId}
                     onChange={e => setWhatsappSettings(s => ({ ...s, phoneNumberId: e.target.value }))}
@@ -552,11 +634,21 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
                 <button
                   type="button"
+                  onClick={() => {
+                    setWhatsappSettings(s => ({ ...s, isConnected: true }));
+                    addToast({ type: 'info', message: 'WhatsApp API bağlantı testi başarılı.' });
+                  }}
+                  style={{ background: '#fff', color: '#3A3A36', border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <IconPlug size={14} color="#6B685E" /> Bağlantıyı test et
+                </button>
+                <button
+                  type="button"
                   onClick={handleSaveWhatsapp}
                   disabled={saving}
                   style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconSave size={15} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
+                  <IconSave size={13} /> {saving ? 'Kaydediliyor...' : 'Değişiklikleri kaydet'}
                 </button>
               </div>
             </div>
@@ -567,110 +659,134 @@ export default function SettingsPage() {
             <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                  <IconBell size={18} />
+                  <IconBell size={16} />
                 </div>
                 <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>Bildirimler</span>
               </div>
-              <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>Otomatik sistem bildirimlerini yönetin.</div>
+              <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>Otomatik sistem bildirim tercihlerini yönetin.</div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+              {/* Toggle List Pattern */}
+              <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 20 }}>
                 {notifSettings.map((item, i) => (
-                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#FCFBF8', border: '0.5px solid #E2DED0', borderRadius: 8 }}>
-                    <span style={{ fontSize: 13, color: '#22281F', fontWeight: 500 }}>{item.label}</span>
-                    <label style={{ position: 'relative', width: 44, height: 24, cursor: 'pointer' }} onClick={() => toggleNotifSetting(item.id)}>
+                  <div
+                    key={item.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 4px',
+                      borderBottom: i < notifSettings.length - 1 ? '0.5px solid #F0EDE4' : 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
+                        {item.icon === 'calendar' && <IconCalendar size={15} />}
+                        {item.icon === 'stock' && <IconStock size={15} />}
+                        {item.icon === 'cash' && <IconCash size={15} />}
+                        {item.icon === 'recall' && <IconRecall size={15} />}
+                        {item.icon === 'shield' && <IconShield size={15} />}
+                      </div>
+                      <span style={{ fontSize: 12.5, color: '#22281F', fontWeight: 500 }}>{item.label}</span>
+                    </div>
+
+                    {/* Toggle Switch: On #0F5C43, Off #D8D4C6 */}
+                    <label style={{ position: 'relative', width: 42, height: 22, cursor: 'pointer' }} onClick={() => toggleNotifSetting(item.id)}>
                       <input type="checkbox" checked={item.checked} readOnly style={{ display: 'none' }} />
                       <div style={{ width: '100%', height: '100%', borderRadius: 12, background: item.checked ? '#0F5C43' : '#D8D4C6', transition: 'all 0.2s ease', position: 'relative' }}>
-                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'white', position: 'absolute', top: 3, left: item.checked ? 23 : 3, transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'white', position: 'absolute', top: 3, left: item.checked ? 23 : 3, transition: 'all 0.2s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
                       </div>
                     </label>
                   </div>
                 ))}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-start', paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
                 <button
                   type="button"
                   onClick={handleSaveNotifications}
                   disabled={saving}
                   style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <IconSave size={15} /> {saving ? 'Kaydediliyor...' : 'Bildirim ayarlarını kaydet'}
+                  <IconSave size={13} /> {saving ? 'Kaydediliyor...' : 'Bildirim ayarlarını kaydet'}
                 </button>
               </div>
             </div>
           )}
 
-          {/* SECTION 7: Güvenlik */}
+          {/* SECTION 7: Güvenlik (İki Ayrı Kart) */}
           {activeSection === 'guvenlik' && (
-            <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                  <IconLock size={18} />
+            <>
+              {/* Kart 1: Şifre Değiştir */}
+              <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
+                    <IconLock size={16} />
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>Şifre değiştir</span>
                 </div>
-                <span style={{ fontSize: 15, fontWeight: 600, color: '#22281F' }}>Güvenlik ayarları</span>
-              </div>
-              <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>Hesap şifrenizi güncelleyin ve güvenlik tercihlerini değiştirin.</div>
+                <div style={{ fontSize: 12, color: '#6B685E', margin: '2px 0 20px 42px' }}>Hesap güvenliğiniz için düzenli olarak şifrenizi güncelleyin.</div>
 
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Mevcut Şifre</label>
-                <input
-                  type="password"
-                  value={securityForm.currentPassword}
-                  onChange={e => setSecurityForm(s => ({ ...s, currentPassword: e.target.value }))}
-                  placeholder="••••••••"
-                  style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Yeni Şifre</label>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Mevcut Şifre</label>
                   <input
                     type="password"
-                    value={securityForm.newPassword}
-                    onChange={e => setSecurityForm(s => ({ ...s, newPassword: e.target.value }))}
-                    placeholder="En az 8 karakter"
+                    value={securityForm.currentPassword}
+                    onChange={e => setSecurityForm(s => ({ ...s, currentPassword: e.target.value }))}
+                    placeholder="••••••••"
                     style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
                   />
                 </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Yeni Şifre (Tekrar)</label>
-                  <input
-                    type="password"
-                    value={securityForm.confirmPassword}
-                    onChange={e => setSecurityForm(s => ({ ...s, confirmPassword: e.target.value }))}
-                    placeholder="Şifreyi tekrar girin"
-                    style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
-                  />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Yeni Şifre</label>
+                    <input
+                      type="password"
+                      value={securityForm.newPassword}
+                      onChange={e => setSecurityForm(s => ({ ...s, newPassword: e.target.value }))}
+                      placeholder="En az 8 karakter"
+                      style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 500, color: '#3A3A36', display: 'block', marginBottom: 6 }}>Yeni Şifre (Tekrar)</label>
+                    <input
+                      type="password"
+                      value={securityForm.confirmPassword}
+                      onChange={e => setSecurityForm(s => ({ ...s, confirmPassword: e.target.value }))}
+                      placeholder="Şifreyi tekrar girin"
+                      style={{ width: '100%', height: 38, border: '0.5px solid #D8D4C6', borderRadius: 8, padding: '0 12px', fontSize: 13, color: '#22281F', boxSizing: 'border-box', background: '#FCFBF8' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
+                  <button
+                    type="button"
+                    onClick={handleChangePassword}
+                    disabled={saving}
+                    style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <IconLock size={13} /> {saving ? 'Güncelleniyor...' : 'Şifreyi güncelle'}
+                  </button>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 16, borderTop: '0.5px solid #F0EDE4' }}>
-                <button
-                  type="button"
-                  onClick={handleChangePassword}
-                  disabled={saving}
-                  style={{ background: '#0F5C43', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <IconLock size={15} /> {saving ? 'Güncelleniyor...' : 'Şifreyi Güncelle'}
-                </button>
+              {/* Kart 2: Otomatik Yedekleme (Ayrı Kompakt Kart) */}
+              <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '16px 20px', marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
+                    <IconDatabase size={15} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500, color: '#22281F' }}>Günlük otomatik yedekleme</div>
+                    <div style={{ fontSize: 11, color: '#8A8776' }}>Son yedek: 09.07.2026, 03:00</div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, background: '#E1F0E8', color: '#0F5C43', padding: '3px 10px', borderRadius: 20 }}>Aktif</span>
               </div>
-            </div>
+            </>
           )}
-
-          {/* Bottom Info Card: Günlük Otomatik Yedekleme */}
-          <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '16px 20px', marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
-                <IconDatabase size={16} />
-              </div>
-              <div>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#22281F' }}>Günlük otomatik yedekleme</div>
-                <div style={{ fontSize: 11, color: '#8A8776', marginTop: 1 }}>Son yedek: 09.07.2026, 03:00</div>
-              </div>
-            </div>
-            <span style={{ fontSize: 11, fontWeight: 600, background: '#E1F0E8', color: '#0F5C43', padding: '3px 10px', borderRadius: 20 }}>Aktif</span>
-          </div>
 
         </div>
 

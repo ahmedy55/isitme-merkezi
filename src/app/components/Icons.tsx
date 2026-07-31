@@ -769,6 +769,18 @@ export const IconDatabase: React.FC<IconProps> = (p = {}) => {
   );
 };
 
+export const IconPlug: React.FC<IconProps> = (p = {}) => {
+  const { size = 18, color = 'currentColor', strokeWidth = 1.8, className = '' } = p;
+  return (
+    <Svg size={size} color={color} className={className}>
+      <path d="M12 22v-5" strokeWidth={strokeWidth} />
+      <path d="M9 8V2" strokeWidth={strokeWidth} />
+      <path d="M15 8V2" strokeWidth={strokeWidth} />
+      <path d="M18 8v5a6 6 0 0 1-12 0V8h12Z" strokeWidth={strokeWidth} />
+    </Svg>
+  );
+};
+
 /* ============================================================
    İKON HARİTASI — Sidebar için
    ============================================================ */
