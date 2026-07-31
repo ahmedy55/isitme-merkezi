@@ -73,14 +73,27 @@ export default function CashPage() {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [selectedAccountIdFilter, setSelectedAccountIdFilter] = useState('All');
 
-  // Form State for Manual Transaction
+  // Form State for Manual Transaction & Component-Level Idempotency Key
+  const [formIdempotencyKey, setFormIdempotencyKey] = useState<string>(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `idemp-${Date.now()}`
+  );
   const [txAccountId, setTxAccountId] = useState('acc-1');
   const [txType, setTxType] = useState<'Giriş' | 'Çıkış'>('Giriş');
   const [txCategory, setTxCategory] = useState('Diğer');
   const [txAmount, setTxAmount] = useState<number>(0);
   const [txDescription, setTxDescription] = useState('');
 
-  // Sale Form State
+  const resetTxForm = () => {
+    setTxAmount(0);
+    setTxDescription('');
+    // Form tamamlandığında bir sonraki işlem için YENİ tekil anahtar üretilir
+    setFormIdempotencyKey(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `idemp-${Date.now()}`);
+  };
+
+  // Sale Form State & Idempotency Key
+  const [saleFormIdempotencyKey, setSaleFormIdempotencyKey] = useState<string>(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sale-idemp-${Date.now()}`
+  );
   const [formData, setFormData] = useState({
     patientName: '',
     itemName: 'Phonak Audéo P90',
@@ -110,15 +123,15 @@ export default function CashPage() {
       sgkAmount: Number(formData.sgkAmount),
       patientAmount: patientAmt,
       paymentMethod: formData.paymentMethod as any,
-      status: 'Tahsil Edildi' as const
+      status: 'Tahsil Edildi' as const,
+      idempotencyKey: saleFormIdempotencyKey
     };
     const matchingStockItem = stockList.find(s => s.name.includes(formData.itemName) && s.quantity > 0);
     
     // Fix #4: addSale artık tek noktadan kasa + stok + DB işlemlerini yönetiyor
-    // Sayfa seviyesinde duplicate transaction oluşturmuyoruz
     addSale(newSale, matchingStockItem?.id, formData.targetAccountId);
 
-    // Sayfa-local hesap bakiyesini güncelle (sadece UI gösterimi için)
+    // Sayfa-local hesap bakiyesini güncelle
     const targetAcc = accounts.find(a => a.id === formData.targetAccountId);
     if (targetAcc) {
       setAccounts(prev => prev.map(a => {
@@ -130,6 +143,7 @@ export default function CashPage() {
     }
 
     setShowSaleModal(false);
+    setSaleFormIdempotencyKey(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sale-idemp-${Date.now()}`);
     setFormData({
       patientName: '',
       itemName: 'Phonak Audéo P90',
@@ -170,6 +184,17 @@ export default function CashPage() {
     setTransactions(prev => [newTx, ...prev]);
 
     // Update account balance
+    // DB'ye kaydet — Component state'indeki sabit formIdempotencyKey gönderilir
+    dbInsertCashTransaction({
+      cashRegisterId: txAccountId,
+      accountName: targetAcc.name,
+      type: txType === 'Giriş' ? 'INCOME' : 'EXPENSE',
+      category: txCategory,
+      amount: txAmount,
+      description: txDescription,
+      idempotency_key: formIdempotencyKey
+    });
+
     setAccounts(prev => prev.map(a => {
       if (a.id === txAccountId) {
         return {
@@ -182,8 +207,7 @@ export default function CashPage() {
 
     setShowTransactionModal(false);
     addToast({ type: 'success', message: 'Kasa işlemi başarıyla kaydedildi.' });
-    setTxAmount(0);
-    setTxDescription('');
+    resetTxForm();
   };
 
   const filteredSales = salesList.filter(s =>

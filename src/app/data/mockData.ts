@@ -102,6 +102,7 @@ export interface SaleRecord {
   status: 'Tahsil Edildi' | 'Bekliyor' | 'Taksitli';
   installments?: { amount: number; dueDate: string; paid: boolean }[];
   audiologist?: string;
+  idempotencyKey?: string;
 }
 
 // ── Enterprise Domain Ledgers & Policies ──

@@ -11,6 +11,7 @@ export interface RecordCashTransactionPayload {
   organizationId?: string;
   performedByUserId?: string;
   description?: string;
+  idempotencyKey?: string;
 }
 
 export class CashDomainService {

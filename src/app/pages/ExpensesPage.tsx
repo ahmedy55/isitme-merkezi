@@ -33,6 +33,11 @@ export default function ExpensesPage() {
   // Form validation errors
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  // Component-Level Idempotency Key
+  const [formIdempotencyKey, setFormIdempotencyKey] = useState<string>(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `exp-idemp-${Date.now()}`
+  );
+
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setEditingExpenseId(null);
@@ -46,6 +51,7 @@ export default function ExpensesPage() {
     setFormReceiptNo('');
     setFormNotes('');
     setErrors({});
+    setFormIdempotencyKey(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `exp-idemp-${Date.now()}`);
     setShowModal(true);
   };
 
@@ -96,7 +102,7 @@ export default function ExpensesPage() {
       updateExpense(updated);
       addToast({ type: 'success', message: 'Masraf başarıyla güncellendi.' });
     } else {
-      const newExpense: Expense = {
+      const newExpense: Expense & { idempotencyKey?: string } = {
         id: 'exp-' + Math.floor(Math.random() * 1000000),
         date: formDate,
         category: formCategory,
@@ -106,7 +112,8 @@ export default function ExpensesPage() {
         branch: formBranch,
         createdBy: formCreatedBy,
         receiptNo: formReceiptNo || undefined,
-        notes: formNotes || undefined
+        notes: formNotes || undefined,
+        idempotencyKey: formIdempotencyKey
       };
       addExpense(newExpense);
       addToast({ type: 'success', message: 'Masraf kaydı başarıyla oluşturuldu.' });

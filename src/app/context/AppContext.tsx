@@ -483,8 +483,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addToast({ type: 'success', message: 'Satış kaydedildi, stok ve kasa bakiyesi güncellendi.' });
 
       if (currentOrgId) {
-        await dbInsertSale(sale);
-        // Fix #3: Kasa hareketini DB'ye persist et
+        await dbInsertSale({
+          ...sale,
+          idempotency_key: sale.idempotencyKey
+        });
+        // Kasa hareketini DB'ye persist et
         await dbInsertCashTransaction({
           cashRegisterId: cashRegisterId || 'kas-1',
           type: 'INCOME',
@@ -492,7 +495,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           category: 'Cihaz Satışı',
           referenceEntity: 'sale',
           referenceId: sale.id,
-          description: `${sale.patientName} — Satış tahsilatı`
+          description: `${sale.patientName} — Satış tahsilatı`,
+          idempotency_key: sale.idempotencyKey ? `tx-${sale.idempotencyKey}` : undefined
         });
         await dbInsertAuditLog({
           action: 'Satış Ekleme',
@@ -664,8 +668,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // P0 — Masraf CRUD
   // Fix #12: Interface artık cashRegisterId parametresini de kabul ediyor
-  const addExpense = async (expense: Expense, cashRegisterId?: string) => {
+  const addExpense = async (expense: Expense & { idempotencyKey?: string }, cashRegisterId?: string) => {
     try {
+      if (currentOrgId) {
+        await dbInsertExpense({
+          ...expense,
+          idempotency_key: expense.idempotencyKey
+        });
+      }
       CashDomainService.recordTransaction({
         cashRegisterId: cashRegisterId || 'kas-1',
         type: 'EXPENSE',
@@ -674,7 +684,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         referenceEntity: 'expense',
         referenceId: expense.id,
         organizationId: currentOrgId || undefined,
-        description: expense.description
+        description: expense.description,
+        idempotencyKey: expense.idempotencyKey
       });
       setExpensesList(prev => [expense, ...prev]);
       addToast({ type: 'success', message: 'Gider başarıyla kaydedildi ve kasadan düşüldü.' });
