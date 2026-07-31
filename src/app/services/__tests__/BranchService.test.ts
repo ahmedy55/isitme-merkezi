@@ -10,7 +10,6 @@ describe('BranchService Production Architecture', () => {
       slug: 'merkez-1-kadikoy',
       address: 'Kadıköy',
       phone: '0216 111 22 33',
-      city: 'İstanbul',
       status: 'Aktif',
       patientsCount: 25
     },
@@ -20,7 +19,6 @@ describe('BranchService Production Architecture', () => {
       slug: 'merkez-2-besiktas',
       address: 'Beşiktaş',
       phone: '0212 222 33 44',
-      city: 'İstanbul',
       status: 'Aktif',
       patientsCount: 15
     }

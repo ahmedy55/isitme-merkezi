@@ -86,7 +86,11 @@ describe('Enterprise ERP Architecture Domain Services', () => {
       tc: '11111111111',
       phone: '05321112233',
       sgkStatus: 'Aktif',
-      salesStage: 'Satış Yapıldı'
+      salesStage: 'Satış Yapıldı',
+      email: 'ayse@example.com',
+      birthDate: '1985-01-01',
+      gender: 'Kadın',
+      address: 'İstanbul'
     };
 
     const sgkResult = await SGKDomainService.approvePrescription([mockPatient], [], {
