@@ -90,7 +90,9 @@ describe('Enterprise ERP Architecture Domain Services', () => {
       email: 'ayse@example.com',
       birthDate: '1985-01-01',
       gender: 'Kadın',
-      address: 'İstanbul'
+      address: 'İstanbul',
+      hearingLoss: 'Orta',
+      hearingLossSide: 'Her İki Kulak'
     };
 
     const sgkResult = await SGKDomainService.approvePrescription([mockPatient], [], {
