@@ -76,6 +76,7 @@ export const dbUpdatePatient = async (id: string, patient: any) => {
       .from('patients')
       .update(payload)
       .eq('id', id)
+      .select();
     if (error) throw error;
     return toCamel(data?.[0]);
   }, 'dbUpdatePatient');
@@ -197,7 +198,7 @@ export const dbDeleteStockItem = async (id: string) => {
   return executeDbQuery(async () => {
     const { error } = await supabase
       .from('stock_items')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
     if (error) throw error;
   }, 'dbDeleteStockItem');
@@ -430,7 +431,7 @@ export const dbDeleteSupplier = async (id: string) => {
   return executeDbQuery(async () => {
     const { error } = await supabase
       .from('suppliers')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
     if (error) throw error;
   }, 'dbDeleteSupplier');
@@ -491,7 +492,7 @@ export const dbDeleteExpense = async (id: string) => {
   return executeDbQuery(async () => {
     const { error } = await supabase
       .from('expenses')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
     if (error) throw error;
   }, 'dbDeleteExpense');
@@ -656,7 +657,7 @@ export const dbDeleteMembership = async (id: string) => {
   return executeDbQuery(async () => {
     const { error } = await supabase
       .from('memberships')
-      .delete()
+      .update({ status: 'inactive' })
       .eq('id', id);
 
     if (error) throw error;

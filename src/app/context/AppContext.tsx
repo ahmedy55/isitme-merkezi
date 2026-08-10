@@ -210,8 +210,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
 
-  // Demo Ayarları
-  const [demoModeActive] = useState(true);
+  // Demo Ayarları — orgId ve Supabase bağlantısı yoksa demo modda çalış
+  const demoModeActive = !isConfigured || !currentOrgId;
   const [commissionRate, setCommissionRate] = useState(3);
 
   // Supabase'den tüm verileri tek hamlede çek
@@ -675,6 +675,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...expense,
           idempotency_key: expense.idempotencyKey
         });
+        // Kasa hareketini DB'ye persist et
+        await dbInsertCashTransaction({
+          cashRegisterId: cashRegisterId || 'kas-1',
+          type: 'EXPENSE',
+          amount: expense.amount,
+          category: expense.category,
+          referenceEntity: 'expense',
+          referenceId: expense.id,
+          description: expense.description,
+          idempotency_key: expense.idempotencyKey ? `tx-${expense.idempotencyKey}` : undefined
+        });
       }
       CashDomainService.recordTransaction({
         cashRegisterId: cashRegisterId || 'kas-1',
@@ -689,20 +700,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       setExpensesList(prev => [expense, ...prev]);
       addToast({ type: 'success', message: 'Gider başarıyla kaydedildi ve kasadan düşüldü.' });
-
-      if (currentOrgId) {
-        await dbInsertExpense(expense);
-        // Fix #3: Kasa hareketini DB'ye persist et
-        await dbInsertCashTransaction({
-          cashRegisterId: cashRegisterId || 'kas-1',
-          type: 'EXPENSE',
-          amount: expense.amount,
-          category: expense.category,
-          referenceEntity: 'expense',
-          referenceId: expense.id,
-          description: expense.description
-        });
-      }
 
       await EventBus.publish({
         type: 'EXPENSE_CREATED',
