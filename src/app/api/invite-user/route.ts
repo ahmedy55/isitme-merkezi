@@ -3,12 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://znktitzknixpbakfrnzk.supabase.co';
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Critical Security Guard 1: Require explicit SUPABASE_SERVICE_ROLE_KEY without Anon Key fallback
+    // Critical Security Guard 1: Require explicit NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY without fallback
     if (!supabaseUrl) {
-      return NextResponse.json({ success: false, error: 'Supabase URL yapılandırılmamış.' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'Güvenlik Hatası: NEXT_PUBLIC_SUPABASE_URL ortam değişkeni yapılandırılmamış.' }, { status: 500 });
     }
 
     if (!supabaseServiceKey) {

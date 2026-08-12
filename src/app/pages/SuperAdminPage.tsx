@@ -1,16 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 
+export interface OrganizationItem {
+  id: string;
+  name: string;
+  slug: string;
+  plan_type: string;
+  subscription_status: string;
+  max_users: number;
+  max_branches: number;
+  created_at?: string;
+}
+
 export default function SuperAdminPage() {
   const { addToast, isPlatformAdmin } = useApp();
-  const [orgs, setOrgs] = useState<any[]>([]);
+  const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState<any | null>(null);
+  const [showEditModal, setShowEditModal] = useState<OrganizationItem | null>(null);
   
   // Create Form State
   const [newName, setNewName] = useState('');
@@ -26,7 +37,7 @@ export default function SuperAdminPage() {
   const [editMaxBranches, setEditMaxBranches] = useState(2);
   const [editLoading, setEditLoading] = useState(false);
 
-  const fetchOrganizations = async () => {
+  const fetchOrganizations = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -36,17 +47,18 @@ export default function SuperAdminPage() {
       
       if (error) throw error;
       setOrgs(data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Bilinmeyen hata';
       console.error(err);
-      addToast({ type: 'error', message: `Organizasyonlar yüklenemedi: ${err.message}` });
+      addToast({ type: 'error', message: `Organizasyonlar yüklenemedi: ${message}` });
     } finally {
       setLoading(false);
     }
-  };
+  }, [addToast]);
 
   useEffect(() => {
     fetchOrganizations();
-  }, []);
+  }, [fetchOrganizations]);
 
   const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,7 +280,7 @@ export default function SuperAdminPage() {
                   <td style={{ padding: '16px', fontWeight: 500, color: 'var(--gray-700)' }}>{org.max_users} Kullanıcı</td>
                   <td style={{ padding: '16px', fontWeight: 500, color: 'var(--gray-700)' }}>{org.max_branches} Şube</td>
                   <td style={{ padding: '16px', color: 'var(--gray-400)' }}>
-                    {new Date(org.created_at).toLocaleDateString('tr-TR')}
+                    {org.created_at ? new Date(org.created_at).toLocaleDateString('tr-TR') : '-'}
                   </td>
                   <td style={{ padding: '16px', textAlign: 'right' }}>
                     <button

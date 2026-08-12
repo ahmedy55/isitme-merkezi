@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
-import { stockItems, formatCurrency, type StockItem, type Patient } from '../data/mockData';
+import { formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { useDebounce } from '../hooks/useDebounce';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
