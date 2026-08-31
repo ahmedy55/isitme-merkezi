@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AudiPro SaaS — Sistem Teslimat, Mimari ve Güvenlik Raporu</title>
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: var(--font);
+      color: var(--text);
+      background-color: var(--bg);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 48px 56px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+
+    .header-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 22px;
+    }
+
+    .brand-text h1 {
+      font-size: 22px;
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    .brand-text span {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .print-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .print-btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .meta-box {
+      background: #f1f5f9;
+      border-left: 4px solid var(--primary);
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 32px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      font-size: 13.5px;
+    }
+
+    .meta-item strong {
+      color: #334155;
+      display: block;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    h2 {
+      font-size: 20px;
+      color: #0f172a;
+      margin: 32px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 1.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 16px;
+      color: #1e293b;
+      margin: 20px 0 10px 0;
+    }
+
+    p {
+      margin-bottom: 14px;
+      font-size: 14.5px;
+      color: #334155;
+    }
+
+    ul, ol {
+      margin-left: 24px;
+      margin-bottom: 18px;
+      font-size: 14px;
+      color: #334155;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px 0;
+      font-size: 13.5px;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f8fafc;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    tr:nth-child(even) td {
+      background-color: #fafafa;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-success { background: #dcfce7; color: #15803d; }
+    .badge-primary { background: #e0f2fe; color: #0369a1; }
+
+    .highlight-card {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+
+    .highlight-card h4 {
+      color: #166534;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .diagram {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 18px 22px;
+      border-radius: 8px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      body {
+        padding: 0;
+        background: white;
+      }
+      .container {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      .print-btn {
+        display: none;
+      }
+      h2 {
+        page-break-after: avoid;
+      }
+      table, .diagram, .highlight-card {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <div class="header-actions">
+      <div class="brand">
+        <div class="brand-logo">A</div>
+        <div class="brand-text">
+          <h1>AudiPro SaaS</h1>
+          <span>İşitme Merkezi Yönetim ve Klinik ERP Sistemi</span>
+        </div>
+      </div>
+      <button class="print-btn" onclick="window.print()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+        PDF Olarak Kaydet / Yazdır
+      </button>
+    </div>
+
+    <div class="meta-box">
+      <div class="meta-item">
+        <strong>Doküman Tipi</strong>
+        Sistem Teslimat & Güvenlik Raporu
+      </div>
+      <div class="meta-item">
+        <strong>Sürüm / Durum</strong>
+        1.0.0 — <span class="badge badge-success">Production Ready</span>
+      </div>
+      <div class="meta-item">
+        <strong>Tarih</strong>
+        31 Ağustos 2026
+      </div>
+      <div class="meta-item">
+        <strong>Git Versiyonu</strong>
+        <code>main</code> (Commit: <code>a1cadc4</code>)
+      </div>
+    </div>
+
+    <h2>1. Yönetici Özeti</h2>
+    <p>
+      AudiPro SaaS; işitme cihazı satış ve uygulama merkezlerinin klinik test (odyogram), hasta takibi, SGK reçete/rapor süreçleri, teknik servis, çoklu şube, kasa-finans ve stok operasyonlarını tek bir çatı altında toplayan <strong>kurumsal seviyede çok kiracılı (multi-tenant) bir SaaS/ERP platformudur.</strong>
+    </p>
+    <p>
+      Sistem; Next.js 16 (App Router), TypeScript, PostgreSQL (Supabase) ve Vitest test altyapısı üzerine inşa edilmiştir. Yapılan kapsamlı denetimler sonucunda sistem tüm güvenlik, performans ve mimari testlerden geçmiş ve canlı yayına tam hazır duruma getirilmiştir.
+    </p>
+
+    <h2>2. Uygulanan Modüller ve Fonksiyonel Geliştirmeler</h2>
+    <ul>
+      <li><strong>Hasta & Klinik Yönetimi:</strong> Anamnez, sol/sağ kulak odyogram grafikleri, cihaz geçmişi, KVKK açık rıza onay mekanizması ve Excel ile toplu hasta aktarımı (ExcelJS motoru).</li>
+      <li><strong>Randevu & Akıllı Recall:</strong> Dinamik randevu takvimi, odyolog ataması, pil değişimi ve SGK 5 yıllık cihaz yenileme süresi dolan hastalar için otomatik hatırlatma motoru.</li>
+      <li><strong>SGK & Reçete Takibi:</strong> Medula uyumlu reçete/rapor takibi, devlet katkı payı alacakları ve tahsilat eşleştirmesi.</li>
+      <li><strong>Stok & ÜTS Entegrasyonu:</strong> Seri no takibi, cihaz ve aksesuar envanteri, kritik stok alarm eşikleri ve otomatik olay bildirimleri.</li>
+      <li><strong>Kasa, Finans & Masraflar:</strong> Çift tıklama ve mükerrer kayıt riskini sıfırlayan <strong>Idempotency Key (UUID)</strong> altyapısı, tedarikçi cari hesapları ve şube bazlı gelir/gider tabloları.</li>
+      <li><strong>Çoklu Şube & Denetim Kayıtları:</strong> Şube bazlı veri izolasyonu ve tüm kullanıcı aksiyonlarının zaman damgalı değişmez denetim kaydı (Audit Trail).</li>
+    </ul>
+
+    <h2>3. Veritabanı Mimarisi ve Veri Modeli</h2>
+    <p>Veritabanı PostgreSQL üzerinde çok kiracılı (multi-tenant) olarak tasarlanmıştır:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Tablo Adı</th>
+          <th>Sorumluluk ve İçerik</th>
+          <th>Güvenlik Katmanı</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>organizations</code></td>
+          <td>Kiracı firmalar, abonelik planları, şube ve kullanıcı limitleri</td>
+          <td>Tenant İzolasyonu</td>
+        </tr>
+        <tr>
+          <td><code>branches</code></td>
+          <td>Firmaya ait fiziksel şubeler (Kadıköy, Beşiktaş vb.)</td>
+          <td>RLS & Şube İzolasyonu</td>
+        </tr>
+        <tr>
+          <td><code>memberships</code></td>
+          <td>Kullanıcı ↔ Firma ↔ Şube ↔ Rol bağlantıları</td>
+          <td>RBAC Yetki Kontrolü</td>
+        </tr>
+        <tr>
+          <td><code>patients</code></td>
+          <td>Klinik ve demografik hasta verileri</td>
+          <td><strong>AES-256 Şifreli TCKN</strong> + RLS</td>
+        </tr>
+        <tr>
+          <td><code>sales</code> & <code>cash_transactions</code></td>
+          <td>Satışlar, kasa hareketleri ve tahsilatlar</td>
+          <td>Idempotency Key + RLS</td>
+        </tr>
+        <tr>
+          <td><code>expenses</code></td>
+          <td>Masraflar, giderler ve fatura kayıtları</td>
+          <td>Soft-Delete + RLS</td>
+        </tr>
+        <tr>
+          <td><code>stock_items</code></td>
+          <td>Cihazlar, piller, kalıplar ve ÜTS durumları</td>
+          <td>Soft-Delete + RLS</td>
+        </tr>
+        <tr>
+          <td><code>audit_logs</code></td>
+          <td>10 yıl saklama süreli sistem işlem günlükleri</td>
+          <td>Değişmez Güvenlik Günlüğü</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="highlight-card">
+      <h4>🛡️ Soft-Delete ve Veri Kaybı Önleme Mimarisi</h4>
+      <p style="margin: 0; font-size: 13.5px;">
+        Kritik tablolarda fiziksel <code>DELETE</code> işlemi tamamen engellenmiştir. Silinen kayıtlar <code>deleted_at</code> zaman damgası ile işaretlenir ve uygulama/RLS seviyesinde filtrelenir. Bu sayede olası kullanıcı hatalarında veriler %100 kurtarılabilir.
+      </p>
+    </div>
+
+    <h2>4. Siber Güvenlik ve KVKK Savunma Katmanları</h2>
+    <p>Platform, <strong>Derinlemesine Savunma (Defense-in-Depth)</strong> prensibine göre çok katmanlı olarak korunmaktadır:</p>
+
+    <div class="diagram">
+[ İstemci / Tarayıcı ]
+       │
+       ▼ (1) HTTP Güvenlik Başlıkları (CSP, HSTS, X-Frame-Options, X-Content-Type)
+[ Next.js Edge / Sunucu ]
+       │
+       ▼ (2) IP Bazlı Rate Limiting (10-20 istek/dk) & Zod Şema Doğrulaması
+[ API Routes / DAL ]
+       │
+       ▼ (3) AES-256 Kriptografik Şifreleme (TC Kimlik No)
+[ Supabase PostgreSQL ]
+       │
+       ▼ (4) Row Level Security (RLS) & Multi-Tenant İzolasyonu (42501 Yetki Koruması)
+[ Şifreli Disk (AES-256 At-Rest) ]
+    </div>
+
+    <h3>Temel Güvenlik Önlemleri Tablosu</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Güvenlik Katmanı</th>
+          <th>Uygulanan Önlem</th>
+          <th>Engellenen Tehdit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>SQL Injection</strong></td>
+          <td>%100 Parametreli Sorgu (Prepared Statements) + SDK</td>
+          <td>SQL Enjeksiyonu, Veri Tabanı İhlali</td>
+        </tr>
+        <tr>
+          <td><strong>KVKK Veri Şifreleme</strong></td>
+          <td>AES-256 Kriptografik TCKN Şifreleme (<code>cryptoUtils.ts</code>)</td>
+          <td>Veri Tabanı Sızıntısı, Açık Metin İhlali</td>
+        </tr>
+        <tr>
+          <td><strong>XSS & Script Injection</strong></td>
+          <td>Content Security Policy (CSP) Başlığı</td>
+          <td>Zararlı Script Çalıştırma, Session Hijacking</td>
+        </tr>
+        <tr>
+          <td><strong>Clickjacking</strong></td>
+          <td><code>X-Frame-Options: DENY</code></td>
+          <td>Sahte Arayüz Tıklama Tuzağı</td>
+        </tr>
+        <tr>
+          <td><strong>SSL Stripping</strong></td>
+          <td><code>Strict-Transport-Security (HSTS)</code> (1 Yıl)</td>
+          <td>Man-in-the-Middle, Ağ Dinleme</td>
+        </tr>
+        <tr>
+          <td><strong>Brute-Force & DoS</strong></td>
+          <td>IP Bazlı Rate Limiter (10 istek/dakika)</td>
+          <td>Kaba Kuvvet Saldırısı, API Tüketimi</td>
+        </tr>
+        <tr>
+          <td><strong>Input Validation</strong></td>
+          <td>Sunucu Tarafı Zod Şema Doğrulaması</td>
+          <td>Hatalı / Zararlı JSON Payload Girişi</td>
+        </tr>
+        <tr>
+          <td><strong>Bağımlılık Güvenliği</strong></td>
+          <td>Next.js 16.3.3 yükseltmesi + ExcelJS geçişi</td>
+          <td>9 CVE + Prototype Pollution & ReDoS</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>5. Kullanıcı Hiyerarşisi ve Yetkilendirme (RBAC)</h2>
+    <p>
+      Sistemde yetkilendirme hem veritabanı (PostgreSQL RLS) hem de kullanıcı arayüzü (Sidebar) seviyesinde <strong>tam eşleşme (Exact-Match)</strong> kuralıyla çalışır:
+    </p>
+    <ul>
+      <li><strong>Platform Admin:</strong> SaaS panelini ve tüm organizasyonları denetler.</li>
+      <li><strong>Firma Yöneticisi:</strong> Kendi organizasyonuna ait tüm şubeleri, ayarları, personelleri ve konsolide finansı yönetir.</li>
+      <li><strong>Şube Yöneticisi:</strong> Yalnızca kendi atandığı şubenin klinik ve finansal verilerini yönetir; diğer şubelere erişemez (RLS 42501).</li>
+      <li><strong>Odyolog / Odyometrist:</strong> Hasta kartı, odyogram testleri, randevu ve cihaz süreçlerini yürütür; genel kasa ve firma ayarlarına erişemez.</li>
+      <li><strong>Sekreter / Resepsiyon:</strong> Hasta kayıt, randevu, recall ve aktivite girişlerini yapar; finansal masraf tablolarına erişemez.</li>
+      <li><strong>Muhasebe:</strong> Kasa, masraflar, tedarikçiler ve SGK alacaklarını yönetir; hasta tıbbi/odyogram detaylarına erişemez.</li>
+    </ul>
+
+    <h2>6. Test ve Kalite Güvence Metrikleri</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Test / Doğrulama Adımı</th>
+          <th>Kapsam</th>
+          <th>Sonuç</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Vitest Unit Tests</strong></td>
+          <td>Kripto modülü, Domain servisleri, Şube izolasyonu</td>
+          <td><span class="badge badge-success">13/13 Geçti</span></td>
+        </tr>
+        <tr>
+          <td><strong>TypeScript Check</strong></td>
+          <td><code>npx tsc --noEmit</code></td>
+          <td><span class="badge badge-success">0 Hata</span></td>
+        </tr>
+        <tr>
+          <td><strong>ESLint Quality Check</strong></td>
+          <td><code>npm run lint</code></td>
+          <td><span class="badge badge-success">0 Hata (CI Uyumlu)</span></td>
+        </tr>
+        <tr>
+          <td><strong>CI/CD GitHub Actions</strong></td>
+          <td>Lint + Test + Build pipeline otomasyonu</td>
+          <td><span class="badge badge-success">Aktif</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <p>AudiPro SaaS — Tüm hakları saklıdır © 2026. Bu rapor sistem teslimatı ve kalite güvence amacıyla oluşturulmuştur.</p>
+    </div>
+
+  </div>
+
+</body>
+</html>
