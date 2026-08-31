@@ -6,7 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import CustomSelect from '../components/CustomSelect';
 import { useDebounce } from '../hooks/useDebounce';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { ResponsivePie } from '@nivo/pie';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
@@ -77,10 +77,27 @@ export default function PatientsPage() {
     setSelectedBulkFile(file);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheetName = workbook.SheetNames.includes('Veri') ? 'Veri' : workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
+      const sheet = workbook.worksheets.find(s => s.name === 'Veri') || workbook.worksheets[0];
+      if (!sheet) return;
+
+      // İlk satırı başlık olarak al, geri kalanları JSON'a çevir
+      const headers: string[] = [];
+      sheet.getRow(1).eachCell({ includeEmpty: true }, (cell) => {
+        headers.push(String(cell.value || ''));
+      });
+
+      const jsonRows: Record<string, unknown>[] = [];
+      sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // başlık satırını atla
+        const rowData: Record<string, unknown> = {};
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          rowData[headers[colNumber - 1]] = cell.value ?? '';
+        });
+        jsonRows.push(rowData);
+      });
+
       setParsedBulkRows(jsonRows);
     } catch (err) {
       console.error('Excel parsing error:', err);
@@ -109,10 +126,26 @@ export default function PatientsPage() {
     setSelectedImportFile(file);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheetName = workbook.SheetNames.includes('Veri') ? 'Veri' : workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
+      const sheet = workbook.worksheets.find(s => s.name === 'Veri') || workbook.worksheets[0];
+      if (!sheet) return;
+
+      const headers: string[] = [];
+      sheet.getRow(1).eachCell({ includeEmpty: true }, (cell) => {
+        headers.push(String(cell.value || ''));
+      });
+
+      const jsonRows: Record<string, unknown>[] = [];
+      sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const rowData: Record<string, unknown> = {};
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          rowData[headers[colNumber - 1]] = cell.value ?? '';
+        });
+        jsonRows.push(rowData);
+      });
+
       setParsedImportRows(jsonRows);
     } catch (err) {
       console.error('Excel parsing error:', err);
