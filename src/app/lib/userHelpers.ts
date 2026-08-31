@@ -62,8 +62,8 @@ export function getUserRole(currentUser: any, usersList?: any[]): string {
     }
   }
 
-  // 3. Uniform default fallback for both Header and Sidebar
-  return 'Firma Yöneticisi';
+  // 3. Güvenli varsayılan — asla en yüksek rolü fallback verme
+  return 'Odyolog';
 }
 
 export function getUserInitials(name: string): string {

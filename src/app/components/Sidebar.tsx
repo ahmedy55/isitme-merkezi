@@ -23,12 +23,14 @@ export default function Sidebar() {
       ? currentUser.user_metadata.roles
       : (currentUser?.user_metadata?.role ? [currentUser.user_metadata.role] : [userRole]);
 
+    // Güvenli tam eşleşme: substring yok, sadece exact match veya Platform/Firma Yöneticisi bypass
     const hasRole = (required?: string[]) => {
       if (!required || required.length === 0) return true;
       if (isPlatformAdmin) return true;
-      if (userRoles.some(r => r.toLowerCase().includes('firma') || r.toLowerCase().includes('yönetici'))) return true;
-      return required.some(req => 
-        userRoles.some(ur => ur.toLowerCase().includes(req.toLowerCase()) || req.toLowerCase().includes(ur.toLowerCase()))
+      // Sadece 'Firma Yöneticisi' tam eşleşmesi bypass verir — 'Şube Yöneticisi' vermez
+      if (userRoles.includes('Firma Yöneticisi')) return true;
+      return required.some(req =>
+        userRoles.some(ur => ur.trim().toLowerCase() === req.trim().toLowerCase())
       );
     };
 
@@ -37,15 +39,15 @@ export default function Sidebar() {
         title: 'Ana Menü',
         items: [
           { id: 'dashboard'    as const, label: 'Dashboard', badge: null },
-          { id: 'patients'     as const, label: 'Hastalar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
-          { id: 'appointments' as const, label: 'Randevular', badge: pendingAppointmentsCount > 0 ? String(pendingAppointmentsCount) : null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
+          { id: 'patients'     as const, label: 'Hastalar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter', 'Resepsiyon'] },
+          { id: 'appointments' as const, label: 'Randevular', badge: pendingAppointmentsCount > 0 ? String(pendingAppointmentsCount) : null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter', 'Resepsiyon'] },
         ].filter(item => hasRole((item as any).requiredRoles)),
       },
       {
         title: 'İşlemler',
         items: [
-          { id: 'recall'          as const, label: 'Recall', badge: pendingRecallCount > 0 ? String(pendingRecallCount) : null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
-          { id: 'activity-log'    as const, label: 'Aktivite Kaydı', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter'] },
+          { id: 'recall'          as const, label: 'Recall', badge: pendingRecallCount > 0 ? String(pendingRecallCount) : null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter', 'Resepsiyon'] },
+          { id: 'activity-log'    as const, label: 'Aktivite Kaydı', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter', 'Resepsiyon'] },
           { id: 'sgk'             as const, label: 'SGK & Reçete', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog'] },
           { id: 'sgk-receivables' as const, label: 'SGK Katkı Alacakları', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
           { id: 'stock'           as const, label: 'Stok & Aksesuar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Sekreter', 'Muhasebe'] },
