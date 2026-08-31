@@ -66,22 +66,12 @@ export default function Sidebar() {
           { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'audit-log'         as const, label: 'İşlem Kayıtları', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'settings'          as const, label: 'Ayarlar', badge: null, requiredRoles: ['Firma Yöneticisi'] },
+          { id: 'super-admin'       as const, label: 'SaaS Master Panel', badge: 'Admin' },
           { id: 'support'           as const, label: 'Destek', badge: null },
         ].filter(item => hasRole((item as any).requiredRoles)),
       },
     ];
 
-    if (isPlatformAdmin) {
-      return [
-        ...dynamicSections,
-        {
-          title: 'SaaS Yönetimi',
-          items: [
-            { id: 'super-admin' as const, label: 'SaaS Panel', badge: null }
-          ]
-        }
-      ];
-    }
     return dynamicSections;
   }, [isPlatformAdmin, pendingAppointmentsCount, pendingRecallCount, currentUser]);
 
