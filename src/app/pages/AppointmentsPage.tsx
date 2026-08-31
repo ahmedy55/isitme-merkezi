@@ -36,6 +36,8 @@ export default function AppointmentsPage() {
 
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [filterAudiologist, setFilterAudiologist] = useState('Tümü');
+  const [filterBranch, setFilterBranch] = useState('Tüm Şubeler');
+  const [filterDate, setFilterDate] = useState('');
   const [statusWidgetFilter, setStatusWidgetFilter] = useState<'all' | 'planlandi' | 'tamamlanan' | 'iptal'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 9));
@@ -82,6 +84,9 @@ export default function AppointmentsPage() {
 
   const filtered = appointmentsList.filter(a => {
     const matchAudiologist = filterAudiologist === 'Tümü' || a.audiologist === filterAudiologist;
+    const matchBranch = filterBranch === 'Tüm Şubeler' || 
+      (a.branch && (a.branch.toLowerCase().includes(filterBranch.toLowerCase()) || filterBranch.toLowerCase().includes(a.branch.toLowerCase())));
+    const matchDate = !filterDate || a.date === filterDate;
     let matchWidget = true;
     if (statusWidgetFilter === 'planlandi') {
       matchWidget = a.status === 'Bekliyor' || a.status === 'Hatırlatıldı';
@@ -90,7 +95,7 @@ export default function AppointmentsPage() {
     } else if (statusWidgetFilter === 'iptal') {
       matchWidget = a.status === 'İptal' || a.status === 'Gelmedi';
     }
-    return matchAudiologist && matchWidget;
+    return matchAudiologist && matchBranch && matchDate && matchWidget;
   });
 
   return (
@@ -267,19 +272,64 @@ export default function AppointmentsPage() {
               onChange={(e) => setFilterAudiologist(e.target.value)}
               style={{ width: '100%' }}
             >
-              <option>Tümü</option>
-              {audiologists.map(a => <option key={a}>{a}</option>)}
+              <option value="Tümü">Tüm Doktorlar</option>
+              {audiologists.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
           </div>
           <div className="form-group" style={{ margin: 0, flex: '1 1 200px' }}>
-            <select className="form-select" style={{ width: '100%' }}>
-              <option>Tüm Şubeler</option>
-              {branches.map(b => <option key={b}>{b}</option>)}
+            <select 
+              className="form-select" 
+              value={filterBranch}
+              onChange={(e) => setFilterBranch(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <option value="Tüm Şubeler">Tüm Şubeler</option>
+              {branches.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
-          <div className="form-group" style={{ margin: 0, flex: '1 1 150px' }}>
-            <input className="form-input" type="date" defaultValue="2026-07-09" style={{ width: '100%' }} />
+          <div className="form-group" style={{ margin: 0, flex: '1 1 180px', display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input 
+              className="form-input" 
+              type="date" 
+              value={filterDate}
+              onChange={(e) => {
+                const val = e.target.value;
+                setFilterDate(val);
+                if (val) {
+                  const parts = val.split('-').map(Number);
+                  if (parts[0] && parts[1]) {
+                    setCurrentDate(new Date(parts[0], parts[1] - 1, parts[2] || 1));
+                  }
+                }
+              }}
+              style={{ width: '100%' }} 
+              placeholder="Tarih Seçin"
+            />
+            {filterDate && (
+              <button
+                className="btn btn-sm btn-secondary"
+                onClick={() => setFilterDate('')}
+                title="Tarih Filtresini Temizle"
+                style={{ padding: '6px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+              >
+                Temizle
+              </button>
+            )}
           </div>
+          {(filterAudiologist !== 'Tümü' || filterBranch !== 'Tüm Şubeler' || filterDate || statusWidgetFilter !== 'all') && (
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => {
+                setFilterAudiologist('Tümü');
+                setFilterBranch('Tüm Şubeler');
+                setFilterDate('');
+                setStatusWidgetFilter('all');
+              }}
+              style={{ fontSize: '0.8rem', color: 'var(--danger-600)', border: '1px solid var(--danger-200)', background: 'var(--danger-50)' }}
+            >
+              Filtreleri Sıfırla
+            </button>
+          )}
         </div>
       </div>
 
@@ -299,70 +349,85 @@ export default function AppointmentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((apt) => (
-                  <tr key={apt.id}>
-                    <td data-label="Saat" className="td-primary"
-                      style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)' }}>
-                      {apt.time}
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--gray-500)' }}>
+                      <div style={{ fontSize: '1.8rem', marginBottom: 8 }}>🔍</div>
+                      <div style={{ fontWeight: 600, color: 'var(--gray-800)' }}>Seçilen kriterlere uygun randevu bulunamadı.</div>
+                      <div style={{ fontSize: '0.82rem', marginTop: 4 }}>Filtreleri sıfırlayarak tüm randevuları görüntüleyebilirsiniz.</div>
                     </td>
-                    <td data-label="Hasta">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="avatar" style={{ background: getAvatarColor(apt.patientName) }}>
-                          {apt.patientName.split(' ').map(n => n[0]).join('')}
+                  </tr>
+                ) : (
+                  filtered.map((apt) => (
+                    <tr key={apt.id}>
+                      <td data-label="Saat" className="td-primary"
+                        style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)' }}>
+                        {apt.time}
+                      </td>
+                      <td data-label="Hasta">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div className="avatar" style={{ background: getAvatarColor(apt.patientName) }}>
+                            {apt.patientName.split(' ').map(n => n[0]).join('')}
+                          </div>
+                          <div>
+                            <div className="td-primary">{apt.patientName}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{apt.notes || '—'}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="td-primary">{apt.patientName}</div>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{apt.notes || '—'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td data-label="Tür">
-                      <span className={`badge badge-${
-                        apt.type === 'İşitme Testi' ? 'info' :
-                        apt.type === 'Cihaz Denemesi' ? 'info' :
-                        apt.type === 'Kontrol' ? 'warning' :
-                        apt.type === 'SGK Yenileme' ? 'success' : 'neutral'
-                      }`}>{apt.type}</span>
-                    </td>
-                    <td data-label="Odyolog">{apt.audiologist}</td>
-                    <td data-label="Ŝube" style={{ fontSize: '0.78rem' }}>{apt.branch}</td>
-                    <td data-label="Durum">
-                      <span className={`badge badge-${statusColors[apt.status] || 'neutral'}`}>
-                        {apt.status}
-                      </span>
-                    </td>
-                    <td data-label="">
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {apt.status === 'Bekliyor' && (
-                          <>
+                      </td>
+                      <td data-label="Tür">
+                        <span className={`badge badge-${
+                          apt.type === 'İşitme Testi' ? 'info' :
+                          apt.type === 'Cihaz Denemesi' ? 'info' :
+                          apt.type === 'Kontrol' ? 'warning' :
+                          apt.type === 'SGK Yenileme' ? 'success' : 'neutral'
+                        }`}>{apt.type}</span>
+                      </td>
+                      <td data-label="Odyolog">{apt.audiologist}</td>
+                      <td data-label="Şube" style={{ fontSize: '0.78rem' }}>{apt.branch}</td>
+                      <td data-label="Durum">
+                        <span className={`badge badge-${statusColors[apt.status] || 'neutral'}`}>
+                          {apt.status}
+                        </span>
+                      </td>
+                      <td data-label="">
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {apt.status === 'Bekliyor' && (
+                            <>
+                              <button className="btn btn-sm btn-primary"
+                                onClick={() => updateAppointmentStatus(apt.id, 'Geldi')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <IconCheck size={12} strokeWidth={2} /> Geldi
+                              </button>
+                              <button className="btn btn-sm btn-secondary"
+                                onClick={() => updateAppointmentStatus(apt.id, 'Hatırlatıldı')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                🔔 Hatırlat
+                              </button>
+                              <button className="btn btn-sm btn-danger"
+                                onClick={() => updateAppointmentStatus(apt.id, 'İptal')}
+                                style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <IconClose size={12} strokeWidth={2} /> İptal
+                              </button>
+                            </>
+                          )}
+                          {apt.status === 'Hatırlatıldı' && (
                             <button className="btn btn-sm btn-primary"
                               onClick={() => updateAppointmentStatus(apt.id, 'Geldi')}
                               style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                               <IconCheck size={12} strokeWidth={2} /> Geldi
                             </button>
-                            <button className="btn btn-sm btn-ghost btn-icon"
-                              onClick={() => updateAppointmentStatus(apt.id, 'İptal')}
-                              aria-label="İptal">
-                              <IconClose size={13} strokeWidth={2} />
-                            </button>
-                          </>
-                        )}
-                        {apt.status === 'Hatırlatıldı' && (
-                          <button className="btn btn-sm btn-primary"
-                            onClick={() => updateAppointmentStatus(apt.id, 'Geldi')}
-                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <IconCheck size={12} strokeWidth={2} /> Geldi
-                          </button>
-                        )}
-                        {apt.status === 'Geldi' && (
-                          <span style={{ fontSize: '0.78rem', color: 'var(--success-600)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <IconCheck size={12} strokeWidth={2} /> Tamamlandı
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          )}
+                          {apt.status === 'Geldi' && (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--success-600)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <IconCheck size={12} strokeWidth={2} /> Tamamlandı
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -407,6 +472,7 @@ export default function AppointmentsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
                 <h3 style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--gray-800)' }}>
                   {currentMonthName} {currentYear}
+                  {filterDate && <span style={{ fontSize: '0.82rem', color: 'var(--primary-600)', marginLeft: 8 }}>(Seçili Gün: {filterDate})</span>}
                 </h3>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button className="btn btn-sm btn-secondary" onClick={() => setCurrentDate(new Date(currentYear, currentDate.getMonth() - 1, 1))}>
@@ -424,24 +490,40 @@ export default function AppointmentsPage() {
                 ))}
                 {cells.map((cell, idx) => {
                   const isToday = cell.isCurrentMonth && cell.dateNum === 9 && currentDate.getMonth() === 6 && currentYear === 2026;
+                  const isSelected = Boolean(filterDate && cell.fullDate === filterDate);
                   const dayAppointments = cell.isCurrentMonth
-                    ? appointmentsList.filter(a => a.date === cell.fullDate)
+                    ? filtered.filter(a => a.date === cell.fullDate)
                     : [];
                     
                   return (
                     <div
                       key={idx}
+                      onClick={() => {
+                        if (cell.isCurrentMonth && cell.fullDate) {
+                          setFilterDate(prev => prev === cell.fullDate ? '' : cell.fullDate);
+                        }
+                      }}
                       className={`calendar-cell ${isToday ? 'today' : ''} ${!cell.isCurrentMonth ? 'other-month' : ''}`}
+                      style={{
+                        cursor: cell.isCurrentMonth ? 'pointer' : 'default',
+                        border: isSelected ? '2px solid var(--primary-600)' : undefined,
+                        background: isSelected ? 'rgba(var(--primary-rgb), 0.08)' : undefined
+                      }}
                     >
-                      <div className="day-number">
+                      <div className="day-number" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         {isToday ? <span>{cell.dateNum}</span> : cell.dateNum}
+                        {dayAppointments.length > 0 && (
+                          <span style={{ fontSize: '0.68rem', background: 'var(--primary-100)', color: 'var(--primary-700)', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>
+                            {dayAppointments.length}
+                          </span>
+                        )}
                       </div>
                       {dayAppointments.map(apt => (
                         <div key={apt.id} className={`calendar-event ${
                           apt.type === 'İşitme Testi' ? 'test' :
                           apt.type === 'Cihaz Denemesi' ? 'fitting' :
                           apt.type === 'Kontrol' ? 'control' : 'sgk'
-                        }`}>
+                        }`} title={`${apt.time} - ${apt.patientName} (${apt.audiologist}) [${apt.branch}]`}>
                           {apt.time} {apt.patientName.split(' ')[0]}
                         </div>
                       ))}
