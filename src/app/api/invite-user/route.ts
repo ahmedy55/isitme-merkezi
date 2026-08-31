@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, validateBody, InviteUserSchema } from '../../lib/apiSecurity';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // ── Rate Limiting: 10 istek/dakika/IP ──
+  const rateLimitError = checkRateLimit(request, { windowMs: 60_000, maxRequests: 10 });
+  if (rateLimitError) return rateLimitError;
+
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Critical Security Guard 1: Require explicit NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY without fallback
     if (!supabaseUrl) {
       return NextResponse.json({ success: false, error: 'Güvenlik Hatası: NEXT_PUBLIC_SUPABASE_URL ortam değişkeni yapılandırılmamış.' }, { status: 500 });
     }
@@ -36,12 +40,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Geçersiz veya süresi dolmuş oturum.' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { email, firstName, lastName, phone, roles, branchId, orgId } = body;
+    // ── Zod Şema Doğrulaması ──
+    const { data: body, error: validationError } = await validateBody(request, InviteUserSchema);
+    if (validationError) return validationError;
 
-    if (!email || !orgId) {
-      return NextResponse.json({ success: false, error: 'E-posta ve Organizasyon ID zorunludur.' }, { status: 400 });
-    }
+    const { email, firstName, lastName, phone, roles, branchId, orgId } = body;
 
     // Input Normalization
     const normalizedEmail = email.toLowerCase().trim();
@@ -52,7 +55,6 @@ export async function POST(request: Request) {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // Platform admin kontrolü
     const { data: adminData } = await supabaseAdmin
       .from('platform_admins')
       .select('user_id')
@@ -62,7 +64,6 @@ export async function POST(request: Request) {
     const isPlatformAdmin = !!adminData;
 
     if (!isPlatformAdmin) {
-      // Firma Yöneticisi yetki kontrolü
       const { data: membership } = await supabaseAdmin
         .from('memberships')
         .select('roles, status')
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Performance Optimization: O(1) single profile lookup instead of O(N) listUsers()
+    // 3. O(1) single profile lookup
     let invitedUserId: string;
 
     const { data: existingMembership } = await supabaseAdmin
@@ -113,7 +114,6 @@ export async function POST(request: Request) {
       invitedUserId = newAuthUser.user.id;
     }
 
-    // 4. Profiles tablosuna profil verisini işleme
     await supabaseAdmin.from('profiles').upsert({
       id: invitedUserId,
       first_name: firstName || '',
@@ -121,9 +121,6 @@ export async function POST(request: Request) {
       phone: normalizedPhone
     });
 
-    // 5. Memberships tablosuna ilişkili organizasyon kaydı ekleme
-    // Fix #14: Profil bilgileri (first_name, last_name, phone) profiles tablosunda zaten var
-    // Memberships'te sadece ilişki ve rol bilgisi tutulur
     const { data: memData, error: memErr } = await supabaseAdmin
       .from('memberships')
       .upsert({
@@ -156,8 +153,8 @@ export async function POST(request: Request) {
       }
     });
 
-  } catch (err: any) {
-    console.error('Invite API secure route error:', err);
-    return NextResponse.json({ success: false, error: err.message || 'Sunucu hatası' }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Sunucu hatası';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

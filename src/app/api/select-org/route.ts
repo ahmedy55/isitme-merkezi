@@ -1,7 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit, validateBody, SelectOrgSchema } from '../../lib/apiSecurity';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // ── Rate Limiting: 20 istek/dakika/IP ──
+  const rateLimitError = checkRateLimit(request, { windowMs: 60_000, maxRequests: 20 });
+  if (rateLimitError) return rateLimitError;
+
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -32,18 +37,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Geçersiz veya süresi dolmuş oturum.' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { orgId } = body;
+    // ── Zod Şema Doğrulaması ──
+    const { data: body, error: validationError } = await validateBody(request, SelectOrgSchema);
+    if (validationError) return validationError;
 
-    if (!orgId) {
-      return NextResponse.json({ error: 'Organizasyon ID (orgId) zorunludur.' }, { status: 400 });
-    }
+    const { orgId } = body;
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // 2. Kullanıcının gerçekten bu organizasyona üye olup olmadığını veya platform admin olduğunu doğrula
+    // 2. Kullanıcının bu organizasyona üye olup olmadığını veya platform admin olduğunu doğrula
     const { data: adminData } = await supabaseAdmin
       .from('platform_admins')
       .select('user_id')
@@ -66,7 +70,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Server-side Supabase Admin SDK ile app_metadata.organization_id güncellenmesi
+    // 3. Server-side Supabase Admin SDK ile app_metadata güncellenmesi
     const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
       app_metadata: {
         ...user.app_metadata,
@@ -78,13 +82,10 @@ export async function POST(request: Request) {
       throw new Error(`JWT app_metadata organizasyon ID'si güncellenemedi: ${updateErr.message}`);
     }
 
-    return NextResponse.json({
-      success: true,
-      orgId
-    });
+    return NextResponse.json({ success: true, orgId });
 
-  } catch (err: any) {
-    console.error('Select org API error:', err);
-    return NextResponse.json({ error: err.message || 'Sunucu hatası' }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Sunucu hatası';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
