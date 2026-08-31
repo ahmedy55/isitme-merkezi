@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { encryptText, decryptText } from './cryptoUtils';
 import { SystemUser, UserRole } from '../data/mockData';
 import { toCamelGeneric, toSnakeGeneric } from '../repositories/BaseRepository';
 import { patientRepository } from '../repositories/PatientRepository';
@@ -49,7 +50,8 @@ export const dbFetchPatients = async () => {
       .select('*, patient_timeline(*)')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return toCamel(data || []);
+    const items = toCamel<any[]>(data || []);
+    return items.map(p => ({ ...p, tc: decryptText(p.tc) }));
   }, 'dbFetchPatients');
 };
 
@@ -59,26 +61,40 @@ export const dbInsertPatient = async (patient: any) => {
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     
     const { id, timeline, ...payload } = toSnake(patient);
+    if (payload.tc) {
+      payload.tc = encryptText(payload.tc);
+    }
     
     const { data, error } = await supabase
       .from('patients')
       .insert([{ ...payload, organization_id: orgId }])
       .select();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    const result = toCamel<any>(data?.[0]);
+    if (result && result.tc) {
+      result.tc = decryptText(result.tc);
+    }
+    return result;
   }, 'dbInsertPatient');
 };
 
 export const dbUpdatePatient = async (id: string, patient: any) => {
   return executeDbQuery(async () => {
     const { id: _, timeline, ...payload } = toSnake(patient);
+    if (payload.tc) {
+      payload.tc = encryptText(payload.tc);
+    }
     const { data, error } = await supabase
       .from('patients')
       .update(payload)
       .eq('id', id)
       .select();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    const result = toCamel<any>(data?.[0]);
+    if (result && result.tc) {
+      result.tc = decryptText(result.tc);
+    }
+    return result;
   }, 'dbUpdatePatient');
 };
 
