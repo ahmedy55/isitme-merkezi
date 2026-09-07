@@ -17,17 +17,36 @@ export default function Sidebar() {
   }, [recallList]);
 
   const activeSections = React.useMemo(() => {
-    // Kullanıcı rolünü belirle
+    // Kullanıcı rolünü belirle — user_metadata veya membership listesinden
     const userRole = getUserRole(currentUser, usersList);
-    const userRoles: string[] = Array.isArray(currentUser?.user_metadata?.roles)
+    const metaRoles: string[] = Array.isArray(currentUser?.user_metadata?.roles)
       ? currentUser.user_metadata.roles
-      : (currentUser?.user_metadata?.role ? [currentUser.user_metadata.role] : [userRole]);
+      : (currentUser?.user_metadata?.role ? [currentUser.user_metadata.role] : []);
+
+    // Membership listesinden de rolleri al (Ajans Paneli'nden oluşturulan firmalar için)
+    const membershipRoles: string[] = [];
+    if (usersList && Array.isArray(usersList) && currentUser?.email) {
+      const match = usersList.find((u: any) =>
+        (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+        u.id === currentUser.id
+      );
+      if (match?.roles && Array.isArray(match.roles)) {
+        membershipRoles.push(...match.roles);
+      }
+    }
+
+    const rawRoles = metaRoles.length > 0 ? metaRoles : [...membershipRoles, userRole];
+
+    // 'admin' rolü Firma Yöneticisi yetkisine eşdeğerdir
+    const ADMIN_ALIASES = ['admin', 'firma yöneticisi', 'owner', 'super_admin', 'superadmin'];
+    const isAdminRole = rawRoles.some(r => ADMIN_ALIASES.includes(r.trim().toLowerCase()));
+    const userRoles: string[] = isAdminRole ? [...rawRoles, 'Firma Yöneticisi'] : rawRoles;
 
     // Güvenli tam eşleşme: substring yok, sadece exact match veya Platform/Firma Yöneticisi bypass
     const hasRole = (required?: string[]) => {
       if (!required || required.length === 0) return true;
       if (isPlatformAdmin) return true;
-      // Sadece 'Firma Yöneticisi' tam eşleşmesi bypass verir — 'Şube Yöneticisi' vermez
+      // 'Firma Yöneticisi' tam eşleşmesi bypass verir
       if (userRoles.includes('Firma Yöneticisi')) return true;
       return required.some(req =>
         userRoles.some(ur => ur.trim().toLowerCase() === req.trim().toLowerCase())
