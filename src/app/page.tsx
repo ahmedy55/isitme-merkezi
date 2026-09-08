@@ -42,7 +42,7 @@ function ToastIcon({ type }: { type: string }) {
 }
 
 function AppContent() {
-  const { currentPage, toasts, removeToast } = useApp();
+  const { currentPage, toasts, removeToast, currentUser, currentOrgId, dataLoading } = useApp();
 
   React.useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -70,6 +70,13 @@ function AppContent() {
   }
 
   const renderPage = () => {
+    if (!currentUser || !currentOrgId || dataLoading) return <p>Oturum ve firma verileri yükleniyor…</p>;
+    const roles: string[]=currentUser.membership?.roles || [];
+    const manager=roles.includes('Firma Yöneticisi');
+    const management=['branches','settings','suppliers','audit-log','branch-activities'];
+    const financial=['cash','expenses','reports','sgk-receivables','assets'];
+    if (currentPage==='super-admin' || (!manager && management.includes(currentPage)) ||
+      (!manager && financial.includes(currentPage) && !roles.some(r=>['Şube Yöneticisi','Muhasebe'].includes(r)))) return <p>Bu modül için yetkiniz yok.</p>;
     switch (currentPage) {
       case 'dashboard':         return <DashboardPage />;
       case 'patients':          return <PatientsPage />;
@@ -91,7 +98,6 @@ function AppContent() {
       case 'support':           return <SupportPage />;
       case 'activity-log':      return <ActivityLogPage />;
       case 'branch-activities': return <BranchActivitiesPage />;
-      case 'super-admin':       return <SuperAdminPage />;
       default:                  return <DashboardPage />;
     }
   };
@@ -126,6 +132,7 @@ function AppContent() {
 
       <main className="main-content">
         <Header />
+        {['service','assets','activity-log','sgk-receivables','branch-activities'].includes(currentPage) && <p role="status" style={{padding:16,background:'#fff3cd'}}>Bu ekranın bazı işlemleri yalnızca bu oturumda tutulur. Kalıcı kayıt entegrasyonu tamamlanmadan üretim kaydı için kullanmayın.</p>}
         {renderPage()}
       </main>
 
@@ -146,6 +153,7 @@ function BranchWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <BranchProvider
+      key={`${currentUser?.id || "anonymous"}:${currentOrgId || "none"}`}
       branchesList={branchesList}
       currentUser={currentUser}
       currentOrgId={currentOrgId}

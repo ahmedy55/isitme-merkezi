@@ -157,3 +157,7 @@ ALTER TABLE organization_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "org_settings_select" ON organization_settings FOR SELECT USING (organization_id = get_user_org_id() OR (select auth.uid()) IN (SELECT user_id FROM platform_admins));
 CREATE POLICY "org_settings_insert" ON organization_settings FOR INSERT WITH CHECK (organization_id = get_user_org_id());
 CREATE POLICY "org_settings_update" ON organization_settings FOR UPDATE USING (organization_id = get_user_org_id());
+
+-- Required before migration 003 installs branch policies (fresh installations).
+ALTER TABLE patients ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(id);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS branch_id UUID REFERENCES branches(id);

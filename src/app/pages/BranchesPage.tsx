@@ -38,9 +38,10 @@ export default function BranchesPage() {
   const [formFirstName, setFormFirstName] = useState('');
   const [formLastName, setFormLastName] = useState('');
   const [formEmail, setFormEmail] = useState('');
+  const [formPassword,setFormPassword]=useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRoles, setFormRoles] = useState<UserRole[]>([]);
-  const [formBranch, setFormBranch] = useState<'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Tüm Şubeler'>('Merkez 1 - Kadıköy');
+  const [formBranch, setFormBranch] = useState<string>('');
   const [formStatus, setFormStatus] = useState<'Aktif' | 'Pasif'>('Aktif');
 
   // Form validation errors
@@ -54,7 +55,8 @@ export default function BranchesPage() {
     setFormEmail('');
     setFormPhone('');
     setFormRoles([]);
-    setFormBranch('Merkez 1 - Kadıköy');
+    setFormBranch(branchesList[0]?.name || '');
+    setFormPassword('');
     setFormStatus('Aktif');
     setErrors({});
     setShowUserModal(true);
@@ -91,6 +93,8 @@ export default function BranchesPage() {
     } else if (!/\S+@\S+\.\S+/.test(formEmail)) {
       newErrors.email = 'Geçersiz e-posta formatı';
     }
+    if (!isEditingUser && formPassword.length<12) newErrors.password='Şifre en az 12 karakter olmalıdır';
+    if (!formBranch || (formBranch==='Tüm Şubeler' && !formRoles.includes('Firma Yöneticisi'))) newErrors.branch='Tek bir şube seçin';
     if (!formPhone.trim()) newErrors.phone = 'Telefon zorunludur';
     if (formRoles.length === 0) newErrors.roles = 'En az bir rol seçilmelidir';
 
@@ -98,7 +102,7 @@ export default function BranchesPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateUserForm()) return;
 
@@ -114,11 +118,12 @@ export default function BranchesPage() {
         status: formStatus,
         createdAt: usersList.find(u => u.id === editingUserId)?.createdAt || new Date().toISOString().split('T')[0]
       };
-      updateUser(updated);
-      addToast({ type: 'success', message: 'Kullanıcı başarıyla güncellendi.' });
+      try { await updateUser(updated); } catch { return; }
+
     } else {
       const newUser: SystemUser = {
         id: 'usr-' + Date.now(),
+        password: formPassword,
         firstName: formFirstName,
         lastName: formLastName,
         email: formEmail,
@@ -129,8 +134,8 @@ export default function BranchesPage() {
         createdAt: new Date().toISOString().split('T')[0],
         avatar: (formFirstName[0] + formLastName[0]).toUpperCase()
       };
-      addUser(newUser);
-      addToast({ type: 'success', message: 'Kullanıcı başarıyla oluşturuldu.' });
+      try { await addUser(newUser); } catch { return; }
+
     }
     setShowUserModal(false);
   };
@@ -383,8 +388,7 @@ export default function BranchesPage() {
               <select className="form-input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ margin: 0 }}>
                 <option value="All">Tüm Şubeler</option>
                 <option value="Tüm Şubeler">Tüm Şubeler (Genel)</option>
-                <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
-                <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
+                {branchesList.map(branch=><option key={branch.id} value={branch.name}>{branch.name}</option>)}
               </select>
             </div>
 
@@ -580,6 +584,8 @@ export default function BranchesPage() {
               </button>
             </div>
             <form onSubmit={handleSaveUser}>
+              {!isEditingUser && <div className="form-group"><label className="form-label">İlk giriş şifresi (en az 12 karakter)</label><input className="form-input" type="password" autoComplete="new-password" value={formPassword} onChange={e=>setFormPassword(e.target.value)} minLength={12} required />{errors.password && <p>{errors.password}</p>}</div>}
+
               <div className="modal-body">
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>
@@ -635,8 +641,7 @@ export default function BranchesPage() {
                       value={formBranch}
                       onChange={(e) => setFormBranch(e.target.value as any)}
                     >
-                      <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
-                      <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
+                      {branchesList.map(branch=><option key={branch.id} value={branch.name}>{branch.name}</option>)}
                       <option value="Tüm Şubeler">Tüm Şubeler (Genel)</option>
                     </select>
                   </div>

@@ -3,6 +3,17 @@ import { BranchService } from '../BranchService';
 import { Branch } from '../../data/mockData';
 
 describe('BranchService Production Architecture', () => {
+  it('empty branch permission never falls back to all', () => {
+    const result=BranchService.resolveActiveBranch('all',[],[]);
+    expect(result.branchContext.mode).toBe('single');
+    expect(BranchService.matchesBranch(undefined,undefined,result.branchContext)).toBe(false);
+  });
+  it('single-branch view rejects unassigned data and fuzzy demo names', () => {
+    const context={mode:'single' as const,branchId:'a',slug:'kadikoy'};
+    expect(BranchService.matchesBranch(undefined,undefined,context,0)).toBe(false);
+    expect(BranchService.matchesBranch('Kadıköy', 'b',context)).toBe(false);
+    expect(BranchService.matchesBranch(undefined,'a',context)).toBe(true);
+  });
   const mockBranches: Branch[] = [
     {
       id: 'br-1',

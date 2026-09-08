@@ -6,7 +6,7 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 2. Hasta TC Kimlik alanına şifrelenmiş veri notasyonu açıklama yorumu ekle
-COMMENT ON COLUMN patients.tc IS 'KVKK gereğince AES-256 algoritması ile şifrelenmiş TCKN verisi (ENC: prefixli)';
+COMMENT ON COLUMN patients.tc IS 'Legacy ENC: XOR/Base64 encoding; not cryptographic encryption. Server-side migration required.';
 
 -- 3. Yetkisiz doğrudan SQL sorgularında TCKN maskeleme fonksiyonu (PostgreSQL Helper)
 CREATE OR REPLACE FUNCTION mask_tc_kn(input_tc TEXT)

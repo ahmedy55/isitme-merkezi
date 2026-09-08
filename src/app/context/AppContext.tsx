@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import {
   patients as initialPatients,
   appointments as initialAppointments,
@@ -211,11 +211,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataLoading, setDataLoading] = useState(false);
 
   // Demo Ayarları — orgId ve Supabase bağlantısı yoksa demo modda çalış
-  const demoModeActive = !isConfigured || !currentOrgId;
+  const demoModeActive = !isConfigured && process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+  const dataGeneration = useRef(0);
+  const identityRef = useRef('');
+  const clearTenantData = () => {
+    setPatientsList([]); setAppointmentsList([]); setStockList([]); setSalesList([]);
+    setRecallList([]); setSuppliersList([]); setExpensesList([]); setBranchesList([]);
+    setAuditLogList([]); setUsersList([]); setCurrentOrg(null); setSelectedPatientId(null);
+  };
   const [commissionRate, setCommissionRate] = useState(3);
 
   // Supabase'den tüm verileri tek hamlede çek
   const loadAllData = async () => {
+    const generation = dataGeneration.current;
     setDataLoading(true);
     try {
       if (currentOrgId) {
@@ -224,7 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .select('*')
           .eq('id', currentOrgId)
           .maybeSingle();
-        if (orgData) setCurrentOrg(orgData);
+        if (orgData && generation === dataGeneration.current) setCurrentOrg(orgData);
       }
 
       const [
@@ -251,6 +259,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dbFetchMemberships()
       ]);
 
+      if (generation !== dataGeneration.current) return;
       setPatientsList(patients);
       setAppointmentsList(appointments);
       setStockList(stock);
@@ -265,15 +274,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Veriler Supabase\'den çekilirken hata oluştu:', err);
       addToast({ type: 'error', message: 'Klinik verileri veritabanından çekilemedi.' });
     } finally {
-      setDataLoading(false);
+      if (generation === dataGeneration.current) setDataLoading(false);
     }
   };
 
   // Fix #1: Organizasyon seçimi değiştiğinde verileri otomatik yükle
   useEffect(() => {
+    clearTenantData();
     if (currentOrgId) {
       loadAllData();
-    } else if (!mockDataLoaded) {
+    } else if (demoModeActive && !mockDataLoaded) {
       // Demo mod: orgId yoksa mock veriyi yükle (sadece bir kez)
       setPatientsList(initialPatients);
       setAppointmentsList(initialAppointments);
@@ -288,75 +298,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMockDataLoaded(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentOrgId]);
+  }, [currentOrgId, currentUser?.membership?.branch_id, JSON.stringify(currentUser?.membership?.roles)]);
 
   // Fix #1: İlk yüklemede Auth kontrolü yap (mock data yukarıda orgId yoksa yüklenir)
   useEffect(() => {
-    // Platform admin kontrol helper'ı
-    const checkAdminStatus = async (uid: string) => {
-      try {
-        const { data } = await supabase
-          .from('platform_admins')
-          .select('user_id')
-          .eq('user_id', uid)
-          .maybeSingle();
-        return !!data;
-      } catch (err) {
-        console.error('Admin status check failed:', err);
-        return false;
+    let disposed = false;
+    let authVersion = 0;
+    const applySession = async (user: any) => {
+      const version = ++authVersion;
+      let membership = null;
+      const orgId = user?.app_metadata?.organization_id;
+      if (user && orgId) {
+        const {data,error}=await supabase.from('memberships').select('organization_id,branch_id,roles,status')
+          .eq('user_id',user.id).eq('organization_id',orgId).eq('status','active').maybeSingle();
+        if (!error) membership=data;
       }
+      if (disposed || version !== authVersion) return;
+      const nextOrg=membership && (membership.roles.includes('Firma Yöneticisi') || membership.branch_id) ? orgId : null;
+      const identity=JSON.stringify([user?.id,nextOrg,membership]);
+      if (identity !== identityRef.current) {
+        dataGeneration.current++; identityRef.current=identity; clearTenantData();
+      }
+      setCurrentUser(user ? {...user,membership} : null);
+      setCurrentOrgId(nextOrg); setIsPlatformAdmin(false);
+      if (!user) setCurrentPage('login');
+      else if (!nextOrg) setCurrentPage('org-select',true);
+      else setCurrentPage((prev: Page)=>(prev==='login'||prev==='org-select'?'dashboard':prev));
     };
-
-    // 2. İlk açılışta aktif oturum kontrolü
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setCurrentUser(session.user);
-        const admin = await checkAdminStatus(session.user.id);
-        setIsPlatformAdmin(admin);
-        
-        const orgId = session.user.app_metadata?.organization_id;
-        if (orgId) {
-          setCurrentOrgId(orgId);
-          const initialHash = (typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '') as Page;
-          setCurrentPage(initialHash || 'dashboard', true);
-        } else {
-          setCurrentPage('org-select', true);
-        }
-      } else {
-        setCurrentUser(null);
-        setCurrentOrgId(null);
-        setIsPlatformAdmin(false);
-        setCurrentPage('login');
-      }
-    };
-
-    checkSession();
-
-    // 3. Auth State Dinleyicisi
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        setCurrentUser(session.user);
-        const admin = await checkAdminStatus(session.user.id);
-        setIsPlatformAdmin(admin);
-
-        const orgId = session.user.app_metadata?.organization_id;
-        if (orgId) {
-          setCurrentOrgId(orgId);
-          setCurrentPage((prev: Page) => (prev === 'login' || prev === 'org-select' ? 'dashboard' : prev));
-        } else {
-          setCurrentOrgId(null);
-          setCurrentPage((prev: Page) => (prev === 'login' ? 'org-select' : prev));
-        }
-      } else {
-        setCurrentUser(null);
-        setCurrentOrgId(null);
-        setIsPlatformAdmin(false);
-        setCurrentPage('login');
-      }
+    supabase.auth.getUser().then(({data})=>applySession(data.user));
+    // Do not await Supabase queries inside its Auth callback (auth lock deadlock).
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
+      setTimeout(()=>{ if(!disposed) void applySession(session?.user || null); },0);
     });
 
     return () => {
+      disposed = true;
       subscription.unsubscribe();
     };
   }, []);
@@ -471,42 +447,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addSale = async (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => {
     try {
-      const result = await SaleDomainService.executeSaleTransaction(stockList, {
-        sale,
-        stockItemId,
-        cashRegisterId,
-        organizationId: currentOrgId || undefined
-      });
-
-      setStockList(result.updatedStockList);
-      setSalesList(prev => [result.createdSale, ...prev]);
-      addToast({ type: 'success', message: 'Satış kaydedildi, stok ve kasa bakiyesi güncellendi.' });
-
       if (currentOrgId) {
-        await dbInsertSale({
-          ...sale,
-          idempotency_key: sale.idempotencyKey
-        });
-        // Kasa hareketini DB'ye persist et
-        await dbInsertCashTransaction({
-          cashRegisterId: cashRegisterId || 'kas-1',
-          type: 'INCOME',
-          amount: sale.total,
-          category: 'Cihaz Satışı',
-          referenceEntity: 'sale',
-          referenceId: sale.id,
-          description: `${sale.patientName} — Satış tahsilatı`,
-          idempotency_key: sale.idempotencyKey ? `tx-${sale.idempotencyKey}` : undefined
-        });
-        await dbInsertAuditLog({
-          action: 'Satış Ekleme',
-          module: 'Kasa',
-          description: `${sale.patientName} adına ${sale.total} TL tutarında atomik satış.`
-        });
-      }
+        sale.idempotencyKey ||= crypto.randomUUID();
+        const created=await dbInsertSale(sale,stockItemId,cashRegisterId);
+        setSalesList(prev=>[created,...prev.filter(s=>s.id!==created.id)]);
+        setStockList(await dbFetchStockItems());
+      } else if (demoModeActive) {
+        const result=await SaleDomainService.executeSaleTransaction(stockList,{sale,stockItemId,cashRegisterId});
+        setStockList(result.updatedStockList); setSalesList(prev=>[result.createdSale,...prev]);
+      } else throw new Error('Aktif firma gerekli.');
+      addToast({type:'success',message:'Satış kaydedildi.'});
     } catch (err: any) {
-      addToast({ type: 'error', message: `Satış kaydedilemedi: ${err.message}` });
-      console.error('[addSale Exception]', err);
+      addToast({type:'error',message:err.message || 'Satış kaydedilemedi.'});
+      throw err;
     }
   };
 
@@ -758,6 +711,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       } catch (err: any) {
         addToast({ type: 'error', message: `Kullanıcı eklenemedi: ${err.message}` });
+        throw err;
       }
     } else {
       setUsersList(prev => [user, ...prev]);
@@ -765,29 +719,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateUser = async (updatedUser: SystemUser) => {
-    setUsersList(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    addToast({ type: 'success', message: 'Kullanıcı bilgileri ve rolü güncellendi.' });
-    if (currentOrgId && updatedUser.id) {
-      try {
-        await dbUpdateMembership(updatedUser.id, updatedUser);
-      } catch (err: any) {
-        logger.warn(`dbUpdateMembership background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Kullanıcı bilgileri yerelde güncellendi ancak veritabanına eşlenemedi.' });
-      }
-    }
+    try {
+      if(currentOrgId) await dbUpdateMembership(updatedUser.id,updatedUser);
+      else if(!demoModeActive) throw new Error('Aktif firma gerekli.');
+      setUsersList(prev=>prev.map(u=>u.id===updatedUser.id?updatedUser:u));
+      addToast({type:'success',message:'Kullanıcı güncellendi.'});
+    } catch(err: any){addToast({type:'error',message:err.message});throw err;}
   };
-
   const deleteUser = async (id: string) => {
-    setUsersList(prev => prev.filter(u => u.id !== id));
-    addToast({ type: 'success', message: 'Kullanıcı üyeliği kaldırıldı.' });
-    if (currentOrgId) {
-      try {
-        await dbDeleteMembership(id);
-      } catch (err: any) {
-        logger.warn(`dbDeleteMembership background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Kullanıcı silme işlemi yerelde gerçekleşti ancak veritabanına eşlenemedi.' });
-      }
-    }
+    try {
+      if(currentOrgId) await dbDeleteMembership(id);
+      else if(!demoModeActive) throw new Error('Aktif firma gerekli.');
+      setUsersList(prev=>prev.filter(u=>u.id!==id));
+      addToast({type:'success',message:'Üyelik kaldırıldı.'});
+    } catch(err: any){addToast({type:'error',message:err.message});}
   };
 
   // Şube CRUD

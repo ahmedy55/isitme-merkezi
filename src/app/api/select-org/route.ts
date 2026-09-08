@@ -47,34 +47,30 @@ export async function POST(request: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // 2. Kullanıcının bu organizasyona üye olup olmadığını veya platform admin olduğunu doğrula
-    const { data: adminData } = await supabaseAdmin
-      .from('platform_admins')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    const isPlatformAdmin = !!adminData;
-
-    if (!isPlatformAdmin) {
-      const { data: membership } = await supabaseAdmin
-        .from('memberships')
-        .select('id, status')
-        .eq('user_id', user.id)
-        .eq('organization_id', orgId)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (!membership) {
-        return NextResponse.json({ error: 'Bu organizasyona aktif üyelik erişiminiz bulunmamaktadır.' }, { status: 403 });
-      }
+    const { data: membership, error: membershipError } = await supabaseAdmin
+      .from('memberships').select('roles, branch_id, status')
+      .eq('user_id', user.id).eq('organization_id', orgId).eq('status', 'active').maybeSingle();
+    if (membershipError || !membership || (!membership.roles.includes('Firma Yöneticisi') && !membership.branch_id)) {
+      return NextResponse.json({ error: 'Aktif üyelik ve geçerli şube ataması gerekiyor.' }, { status: 403 });
     }
-
+    const { data: org, error: orgError } = await supabaseAdmin.from('organizations')
+      .select('subscription_status, plan_type, trial_ends_at').eq('id', orgId).single();
+    if (orgError || !org || org.subscription_status !== 'active' ||
+      (org.plan_type === 'trial' && org.trial_ends_at && Date.parse(org.trial_ends_at) <= Date.now())) {
+      return NextResponse.json({ error: 'Firma lisansı aktif değil.' }, { status: 403 });
+    }
+    if (membership.branch_id) {
+      const { data: branch, error: branchError } = await supabaseAdmin.from('branches').select('id')
+        .eq('id', membership.branch_id).eq('organization_id', orgId).eq('status', 'active').maybeSingle();
+      if (branchError || !branch) return NextResponse.json({ error: 'Şube ataması geçersiz.' }, { status: 403 });
+    }
     // 3. Server-side Supabase Admin SDK ile app_metadata güncellenmesi
     const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
       app_metadata: {
         ...user.app_metadata,
-        organization_id: orgId
+        organization_id: orgId,
+        branch_id: membership.branch_id,
+        roles: membership.roles
       }
     });
 

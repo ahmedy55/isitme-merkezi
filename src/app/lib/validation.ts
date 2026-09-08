@@ -31,7 +31,7 @@ export function validateTcKn(tc: string): { isValid: boolean; error?: string } {
  */
 export function validatePositiveAmount(amount: number | string): { isValid: boolean; error?: string } {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (isNaN(num) || num <= 0) {
+  if (!Number.isFinite(num) || num <= 0) {
     return { isValid: false, error: 'Tutar 0\'dan büyük pozitif bir sayı olmalıdır.' };
   }
   return { isValid: true };
@@ -46,6 +46,7 @@ export function validateAppointmentDate(dateStr: string): { isValid: boolean; er
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  if (!Number.isFinite(selectedDate.getTime())) return { isValid: false, error: 'Geçerli tarih giriniz.' };
   if (selectedDate < today) {
     return { isValid: false, error: 'Randevu tarihi geçmiş bir gün olamaz.' };
   }

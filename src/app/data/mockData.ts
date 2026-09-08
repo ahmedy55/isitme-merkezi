@@ -210,7 +210,7 @@ export const calculateAge = (birthDate: string) => {
 };
 
 // ── Patients ──
-export const patients: Patient[] = [
+export const patients: Patient[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'p1',
     tc: '12345678901',
@@ -339,10 +339,10 @@ export const patients: Patient[] = [
       { date: '01.07.2026', action: 'Hasta kliniğe ilk kez gelerek işitme testi yaptırdı.', icon: 'Patients' }
     ]
   }
-];
+] : []);
 
 // ── Appointments ──
-export const appointments: Appointment[] = [
+export const appointments: Appointment[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'a1',
     patientId: 'p1',
@@ -379,10 +379,10 @@ export const appointments: Appointment[] = [
     branch: 'Merkez 1 - Kadıköy',
     notes: 'Hafif işitme kaybına uygun RIC kasa tipi denenecek.'
   }
-];
+] : []);
 
 // ── Stock Items ──
-export const stockItems: StockItem[] = [
+export const stockItems: StockItem[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 's1',
     name: 'Phonak Audéo P90',
@@ -493,10 +493,10 @@ export const stockItems: StockItem[] = [
     utsStatus: 'Gerekli Değil',
     branch: 'Merkez 2 - Beşiktaş'
   }
-];
+] : []);
 
 // ── Sales Records ──
-export const sales: SaleRecord[] = [
+export const sales: SaleRecord[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'sl1',
     patientId: 'p1',
@@ -532,10 +532,10 @@ export const sales: SaleRecord[] = [
     ],
     audiologist: 'Dr. Can Yılmaz'
   }
-];
+] : []);
 
 // ── Recall Items ──
-export const recallItems: RecallItem[] = [
+export const recallItems: RecallItem[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'r1',
     patientId: 'p1',
@@ -569,7 +569,7 @@ export const recallItems: RecallItem[] = [
     estimatedRevenue: 85000,
     probability: 'Orta Olasılık'
   }
-];
+] : []);
 
 /* ══════════════════════════════════════════════
    P0 Modülleri — Yeni Tipler ve Mock Veriler
@@ -603,7 +603,7 @@ export interface SupplierPurchase {
   paymentMethod: 'Nakit' | 'Havale' | 'Çek' | 'Açık Hesap';
 }
 
-export const suppliers: Supplier[] = [
+export const suppliers: Supplier[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'sup-1',
     companyName: 'Phonak Türkiye A.Ş.',
@@ -690,7 +690,7 @@ export const suppliers: Supplier[] = [
     notes: 'Sözleşme yenilenmedi — alternatif tedarikçi aranıyor.',
     purchases: []
   }
-];
+] : []);
 
 // ─── Masraf Yönetimi ─────────────────
 export interface Expense {
@@ -706,7 +706,7 @@ export interface Expense {
   notes?: string;
 }
 
-export const expenses: Expense[] = [
+export const expenses: Expense[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'exp-1',
     date: '2026-07-01',
@@ -790,26 +790,29 @@ export const expenses: Expense[] = [
     branch: 'Merkez 1 - Kadıköy',
     createdBy: 'Sek. Zeynep Acar'
   }
-];
+] : []);
 
 // ─── Kullanıcı Yönetimi ─────────────────
 export type UserRole = 'Firma Yöneticisi' | 'Odyometrist' | 'Sekreter' | 'Muhasebe';
 
 export interface SystemUser {
+  password?: string;
+  userId?: string;
+  branchId?: string | null;
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
   roles: UserRole[];
-  branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Tüm Şubeler';
+  branch: string;
   status: 'Aktif' | 'Pasif';
   createdAt: string;
   lastLogin?: string;
   avatar?: string;
 }
 
-export const systemUsers: SystemUser[] = [
+export const systemUsers: SystemUser[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'usr-1',
     firstName: 'Elif',
@@ -882,7 +885,7 @@ export const systemUsers: SystemUser[] = [
     createdAt: '2025-02-15',
     lastLogin: '2026-05-10T16:30:00'
   }
-];
+] : []);
 
 // ─── İşlem Kayıtları (Audit Log) ─────────────────
 export interface AuditLogEntry {
@@ -896,7 +899,7 @@ export interface AuditLogEntry {
   details?: string;
 }
 
-export const auditLog: AuditLogEntry[] = [
+export const auditLog: AuditLogEntry[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'log-1',
     timestamp: '2026-07-20T14:35:00',
@@ -962,7 +965,7 @@ export const auditLog: AuditLogEntry[] = [
     module: 'Hasta',
     description: 'Hasta bilgileri güncellendi: Mehmet Demir — Adres ve telefon değişikliği',
   }
-];
+] : []);
 
 // ─── Şube Tanımı ─────────────────
 export interface Branch {
@@ -975,7 +978,7 @@ export interface Branch {
   status: 'Aktif' | 'Pasif';
 }
 
-export const initialBranches: Branch[] = [
+export const initialBranches: Branch[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'br-1',
     name: 'Merkez 1 - Kadıköy',
@@ -992,5 +995,5 @@ export const initialBranches: Branch[] = [
     patientsCount: 86,
     status: 'Aktif'
   }
-];
+] : []);
 

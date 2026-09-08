@@ -220,63 +220,16 @@ export default function PatientDetailPage() {
     );
   }
 
-  const handleStartSale = (deviceName: string, price: number) => {
-    // Find matching device in stock
-    const matchedStockItem = stockList.find(s => s.name.toLowerCase().includes(deviceName.split(' ')[0].toLowerCase()) && (s.status === 'Stokta' || s.status === 'Hastaya Ayrıldı')) 
-      || stockList[0];
-      
-    if (matchedStockItem) {
-      const updatedStockItem = {
-        ...matchedStockItem,
-        status: 'Satıldı' as const,
-        utsStatus: 'Bekliyor' as const, // Wait for ÜTS notification
-        assignedPatientId: patient.id,
-        assignedPatientName: `${patient.firstName} ${patient.lastName}`
-      };
-      updateStockItem(updatedStockItem);
-    }
-
-    const sgkAmount = patient.sgkStatus === 'Yenileme Hakkı Var' ? 6200 : 0;
-    const patientAmount = price - sgkAmount;
-    const newSale = {
-      id: `sl-${Date.now()}`,
-      patientId: patient.id,
-      patientName: `${patient.firstName} ${patient.lastName}`,
-      date: '2026-07-10',
-      items: [
-        { name: deviceName, quantity: 1, price, type: 'Cihaz' as const }
-      ],
-      total: price,
-      sgkAmount,
-      patientAmount,
-      paymentMethod: 'Kredi Kartı' as const,
-      status: 'Tahsil Edildi' as const,
-      audiologist: 'Dr. Elif Arslan'
-    };
-    addSale(newSale);
-
-    const updatedPatient = {
-      ...patient,
-      salesStage: 'Satış Yapıldı' as const,
-      currentDevice: deviceName,
-      deviceDate: '2026-07-10',
-      sgkStatus: 'Aktif' as const, // SGK used
-      timeline: [
-        { date: '10.07.2026', action: `Cihaz satışı tamamlandı. ${deviceName} kasaya işlendi. Fatura oluşturulabilir.`, icon: 'Cash' },
-        { date: '10.07.2026', action: `SGK yenileme hakkı kullanıldı. Medula reçete kaydı tamamlandı.`, icon: 'Check' },
-        ...(patient.timeline || [])
-      ]
-    };
-    updatePatient(updatedPatient);
-
-    addToast({
-      type: 'success',
-      message: `${deviceName} cihaz satışı başarıyla tamamlandı! Kasa kaydı oluşturuldu. ÜTS bildirimi yapmak için Stok sayfasına yönlendiriliyorsunuz.`
-    });
-
-    setTimeout(() => {
-      setCurrentPage('stock');
-    }, 2000);
+  const handleStartSale = async (deviceName: string, price: number) => {
+    const matchedStockItem=stockList.find(s=>s.name===deviceName && s.quantity>0);
+    if(!matchedStockItem){addToast({type:'error',message:'Bu cihaz için stok kaydı seçilmelidir.'});return;}
+    const sgkAmount=Math.min(price,patient.sgkStatus==='Yenileme Hakkı Var'?6200:0);
+    try {
+      await addSale({id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),patientId:patient.id,
+        patientName:patient.firstName+' '+patient.lastName,date:new Date().toISOString().split('T')[0],
+        items:[{name:matchedStockItem.name,quantity:1,price,type:'Cihaz'}],total:price,
+        sgkAmount,patientAmount:price-sgkAmount,paymentMethod:'Kredi Kartı',status:'Tahsil Edildi'},matchedStockItem.id);
+    } catch { return; }
   };
 
   const handleUpdatePatient = () => {

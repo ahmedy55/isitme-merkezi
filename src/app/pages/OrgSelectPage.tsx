@@ -30,14 +30,9 @@ export default function OrgSelectPage() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from('memberships')
-        .select('organization_id, roles, organizations(name, slug, logo_url)')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-
-      if (error) throw error;
-      setOrgs((data as any) || []);
+      const {data,error}=await supabase.rpc('my_organizations');
+      if(error) throw error;
+      setOrgs((data || []).map((o: any)=>({organization_id:o.organization_id,roles:o.roles,organizations:{name:o.name,slug:o.slug,logo_url:o.logo_url}})));
     } catch (err: any) {
       addToast({ type: 'error', message: 'Klinik listesi alınırken bir hata oluştu.' });
     } finally {
@@ -67,7 +62,8 @@ export default function OrgSelectPage() {
       }
 
       // 2. Token'ı yenile (Bölüm 5.4 - refreshSession)
-      await supabase.auth.refreshSession();
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) throw refreshError;
 
       addToast({ type: 'success', message: `${orgName} şubesi ile giriş yapıldı.` });
       setCurrentPage('dashboard');

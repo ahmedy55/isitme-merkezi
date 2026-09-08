@@ -20,7 +20,7 @@ export default function SgkReceivablesPage() {
   const { addToast } = useApp();
 
   // Mock data for SGK receivables
-  const [receivables, setReceivables] = useState<SgkReceivable[]>([
+  const [receivables, setReceivables] = useState<SgkReceivable[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     {
       id: 'sgk-rec-1',
       patientName: 'Kamil Yılmaz',
@@ -72,7 +72,7 @@ export default function SgkReceivablesPage() {
       amount: 6200,
       status: 'Beklemede'
     }
-  ]);
+  ] : []));
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState('');

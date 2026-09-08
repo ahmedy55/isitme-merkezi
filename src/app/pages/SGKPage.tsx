@@ -14,19 +14,19 @@ export default function SGKPage() {
   const [activeTab, setActiveTab] = useState<'sorgu' | 'oranlar' | 'evrak' | 'medula-log'>('sorgu');
 
   // Simulated SGK Documents
-  const [documents, setDocuments] = useState([
+  const [documents, setDocuments] = useState((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     { id: 'doc-1', patient: 'Kamil Yılmaz', type: 'KBB Raporu', status: 'Teslim Edildi', date: '2026-07-02' },
     { id: 'doc-2', patient: 'Ayşe Güler', type: 'E-Reçete', status: 'Onaylandı (GİB)', date: '2026-06-25' },
     { id: 'doc-3', patient: 'Mehmet Kaya', type: 'Odyogram Raporu', status: 'İncelemede', date: '2026-06-18' },
     { id: 'doc-4', patient: 'Ali Öztürk', type: 'KBB Raporu', status: 'Bekliyor', date: '2026-07-05' }
-  ]);
+  ] : []));
 
   // Medula logs
-  const [medulaLogs, setMedulaLogs] = useState([
+  const [medulaLogs, setMedulaLogs] = useState((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     { id: 'log-1', timestamp: '2026-07-20 14:32:11', event: 'Provizyon Sorgulama', tc: '12345678901', status: 'Başarılı', details: 'Hak sahipliği mevcut. Kalan süre: 5 yıl dolmuş.' },
     { id: 'log-2', timestamp: '2026-07-20 11:15:04', event: 'Reçete Gönderimi', tc: '23456789012', status: 'Başarılı', details: 'E-reçete onaylandı. GİB kayıt numarası oluşturuldu.' },
     { id: 'log-3', timestamp: '2026-07-19 16:45:22', event: 'Provizyon Sorgulama', tc: '45678901234', status: 'Hata', details: 'Hak bulunmamaktadır. Son cihaz tarihi: 15.09.2024 (Süre dolmamış).' }
-  ]);
+  ] : []));
 
   const handleQuery = () => {
     if (tc.length === 11) {

@@ -45,25 +45,7 @@ export function getDisplayName(currentUser: any, usersList?: any[]): string {
 }
 
 export function getUserRole(currentUser: any, usersList?: any[]): string {
-  if (!currentUser) return 'Odyolog · Kadıköy';
-
-  // 1. Check user_metadata
-  const metaRole = currentUser.user_metadata?.role || (Array.isArray(currentUser.user_metadata?.roles) ? currentUser.user_metadata?.roles[0] : null);
-  if (metaRole) return metaRole;
-
-  // 2. Match from usersList
-  if (usersList && Array.isArray(usersList)) {
-    const matchedUser = usersList.find((u: any) => 
-      (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) || 
-      u.id === currentUser.id
-    );
-    if (matchedUser && matchedUser.roles && matchedUser.roles.length > 0) {
-      return matchedUser.roles[0];
-    }
-  }
-
-  // 3. Güvenli varsayılan — asla en yüksek rolü fallback verme
-  return 'Odyolog';
+  return currentUser?.membership?.roles?.[0] || 'Yetkisiz';
 }
 
 export function getUserInitials(name: string): string {

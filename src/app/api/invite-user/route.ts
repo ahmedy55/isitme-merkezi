@@ -3,158 +3,51 @@ import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit, validateBody, InviteUserSchema } from '../../lib/apiSecurity';
 
 export async function POST(request: NextRequest) {
-  // ── Rate Limiting: 10 istek/dakika/IP ──
-  const rateLimitError = checkRateLimit(request, { windowMs: 60_000, maxRequests: 10 });
-  if (rateLimitError) return rateLimitError;
-
+  const rateError=checkRateLimit(request,{maxRequests:10});
+  if(rateError) return rateError;
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl) {
-      return NextResponse.json({ success: false, error: 'Güvenlik Hatası: NEXT_PUBLIC_SUPABASE_URL ortam değişkeni yapılandırılmamış.' }, { status: 500 });
+    const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if(!url || !key) return NextResponse.json({error:'Sunucu yapılandırması eksik.'},{status:500});
+    const token=request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1];
+    if(!token) return NextResponse.json({error:'Oturum gerekli.'},{status:401});
+    const admin=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+    const {data:{user},error:authError}=await admin.auth.getUser(token);
+    if(authError || !user) return NextResponse.json({error:'Geçersiz oturum.'},{status:401});
+    const {data:body,error:validationError}=await validateBody(request,InviteUserSchema);
+    if(validationError) return validationError;
+    const {orgId,branchId,roles,email,password,firstName,lastName,phone}=body;
+    const {data:member,error:memberError}=await admin.from('memberships').select('roles')
+      .eq('user_id',user.id).eq('organization_id',orgId).eq('status','active').maybeSingle();
+    if(memberError || !member?.roles.includes('Firma Yöneticisi')) return NextResponse.json({error:'Firma yöneticisi yetkisi gerekli.'},{status:403});
+    const {data:org,error:orgError}=await admin.from('organizations').select('subscription_status,plan_type,trial_ends_at').eq('id',orgId).single();
+    if(orgError || !org || org.subscription_status!=='active' || (org.plan_type==='trial' && org.trial_ends_at && Date.parse(org.trial_ends_at)<=Date.now())) return NextResponse.json({error:'Firma lisansı aktif değil.'},{status:403});
+    if(!branchId && !roles.includes('Firma Yöneticisi')) return NextResponse.json({error:'Personel için bir şube seçilmelidir.'},{status:400});
+    if(branchId){
+      const {data:branch,error}=await admin.from('branches').select('id').eq('id',branchId).eq('organization_id',orgId).eq('status','active').maybeSingle();
+      if(error || !branch) return NextResponse.json({error:'Geçersiz şube.'},{status:400});
     }
-
-    if (!supabaseServiceKey) {
-      return NextResponse.json({
-        success: false,
-        error: 'Güvenlik Hatası: SUPABASE_SERVICE_ROLE_KEY yapılandırılmamış. Anon Key yetkisiyle davet işlemi yapılamaz.'
-      }, { status: 500 });
-    }
-
-    // 1. Yetki Kontrolü: İsteği atan kullanıcının Bearer JWT Token kontrolü
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '').trim();
-
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Yetkisiz erişim. Lütfen oturum açın.' }, { status: 401 });
-    }
-
-    const supabaseUserClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
-      auth: { persistSession: false }
+    // Never reuse a different tenant's Auth account or mutate its profile.
+    const {data:created,error:createError}=await admin.auth.admin.createUser({
+      email:email.trim().toLowerCase(),password,email_confirm:true,
+      app_metadata:{organization_id:orgId,branch_id:branchId || null,roles},
+      user_metadata:{first_name:firstName || '',last_name:lastName || ''},
     });
-
-    const { data: { user: requesterUser }, error: authErr } = await supabaseUserClient.auth.getUser(token);
-
-    if (authErr || !requesterUser) {
-      return NextResponse.json({ success: false, error: 'Geçersiz veya süresi dolmuş oturum.' }, { status: 401 });
-    }
-
-    // ── Zod Şema Doğrulaması ──
-    const { data: body, error: validationError } = await validateBody(request, InviteUserSchema);
-    if (validationError) return validationError;
-
-    const { email, firstName, lastName, phone, roles, branchId, orgId } = body;
-
-    // Input Normalization
-    const normalizedEmail = email.toLowerCase().trim();
-    const normalizedPhone = phone ? phone.replace(/\s+/g, '') : '';
-
-    // 2. Rol Yetki Denetimi: İsteği atan kullanıcı bu organizasyonun "Firma Yöneticisi" mi veya Platform Admin mi?
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+    if(createError || !created.user) return NextResponse.json({error:'Hesap oluşturulamadı. E-posta kullanımda olabilir.'},{status:409});
+    const uid=created.user.id;
+    const {data:membership,error:provisionError}=await admin.rpc('provision_member',{
+      p_actor:user.id,p_org:orgId,p_user:uid,p_branch:branchId || null,p_roles:roles,
+      p_email:email.trim().toLowerCase(),p_first:firstName || '',p_last:lastName || '',p_phone:phone || '',
     });
-
-    const { data: adminData } = await supabaseAdmin
-      .from('platform_admins')
-      .select('user_id')
-      .eq('user_id', requesterUser.id)
-      .maybeSingle();
-
-    const isPlatformAdmin = !!adminData;
-
-    if (!isPlatformAdmin) {
-      const { data: membership } = await supabaseAdmin
-        .from('memberships')
-        .select('roles, status')
-        .eq('user_id', requesterUser.id)
-        .eq('organization_id', orgId)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      const isOrgManager = membership?.roles?.includes('Firma Yöneticisi');
-
-      if (!isOrgManager) {
-        return NextResponse.json({ 
-          success: false,
-          error: 'Yetkisiz işlem. Kullanıcı davet etme yetkisi sadece Firma Yöneticisi veya Platform Yöneticisine aittir.' 
-        }, { status: 403 });
+    if(provisionError || !membership){
+      if (!provisionError?.code || !/^(22|23|P0)/.test(provisionError.code)) {
+        console.error('Provisioning reconciliation required',uid);
+        return NextResponse.json({error:'İşlem sonucu belirsiz; tekrar denemeden yönetici üyelik kaydını kontrol etmelidir.'},{status:503});
       }
+      const {error:cleanupError}=await admin.auth.admin.deleteUser(uid);
+      if(cleanupError) console.error('Unlinked Auth account requires cleanup',uid);
+      return NextResponse.json({error:'Üyelik oluşturulamadı; firma limitini ve şube atamasını kontrol edin.'},{status:409});
     }
-
-    // 3. O(1) single profile lookup
-    let invitedUserId: string;
-
-    const { data: existingMembership } = await supabaseAdmin
-      .from('memberships')
-      .select('user_id')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
-
-    if (existingMembership?.user_id) {
-      invitedUserId = existingMembership.user_id;
-    } else {
-      const { data: newAuthUser, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-        email: normalizedEmail,
-        email_confirm: true,
-        user_metadata: {
-          first_name: firstName || '',
-          last_name: lastName || '',
-          phone: normalizedPhone
-        },
-        app_metadata: {
-          organization_id: orgId
-        }
-      });
-
-      if (createErr || !newAuthUser.user) {
-        throw new Error(`Kullanıcı hesabı oluşturulamadı: ${createErr?.message}`);
-      }
-
-      invitedUserId = newAuthUser.user.id;
-    }
-
-    await supabaseAdmin.from('profiles').upsert({
-      id: invitedUserId,
-      first_name: firstName || '',
-      last_name: lastName || '',
-      phone: normalizedPhone
-    });
-
-    const { data: memData, error: memErr } = await supabaseAdmin
-      .from('memberships')
-      .upsert({
-        user_id: invitedUserId,
-        organization_id: orgId,
-        roles: roles || ['Odyometrist'],
-        branch_id: branchId || null,
-        status: 'active',
-        email: normalizedEmail
-      }, { onConflict: 'user_id, organization_id' })
-      .select('id, joined_at');
-
-    if (memErr) {
-      throw new Error(`Üyelik kaydı oluşturulamadı: ${memErr.message}`);
-    }
-
-    return NextResponse.json({
-      success: true,
-      user: {
-        id: memData?.[0]?.id || invitedUserId,
-        userId: invitedUserId,
-        firstName,
-        lastName,
-        email: normalizedEmail,
-        phone: normalizedPhone,
-        roles: roles || ['Odyometrist'],
-        branch: 'Tüm Şubeler',
-        status: 'Aktif',
-        createdAt: memData?.[0]?.joined_at ? new Date(memData[0].joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-      }
-    });
-
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Sunucu hatası';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
-  }
+    return NextResponse.json({success:true,user:{id:membership.id,userId:uid,firstName,lastName,email,phone,roles,branchId,branch:branchId || 'Tüm Şubeler',status:'Aktif',createdAt:membership.joined_at.split('T')[0]}});
+  } catch {return NextResponse.json({error:'Kullanıcı oluşturma işlemi tamamlanamadı.'},{status:500});}
 }

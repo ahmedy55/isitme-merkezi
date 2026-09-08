@@ -15,6 +15,8 @@ export class IntegrationService {
    * Medula (SGK) WSDL Endpoint Bağlantı Testi
    */
   static async testMedulaConnection(wsdlUrl?: string, facilityCode?: string): Promise<IntegrationHealthResult> {
+    if(process.env.NEXT_PUBLIC_DEMO_MODE!=='true' || process.env.NEXT_PUBLIC_SUPABASE_URL) return {service:'Medula',status:'offline',latencyMs:0,message:'Gerçek servis bağlantısı uygulanmamış; işlem yapılmadı.',timestamp:new Date().toISOString()};
+
     const startTime = Date.now();
     try {
       // Endpoint denetim simülasyonu / fetch check
@@ -53,6 +55,8 @@ export class IntegrationService {
    * Sağlık Bakanlığı ÜTS API Bağlantı Testi
    */
   static async testUtsConnection(firmCode?: string, token?: string): Promise<IntegrationHealthResult> {
+    if(process.env.NEXT_PUBLIC_DEMO_MODE!=='true' || process.env.NEXT_PUBLIC_SUPABASE_URL) return {service:'ÜTS',status:'offline',latencyMs:0,message:'Gerçek servis bağlantısı uygulanmamış; işlem yapılmadı.',timestamp:new Date().toISOString()};
+
     const startTime = Date.now();
     await new Promise(res => setTimeout(res, 400));
     const latencyMs = Date.now() - startTime;
@@ -80,6 +84,8 @@ export class IntegrationService {
    * E-Fatura / E-Arşiv Sağlayıcı Testi
    */
   static async testEfaturaConnection(provider: string, apiKey?: string): Promise<IntegrationHealthResult> {
+    if(process.env.NEXT_PUBLIC_DEMO_MODE!=='true' || process.env.NEXT_PUBLIC_SUPABASE_URL) return {service:'E-Fatura',status:'offline',latencyMs:0,message:'Gerçek servis bağlantısı uygulanmamış; işlem yapılmadı.',timestamp:new Date().toISOString()};
+
     const startTime = Date.now();
     await new Promise(res => setTimeout(res, 350));
     const latencyMs = Date.now() - startTime;
@@ -97,6 +103,8 @@ export class IntegrationService {
    * Meta / Twilio WhatsApp API Testi
    */
   static async testWhatsappConnection(provider: string, phoneId?: string): Promise<IntegrationHealthResult> {
+    if(process.env.NEXT_PUBLIC_DEMO_MODE!=='true' || process.env.NEXT_PUBLIC_SUPABASE_URL) return {service:'WhatsApp',status:'offline',latencyMs:0,message:'Gerçek servis bağlantısı uygulanmamış; işlem yapılmadı.',timestamp:new Date().toISOString()};
+
     const startTime = Date.now();
     await new Promise(res => setTimeout(res, 300));
     const latencyMs = Date.now() - startTime;
@@ -118,6 +126,7 @@ export class IntegrationService {
     prescriptionNo: string,
     timeoutMs: number = 5000
   ): Promise<{ status: 'Onaylandı' | 'Reddedildi' | 'Durumu Belirsiz'; message: string }> {
+    if(process.env.NEXT_PUBLIC_DEMO_MODE!=='true' || process.env.NEXT_PUBLIC_SUPABASE_URL) return {status:'Durumu Belirsiz',message:'Medula entegrasyonu uygulanmamış; provizyon gönderilmedi.'};
     const timeoutPromise = new Promise<{ status: 'Durumu Belirsiz'; message: string }>((resolve) => {
       setTimeout(() => {
         resolve({
@@ -146,6 +155,7 @@ export class IntegrationService {
     patientPhone: string,
     messageText: string
   ): Promise<{ success: boolean; staffNotice?: string; message: string }> {
+    if(process.env.NEXT_PUBLIC_DEMO_MODE!=='true' || process.env.NEXT_PUBLIC_SUPABASE_URL) return {success:false,message:'WhatsApp entegrasyonu uygulanmamış; mesaj gönderilmedi.'};
     try {
       if (!patientPhone || patientPhone.length < 10) {
         throw new Error('Geçersiz telefon numarası');

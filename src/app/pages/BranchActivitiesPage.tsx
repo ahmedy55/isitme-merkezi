@@ -38,10 +38,10 @@ export default function BranchActivitiesPage() {
   };
 
   // Simulated transfers history
-  const [transfers, setTransfers] = useState<TransferRecord[]>([
+  const [transfers, setTransfers] = useState<TransferRecord[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     { id: 'trf-1', patientName: 'Ahmet Yılmaz', fromBranch: 'Merkez 2 - Beşiktaş', toBranch: 'Merkez 1 - Kadıköy', date: '2026-07-20', approvedBy: 'Dr. Elif Arslan', status: 'Tamamlandı' },
     { id: 'trf-2', patientName: 'Saniye Öztürk', fromBranch: 'Merkez 1 - Kadıköy', toBranch: 'Merkez 2 - Beşiktaş', date: '2026-07-15', approvedBy: 'Sek. Zeynep Acar', status: 'Tamamlandı' }
-  ]);
+  ] : []));
 
   // Transfer Form State
   const [formPatientName, setFormPatientName] = useState('');

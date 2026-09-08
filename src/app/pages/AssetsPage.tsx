@@ -25,7 +25,7 @@ export default function AssetsPage() {
   const { addToast } = useApp();
   const { activeBranch } = useBranch();
 
-  const [assets, setAssets] = useState<Asset[]>([
+  const [assets, setAssets] = useState<Asset[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     {
       id: 'ast-1',
       name: 'Interacoustics AD629 Odyometre',
@@ -95,7 +95,7 @@ export default function AssetsPage() {
       status: 'Hek/Iskarta',
       notes: 'Kartuş arızası var, yedek parça olarak saklanıyor.'
     }
-  ]);
+  ] : []));
 
   // Search & Filters State
   const [searchTerm, setSearchTerm] = useState('');

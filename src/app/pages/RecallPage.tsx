@@ -23,7 +23,7 @@ interface EnhancedRecallItem {
   probability: string;
 }
 
-const enhancedRecallData: EnhancedRecallItem[] = [
+const enhancedRecallData: EnhancedRecallItem[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'r1',
     patientName: 'Ayşe Yılmaz',
@@ -106,7 +106,7 @@ const enhancedRecallData: EnhancedRecallItem[] = [
     estimatedRevenue: 1200,
     probability: 'Yüksek Olasılık'
   }
-];
+] : []);
 
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
@@ -117,7 +117,7 @@ export default function RecallPage() {
   const { activeBranch } = useBranch();
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [selectedChain, setSelectedChain] = useState<EnhancedRecallItem | null>(null);
-  const [recallChains, setRecallChains] = useState<EnhancedRecallItem[]>(enhancedRecallData);
+  const [recallChains, setRecallChains] = useState<EnhancedRecallItem[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? enhancedRecallData : []));
   const [showFastAppointmentModal, setShowFastAppointmentModal] = useState<EnhancedRecallItem | null>(null);
 
   // Olasılığa göre ağırlıklı gelir hesabı

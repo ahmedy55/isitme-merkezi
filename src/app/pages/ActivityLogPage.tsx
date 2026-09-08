@@ -18,7 +18,7 @@ interface Activity {
 export default function ActivityLogPage() {
   const { addToast } = useApp();
 
-  const [activities, setActivities] = useState<Activity[]>([
+  const [activities, setActivities] = useState<Activity[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     {
       id: 'act-1',
       timestamp: '2026-07-21 10:15',
@@ -65,7 +65,7 @@ export default function ActivityLogPage() {
       patientName: 'Kamil Yılmaz',
       description: 'Cihaz deneme sürecinde sol kulakta hafif kaşıntı şikayeti olduğu not düşüldü.',
     }
-  ]);
+  ] : []));
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');

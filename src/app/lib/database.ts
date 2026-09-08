@@ -1,3 +1,4 @@
+import { writePayload } from './writePayload';
 import { supabase } from './supabase';
 import { encryptText, decryptText } from './cryptoUtils';
 import { SystemUser, UserRole } from '../data/mockData';
@@ -67,7 +68,7 @@ export const dbInsertPatient = async (patient: any) => {
     
     const { data, error } = await supabase
       .from('patients')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...await writePayload('patients',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
     const result = toCamel<any>(data?.[0]);
@@ -86,7 +87,7 @@ export const dbUpdatePatient = async (id: string, patient: any) => {
     }
     const { data, error } = await supabase
       .from('patients')
-      .update(payload)
+      .update(await writePayload('patients',payload))
       .eq('id', id)
       .select();
     if (error) throw error;
@@ -137,13 +138,14 @@ export const dbInsertAppointment = async (appointment: any) => {
     const orgId = await getActiveOrgId();
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     
-    const { id, patientName, ...payload } = toSnake(appointment);
+    const { id, patient_name, ...payload } = toSnake(appointment);
     const { data, error } = await supabase
       .from('appointments')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...await writePayload('appointments',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    if (!data?.[0]) throw new DatabaseError('Kayıt bulunamadı veya işlem yetkisi yok.');
+    return toCamel(data[0]);
   }, 'dbInsertAppointment');
 };
 
@@ -187,10 +189,10 @@ export const dbInsertStockItem = async (item: any) => {
     const orgId = await getActiveOrgId();
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     
-    const { id, assignedPatientName, ...payload } = toSnake(item);
+    const { id, assigned_patient_name, ...payload } = toSnake(item);
     const { data, error } = await supabase
       .from('stock_items')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...await writePayload('stock_items',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
     return toCamel(data?.[0]);
@@ -199,10 +201,10 @@ export const dbInsertStockItem = async (item: any) => {
 
 export const dbUpdateStockItem = async (id: string, item: any) => {
   return executeDbQuery(async () => {
-    const { id: _, assignedPatientName, ...payload } = toSnake(item);
+    const { id: _, assigned_patient_name, ...payload } = toSnake(item);
     const { data, error } = await supabase
       .from('stock_items')
-      .update(payload)
+      .update(await writePayload('stock_items',payload))
       .eq('id', id)
       .select();
     if (error) throw error;
@@ -237,20 +239,19 @@ export const dbFetchCashTransactions = async () => {
 export const dbInsertCashTransaction = async (tx: any) => {
   return executeDbQuery(async () => {
     const orgId = await getActiveOrgId();
-    if (!orgId) return tx; // Demo modda sadece local kalır
+    if (!orgId) throw new DatabaseError('Aktif firma gerekli.');
     
     const { id, ...payload } = toSnake(tx);
     const idempotencyKey = payload.idempotency_key || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
 
     const { data, error } = await supabase
       .from('cash_transactions')
-      .insert([{ ...payload, organization_id: orgId, idempotency_key: idempotencyKey }])
+      .insert([{ ...await writePayload('cash_transactions',payload), organization_id: orgId, idempotency_key: idempotencyKey }])
       .select();
 
     if (error) {
-      if (error.code === '23505' || error.message?.includes('idempotency')) {
-        console.warn('[IdempotencyGuard] Mükerrer kasa hareketi engellendi. Key:', idempotencyKey);
-        return tx;
+      if (error.code === '23505' && idempotencyKey) {
+        throw new DatabaseError('Tekrarlanan işlem veya benzersiz alan çakışması; kaydı yenileyip doğrulayın.', error);
       }
       throw error;
     }
@@ -264,12 +265,12 @@ export const dbInsertCashTransaction = async (tx: any) => {
 export const dbInsertStockMovement = async (movement: any) => {
   return executeDbQuery(async () => {
     const orgId = await getActiveOrgId();
-    if (!orgId) return movement; // Demo modda sadece local kalır
+    if (!orgId) throw new DatabaseError('Aktif firma gerekli.');
     
     const { id, ...payload } = toSnake(movement);
     const { data, error } = await supabase
       .from('stock_movements')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...await writePayload('stock_movements',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
     return toCamel(data?.[0]);
@@ -302,56 +303,16 @@ export const dbFetchSales = async () => {
   }, 'dbFetchSales');
 };
 
-export const dbInsertSale = async (sale: any) => {
-  return executeDbQuery(async () => {
-    const orgId = await getActiveOrgId();
-    if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
-    
-    const { id, patientName, items, installments, ...payload } = toSnake(sale);
-    const idempotencyKey = payload.idempotency_key || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
-    
-    const { data: mainSale, error: saleError } = await supabase
-      .from('sales')
-      .insert([{ ...payload, organization_id: orgId, idempotency_key: idempotencyKey }])
-      .select();
-      
-    if (saleError) {
-      if (saleError.code === '23505' || saleError.message?.includes('idempotency')) {
-        console.warn('[IdempotencyGuard] Mükerrer satış kaydı engellendi. Key:', idempotencyKey);
-        return sale;
-      }
-      throw saleError;
-    }
-    const createdSale = mainSale?.[0];
-    if (!createdSale) throw new DatabaseError('Satış kaydı oluşturulamadı.');
-
-    if (items && items.length > 0) {
-      const itemsPayload = items.map((item: any) => ({
-        sale_id: createdSale.id,
-        organization_id: orgId,
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price,
-        type: item.type
-      }));
-      const { error: itemsError } = await supabase.from('sale_items').insert(itemsPayload);
-      if (itemsError) throw itemsError;
-    }
-
-    if (installments && installments.length > 0) {
-      const installmentsPayload = installments.map((inst: any) => ({
-        sale_id: createdSale.id,
-        organization_id: orgId,
-        amount: inst.amount,
-        due_date: inst.due_date,
-        paid: inst.paid || false
-      }));
-      const { error: instError } = await supabase.from('sale_installments').insert(installmentsPayload);
-      if (instError) throw instError;
-    }
-
-    return toCamel(createdSale);
-  }, 'dbInsertSale');
+export const dbInsertSale = async (sale: any, stockItemId?: string, cashRegisterId?: string) => {
+  const payload=toSnake(sale);
+  const {data,error}=await supabase.rpc('complete_sale',{
+    p_sale:{patient_id:payload.patient_id,date:payload.date,items:payload.items,installments:payload.installments || [],
+      total:payload.total,sgk_amount:payload.sgk_amount || 0,patient_amount:payload.patient_amount ?? payload.total,
+      payment_method:payload.payment_method,status:payload.status,audiologist:payload.audiologist},
+    p_key:payload.idempotency_key,p_stock:stockItemId || null,p_register:cashRegisterId || 'kas-1',
+  });
+  if(error) throw new DatabaseError('Satış işlemi tamamlanamadı.',error);
+  return {...toCamel(data),items:sale.items,installments:sale.installments || [],patientName:sale.patientName};
 };
 
 // ═══════════════════════════════════════════════
@@ -423,7 +384,7 @@ export const dbInsertSupplier = async (supplier: any) => {
     const { id, purchases, ...payload } = toSnake(supplier);
     const { data, error } = await supabase
       .from('suppliers')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...await writePayload('suppliers',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
     return toCamel(data?.[0]);
@@ -435,7 +396,7 @@ export const dbUpdateSupplier = async (id: string, supplier: any) => {
     const { id: _, purchases, ...payload } = toSnake(supplier);
     const { data, error } = await supabase
       .from('suppliers')
-      .update(payload)
+      .update(await writePayload('suppliers',payload))
       .eq('id', id)
       .select();
     if (error) throw error;
@@ -477,13 +438,12 @@ export const dbInsertExpense = async (expense: any) => {
 
     const { data, error } = await supabase
       .from('expenses')
-      .insert([{ ...payload, organization_id: orgId, idempotency_key: idempotencyKey }])
+      .insert([{ ...await writePayload('expenses',payload), organization_id: orgId, idempotency_key: idempotencyKey }])
       .select();
 
     if (error) {
-      if (error.code === '23505' || error.message?.includes('idempotency')) {
-        console.warn('[IdempotencyGuard] Mükerrer masraf kaydı engellendi. Key:', idempotencyKey);
-        return expense;
+      if (error.code === '23505' && idempotencyKey) {
+        throw new DatabaseError('Tekrarlanan işlem veya benzersiz alan çakışması; kaydı yenileyip doğrulayın.', error);
       }
       throw error;
     }
@@ -496,7 +456,7 @@ export const dbUpdateExpense = async (id: string, expense: any) => {
     const { id: _, ...payload } = toSnake(expense);
     const { data, error } = await supabase
       .from('expenses')
-      .update(payload)
+      .update(await writePayload('expenses',payload))
       .eq('id', id)
       .select();
     if (error) throw error;
@@ -538,10 +498,12 @@ export const dbInsertAuditLog = async (log: any) => {
     const orgId = await getActiveOrgId();
     if (!orgId) return;
     
-    const { id, timestamp, ...payload } = toSnake(log);
-    await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const { id, timestamp, ...payload } = toSnake({ ...log, userId: user?.id });
+    const { error } = await supabase
       .from('audit_log')
-      .insert([{ ...payload, organization_id: orgId }]);
+      .insert([{ ...await writePayload('audit_log',payload), organization_id: orgId }]);
+    if (error) console.error('Audit insert failed',error.code);
   }, 'dbInsertAuditLog');
 };
 
@@ -564,10 +526,10 @@ export const dbInsertBranch = async (branch: any) => {
     const orgId = await getActiveOrgId();
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     
-    const { id, patientsCount, ...payload } = toSnake(branch);
+    const { id, patients_count, ...payload } = toSnake(branch);
     const { data, error } = await supabase
       .from('branches')
-      .insert([{ ...payload, organization_id: orgId }])
+      .insert([{ ...await writePayload('branches',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
     return toCamel(data?.[0]);
@@ -576,10 +538,10 @@ export const dbInsertBranch = async (branch: any) => {
 
 export const dbUpdateBranch = async (id: string, branch: any) => {
   return executeDbQuery(async () => {
-    const { id: _, patientsCount, ...payload } = toSnake(branch);
+    const { id: _, patients_count, ...payload } = toSnake(branch);
     const { data, error } = await supabase
       .from('branches')
-      .update(payload)
+      .update(await writePayload('branches',payload))
       .eq('id', id)
       .select();
     if (error) throw error;
@@ -601,6 +563,8 @@ export const dbFetchMemberships = async (): Promise<SystemUser[]> => {
 
     return (data || []).map((m: any) => ({
       id: m.id,
+      userId: m.user_id,
+      branchId: m.branch_id,
       firstName: m.first_name || m.email?.split('@')[0] || 'Kullanıcı',
       lastName: m.last_name || '',
       email: m.email || 'kullanici@audipro.com',
@@ -622,6 +586,11 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token || '';
 
+    if (!user.branchId && user.branch && user.branch !== 'Tüm Şubeler') {
+      const { data: branch, error } = await supabase.from('branches').select('id').eq('organization_id', orgId).eq('name', user.branch).single();
+      if (error || !branch) throw new DatabaseError('Geçerli bir şube seçin.');
+      user = { ...user, branchId: branch.id };
+    }
     const res = await fetch('/api/invite-user', {
       method: 'POST',
       headers: { 
@@ -634,6 +603,8 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
         lastName: user.lastName,
         phone: user.phone,
         roles: user.roles,
+        password: user.password,
+        branchId: user.branchId || null,
         orgId
       })
     });
@@ -649,10 +620,18 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
 
 export const dbUpdateMembership = async (id: string, user: any) => {
   return executeDbQuery(async () => {
+    let branchId = user.branchId || null;
+    if (user.branch && user.branch !== 'Tüm Şubeler') {
+      const {data:branch,error}=await supabase.from('branches').select('id').eq('name',user.branch).single();
+      if(error || !branch) throw new DatabaseError('Geçerli bir şube seçin.');
+      branchId=branch.id;
+    }
+    if(user.branch==='Tüm Şubeler') branchId=null;
     const { data, error } = await supabase
       .from('memberships')
       .update({
         roles: user.roles,
+        branch_id: branchId,
         status: user.status === 'Pasif' ? 'inactive' : 'active',
         first_name: user.firstName,
         last_name: user.lastName,
@@ -662,6 +641,7 @@ export const dbUpdateMembership = async (id: string, user: any) => {
       .select('*, branches(name)');
 
     if (error) throw error;
+    if (!data?.[0]) throw new DatabaseError('Üyelik güncellenemedi.');
     return {
       ...user,
       branch: data?.[0]?.branches?.name || user.branch

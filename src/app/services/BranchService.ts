@@ -75,7 +75,7 @@ export class BranchService {
     // 1. Try URL Slug
     if (urlSlug) {
       if (urlSlug === 'all') {
-        if (!allowedBranchIds || allowedBranchIds.length > 1) {
+        if (allowedBranchIds === null) {
           return { branchContext: { mode: 'all' }, isFallback: false };
         }
       }
@@ -103,7 +103,7 @@ export class BranchService {
       try {
         const savedSlug = localStorage.getItem(this.STORAGE_KEY);
         if (savedSlug) {
-          if (savedSlug === 'all' && (!allowedBranchIds || allowedBranchIds.length > 1)) {
+          if (savedSlug === 'all' && (allowedBranchIds === null)) {
             return { branchContext: { mode: 'all' }, isFallback: false };
           }
           const matched = bySlugMap.get(savedSlug) || byIdMap.get(savedSlug);
@@ -145,7 +145,7 @@ export class BranchService {
       }
     }
 
-    if (!allowedBranchIds || allowedBranchIds.length > 1) {
+    if (allowedBranchIds === null) {
       return { mode: 'all' };
     }
 
@@ -156,7 +156,7 @@ export class BranchService {
       }
     }
 
-    return { mode: 'all' };
+    return { mode: 'single', branchId: '', slug: '' };
   }
 
   /**
@@ -181,45 +181,10 @@ export class BranchService {
     activeBranch?: BranchMode,
     fallbackIndex?: number
   ): boolean {
-    if (!activeBranch || activeBranch.mode !== 'single') return true;
-
-    if (activeBranch.branchId && itemBranchId) {
-      return itemBranchId === activeBranch.branchId;
-    }
-
-    const branchName = activeBranch.branch?.name || '';
-    const activeSlug = activeBranch.slug || (activeBranch.branch ? this.generateSlug(activeBranch.branch) : '');
-
-    const isKadikoy = activeBranch.branchId === 'br-1' || activeSlug.includes('kadikoy') || branchName.toLowerCase().includes('kadıköy');
-    const isBesiktas = activeBranch.branchId === 'br-2' || activeSlug.includes('besiktas') || branchName.toLowerCase().includes('beşiktaş');
-    const isIzmir = activeBranch.branchId === 'br-3' || activeSlug.includes('izmir') || branchName.toLowerCase().includes('izmir');
-
-    if (itemBranch) {
-      const itemLower = itemBranch.toLowerCase();
-      const itemSlug = this.generateSlug({ name: itemBranch });
-
-      if (isKadikoy) {
-        return itemLower.includes('kadıköy') || itemLower.includes('kadikoy') || itemLower.includes('merkez 1') || itemSlug.includes('kadikoy');
-      }
-      if (isBesiktas) {
-        return itemLower.includes('beşiktaş') || itemLower.includes('besiktas') || itemLower.includes('merkez 2') || itemSlug.includes('besiktas');
-      }
-      if (isIzmir) {
-        return itemLower.includes('izmir') || itemSlug.includes('izmir');
-      }
-
-      if (branchName && (itemLower.includes(branchName.toLowerCase()) || branchName.toLowerCase().includes(itemLower))) return true;
-      if (activeSlug && itemSlug.includes(activeSlug)) return true;
-
-      return false;
-    }
-
-    if (typeof fallbackIndex === 'number') {
-      if (isKadikoy) return fallbackIndex % 2 === 0;
-      if (isBesiktas) return fallbackIndex % 2 !== 0;
-      if (isIzmir) return fallbackIndex % 3 === 0;
-    }
-
-    return true;
+    if (!activeBranch) return false;
+    if (activeBranch.mode === 'all') return true;
+    if (activeBranch.mode !== 'single' || !activeBranch.branchId) return false;
+    if (itemBranchId) return itemBranchId === activeBranch.branchId;
+    return Boolean(itemBranch && activeBranch.branch?.name && itemBranch === activeBranch.branch.name);
   }
 }

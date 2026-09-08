@@ -24,7 +24,7 @@ interface ServiceRecord {
   complaints?: string[];
 }
 
-const serviceRecords: ServiceRecord[] = [
+const serviceRecords: ServiceRecord[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
   {
     id: 'srv1',
     patientName: 'Ayşe Yılmaz',
@@ -123,7 +123,7 @@ const serviceRecords: ServiceRecord[] = [
     warrantyRepair: false,
     notes: '',
   },
-];
+] : []);
 
 const statusConfig: Record<string, { color: string; icon: string }> = {
   'Alındı': { color: 'neutral', icon: '📥' },
@@ -134,12 +134,12 @@ const statusConfig: Record<string, { color: string; icon: string }> = {
 };
 
 export default function ServicePage() {
-  const { addSale, addToast, completeServiceTicket } = useApp();
+  const { addSale, addToast, completeServiceTicket, patientsList } = useApp();
   const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<ServiceRecord | null>(null);
-  const [records, setRecords] = useState<ServiceRecord[]>(serviceRecords);
+  const [records, setRecords] = useState<ServiceRecord[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? serviceRecords : []));
 
   const [newRecordForm, setNewRecordForm] = useState({
     patientName: '',
@@ -227,14 +227,7 @@ export default function ServicePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const patientsListMock = [
-    { name: 'Ayşe Demir', tc: '22222222222', device: 'Phonak Audéo P90 (SN: PH-2024-00142)', serial: 'PH-2024-00142' },
-    { name: 'Ali Yılmaz', tc: '11111111111', device: 'Oticon More 1 (SN: OT-2024-00089)', serial: 'OT-2024-00089' },
-    { name: 'SAMET ALTOK', tc: '12638639514', device: 'Signia Pure 7Nx (SN: SG-2024-00176)', serial: 'SG-2024-00176' },
-    { name: 'Mehmet Kaya', tc: '33333333333', device: 'ReSound ONE 9 (SN: RS-2024-00331)', serial: 'RS-2024-00331' },
-    { name: 'Hasan Çelik', tc: '44444444444', device: '', serial: '' },
-    { name: 'Fatma Özkan', tc: '55555555555', device: 'Starkey Evolv AI 2400 (SN: ST-2024-00998)', serial: 'ST-2024-00998' }
-  ];
+  const patientsListMock = patientsList.map(p=>({name:p.firstName+' '+p.lastName,tc:p.tc,device:p.currentDevice || '',serial:''}));
 
   const moldOptions = [
     'Prob',
@@ -360,7 +353,9 @@ export default function ServicePage() {
     }
   };
 
-  const handlePrintForm = (record: ServiceRecord) => {
+  const handlePrintForm = (rawRecord: ServiceRecord) => {
+    const escapeValue=(v: any): any=>typeof v==='string'?v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!)):Array.isArray(v)?v.map(escapeValue):v && typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,value])=>[k,escapeValue(value)])):v;
+    const record=escapeValue(rawRecord) as ServiceRecord;
     const printWindow = window.open('', '_blank', 'width=900,height=1000');
     if (!printWindow) return;
 

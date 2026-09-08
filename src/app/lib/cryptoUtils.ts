@@ -1,15 +1,13 @@
-/**
- * AudiPro SaaS — KVKK Uyumlu Kriptografik Şifreleme ve Maskeleme Modülü (cryptoUtils.ts)
- *
- * Hassas kişisel verilerin (TC Kimlik No vb.) veritabanına yazılmadan önce AES-256
- * algoritması ile şifrelenmesini ve okunurken çözülmesini sağlar.
+/** Legacy XOR/Base64 obfuscation, retained only for existing ENC: record compatibility.
+ * This is NOT AES, encryption at rest, or a compliance guarantee.
+ * A server-side key migration is required before treating stored TC numbers as encrypted.
  */
 
 // Varsayılan gizli anahtar (Ortam değişkeni `NEXT_PUBLIC_KVKK_ENCRYPTION_KEY` yoksa kullanılır)
 const DEFAULT_SECRET = 'AudiPro-KVKK-AES256-Secure-Key-2026';
 
 /**
- * Basit ve güvenilir XOR-Base64 çift yönlü şifreleme algoritması (Tarayıcı + Node.js uyumlu)
+ * Eski XOR-Base64 veri kodlaması (güvenlik sağlamaz) (Tarayıcı + Node.js uyumlu)
  */
 function cipherTransform(text: string, secret: string): string {
   let result = '';

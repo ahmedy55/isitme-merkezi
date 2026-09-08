@@ -35,8 +35,8 @@ export function BranchProvider({
   const [fallbackMessage, setFallbackMessage] = useState<string | null>(null);
 
   // Extract allowed branches from user metadata
-  const allowedBranches: string[] | null = currentUser?.user_metadata?.allowed_branches || null;
-  const defaultBranchId: string | undefined = currentUser?.user_metadata?.default_branch_id;
+  const allowedBranches: string[] | null = currentUser?.membership?.roles?.includes('Firma Yöneticisi') ? null : (currentUser?.membership?.branch_id ? [currentUser.membership.branch_id] : []);
+  const defaultBranchId: string | undefined = currentUser?.membership?.branch_id;
 
   // Resolve initial active branch on load / URL query change
   useEffect(() => {
@@ -63,6 +63,7 @@ export function BranchProvider({
     setIsLoadingBranch(true);
     const prevSlug = activeBranch.mode === 'single' ? activeBranch.slug : 'all';
 
+    if (slug === 'all' && allowedBranches !== null) { setIsLoadingBranch(false); return; }
     if (slug === 'all') {
       const newMode: BranchMode = { mode: 'all' };
       setActiveBranchState(newMode);
@@ -76,7 +77,7 @@ export function BranchProvider({
     }
 
     const targetBranch = branchesList.find(b => BranchService.generateSlug(b) === slug || b.id === slug);
-    if (targetBranch) {
+    if (targetBranch && (allowedBranches === null || allowedBranches.includes(targetBranch.id))) {
       const targetSlug = BranchService.generateSlug(targetBranch);
       const newMode: BranchMode = {
         mode: 'single',

@@ -17,42 +17,8 @@ export default function Sidebar() {
   }, [recallList]);
 
   const activeSections = React.useMemo(() => {
-    // Kullanıcı rolünü belirle — user_metadata veya membership listesinden
-    const userRole = getUserRole(currentUser, usersList);
-    const metaRoles: string[] = Array.isArray(currentUser?.user_metadata?.roles)
-      ? currentUser.user_metadata.roles
-      : (currentUser?.user_metadata?.role ? [currentUser.user_metadata.role] : []);
-
-    // Membership listesinden de rolleri al (Ajans Paneli'nden oluşturulan firmalar için)
-    const membershipRoles: string[] = [];
-    if (usersList && Array.isArray(usersList) && currentUser?.email) {
-      const match = usersList.find((u: any) =>
-        (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-        u.id === currentUser.id
-      );
-      if (match?.roles && Array.isArray(match.roles)) {
-        membershipRoles.push(...match.roles);
-      }
-    }
-
-    const rawRoles = metaRoles.length > 0 ? metaRoles : [...membershipRoles, userRole];
-
-    // 'admin' rolü Firma Yöneticisi yetkisine eşdeğerdir
-    const ADMIN_ALIASES = ['admin', 'firma yöneticisi', 'owner', 'super_admin', 'superadmin'];
-    const isAdminRole = rawRoles.some(r => ADMIN_ALIASES.includes(r.trim().toLowerCase()));
-    const userRoles: string[] = isAdminRole ? [...rawRoles, 'Firma Yöneticisi'] : rawRoles;
-
-    // Güvenli tam eşleşme: substring yok, sadece exact match veya Platform/Firma Yöneticisi bypass
-    const hasRole = (required?: string[]) => {
-      if (!required || required.length === 0) return true;
-      if (isPlatformAdmin) return true;
-      // 'Firma Yöneticisi' tam eşleşmesi bypass verir
-      if (userRoles.includes('Firma Yöneticisi')) return true;
-      return required.some(req =>
-        userRoles.some(ur => ur.trim().toLowerCase() === req.trim().toLowerCase())
-      );
-    };
-
+    const userRoles: string[] = currentUser?.membership?.roles || [];
+    const hasRole = (required?: string[]) => !required?.length || userRoles.includes('Firma Yöneticisi') || required.some(r=>userRoles.includes(r));
     const dynamicSections = [
       {
         title: 'Ana Menü',
@@ -73,7 +39,7 @@ export default function Sidebar() {
           { id: 'assets'          as const, label: 'Demirbaşlar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog', 'Muhasebe'] },
           { id: 'cash'            as const, label: 'Kasa & Tahsilat', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
           { id: 'service'         as const, label: 'Teknik Servis', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyometrist', 'Odyolog'] },
-          { id: 'suppliers'       as const, label: 'Tedarikçiler', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
+          { id: 'suppliers' as const, label: 'Tedarikçiler', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'expenses'        as const, label: 'Masraflar', badge: null, requiredRoles: ['Firma Yöneticisi', 'Şube Yöneticisi', 'Muhasebe'] },
         ].filter(item => hasRole((item as any).requiredRoles)),
       },
@@ -85,7 +51,6 @@ export default function Sidebar() {
           { id: 'branch-activities' as const, label: 'Şube Aktiviteleri', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'audit-log'         as const, label: 'İşlem Kayıtları', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'settings'          as const, label: 'Ayarlar', badge: null, requiredRoles: ['Firma Yöneticisi'] },
-          { id: 'super-admin'       as const, label: 'SaaS Master Panel', badge: 'Admin' },
           { id: 'support'           as const, label: 'Destek', badge: null },
         ].filter(item => hasRole((item as any).requiredRoles)),
       },

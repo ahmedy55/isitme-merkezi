@@ -26,40 +26,13 @@ export default function LoginPage() {
       if (error) throw error;
       if (!session) throw new Error('Oturum başlatılamadı.');
 
-      // memberships tablosunu sorgula (Kullanıcı hangi firmalara bağlı?)
-      const { data: userOrgs, error: orgsError } = await supabase
-        .from('memberships')
-        .select('organization_id, status, organizations(name)')
-        .eq('user_id', session.user.id);
-
-      if (orgsError) throw orgsError;
-
-      const activeOrgs = userOrgs?.filter(o => o.status === 'active') || [];
-
-      if (activeOrgs.length === 0) {
-        // Platform admin mi kontrol et
-        const { data: isAdmin } = await supabase
-          .from('platform_admins')
-          .select('id')
-          .eq('user_id', session.user.id)
-          .single();
-
-        if (isAdmin) {
-          // Platform admin ise, organization_id NULL kalır ama platform yetkisi var
-          addToast({ type: 'success', message: 'Platform Yöneticisi olarak giriş yapıldı.' });
-          setCurrentPage('dashboard');
-          return;
-        }
-
-        // Aktif üyeliği yoksa çıkış yap ve uyarı ver
-        await supabase.auth.signOut();
-        addToast({ type: 'error', message: 'Bu hesaba tanımlı aktif bir klinik üyeliği bulunamadı.' });
-        return;
-      }
-
+      const {data: userOrgs,error:orgsError}=await supabase.rpc('my_organizations');
+      if(orgsError) throw orgsError;
+      const activeOrgs=userOrgs || [];
+      if(activeOrgs.length===0){await supabase.auth.signOut();throw new Error('Aktif bir klinik üyeliği bulunamadı.');}
       if (activeOrgs.length === 1) {
         const orgId = activeOrgs[0].organization_id;
-        const orgName = (activeOrgs[0].organizations as any)?.name || 'Klinik';
+        const orgName = activeOrgs[0].name || 'Klinik';
 
         // Server-side /api/select-org ile app_metadata.organization_id'yi yaz
         const res = await fetch('/api/select-org', {
@@ -73,11 +46,12 @@ export default function LoginPage() {
 
         if (!res.ok) {
           const errData = await res.json();
-          console.error('Server app_metadata orgId update error:', errData);
+          throw new Error(errData.error || 'Firma seçilemedi.');
         }
 
         // Token cache'ini yenile (Bölüm 5.4 - refreshSession)
-        await supabase.auth.refreshSession();
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if(refreshError) throw refreshError;
 
         addToast({ type: 'success', message: `Hoş geldiniz! ${orgName} oturumu açıldı.` });
         setCurrentPage('dashboard');
