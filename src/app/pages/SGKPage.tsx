@@ -3,9 +3,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconSearch, IconCheck, IconWarning, IconRefresh, IconDownload, IconPlus, IconClose } from '../components/Icons';
+import { useBranchScope } from '../hooks/useBranchScope';
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage, patientsList, approveSGKPrescription } = useApp();
+  const { addToast, setCurrentPage, patientsList: allPatients, approveSGKPrescription } = useApp();
+  const { matches } = useBranchScope();
+  const patientsList = React.useMemo(() => allPatients.filter(p => matches(p.branch, p.branchId)), [allPatients, matches]);
   const [tc, setTc] = useState('');
   const [queryResult, setQueryResult] = useState<null | 'success' | 'loading'>(null);
   const [matchedPatient, setMatchedPatient] = useState<any | null>(null);

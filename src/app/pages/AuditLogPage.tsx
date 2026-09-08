@@ -3,9 +3,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconSearch } from '../components/Icons';
+import { useBranchScope } from '../hooks/useBranchScope';
 
 export default function AuditLogPage() {
-  const { auditLogList } = useApp();
+  const { auditLogList: allAuditLogs } = useApp();
+  const { activeBranch, matches } = useBranchScope();
+  const auditLogList = React.useMemo(() => allAuditLogs.filter(log => activeBranch.mode === 'all' || matches(undefined, log.branchId)), [allAuditLogs, activeBranch, matches]);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionFilter, setActionFilter] = useState('All');
   const [moduleFilter, setModuleFilter] = useState('All');

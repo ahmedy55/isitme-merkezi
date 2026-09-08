@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
+import { useBranchScope } from '../hooks/useBranchScope';
 import { BranchService } from '../services/BranchService';
 import { IconMenu, IconSearch, IconBell } from './Icons';
 
@@ -24,8 +25,11 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 };
 
 export default function Header() {
-  const { currentPage, toggleSidebar, patientsList, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList, stockList, usersList } = useApp();
+  const { currentPage, toggleSidebar, patientsList: allPatients, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList, stockList: allStock, usersList } = useApp();
   const { activeBranch, selectBranchBySlug, isLoadingBranch, allowedBranches } = useBranch();
+  const { matches } = useBranchScope();
+  const patientsList = React.useMemo(() => allPatients.filter(p => matches(p.branch, p.branchId)), [allPatients, matches]);
+  const stockList = React.useMemo(() => allStock.filter(s => matches(s.branch, s.branchId)), [allStock, matches]);
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);

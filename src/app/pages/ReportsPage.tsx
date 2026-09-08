@@ -6,9 +6,17 @@ import { formatCurrency } from '../data/mockData';
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsivePie } from '@nivo/pie';
 import { IconCash, IconReports, IconPatients, IconRecall, IconBranches } from '../components/Icons';
+import { useBranchScope } from '../hooks/useBranchScope';
 
 export default function ReportsPage() {
-  const { patientsList, salesList, appointmentsList, recallList, addToast } = useApp();
+  const app = useApp();
+  const { matches } = useBranchScope();
+  const patientsList = useMemo(() => app.patientsList.filter(p => matches(p.branch, p.branchId)), [app.patientsList, matches]);
+  const patientIds = useMemo(() => new Set(patientsList.map(p => p.id)), [patientsList]);
+  const salesList = useMemo(() => app.salesList.filter(s => patientIds.has(s.patientId)), [app.salesList, patientIds]);
+  const appointmentsList = useMemo(() => app.appointmentsList.filter(a => matches(a.branch, a.branchId)), [app.appointmentsList, matches]);
+  const recallList = useMemo(() => app.recallList.filter(r => patientIds.has(r.patientId)), [app.recallList, patientIds]);
+  const { addToast } = app;
   const [selectedYear, setSelectedYear] = useState('2026');
   const [mounted, setMounted] = useState(false);
 

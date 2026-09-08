@@ -2,11 +2,14 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranchScope } from '../hooks/useBranchScope';
 import { Expense } from '../data/mockData';
 import { IconSearch, IconPlus, IconEdit, IconDelete, IconFilter, IconCheck, IconWarning, IconDownload } from '../components/Icons';
 
 export default function ExpensesPage() {
-  const { expensesList, addExpense, updateExpense, deleteExpense, addToast } = useApp();
+  const { expensesList: allExpenses, addExpense, updateExpense, deleteExpense, addToast, branchesList } = useApp();
+  const { matches, activeBranchName, activeBranchId, activeBranch } = useBranchScope();
+  const expensesList = React.useMemo(() => allExpenses.filter(e => e.branch === 'Genel' || matches(e.branch, e.branchId)), [allExpenses, matches]);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,7 +28,7 @@ export default function ExpensesPage() {
   const [formDescription, setFormDescription] = useState('');
   const [formAmount, setFormAmount] = useState<number>(0);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'Nakit' | 'Havale' | 'Kredi Kartı' | 'Otomatik Ödeme'>('Havale');
-  const [formBranch, setFormBranch] = useState<'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Genel'>('Merkez 1 - Kadıköy');
+  const [formBranch, setFormBranch] = useState('Genel');
   const [formCreatedBy, setFormCreatedBy] = useState('Dr. Elif Arslan');
   const [formReceiptNo, setFormReceiptNo] = useState('');
   const [formNotes, setFormNotes] = useState('');
@@ -46,7 +49,7 @@ export default function ExpensesPage() {
     setFormDescription('');
     setFormAmount(0);
     setFormPaymentMethod('Havale');
-    setFormBranch('Merkez 1 - Kadıköy');
+    setFormBranch(activeBranchName || 'Genel');
     setFormCreatedBy('Dr. Elif Arslan');
     setFormReceiptNo('');
     setFormNotes('');
@@ -95,6 +98,7 @@ export default function ExpensesPage() {
         amount: formAmount,
         paymentMethod: formPaymentMethod,
         branch: formBranch,
+        branchId: expenseBranchId(formBranch),
         createdBy: formCreatedBy,
         receiptNo: formReceiptNo || undefined,
         notes: formNotes || undefined
@@ -110,6 +114,7 @@ export default function ExpensesPage() {
         amount: formAmount,
         paymentMethod: formPaymentMethod,
         branch: formBranch,
+        branchId: expenseBranchId(formBranch),
         createdBy: formCreatedBy,
         receiptNo: formReceiptNo || undefined,
         notes: formNotes || undefined,
@@ -119,6 +124,11 @@ export default function ExpensesPage() {
       addToast({ type: 'success', message: 'Masraf kaydı başarıyla oluşturuldu.' });
     }
     setShowModal(false);
+  };
+
+  const expenseBranchId = (branchName: string) => {
+    if (activeBranch.mode === 'single') return activeBranchId;
+    return branchesList.find(branch => branch.name === branchName)?.id;
   };
 
   const handleDelete = (id: string) => {
@@ -464,10 +474,10 @@ export default function ExpensesPage() {
                     <select
                       className="form-input"
                       value={formBranch}
-                      onChange={(e) => setFormBranch(e.target.value as any)}
+                      onChange={(e) => setFormBranch(e.target.value)}
+                      disabled={activeBranch.mode === 'single'}
                     >
-                      <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
-                      <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
+                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                       <option value="Genel">Genel</option>
                     </select>
                   </div>

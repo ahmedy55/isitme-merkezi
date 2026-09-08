@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, SaleRecord } from '../data/mockData';
 import { dbFetchCashTransactions, dbInsertCashTransaction } from '../lib/database';
 import { IconPlus, IconDownload, IconCash, IconCheck, IconRecall, IconShield, IconClose, IconSearch, IconFilter, IconWarning } from '../components/Icons';
+import { useBranchScope } from '../hooks/useBranchScope';
 
 interface CashAccount {
   id: string;
@@ -24,10 +25,17 @@ interface CashTransaction {
   amount: number;
   description: string;
   createdBy: string;
+  branchId?: string;
 }
 
 export default function CashPage() {
-  const { salesList, commissionRate, addSale, stockList, updateStockItem, addToast, currentOrgId, patientsList } = useApp();
+  const app = useApp();
+  const { matches, activeBranchId } = useBranchScope();
+  const patientsList = React.useMemo(() => app.patientsList.filter(p => matches(p.branch, p.branchId)), [app.patientsList, matches]);
+  const patientIds = React.useMemo(() => new Set(patientsList.map(p => p.id)), [patientsList]);
+  const salesList = React.useMemo(() => app.salesList.filter(s => patientIds.has(s.patientId)), [app.salesList, patientIds]);
+  const stockList = React.useMemo(() => app.stockList.filter(s => matches(s.branch, s.branchId)), [app.stockList, matches]);
+  const { commissionRate, addSale, updateStockItem, addToast, currentOrgId } = app;
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<SaleRecord | null>(null);
@@ -47,18 +55,19 @@ export default function CashPage() {
             date: t.createdAt ? t.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
             accountId: t.cashRegisterId || 'kas-1',
             accountName: t.cashRegisterId || 'Ana Kasa',
-            type: t.type === 'INCOME' ? 'Giriş' : 'Çıkış',
+            type: (t.type === 'INCOME' ? 'Giriş' : 'Çıkış') as CashTransaction['type'],
             category: t.category || 'Genel',
             amount: t.amount,
             description: t.description || '',
-            createdBy: 'Sistem'
-          }));
+            createdBy: 'Sistem',
+            branchId: t.branchId
+          })).filter(t => matches(undefined, t.branchId));
           setTransactions(mapped);
           setAccounts([{id:"kas-1",name:"Ana Kasa",type:"Nakit",branch:"Tüm Şubeler",balance:mapped.reduce((sum,t)=>sum+(t.type==="Giriş"?t.amount:-t.amount),0)}]);
         }
       }).catch(err => console.warn('[CashPage] dbFetchCashTransactions warning:', err.message));
     }
-  }, [currentOrgId]);
+  }, [currentOrgId, matches]);
 
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [selectedAccountIdFilter, setSelectedAccountIdFilter] = useState('All');
@@ -171,6 +180,7 @@ export default function CashPage() {
       amount: txAmount,
       description: txDescription,
       createdBy: 'Dr. Elif Arslan'
+      ,branchId: activeBranchId
     };
 
 
@@ -184,6 +194,7 @@ export default function CashPage() {
       category: txCategory,
       amount: txAmount,
       description: txDescription,
+      branchId: activeBranchId,
       idempotency_key: formIdempotencyKey
     }); } catch { addToast({type:"error",message:"Kasa işlemi kaydedilemedi."}); return; }
     setTransactions(prev => [newTx, ...prev]);

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconSearch, IconPlus, IconCheck, IconWarning, IconRefresh } from '../components/Icons';
 import { formatCurrency } from '../data/mockData';
+import { useBranchScope } from '../hooks/useBranchScope';
 
 interface TransferRecord {
   id: string;
@@ -16,23 +17,24 @@ interface TransferRecord {
 }
 
 export default function BranchActivitiesPage() {
-  const { addToast, branchesList, usersList, salesList, appointmentsList } = useApp();
+  const { addToast, branchesList: allBranches, usersList, salesList, appointmentsList, patientsList } = useApp();
+  const { matches } = useBranchScope();
+  const branchesList = React.useMemo(() => allBranches.filter(branch => matches(branch.name, branch.id)), [allBranches, matches]);
 
   // Branch Performance Analysis
   // Calculate dynamic data per branch from AppContext
   const getBranchStats = (branchName: string) => {
     // Staff count
-    const staff = usersList.filter(u => u.branch === branchName || u.branch === 'Tüm Şubeler').length;
+    const branch = allBranches.find(item => item.name === branchName);
+    const staff = usersList.filter(u => u.branchId === branch?.id || u.branch === branchName || u.branch === 'Tüm Şubeler').length;
     // Sales count and revenue
-    // We map branch mapping. (Wait! In mockData, stock items have branch, sales have no branch explicitly but we can assume or link it,
-    // let's count sales by matching audiologist or simply split them for Kadıköy and Beşiktaş for this simulation/analysis view)
-    const isKadikoy = branchName.includes('Kadıköy');
-    const branchSales = salesList.filter((s, i) => isKadikoy ? i % 2 === 0 : i % 2 !== 0);
+    const branchPatientIds = new Set(patientsList.filter(patient => patient.branchId === branch?.id || patient.branch === branchName).map(patient => patient.id));
+    const branchSales = salesList.filter(sale => branchPatientIds.has(sale.patientId));
     const revenue = branchSales.reduce((acc, curr) => acc + curr.total, 0);
     const salesCount = branchSales.length;
 
     // Appointments count
-    const appointments = appointmentsList.filter(a => a.branch === branchName).length;
+    const appointments = appointmentsList.filter(a => a.branchId === branch?.id || a.branch === branchName).length;
 
     return { staff, revenue, salesCount, appointments };
   };

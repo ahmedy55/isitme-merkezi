@@ -84,6 +84,7 @@ export interface StockItem {
   assignedPatientId?: string;
   assignedPatientName?: string;
   branch: string;
+  branchId?: string;
   utsKurumNo?: string;
   gln?: string;
   mersisNo?: string;
@@ -103,6 +104,7 @@ export interface SaleRecord {
   installments?: { amount: number; dueDate: string; paid: boolean }[];
   audiologist?: string;
   idempotencyKey?: string;
+  branchId?: string;
 }
 
 // ── Enterprise Domain Ledgers & Policies ──
@@ -700,7 +702,8 @@ export interface Expense {
   description: string;
   amount: number;
   paymentMethod: 'Nakit' | 'Havale' | 'Kredi Kartı' | 'Otomatik Ödeme';
-  branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Genel';
+  branch: string;
+  branchId?: string;
   createdBy: string;
   receiptNo?: string;
   notes?: string;
@@ -897,6 +900,7 @@ export interface AuditLogEntry {
   module: 'Hasta' | 'Randevu' | 'Stok' | 'Satış' | 'Kasa' | 'Tedarikçi' | 'Masraf' | 'Kullanıcı' | 'Ayarlar' | 'Sistem';
   description: string;
   details?: string;
+  branchId?: string | null;
 }
 
 export const auditLog: AuditLogEntry[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [

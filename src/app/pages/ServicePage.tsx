@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranchScope } from '../hooks/useBranchScope';
 import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
 import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye, IconSearch } from '../components/Icons';
 
@@ -134,7 +135,9 @@ const statusConfig: Record<string, { color: string; icon: string }> = {
 };
 
 export default function ServicePage() {
-  const { addSale, addToast, completeServiceTicket, patientsList } = useApp();
+  const { addSale, addToast, completeServiceTicket, patientsList: allPatients } = useApp();
+  const { matches } = useBranchScope();
+  const patientsList = React.useMemo(() => allPatients.filter(p => matches(p.branch, p.branchId)), [allPatients, matches]);
   const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);

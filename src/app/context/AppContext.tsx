@@ -633,6 +633,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           referenceEntity: 'expense',
           referenceId: expense.id,
           description: expense.description,
+          branchId: expense.branchId,
           idempotency_key: expense.idempotencyKey ? `tx-${expense.idempotencyKey}` : undefined
         });
       }
