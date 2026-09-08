@@ -33,7 +33,6 @@ import ActivityLogPage from './pages/ActivityLogPage';
 import BranchActivitiesPage from './pages/BranchActivitiesPage';
 import LoginPage from './pages/LoginPage';
 import OrgSelectPage from './pages/OrgSelectPage';
-import SuperAdminPage from './pages/SuperAdminPage';
 
 function ToastIcon({ type }: { type: string }) {
   if (type === 'success') return <IconCheck size={16} strokeWidth={2} />;
@@ -75,7 +74,7 @@ function AppContent() {
     const manager=roles.includes('Firma Yöneticisi');
     const management=['branches','settings','suppliers','audit-log','branch-activities'];
     const financial=['cash','expenses','reports','sgk-receivables','assets'];
-    if (currentPage==='super-admin' || (!manager && management.includes(currentPage)) ||
+    if ((!manager && management.includes(currentPage)) ||
       (!manager && financial.includes(currentPage) && !roles.some(r=>['Şube Yöneticisi','Muhasebe'].includes(r)))) return <p>Bu modül için yetkiniz yok.</p>;
     switch (currentPage) {
       case 'dashboard':         return <DashboardPage />;

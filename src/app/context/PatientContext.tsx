@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Patient, patients as initialPatients } from '../data/mockData';
+import { Patient } from '../data/mockData';
 import { dbInsertPatient, dbUpdatePatient, dbInsertAuditLog } from '../lib/database';
 import { logger } from '../lib/logger';
 
@@ -17,7 +17,7 @@ interface PatientContextType {
 const PatientContext = createContext<PatientContextType | null>(null);
 
 export function PatientProvider({ children }: { children: ReactNode }) {
-  const [patientsList, setPatientsList] = useState<Patient[]>(initialPatients);
+  const [patientsList, setPatientsList] = useState<Patient[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
 
   const addPatient = async (patient: Patient, currentOrgId: string | null, currentOrg: any, addToast: (t: any) => void) => {

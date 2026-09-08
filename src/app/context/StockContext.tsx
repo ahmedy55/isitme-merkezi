@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { StockItem, stockItems as initialStock } from '../data/mockData';
+import { StockItem } from '../data/mockData';
 import { dbInsertStockItem, dbUpdateStockItem } from '../lib/database';
 import { logger } from '../lib/logger';
 
@@ -16,7 +16,7 @@ interface StockContextType {
 const StockContext = createContext<StockContextType | null>(null);
 
 export function StockProvider({ children }: { children: ReactNode }) {
-  const [stockList, setStockList] = useState<StockItem[]>(initialStock);
+  const [stockList, setStockList] = useState<StockItem[]>([]);
 
   const addStockItem = async (item: StockItem, currentOrgId: string | null, addToast: (t: any) => void) => {
     if (currentOrgId) {

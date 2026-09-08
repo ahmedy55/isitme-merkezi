@@ -6,7 +6,7 @@ import { IconLogo, IconClose, navIcons } from './Icons';
 import { getDisplayName, getUserRole, getUserInitials } from '../lib/userHelpers';
 
 export default function Sidebar() {
-  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, isPlatformAdmin, appointmentsList, recallList, usersList } = useApp();
+  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, appointmentsList, recallList, usersList } = useApp();
 
   const pendingAppointmentsCount = React.useMemo(() => {
     return (appointmentsList || []).filter(a => a.status === 'Bekliyor').length;
@@ -57,7 +57,7 @@ export default function Sidebar() {
     ];
 
     return dynamicSections;
-  }, [isPlatformAdmin, pendingAppointmentsCount, pendingRecallCount, currentUser]);
+  }, [pendingAppointmentsCount, pendingRecallCount, currentUser]);
 
   return (
     <>

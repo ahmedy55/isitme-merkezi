@@ -21,7 +21,6 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   reports:          { title: 'Raporlama & Analitik',  subtitle: 'Performans ve finansal raporlar' },
   branches:         { title: 'Şubeler & Yetki',       subtitle: 'Çoklu şube ve rol yönetimi' },
   settings:         { title: 'Ayarlar',               subtitle: 'Sistem ve entegrasyon ayarları' },
-  'super-admin':     { title: 'SaaS Super Admin',      subtitle: 'Tüm organizasyonlar, üyelikler ve lisans limitleri' },
 };
 
 export default function Header() {

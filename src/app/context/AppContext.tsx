@@ -60,8 +60,7 @@ type Page =
   | 'activity-log'
   | 'branch-activities'
   | 'login'
-  | 'org-select'
-  | 'super-admin';
+  | 'org-select';
 
 interface Toast {
   id: string;
@@ -91,7 +90,6 @@ interface AppContextType {
   currentOrg?: any;
   logout: () => Promise<void>;
   dataLoading: boolean;
-  isPlatformAdmin: boolean;
   
   // Dinamik Veri Eyaletleri
   patientsList: Patient[];
@@ -207,7 +205,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
   const [currentOrg, setCurrentOrg] = useState<any>(null);
-  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
 
   // Demo Ayarları — orgId ve Supabase bağlantısı yoksa demo modda çalış
@@ -320,7 +317,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dataGeneration.current++; identityRef.current=identity; clearTenantData();
       }
       setCurrentUser(user ? {...user,membership} : null);
-      setCurrentOrgId(nextOrg); setIsPlatformAdmin(false);
+      setCurrentOrgId(nextOrg);
       if (!user) setCurrentPage('login');
       else if (!nextOrg) setCurrentPage('org-select',true);
       else setCurrentPage((prev: Page)=>(prev==='login'||prev==='org-select'?'dashboard':prev));
@@ -345,7 +342,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addToast({ type: 'success', message: 'Güvenli çıkış yapıldı.' });
       setCurrentUser(null);
       setCurrentOrgId(null);
-      setIsPlatformAdmin(false);
       setCurrentPage('login');
     }
   };
@@ -792,7 +788,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentOrg,
       logout,
       dataLoading,
-      isPlatformAdmin,
       
       patientsList,
       appointmentsList,
