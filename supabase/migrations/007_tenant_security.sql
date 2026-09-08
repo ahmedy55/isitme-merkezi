@@ -3,6 +3,14 @@
 BEGIN;
 ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS branch_id uuid REFERENCES public.branches(id);
 ALTER TABLE public.sales ADD COLUMN IF NOT EXISTS branch_id uuid REFERENCES public.branches(id);
+-- Some existing deployments were created before migration 004 was applied.
+-- Keep this hardening migration self-contained and idempotent for those databases.
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
+ALTER TABLE public.appointments ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
+ALTER TABLE public.stock_items ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
+ALTER TABLE public.sales ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
+ALTER TABLE public.suppliers ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
 
 CREATE OR REPLACE FUNCTION public.get_user_org_id() RETURNS uuid
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
