@@ -28,7 +28,7 @@ export default function ExpensesPage() {
   const [formDescription, setFormDescription] = useState('');
   const [formAmount, setFormAmount] = useState<number>(0);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'Nakit' | 'Havale' | 'Kredi Kartı' | 'Otomatik Ödeme'>('Havale');
-  const [formBranch, setFormBranch] = useState('Genel');
+  const [formBranch, setFormBranch] = useState('');
   const [formCreatedBy, setFormCreatedBy] = useState('Dr. Elif Arslan');
   const [formReceiptNo, setFormReceiptNo] = useState('');
   const [formNotes, setFormNotes] = useState('');
@@ -49,7 +49,7 @@ export default function ExpensesPage() {
     setFormDescription('');
     setFormAmount(0);
     setFormPaymentMethod('Havale');
-    setFormBranch(activeBranchName || 'Genel');
+    setFormBranch(activeBranchName || branchesList[0]?.name || '');
     setFormCreatedBy('Dr. Elif Arslan');
     setFormReceiptNo('');
     setFormNotes('');
@@ -85,10 +85,14 @@ export default function ExpensesPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
-
+    if (!expenseBranchId(formBranch)) { addToast({ type: 'error', message: 'Gider için bir şube seçin.' }); return; }
+    if (saving) return;
+    setSaving(true);
+    try {
     if (isEditing && editingExpenseId) {
       const updated: Expense = {
         id: editingExpenseId,
@@ -103,8 +107,7 @@ export default function ExpensesPage() {
         receiptNo: formReceiptNo || undefined,
         notes: formNotes || undefined
       };
-      updateExpense(updated);
-      addToast({ type: 'success', message: 'Masraf başarıyla güncellendi.' });
+      await updateExpense(updated);
     } else {
       const newExpense: Expense & { idempotencyKey?: string } = {
         id: 'exp-' + Math.floor(Math.random() * 1000000),
@@ -120,10 +123,11 @@ export default function ExpensesPage() {
         notes: formNotes || undefined,
         idempotencyKey: formIdempotencyKey
       };
-      addExpense(newExpense);
-      addToast({ type: 'success', message: 'Masraf kaydı başarıyla oluşturuldu.' });
+      await addExpense(newExpense);
     }
     setShowModal(false);
+    } catch { /* Context reports persistence failure; keep the form open. */ }
+    finally { setSaving(false); }
   };
 
   const expenseBranchId = (branchName: string) => {
@@ -131,10 +135,9 @@ export default function ExpensesPage() {
     return branchesList.find(branch => branch.name === branchName)?.id;
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Bu masraf kaydını silmek istediğinize emin misiniz?')) {
-      deleteExpense(id);
-      addToast({ type: 'warning', message: 'Masraf kaydı silindi.' });
+      try { await deleteExpense(id); } catch { /* Context reports failure. */ }
     }
   };
 
@@ -477,8 +480,8 @@ export default function ExpensesPage() {
                       onChange={(e) => setFormBranch(e.target.value)}
                       disabled={activeBranch.mode === 'single'}
                     >
+                      {!formBranch && <option value="">Şube seçin</option>}
                       {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
-                      <option value="Genel">Genel</option>
                     </select>
                   </div>
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>

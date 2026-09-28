@@ -3,11 +3,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
+import DeviceIdentityFields from '../components/DeviceIdentityFields';
+import DevicePicker from '../components/DevicePicker';
+import { fetchServiceTickets, saveServiceTicket } from '../repositories/ServiceTicketRepository';
 import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
 import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye, IconSearch } from '../components/Icons';
 
 interface ServiceRecord {
   id: string;
+  patientId?: string;
+  branchId?: string;
+  stockItemId?: string;
+  barcode?: string;
   patientName: string;
   deviceName: string;
   serialNo: string;
@@ -135,14 +142,33 @@ const statusConfig: Record<string, { color: string; icon: string }> = {
 };
 
 export default function ServicePage() {
-  const { addSale, addToast, completeServiceTicket, patientsList: allPatients } = useApp();
-  const { matches } = useBranchScope();
+  const { addToast, completeServiceTicket, currentOrgId, stockList, branchesList, patientsList: allPatients } = useApp();
+  const { matches, activeBranchId } = useBranchScope();
+  const [deviceId, setDeviceId] = useState('');
+  const [serviceBranchId, setServiceBranchId] = useState('');
+  const [barcode, setBarcode] = useState('');
+  const [recordId, setRecordId] = useState(() => crypto.randomUUID());
+  const [serviceBusy, setServiceBusy] = useState(false);
+  const [serviceError, setServiceError] = useState('');
   const patientsList = React.useMemo(() => allPatients.filter(p => matches(p.branch, p.branchId)), [allPatients, matches]);
   const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<ServiceRecord | null>(null);
   const [records, setRecords] = useState<ServiceRecord[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? serviceRecords : []));
+  useEffect(() => {
+    let cancelled = false;
+    setRecords([]);
+    if (currentOrgId) fetchServiceTickets(currentOrgId).then(rows => { if (!cancelled) setRecords(rows.filter(r => matches(undefined, r.branchId))); }).catch(e => { if (!cancelled) setServiceError(e.message); });
+    return () => { cancelled = true; };
+  }, [currentOrgId, matches]);
+  const persist = async (record: ServiceRecord) => {
+    if (!currentOrgId) { addToast({ type: 'error', message: 'Aktif firma gerekli.' }); return false; }
+    setServiceBusy(true);
+    try { await saveServiceTicket(currentOrgId, record); return true; }
+    catch (e) { addToast({ type: 'error', message: (e as Error).message }); return false; }
+    finally { setServiceBusy(false); }
+  };
 
   const [newRecordForm, setNewRecordForm] = useState({
     patientName: '',
@@ -261,16 +287,25 @@ export default function ServicePage() {
     setNewRecordForm({ ...newRecordForm, technicianComplaints: updated });
   };
 
-  const handleSaveNewRecord = () => {
+  const handleSaveNewRecord = async () => {
+    if (serviceBusy) return;
     if (!newRecordForm.patientName || !newRecordForm.deviceName) {
       alert('Lütfen hasta ve cihaz adı girin.');
       return;
     }
+    const patient = patientsList.filter(p => `${p.firstName} ${p.lastName}` === newRecordForm.patientName);
+    if (!newRecordForm.unregisteredPatient && patient.length !== 1) { addToast({ type: 'error', message: 'Tek bir kayıtlı hasta seçin.' }); return; }
     const newRec: ServiceRecord = {
-      id: `srv-${Date.now().toString().slice(-6)}`,
+      id: recordId,
+      patientId: newRecordForm.unregisteredPatient ? undefined : patient[0]?.id,
+      branchId: newRecordForm.unregisteredPatient
+        ? activeBranchId || serviceBranchId
+        : patient[0]?.branchId || activeBranchId || serviceBranchId,
+      stockItemId: newRecordForm.externalDevice ? undefined : deviceId || undefined,
+      barcode,
       patientName: newRecordForm.patientName,
       deviceName: newRecordForm.deviceName,
-      serialNo: newRecordForm.serialNo || 'SN-UNKNOWN',
+      serialNo: newRecordForm.serialNo,
       receivedDate: newRecordForm.receivedDate,
       estimatedDate: newRecordForm.estimatedDate,
       returnedDate: null,
@@ -285,7 +320,9 @@ export default function ServicePage() {
       complaints: [...newRecordForm.customerComplaints, ...newRecordForm.technicianComplaints]
     };
 
-    setRecords([newRec, ...records]);
+    if (!await persist(newRec)) return;
+    setRecords(prev => [newRec, ...prev]);
+    setDeviceId(''); setBarcode(''); setRecordId(crypto.randomUUID()); setServiceBranchId('');
     setShowAddModal(false);
     setNewRecordForm({
       patientName: '',
@@ -319,41 +356,24 @@ export default function ServicePage() {
     addToast({ type: 'success', message: `${newRec.patientName} adına yeni teknik servis kaydı oluşturuldu.` });
   };
 
-  const handleDeliver = (record: ServiceRecord) => {
+  const handleDeliver = async (record: ServiceRecord) => {
+    const returnedDate = new Date().toISOString().slice(0, 10);
+    const delivered = { ...record, status: 'Teslim Edildi' as const, returnedDate };
     const updatedRecords = records.map(r => 
       r.id === record.id 
-        ? { ...r, status: 'Teslim Edildi' as const, returnedDate: '2026-07-10' }
+        ? delivered
         : r
     );
+    if (!await persist(delivered)) return;
     setRecords(updatedRecords);
-    setSelectedRecord({ ...record, status: 'Teslim Edildi', returnedDate: '2026-07-10' });
+    setSelectedRecord(delivered);
 
-    if (!record.warrantyRepair && record.totalCost > 0) {
-      const newSale = {
-        id: `s-srv-${Date.now().toString().slice(-6)}`,
-        patientId: 'p-unknown',
-        date: '2026-07-10',
-        patientName: record.patientName,
-        items: [
-          { name: `Teknik Servis Onarım: ${record.deviceName}`, quantity: 1, price: record.totalCost }
-        ],
-        total: record.totalCost,
-        sgkAmount: 0,
-        patientAmount: record.totalCost,
-        paymentMethod: 'Nakit' as const,
-        status: 'Tahsil Edildi' as const
-      };
-      addSale(newSale);
-      addToast({
-        type: 'success',
-        message: `${record.patientName} adına servis teslim kaydı yapıldı. ${formatCurrency(record.totalCost)} tutarındaki teknik servis geliri kasaya işlendi.`
-      });
-    } else {
-      addToast({
-        type: 'success',
-        message: `${record.patientName} adına servis teslim kaydı tamamlandı (Garanti Kapsamı - Ücretsiz).`
-      });
-    }
+    addToast({
+      type: 'success',
+      message: record.warrantyRepair || record.totalCost <= 0
+        ? `${record.patientName} adına servis teslim kaydı tamamlandı (Garanti Kapsamı - Ücretsiz).`
+        : `${record.patientName} adına servis teslim kaydı tamamlandı. ${formatCurrency(record.totalCost)} servis ücretini tahsilat için Kasa ekranına ayrıca girin.`
+    });
   };
 
   const handlePrintForm = (rawRecord: ServiceRecord) => {
@@ -571,7 +591,8 @@ export default function ServicePage() {
     printWindow.document.close();
   };
 
-  const handleAddOperation = () => {
+  const handleAddOperation = async () => {
+    if (serviceBusy) return;
     if (!selectedRecord) return;
 
     const labor = Number(opLaborCost) || 0;
@@ -600,6 +621,7 @@ export default function ServicePage() {
       notes: opShortNote ? (selectedRecord.notes ? `${selectedRecord.notes} | ${opShortNote}` : opShortNote) : selectedRecord.notes
     };
 
+    if (!await persist(updatedRecord)) return;
     const updatedRecords = records.map(r => r.id === selectedRecord.id ? updatedRecord : r);
     setRecords(updatedRecords);
     setSelectedRecord(updatedRecord);
@@ -624,7 +646,7 @@ export default function ServicePage() {
 
     const matchesName = (r.patientName || '').toLowerCase().includes(q);
     const matchesDevice = (r.deviceName || '').toLowerCase().includes(q);
-    const matchesSerial = (r.serialNo || '').toLowerCase().includes(q);
+    const matchesSerial = [r.serialNo, r.barcode].some(v => v?.toLowerCase().includes(q));
     const matchesProblem = (r.problem || '').toLowerCase().includes(q);
     const matchesTechnician = (r.technician || '').toLowerCase().includes(q);
 
@@ -638,6 +660,7 @@ export default function ServicePage() {
 
   return (
     <div className="page">
+      {serviceError && <p role="alert">{serviceError}</p>}
       <div className="page-header">
         <div className="page-header-left">
           <h2>Teknik Servis Takibi</h2>
@@ -812,7 +835,7 @@ export default function ServicePage() {
                       </div>
                     </td>
                     <td data-label="Cihaz" style={{ fontWeight: 600, fontSize: '0.85rem' }}>{record.deviceName}</td>
-                    <td data-label="Seri No" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{record.serialNo}</td>
+                    <td data-label="Seri No / Barkod" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{record.serialNo}<br />Barkod: {record.barcode || 'Kaydedilmemiş'}</td>
                     <td data-label="Arıza" style={{ maxWidth: 200, fontSize: '0.82rem', color: 'var(--gray-600)' }}>
                       {record.problem}
                     </td>
@@ -891,6 +914,7 @@ export default function ServicePage() {
                     <div>
                       <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Seri No: </span>
                       <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{selectedRecord.serialNo}</span>
+                      <span>Barkod: {selectedRecord.barcode || 'Kaydedilmemiş'}</span>
                     </div>
                     <div>
                       <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Teknisyen: </span>
@@ -1113,6 +1137,7 @@ export default function ServicePage() {
             <div className="modal-body" style={{ padding: 20, maxHeight: '78vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
               
               {/* 1. HASTA SECTION */}
+              {newRecordForm.unregisteredPatient && !activeBranchId && <label className="form-label">Kayıt şubesi<select className="form-select" value={serviceBranchId} onChange={e => setServiceBranchId(e.target.value)}><option value="">Şube seçin</option>{branchesList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
@@ -1224,6 +1249,8 @@ export default function ServicePage() {
               </div>
 
               {/* 2. CİHAZ SECTION */}
+              <DevicePicker items={stockList.filter(s => matches(s.branch, s.branchId))} value={deviceId} onChange={item => { setDeviceId(item.id); setBarcode(item.barcode || ''); setNewRecordForm(prev => ({ ...prev, deviceName: item.name, serialNo: item.serialNo, externalDevice: false })); }} />
+              <DeviceIdentityFields value={{ barcode, serialNo: newRecordForm.serialNo }} onChange={value => { setBarcode(value.barcode || ''); setNewRecordForm(prev => ({ ...prev, serialNo: value.serialNo || '' })); }} />
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>

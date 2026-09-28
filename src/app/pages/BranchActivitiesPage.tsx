@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconSearch, IconPlus, IconCheck, IconWarning, IconRefresh } from '../components/Icons';
 import { formatCurrency } from '../data/mockData';
 import { useBranchScope } from '../hooks/useBranchScope';
+import { fetchBranchTransfers, transferPatient } from '../repositories/OperationsRepository';
 
 interface TransferRecord {
   id: string;
@@ -17,7 +18,7 @@ interface TransferRecord {
 }
 
 export default function BranchActivitiesPage() {
-  const { addToast, branchesList: allBranches, usersList, salesList, appointmentsList, patientsList } = useApp();
+  const { addToast, branchesList: allBranches, usersList, salesList, appointmentsList, patientsList, currentOrgId, refreshOrganizationData } = useApp();
   const { matches } = useBranchScope();
   const branchesList = React.useMemo(() => allBranches.filter(branch => matches(branch.name, branch.id)), [allBranches, matches]);
 
@@ -44,38 +45,50 @@ export default function BranchActivitiesPage() {
     { id: 'trf-1', patientName: 'Ahmet Yılmaz', fromBranch: 'Merkez 2 - Beşiktaş', toBranch: 'Merkez 1 - Kadıköy', date: '2026-07-20', approvedBy: 'Dr. Elif Arslan', status: 'Tamamlandı' },
     { id: 'trf-2', patientName: 'Saniye Öztürk', fromBranch: 'Merkez 1 - Kadıköy', toBranch: 'Merkez 2 - Beşiktaş', date: '2026-07-15', approvedBy: 'Sek. Zeynep Acar', status: 'Tamamlandı' }
   ] : []));
+  useEffect(() => {
+    let cancelled = false;
+    if (currentOrgId) {
+      setTransfers([]);
+      fetchBranchTransfers().then(rows => { if (!cancelled) setTransfers(rows as TransferRecord[]); }).catch(e => { if (!cancelled) addToast({type:'error',message:e.message}); });
+    }
+    return () => { cancelled = true; };
+  }, [currentOrgId]);
 
   // Transfer Form State
-  const [formPatientName, setFormPatientName] = useState('');
-  const [formFromBranch, setFormFromBranch] = useState('Merkez 1 - Kadıköy');
-  const [formToBranch, setFormToBranch] = useState('Merkez 2 - Beşiktaş');
+  const [formPatientId, setFormPatientId] = useState('');
+  const [formToBranchId, setFormToBranchId] = useState('');
+  const [savingTransfer, setSavingTransfer] = useState(false);
+  const [transferRequestId, setTransferRequestId] = useState(() => crypto.randomUUID());
 
-  const handleCreateTransfer = (e: React.FormEvent) => {
+  const handleCreateTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formPatientName.trim()) {
-      alert('Lütfen hasta adı girin.');
-      return;
-    }
-    if (formFromBranch === formToBranch) {
-      alert('Başlangıç ve hedef şube aynı olamaz.');
-      return;
-    }
+    const patient = patientsList.find(p => p.id === formPatientId);
+    const target = allBranches.find(b => b.id === formToBranchId);
+    if (!patient || !patient.branchId || !target || patient.branchId === target.id || savingTransfer) { addToast({type:'error',message:'Kayıtlı hasta ve farklı, aktif hedef şube seçin.'}); return; }
+    if (!currentOrgId) { addToast({type:'error',message:'Aktif firma gerekli.'}); return; }
+    setSavingTransfer(true);
+    const requestId = transferRequestId;
+    try { await transferPatient(patient.id, target.id, requestId); }
+    catch(e) { addToast({type:'error',message:(e as Error).message}); setSavingTransfer(false); return; }
 
     const newTransfer: TransferRecord = {
-      id: 'trf-' + Date.now(),
-      patientName: formPatientName,
-      fromBranch: formFromBranch,
-      toBranch: formToBranch,
+      id: requestId,
+      patientName: patient.firstName + ' ' + patient.lastName,
+      fromBranch: allBranches.find(b => b.id === patient.branchId)?.name || '',
+      toBranch: target.name,
       date: new Date().toISOString().split('T')[0],
       approvedBy: 'Dr. Elif Arslan',
       status: 'Tamamlandı'
     };
 
-    setTransfers(prev => [newTransfer, ...prev]);
-    setFormPatientName('');
+    setTransfers(prev => [newTransfer, ...prev.filter(t => t.id !== requestId)]);
+    setFormPatientId('');
+    setTransferRequestId(crypto.randomUUID());
+    await refreshOrganizationData();
+    setSavingTransfer(false);
     addToast({
       type: 'success',
-      message: `${formPatientName} adlı hastanın şube ataması başarıyla güncellendi ve dosya transferi tamamlandı.`
+      message: `${patient.firstName} ${patient.lastName} adlı hastanın şubesi güncellendi; işlem transfer günlüğüne kaydedildi.`
     });
   };
 
@@ -143,13 +156,10 @@ export default function BranchActivitiesPage() {
             <div className="card-body" style={{ padding: 20 }}>
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label className="form-label">Hasta Adı Soyadı</label>
-                <input
-                  className="form-input"
-                  placeholder="Şubesi değiştirilecek hastanın adı"
-                  value={formPatientName}
-                  onChange={(e) => setFormPatientName(e.target.value)}
-                  required
-                />
+                <select className="form-input" value={formPatientId} onChange={e => { setFormPatientId(e.target.value); setFormToBranchId(''); }} required>
+                  <option value="">Hasta seçin</option>
+                  {patientsList.filter(p => p.branchId).map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} · {allBranches.find(b => b.id === p.branchId)?.name}</option>)}
+                </select>
               </div>
 
               <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
@@ -157,27 +167,27 @@ export default function BranchActivitiesPage() {
                   <label className="form-label">Mevcut Şubesi</label>
                   <select
                     className="form-input"
-                    value={formFromBranch}
-                    onChange={(e) => setFormFromBranch(e.target.value)}
+                    value={allBranches.find(b => b.id === patientsList.find(p => p.id === formPatientId)?.branchId)?.name || ''}
+                    disabled
                   >
-                    <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
-                    <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
+                    <option value="">Hasta seçin</option>
+                    {allBranches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
                   <label className="form-label">Hedef Şubesi</label>
                   <select
                     className="form-input"
-                    value={formToBranch}
-                    onChange={(e) => setFormToBranch(e.target.value)}
+                    value={formToBranchId}
+                    onChange={(e) => setFormToBranchId(e.target.value)}
                   >
-                    <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
-                    <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
+                    <option value="">Hedef şube seçin</option>
+                    {allBranches.filter(b => b.id !== patientsList.find(p => p.id === formPatientId)?.branchId && b.status !== 'Pasif' && String(b.status) !== 'inactive').map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+              <button type="submit" disabled={savingTransfer} className="btn btn-primary" style={{ width: '100%' }}>
                 Hasta Dosyasını ve Kaydını Transfer Et
               </button>
             </div>

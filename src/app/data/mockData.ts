@@ -70,6 +70,7 @@ export interface StockItem {
   brand: string;
   model: string;
   serialNo: string;
+  barcode?: string;
   quantity: number;
   criticalLevel: number;
   price: number;
@@ -95,7 +96,7 @@ export interface SaleRecord {
   patientId: string;
   patientName: string;
   date: string;
-  items: { name: string; quantity: number; price: number; type?: 'Cihaz' | 'Pil' | 'Servis Geliri' | 'Aksesuar' }[];
+  items: { name: string; quantity: number; price: number; stockItemId?: string; barcode?: string; serialNo?: string; type?: 'Cihaz' | 'Pil' | 'Servis Geliri' | 'Aksesuar' }[];
   total: number;
   sgkAmount: number;
   patientAmount: number;

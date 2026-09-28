@@ -90,6 +90,7 @@ interface AppContextType {
   currentOrg?: any;
   logout: () => Promise<void>;
   dataLoading: boolean;
+  refreshOrganizationData: () => Promise<void>;
   
   // Dinamik Veri Eyaletleri
   patientsList: Patient[];
@@ -112,8 +113,8 @@ interface AppContextType {
   addSupplierPurchaseTransaction: (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => Promise<void>;
   approveSGKPrescription: (patientId: string, prescriptionNo: string, reportNo: string) => Promise<void>;
   completeServiceTicket: (ticketId: string, patientName: string, serviceFee: number, partsUsed?: { stockItemId: string; stockItemName: string; quantity: number; price: number }[], cashRegisterId?: string) => Promise<void>;
-  addStockItem: (item: StockItem) => void;
-  updateStockItem: (item: StockItem) => void;
+  addStockItem: (item: StockItem) => Promise<void>;
+  updateStockItem: (item: StockItem) => Promise<void>;
   deleteStockItem: (id: string) => void;
   updateRecallItemStatus: (id: string, status: RecallItem['status']) => void;
   
@@ -123,9 +124,9 @@ interface AppContextType {
   deleteSupplier: (id: string) => void;
   
   // P0 — Masraf
-  addExpense: (expense: Expense, cashRegisterId?: string) => void;
-  updateExpense: (expense: Expense) => void;
-  deleteExpense: (id: string) => void;
+  addExpense: (expense: Expense, cashRegisterId?: string) => Promise<void>;
+  updateExpense: (expense: Expense) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
   
   // P0 — Kullanıcı
   addUser: (user: SystemUser) => void;
@@ -273,6 +274,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       if (generation === dataGeneration.current) setDataLoading(false);
     }
+  };
+  const refreshOrganizationData = async () => {
+    if (currentOrgId) await loadAllData();
   };
 
   // Fix #1: Organizasyon seçimi değiştiğinde verileri otomatik yükle
@@ -525,6 +529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addToast({ type: 'success', message: 'Ürün envantere eklendi.' });
       } catch (err: any) {
         addToast({ type: 'error', message: `Ürün eklenemedi: ${err.message}` });
+        throw err;
       }
     } else {
       setStockList(prev => [item, ...prev]);
@@ -532,16 +537,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateStockItem = async (updatedItem: StockItem) => {
-    setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
-    addToast({ type: 'success', message: 'Ürün bilgileri güncellendi.' });
     if (currentOrgId && updatedItem.id) {
       try {
-        await dbUpdateStockItem(updatedItem.id, updatedItem);
+        const saved = await dbUpdateStockItem(updatedItem.id, updatedItem);
+        setStockList(prev => prev.map(s => s.id === saved.id ? saved : s));
+        addToast({ type: 'success', message: 'Ürün bilgileri güncellendi.' });
       } catch (err: any) {
         logger.warn(`dbUpdateStockItem background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Stok ürünü yerelde güncellendi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: 'Stok ürünü kaydedilemedi.' });
+        throw err;
       }
-    }
+    } else if (demoModeActive) setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
   };
 
   // Fix #2: Stok silme artık DB'ye de yazılıyor
@@ -620,22 +626,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addExpense = async (expense: Expense & { idempotencyKey?: string }, cashRegisterId?: string) => {
     try {
       if (currentOrgId) {
-        await dbInsertExpense({
+        const created = await dbInsertExpense({
           ...expense,
           idempotency_key: expense.idempotencyKey
         });
-        // Kasa hareketini DB'ye persist et
-        await dbInsertCashTransaction({
-          cashRegisterId: cashRegisterId || 'kas-1',
-          type: 'EXPENSE',
-          amount: expense.amount,
-          category: expense.category,
-          referenceEntity: 'expense',
-          referenceId: expense.id,
-          description: expense.description,
-          branchId: expense.branchId,
-          idempotency_key: expense.idempotencyKey ? `tx-${expense.idempotencyKey}` : undefined
-        });
+        setExpensesList(prev => [created, ...prev.filter(e => e.id !== created.id)]);
+        addToast({ type: 'success', message: 'Gider ve kasa hareketi kaydedildi.' });
+        return;
       }
       CashDomainService.recordTransaction({
         cashRegisterId: cashRegisterId || 'kas-1',
@@ -659,30 +656,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     } catch (err: any) {
       addToast({ type: 'error', message: `Gider eklenemedi: ${err.message}` });
+      throw err;
     }
   };
   const updateExpense = async (updatedExpense: Expense) => {
-    setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
-    addToast({ type: 'success', message: 'Gider kaydı güncellendi.' });
     if (currentOrgId && updatedExpense.id) {
       try {
-        await dbUpdateExpense(updatedExpense.id, updatedExpense);
+        const saved = await dbUpdateExpense(updatedExpense.id, updatedExpense);
+        if (!saved) throw new Error('Kayıt bulunamadı.');
+        setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? saved : e));
+        addToast({ type: 'success', message: 'Gider ve kasa hareketi güncellendi.' });
       } catch (err: any) {
         logger.warn(`dbUpdateExpense background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Gider kaydı yerelde güncellendi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: 'Gider güncellenemedi; kayıt değiştirilmedi.' });
+        throw err;
       }
     }
   };
 
   const deleteExpense = async (id: string) => {
-    setExpensesList(prev => prev.filter(e => e.id !== id));
-    addToast({ type: 'success', message: 'Gider kaydı silindi.' });
     if (currentOrgId) {
       try {
         await dbDeleteExpense(id);
+        setExpensesList(prev => prev.filter(e => e.id !== id));
+        addToast({ type: 'success', message: 'Gider iptal edildi ve kasa düzeltildi.' });
       } catch (err: any) {
         logger.warn(`dbDeleteExpense background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Gider silme işlemi yerelde gerçekleşti ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: 'Gider iptal edilemedi; kayıt değiştirilmedi.' });
+        throw err;
       }
     }
   };
@@ -789,6 +790,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentOrg,
       logout,
       dataLoading,
+      refreshOrganizationData,
       
       patientsList,
       appointmentsList,

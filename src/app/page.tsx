@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { AppProvider, useApp } from './context/AppContext';
 import { BranchProvider, useBranch } from './context/BranchContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -11,28 +12,28 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import { IconCheck, IconWarning, IconClose } from './components/Icons';
-import DashboardPage from './pages/DashboardPage';
-import PatientsPage from './pages/PatientsPage';
-import PatientDetailPage from './pages/PatientDetailPage';
-import AppointmentsPage from './pages/AppointmentsPage';
-import RecallPage from './pages/RecallPage';
-import SGKPage from './pages/SGKPage';
-import StockPage from './pages/StockPage';
-import CashPage from './pages/CashPage';
-import ServicePage from './pages/ServicePage';
-import ReportsPage from './pages/ReportsPage';
-import BranchesPage from './pages/BranchesPage';
-import SettingsPage from './pages/SettingsPage';
-import SuppliersPage from './pages/SuppliersPage';
-import ExpensesPage from './pages/ExpensesPage';
-import AuditLogPage from './pages/AuditLogPage';
-import SgkReceivablesPage from './pages/SgkReceivablesPage';
-import AssetsPage from './pages/AssetsPage';
-import SupportPage from './pages/SupportPage';
-import ActivityLogPage from './pages/ActivityLogPage';
-import BranchActivitiesPage from './pages/BranchActivitiesPage';
-import LoginPage from './pages/LoginPage';
-import OrgSelectPage from './pages/OrgSelectPage';
+const pageLoading = () => <p role="status" style={{ padding: 24 }}>Ekran yükleniyor…</p>;
+const DashboardPage = dynamic(() => import('./pages/DashboardPage'), { loading: pageLoading });
+const PatientsPage = dynamic(() => import('./pages/PatientsPage'), { loading: pageLoading });
+const PatientDetailPage = dynamic(() => import('./pages/PatientDetailPage'), { loading: pageLoading });
+const AppointmentsPage = dynamic(() => import('./pages/AppointmentsPage'), { loading: pageLoading });
+const RecallPage = dynamic(() => import('./pages/RecallPage'), { loading: pageLoading });
+const SGKPage = dynamic(() => import('./pages/SGKPage'), { loading: pageLoading });
+const StockPage = dynamic(() => import('./pages/StockPage'), { loading: pageLoading });
+const FinancePage = dynamic(() => import('./pages/FinancePage'), { loading: pageLoading });
+const ServicePage = dynamic(() => import('./pages/ServicePage'), { loading: pageLoading });
+const ReportsPage = dynamic(() => import('./pages/ReportsPage'), { loading: pageLoading });
+const BranchesPage = dynamic(() => import('./pages/BranchesPage'), { loading: pageLoading });
+const SettingsPage = dynamic(() => import('./pages/SettingsPage'), { loading: pageLoading });
+const SuppliersPage = dynamic(() => import('./pages/SuppliersPage'), { loading: pageLoading });
+const AuditLogPage = dynamic(() => import('./pages/AuditLogPage'), { loading: pageLoading });
+const SgkReceivablesPage = dynamic(() => import('./pages/SgkReceivablesPage'), { loading: pageLoading });
+const AssetsPage = dynamic(() => import('./pages/AssetsPage'), { loading: pageLoading });
+const SupportPage = dynamic(() => import('./pages/SupportPage'), { loading: pageLoading });
+const ActivityLogPage = dynamic(() => import('./pages/ActivityLogPage'), { loading: pageLoading });
+const BranchActivitiesPage = dynamic(() => import('./pages/BranchActivitiesPage'), { loading: pageLoading });
+const LoginPage = dynamic(() => import('./pages/LoginPage'), { loading: pageLoading });
+const OrgSelectPage = dynamic(() => import('./pages/OrgSelectPage'), { loading: pageLoading });
 
 function ToastIcon({ type }: { type: string }) {
   if (type === 'success') return <IconCheck size={16} strokeWidth={2} />;
@@ -84,13 +85,13 @@ function AppContent() {
       case 'recall':            return <RecallPage />;
       case 'sgk':               return <SGKPage />;
       case 'stock':             return <StockPage />;
-      case 'cash':              return <CashPage />;
+      case 'cash':              return <FinancePage />;
       case 'service':           return <ServicePage />;
       case 'reports':           return <ReportsPage />;
       case 'branches':          return <BranchesPage />;
       case 'settings':          return <SettingsPage />;
       case 'suppliers':         return <SuppliersPage />;
-      case 'expenses':          return <ExpensesPage />;
+      case 'expenses':          return <FinancePage />;
       case 'audit-log':         return <AuditLogPage />;
       case 'sgk-receivables':   return <SgkReceivablesPage />;
       case 'assets':            return <AssetsPage />;
@@ -131,7 +132,6 @@ function AppContent() {
 
       <main className="main-content">
         <Header />
-        {['service','assets','activity-log','sgk-receivables','branch-activities'].includes(currentPage) && <p role="status" style={{padding:16,background:'#fff3cd'}}>Bu ekranın bazı işlemleri yalnızca bu oturumda tutulur. Kalıcı kayıt entegrasyonu tamamlanmadan üretim kaydı için kullanmayın.</p>}
         {renderPage()}
       </main>
 

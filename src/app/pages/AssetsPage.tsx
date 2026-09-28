@@ -5,13 +5,16 @@ import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { IconSearch, IconPlus, IconEdit, IconDelete, IconCheck, IconWarning, IconRefresh } from '../components/Icons';
+import { archiveAsset, AssetRecord, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
+import { useEffect } from 'react';
 
 interface Asset {
   id: string;
   name: string;
   category: 'Klinik Cihaz' | 'Ofis Ekipmanı' | 'Bilgisayar & Çevre' | 'Mobilya' | 'Diğer';
   serialNo: string;
-  branch: 'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Genel';
+  branch: string;
+  branchId?: string;
   purchaseDate: string;
   cost: number;
   warrantyExpiry: string;
@@ -22,7 +25,7 @@ interface Asset {
 }
 
 export default function AssetsPage() {
-  const { addToast } = useApp();
+  const { addToast, currentOrgId, branchesList } = useApp();
   const { activeBranch } = useBranch();
 
   const [assets, setAssets] = useState<Asset[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
@@ -96,6 +99,12 @@ export default function AssetsPage() {
       notes: 'Kartuş arızası var, yedek parça olarak saklanıyor.'
     }
   ] : []));
+  useEffect(() => {
+    let cancelled = false;
+    setAssets([]);
+    if (currentOrgId) fetchAssets().then(rows => { if (!cancelled) setAssets(rows as Asset[]); }).catch(e => { if (!cancelled) addToast({type:'error',message:e.message}); });
+    return () => { cancelled = true; };
+  }, [currentOrgId]);
 
   // Search & Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,7 +121,7 @@ export default function AssetsPage() {
   const [formName, setFormName] = useState('');
   const [formCategory, setFormCategory] = useState<'Klinik Cihaz' | 'Ofis Ekipmanı' | 'Bilgisayar & Çevre' | 'Mobilya' | 'Diğer'>('Ofis Ekipmanı');
   const [formSerialNo, setFormSerialNo] = useState('');
-  const [formBranch, setFormBranch] = useState<'Merkez 1 - Kadıköy' | 'Merkez 2 - Beşiktaş' | 'Genel'>('Merkez 1 - Kadıköy');
+  const [formBranch, setFormBranch] = useState('');
   const [formPurchaseDate, setFormPurchaseDate] = useState('');
   const [formCost, setFormCost] = useState<number>(0);
   const [formWarrantyExpiry, setFormWarrantyExpiry] = useState('');
@@ -127,7 +136,7 @@ export default function AssetsPage() {
     setFormName('');
     setFormCategory('Ofis Ekipmanı');
     setFormSerialNo('');
-    setFormBranch('Merkez 1 - Kadıköy');
+    setFormBranch(activeBranch.mode === 'single' ? activeBranch.branch?.name || '' : branchesList[0]?.name || '');
     setFormPurchaseDate(new Date().toISOString().split('T')[0]);
     setFormCost(0);
     setFormWarrantyExpiry('');
@@ -155,14 +164,24 @@ export default function AssetsPage() {
     setShowModal(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       alert('Demirbaş adı zorunludur');
       return;
     }
 
+    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : branchesList.find(b => b.name === formBranch)?.id;
+    if (currentOrgId && !branchId) { addToast({type:'error',message:'Demirbaş için şube seçin.'}); return; }
     if (isEditing && editingAssetId) {
+      const updated: Asset = {
+        ...(assets.find(a => a.id === editingAssetId) as Asset), id: editingAssetId,
+        name: formName, category: formCategory, serialNo: formSerialNo, branch: formBranch, branchId,
+        purchaseDate: formPurchaseDate, cost: formCost, warrantyExpiry: formWarrantyExpiry,
+        lastMaintenance: formLastMaintenance, maintenanceIntervalMonths: formInterval,
+        status: formStatus, notes: formNotes,
+      };
+      if (currentOrgId) { try { const saved = await saveAsset(updated as AssetRecord); setAssets(prev => prev.map(a => a.id === saved.id ? saved as Asset : a)); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
       setAssets(prev => prev.map(a => {
         if (a.id === editingAssetId) {
           return {
@@ -171,6 +190,7 @@ export default function AssetsPage() {
             category: formCategory,
             serialNo: formSerialNo,
             branch: formBranch,
+            branchId,
             purchaseDate: formPurchaseDate,
             cost: formCost,
             warrantyExpiry: formWarrantyExpiry,
@@ -185,11 +205,12 @@ export default function AssetsPage() {
       addToast({ type: 'success', message: 'Demirbaş kaydı güncellendi.' });
     } else {
       const newAsset: Asset = {
-        id: 'ast-' + Date.now(),
+        id: currentOrgId ? crypto.randomUUID() : 'ast-' + Date.now(),
         name: formName,
         category: formCategory,
         serialNo: formSerialNo,
         branch: formBranch,
+        branchId,
         purchaseDate: formPurchaseDate,
         cost: formCost,
         warrantyExpiry: formWarrantyExpiry,
@@ -198,20 +219,24 @@ export default function AssetsPage() {
         status: formStatus,
         notes: formNotes
       };
-      setAssets(prev => [newAsset, ...prev]);
+      if (currentOrgId) { try { const saved = await saveAsset(newAsset as AssetRecord); setAssets(prev => [saved as Asset, ...prev]); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
+      else setAssets(prev => [newAsset, ...prev]);
       addToast({ type: 'success', message: 'Yeni demirbaş kaydı oluşturuldu.' });
     }
     setShowModal(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Bu demirbaş kaydını silmek istediğinize emin misiniz?')) {
+      if (currentOrgId) { try { await archiveAsset(id); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
       setAssets(prev => prev.filter(a => a.id !== id));
-      addToast({ type: 'warning', message: 'Demirbaş kaydı silindi.' });
+      addToast({ type: 'success', message: 'Demirbaş arşivlendi.' });
     }
   };
 
-  const handleMaintenanceDone = (id: string) => {
+  const handleMaintenanceDone = async (id: string) => {
+    const asset = assets.find(a => a.id === id);
+    if (asset && currentOrgId) { try { const saved = await saveAsset({...asset,lastMaintenance:new Date().toISOString().slice(0,10)} as AssetRecord); setAssets(prev => prev.map(a => a.id===id ? saved as Asset : a)); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
     setAssets(prev => prev.map(a => {
       if (a.id === id) {
         return {
@@ -230,7 +255,7 @@ export default function AssetsPage() {
 
   // Branch Filtered Assets
   const branchFilteredAssets = assets.filter((a, index) => 
-    BranchService.matchesBranch(a.branch, undefined, activeBranch, index)
+    BranchService.matchesBranch(a.branch, a.branchId, activeBranch, index)
   );
 
   // Filter Logic
@@ -514,10 +539,9 @@ export default function AssetsPage() {
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>
                     <label className="form-label">Bulunduğu Şube</label>
-                    <select className="form-input" value={formBranch} onChange={(e) => setFormBranch(e.target.value as any)}>
-                      <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
-                      <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
-                      <option value="Genel">Genel (Tüm Şirket)</option>
+                    <select className="form-input" value={activeBranch.mode === 'single' ? activeBranch.branch?.name || '' : formBranch} onChange={(e) => setFormBranch(e.target.value)} disabled={activeBranch.mode === 'single'}>
+                      <option value="">Şube seçin</option>
+                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>

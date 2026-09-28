@@ -6,6 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { useDebounce } from '../hooks/useDebounce';
+import DeviceIdentityFields from '../components/DeviceIdentityFields';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
@@ -63,10 +64,13 @@ export default function StockPage() {
     mersisNo: ''
   });
 
-  const handleSaveNew = () => {
+  const handleSaveNew = async () => {
     if (!formData.name) {
       addToast({ type: 'warning', message: 'Lütfen Ürün Adı alanını doldurunuz.' });
       return;
+    }
+    if (formData.category === 'Cihaz' && (!formData.gtin.trim() || !formData.serialNo.trim() || Number(formData.quantity) > 1)) {
+      addToast({ type: 'error', message: 'Her cihaz için barkod ve seri numarası girin; seri numaralı cihazı tek adet kaydedin.' }); return;
     }
     const newItem: StockItem = {
       id: `s-${Date.now().toString().slice(-6)}`,
@@ -80,15 +84,17 @@ export default function StockPage() {
       sgkPrice: Number(formData.price) * 0.4,
       warrantyExpiry: formData.expiryDate || '2028-07-10',
       location: 'Depo',
-      serialNo: formData.serialNo || (formData.utsTrackType !== 'Takip Yok' ? `SN-${Math.floor(Math.random() * 900000 + 100000)}` : '—'),
+      serialNo: formData.serialNo.trim(),
+      barcode: formData.gtin.trim(),
       utsStatus: formData.utsTrackType !== 'Takip Yok' ? 'Bekliyor' : 'Gerekli Değil',
-      branch: formData.branch,
+      branch: activeBranch.mode === 'single' ? activeBranch.branch?.name || formData.branch : formData.branch,
+      branchId: activeBranch.mode === 'single' ? activeBranch.branchId : undefined,
       criticalLevel: Number(formData.criticalLevel) || 0,
       status: formData.status,
       utsKurumNo: formData.utsKurumNo || '954201',
-      gln: formData.gtin || ''
+      gln: formData.gln || ''
     };
-    addStockItem(newItem);
+    try { await addStockItem(newItem); } catch { return; }
     setShowAddModal(false);
     // Reset form
     setFormData({
@@ -121,23 +127,23 @@ export default function StockPage() {
     addToast({ type: 'success', message: `${newItem.name} ürünü stoğa başarıyla eklendi.` });
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingItem) return;
-    updateStockItem(editingItem);
+    try { await updateStockItem(editingItem); } catch { return; }
     setShowEditModal(false);
     setEditingItem(null);
   };
 
   // Fix #9: Şube filtresi BranchService.matchesBranch ile çalışıyor
   const branchFilteredStock = stockList.filter((item, index) => 
-    BranchService.matchesBranch(item.branch, undefined, activeBranch, index)
+    BranchService.matchesBranch(item.branch, item.branchId, activeBranch, index)
   );
 
   const debouncedSearch = useDebounce(search, 300);
 
   const filtered = branchFilteredStock.filter(item => {
     const searchLower = debouncedSearch.toLowerCase().trim();
-    const matchSearch = !searchLower || item.name.toLowerCase().includes(searchLower) || item.brand.toLowerCase().includes(searchLower);
+    const matchSearch = !searchLower || [item.name, item.brand, item.serialNo, item.barcode].some(v => v?.toLowerCase().includes(searchLower));
     const matchCategory = filterCategory === 'Tümü' || item.category === filterCategory;
     return matchSearch && matchCategory;
   });
@@ -409,6 +415,7 @@ export default function StockPage() {
                     <td data-label="Seri No / Şube">
                       <div>
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', fontWeight: 600 }}>{item.serialNo}</div>
+                        <div style={{ fontSize: '0.75rem' }}>Barkod: {item.barcode || 'Kaydedilmemiş'}</div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>{item.branch}</div>
                       </div>
                     </td>
@@ -730,6 +737,7 @@ export default function StockPage() {
             <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px' }}>
               {activeAddTab === 'info' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <DeviceIdentityFields value={{ barcode: formData.gtin, serialNo: formData.serialNo }} onChange={value => setFormData(prev => ({ ...prev, gtin: value.barcode || '', serialNo: value.serialNo || '', quantity: prev.category === 'Cihaz' ? 1 : prev.quantity }))} />
                   {/* Row 1: Ürün Adı & Kategori */}
                   <div className="form-row">
                     <div className="form-group">
@@ -1006,7 +1014,7 @@ export default function StockPage() {
                     </div>
                     <div className="form-group">
                       <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        GTIN / Barkod (UNO)
+                        GLN (Kurum numarası)
                         <span style={{ cursor: 'help', color: 'var(--gray-400)', fontSize: '0.8rem' }} title="Küresel Ticari Ürün Numarası (GTIN)">ⓘ</span>
                       </label>
                       <div style={{ position: 'relative' }}>
@@ -1014,8 +1022,8 @@ export default function StockPage() {
                         <input
                           className="form-input"
                           placeholder="Örn: 05714880198904"
-                          value={formData.gtin}
-                          onChange={(e) => setFormData({ ...formData, gtin: e.target.value })}
+                          value={formData.gln}
+                          onChange={(e) => setFormData({ ...formData, gln: e.target.value })}
                           style={{ paddingLeft: 34 }}
                         />
                       </div>
@@ -1190,6 +1198,7 @@ export default function StockPage() {
             <div className="modal-body" style={{ overflowY: 'auto', padding: '20px 24px' }}>
               {activeEditTab === 'info' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <DeviceIdentityFields value={editingItem} onChange={value => setEditingItem({ ...editingItem, ...value })} />
                   {/* Row 1: Ürün Adı & Kategori */}
                   <div className="form-row">
                     <div className="form-group">
@@ -1267,13 +1276,7 @@ export default function StockPage() {
                       />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Ürün Kodu (SKU)</label>
-                      <input
-                        className="form-input"
-                        placeholder="SKU"
-                        value={editingItem.serialNo || '11'}
-                        onChange={(e) => setEditingItem({ ...editingItem, serialNo: e.target.value })}
-                      />
+                      <label className="form-label">Seri numarası yukarıdaki cihaz kimliği bölümünden düzenlenir.</label>
                     </div>
                   </div>
 

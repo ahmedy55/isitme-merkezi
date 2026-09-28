@@ -11,10 +11,15 @@ import {
   IconMessage, IconDevice, IconUpload, IconClose, IconPlus, IconArrowRight,
   IconPatients
 } from '../components/Icons';
+import DevicePicker from '../components/DevicePicker';
+import DeviceIdentityFields from '../components/DeviceIdentityFields';
+import { useBranchScope } from '../hooks/useBranchScope';
+import { saveServiceTicket } from '../repositories/ServiceTicketRepository';
 
 const FREQUENCIES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
 
 export default function PatientDetailPage() {
+  const { matches } = useBranchScope();
   const { 
     selectedPatientId, 
     setCurrentPage, 
@@ -28,12 +33,16 @@ export default function PatientDetailPage() {
     addSale,
     appointmentsList,
     addAppointment,
-    salesList
+    salesList,
+    currentOrgId
   } = useApp();
 
   const [activeTab, setActiveTab] = useState('genel');
   const [comparePast, setComparePast] = useState(false);
   const [isParsingXml, setIsParsingXml] = useState(false);
+  const [saleStockId, setSaleStockId] = useState('');
+  const [serviceBarcode, setServiceBarcode] = useState('');
+  const [serviceStockId, setServiceStockId] = useState('');
 
   const [showEditPatientModal, setShowEditPatientModal] = useState(false);
   const [showQuickAptModal, setShowQuickAptModal] = useState(false);
@@ -220,14 +229,15 @@ export default function PatientDetailPage() {
     );
   }
 
-  const handleStartSale = async (deviceName: string, price: number) => {
-    const matchedStockItem=stockList.find(s=>s.name===deviceName && s.quantity>0);
+  const handleStartSale = async (deviceName: string, price: number, stockId: string) => {
+    const matchedStockItem=stockList.find(s=>s.id===stockId && s.name===deviceName && s.quantity>0);
     if(!matchedStockItem){addToast({type:'error',message:'Bu cihaz için stok kaydı seçilmelidir.'});return;}
+    if(matchedStockItem.category==='Cihaz' && (!matchedStockItem.barcode || !matchedStockItem.serialNo)) { addToast({type:'error',message:'Cihazın barkod ve seri numarası stokta kayıtlı olmalıdır.'});return; }
     const sgkAmount=Math.min(price,patient.sgkStatus==='Yenileme Hakkı Var'?6200:0);
     try {
       await addSale({id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),patientId:patient.id,
         patientName:patient.firstName+' '+patient.lastName,date:new Date().toISOString().split('T')[0],
-        items:[{name:matchedStockItem.name,quantity:1,price,type:'Cihaz'}],total:price,
+        items:[{name:matchedStockItem.name,quantity:1,price,type:matchedStockItem.category==='Cihaz'?'Cihaz':'Aksesuar',stockItemId:matchedStockItem.id,barcode:matchedStockItem.barcode,serialNo:matchedStockItem.serialNo}],total:price,
         sgkAmount,patientAmount:price-sgkAmount,paymentMethod:'Kredi Kartı',status:'Tahsil Edildi'},matchedStockItem.id);
     } catch { return; }
   };
@@ -269,13 +279,27 @@ export default function PatientDetailPage() {
     addToast({ type: 'success', message: 'Hasta bilgileri başarıyla güncellendi.' });
   };
 
-  const handleSaveService = () => {
+  const handleSaveService = async () => {
     if (!patient) return;
     if (!serviceFormData.deviceName) {
       alert('Lütfen cihaz adı girin.');
       return;
     }
 
+    const assignedDevice = stockList.find(s => s.id === serviceStockId);
+    if (assignedDevice && (assignedDevice.serialNo !== serviceFormData.serialNo || assignedDevice.barcode !== serviceBarcode)) { addToast({ type: 'error', message: 'Okutulan cihaz kimliği stoktaki cihazla eşleşmiyor.' }); return; }
+    if (!patient.branchId) { addToast({ type: 'error', message: 'Servis kaydı için hastaya şube atanmış olmalı.' }); return; }
+    const ticket = {
+      id: crypto.randomUUID(), patientId: patient.id, branchId: patient.branchId, stockItemId: serviceStockId || undefined,
+      patientName: `${patient.firstName} ${patient.lastName}`, deviceName: serviceFormData.deviceName,
+      serialNo: serviceFormData.serialNo, barcode: serviceBarcode,
+      receivedDate: new Date().toISOString().slice(0, 10), estimatedDate: serviceFormData.estimatedDate,
+      returnedDate: null, problem: serviceFormData.problem || 'Belirtilmedi', operations: [], totalCost: 0,
+      status: 'Alındı' as const, technician: '', warrantyRepair: false, notes: serviceFormData.notes,
+      accessoriesTaken: serviceFormData.accessories, complaints: serviceFormData.complaints,
+    };
+    try { await saveServiceTicket(currentOrgId || '', ticket); }
+    catch (e) { addToast({ type: 'error', message: (e as Error).message }); return; }
     const updated = {
       ...patient,
       timeline: [
@@ -289,6 +313,7 @@ export default function PatientDetailPage() {
     };
     updatePatient(updated);
     setShowServiceModal(false);
+    setServiceBarcode(''); setServiceStockId('');
     setServiceFormData({
       deviceName: '',
       serialNo: '',
@@ -1106,7 +1131,8 @@ export default function PatientDetailPage() {
                               </span>
                             </div>
                           </div>
-                          <button className="btn btn-sm btn-primary" onClick={() => handleStartSale(brand.name, brand.price)}>
+                        <DevicePicker items={stockList.filter(s => s.name === brand.name && s.quantity > 0 && matches(s.branch, s.branchId) && (!patient.branchId || s.branchId === patient.branchId))} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
+                          <button className="btn btn-sm btn-primary" disabled={!stockList.some(s => s.id === saleStockId && s.name === brand.name)} onClick={() => handleStartSale(brand.name, brand.price, saleStockId)}>
                             Satışı Başlat
                           </button>
                         </div>
@@ -1414,8 +1440,8 @@ export default function PatientDetailPage() {
                         padding: '4px 0',
                         color: 'var(--gray-600)',
                       }}>
-                        <span>{item.name} ×{item.quantity}</span>
-                        <span>{formatCurrency(item.price)}</span>
+                        <span>{item.name} ×{item.quantity}<br />{item.serialNo && <>Seri: {item.serialNo} </>}{item.barcode && <>· Barkod: {item.barcode}</>}</span>
+                        <span>{item.serialNo && <>Seri: {item.serialNo} · </>}{item.barcode && <>Barkod: {item.barcode} · </>}{formatCurrency(item.price)}</span>
                       </div>
                     ))}
                     {sale.sgkAmount > 0 && (
@@ -1814,6 +1840,8 @@ export default function PatientDetailPage() {
               <button className="modal-close" onClick={() => setShowServiceModal(false)}>✕</button>
             </div>
             <div className="modal-body">
+              <DevicePicker items={stockList.filter(s => s.quantity > 0 && (!patient.branchId || s.branchId === patient.branchId))} value={serviceStockId} onChange={item => { setServiceStockId(item.id); setServiceBarcode(item.barcode || ''); setServiceFormData(prev => ({ ...prev, deviceName: item.name, serialNo: item.serialNo })); }} />
+              <DeviceIdentityFields value={{ barcode: serviceBarcode, serialNo: serviceFormData.serialNo }} onChange={next => { setServiceBarcode(next.barcode || ''); setServiceFormData(prev => ({ ...prev, serialNo: next.serialNo || '' })); }} />
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Cihaz</label>

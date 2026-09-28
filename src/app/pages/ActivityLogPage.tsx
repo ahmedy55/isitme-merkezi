@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { IconSearch, IconPlus, IconCheck, IconWarning } from '../components/Icons';
+import { createActivity, fetchActivities } from '../repositories/OperationsRepository';
+import { useBranchScope } from '../hooks/useBranchScope';
 
 interface Activity {
   id: string;
@@ -13,10 +15,12 @@ interface Activity {
   patientName: string;
   description: string;
   duration?: string; // Görüşme süresi örn: "4 dk"
+  branchId?: string;
 }
 
 export default function ActivityLogPage() {
-  const { addToast } = useApp();
+  const { addToast, currentOrgId, branchesList, patientsList } = useApp();
+  const { activeBranchId, matches } = useBranchScope();
 
   const [activities, setActivities] = useState<Activity[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     {
@@ -66,6 +70,12 @@ export default function ActivityLogPage() {
       description: 'Cihaz deneme sürecinde sol kulakta hafif kaşıntı şikayeti olduğu not düşüldü.',
     }
   ] : []));
+  useEffect(() => {
+    let cancelled = false;
+    setActivities([]);
+    if (currentOrgId) fetchActivities().then(rows => { if (!cancelled) setActivities(rows as Activity[]); }).catch(e => { if (!cancelled) addToast({type:'error',message:e.message}); });
+    return () => { cancelled = true; };
+  }, [currentOrgId]);
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,8 +88,10 @@ export default function ActivityLogPage() {
   const [formType, setFormType] = useState<'Arama' | 'Randevu' | 'Not Ekleme' | 'Satış' | 'Hasta Girişi'>('Arama');
   const [formDescription, setFormDescription] = useState('');
   const [formDuration, setFormDuration] = useState('');
+  const [activityBranchId, setActivityBranchId] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const handleSaveActivity = (e: React.FormEvent) => {
+  const handleSaveActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formPatientName.trim() || !formDescription.trim()) {
       alert('Hasta adı ve açıklama zorunludur');
@@ -97,7 +109,17 @@ export default function ActivityLogPage() {
       duration: formType === 'Arama' && formDuration ? formDuration + ' dk' : undefined
     };
 
-    setActivities(prev => [newActivity, ...prev]);
+    if (currentOrgId) {
+      const patient = patientsList.find(p => `${p.firstName} ${p.lastName}`.trim().toLowerCase() === formPatientName.trim().toLowerCase());
+      const branchId = patient?.branchId || activeBranchId || activityBranchId;
+      if (!branchId) { addToast({type:'error',message:'Aktivite için şube seçin veya hastayı kayıtlı adıyla bulun.'}); return; }
+      setSaving(true);
+      try {
+        await createActivity({ branchId, patientName: formPatientName, patientId: patient?.id, type: formType, description: formDescription, duration: formType === 'Arama' && formDuration ? Number(formDuration) : undefined });
+        setActivities(prev => [{...newActivity, branchId}, ...prev]);
+      } catch (e) { addToast({type:'error',message:(e as Error).message}); return; }
+      finally { setSaving(false); }
+    } else setActivities(prev => [newActivity, ...prev]);
     setShowModal(false);
     setFormPatientName('');
     setFormDescription('');
@@ -115,7 +137,7 @@ export default function ActivityLogPage() {
     const matchesType = typeFilter === 'All' || act.type === typeFilter;
     const matchesRole = roleFilter === 'All' || act.userRole === roleFilter;
 
-    return matchesSearch && matchesType && matchesRole;
+    return matchesSearch && matchesType && matchesRole && matches(undefined, act.branchId);
   });
 
   return (
@@ -310,6 +332,7 @@ export default function ActivityLogPage() {
                     </select>
                   </div>
                 </div>
+                {branchesList.length > 0 && !activeBranchId && <label className="form-group">Şube<select className="form-input" value={activityBranchId} onChange={e => setActivityBranchId(e.target.value)}><option value="">Hastanın şubesi / seçin</option>{branchesList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>}
 
                 {formType === 'Arama' && (
                   <div className="form-group" style={{ marginBottom: 12 }}>
@@ -339,7 +362,7 @@ export default function ActivityLogPage() {
               </div>
               <div className="card-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--surface-border)' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>İptal</button>
-                <button type="submit" className="btn btn-primary">Kaydı Kaydet</button>
+                <button type="submit" disabled={saving} className="btn btn-primary">{saving ? 'Kaydediliyor…' : 'Kaydı Kaydet'}</button>
               </div>
             </form>
           </div>

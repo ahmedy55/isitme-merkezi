@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, SaleRecord } from '../data/mockData';
 import { dbFetchCashTransactions, dbInsertCashTransaction } from '../lib/database';
 import { IconPlus, IconDownload, IconCash, IconCheck, IconRecall, IconShield, IconClose, IconSearch, IconFilter, IconWarning } from '../components/Icons';
 import { useBranchScope } from '../hooks/useBranchScope';
+import DevicePicker from '../components/DevicePicker';
 
 interface CashAccount {
   id: string;
@@ -38,6 +39,8 @@ export default function CashPage() {
   const { commissionRate, addSale, updateStockItem, addToast, currentOrgId } = app;
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [showSaleModal, setShowSaleModal] = useState(false);
+  const [selectedStockId, setSelectedStockId] = useState('');
+  const [saleSaving, setSaleSaving] = useState(false);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<SaleRecord | null>(null);
 
   // Kasa Genişletme State
@@ -67,7 +70,7 @@ export default function CashPage() {
         }
       }).catch(err => console.warn('[CashPage] dbFetchCashTransactions warning:', err.message));
     }
-  }, [currentOrgId, matches]);
+  }, [currentOrgId, matches, app.expensesList, app.salesList]);
 
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [selectedAccountIdFilter, setSelectedAccountIdFilter] = useState('All');
@@ -111,6 +114,10 @@ export default function CashPage() {
     }
     const matchedPatients=patientsList.filter(p=>(p.firstName+' '+p.lastName).trim()===formData.patientName.trim());
     if(matchedPatients.length!==1){addToast({type:'error',message:'Tek bir kayıtlı hasta seçin; aynı adlı hastalar için hasta detayından işlem yapın.'});return;}
+    const matchingStockItem = stockList.find(s => s.id === selectedStockId && s.quantity > 0 && s.branchId === matchedPatients[0].branchId);
+    if (!matchingStockItem) { addToast({ type: 'error', message: 'Hastanın şubesinden bir stok cihazı seçin.' }); return; }
+    if (matchingStockItem.category === 'Cihaz' && (!matchingStockItem.barcode || !matchingStockItem.serialNo || formData.quantity !== 1)) { addToast({ type: 'error', message: 'Cihazın barkod ve seri numarasını stokta tamamlayın; her seri için bir adet seçin.' }); return; }
+    if (saleSaving) return;
     const patientAmt = formData.itemPrice * formData.quantity - formData.sgkAmount;
     const newSale: SaleRecord = {
       id: `s-${Date.now().toString().slice(-6)}`,
@@ -118,7 +125,7 @@ export default function CashPage() {
       date: new Date().toISOString().split('T')[0],
       patientName: formData.patientName,
       items: [
-        { name: formData.itemName, quantity: Number(formData.quantity), price: Number(formData.itemPrice), type: 'Cihaz' }
+        { name: matchingStockItem.name, quantity: Number(formData.quantity), price: Number(formData.itemPrice), type: matchingStockItem.category === 'Cihaz' ? 'Cihaz' : 'Aksesuar', stockItemId: matchingStockItem.id, barcode: matchingStockItem.barcode, serialNo: matchingStockItem.serialNo }
       ],
       total: formData.itemPrice * formData.quantity,
       sgkAmount: Number(formData.sgkAmount),
@@ -127,10 +134,11 @@ export default function CashPage() {
       status: 'Tahsil Edildi' as const,
       idempotencyKey: saleFormIdempotencyKey
     };
-    const matchingStockItem = stockList.find(s => s.name === formData.itemName && s.quantity > 0);
     
     // Fix #4: addSale artık tek noktadan kasa + stok + DB işlemlerini yönetiyor
-    try { await addSale(newSale, matchingStockItem?.id, formData.targetAccountId); } catch { return; }
+    setSaleSaving(true);
+    try { await addSale(newSale, matchingStockItem.id, formData.targetAccountId); } catch { return; } finally { setSaleSaving(false); }
+    setSelectedStockId('');
 
     // Sayfa-local hesap bakiyesini güncelle
     const targetAcc = accounts.find(a => a.id === formData.targetAccountId);
@@ -223,7 +231,7 @@ export default function CashPage() {
   );
 
   const totalRevenue = salesList.reduce((sum, s) => sum + (s.total || 0), 0);
-  const collected = salesList.filter(s => s.status === 'Tahsil Edildi').reduce((sum, s) => sum + (s.total || 0), 0);
+  const collected = transactions.filter(t => t.type === 'Giriş').reduce((sum, t) => sum + t.amount, 0);
   const pending = salesList.filter(s => s.status !== 'Tahsil Edildi').reduce((sum, s) => sum + (s.patientAmount || s.total || 0), 0);
   const sgkTotal = salesList.reduce((sum, s) => sum + (s.sgkAmount || 0), 0);
   const totalCommission = totalRevenue * (commissionRate / 100);
@@ -277,7 +285,7 @@ export default function CashPage() {
         <div className="stat-card">
           <div className="stat-icon primary"><IconCheck size={20} /></div>
           <div className="stat-content">
-            <div className="stat-label">Tahsil Edilen</div>
+            <div className="stat-label">Kasa Girişleri</div>
             <div className="stat-value">{formatCurrency(collected)}</div>
           </div>
         </div>
@@ -291,8 +299,9 @@ export default function CashPage() {
         <div className="stat-card">
           <div className="stat-icon info"><IconShield size={20} /></div>
           <div className="stat-content">
-            <div className="stat-label">SGK Hak Ediş</div>
+            <div className="stat-label">Satışlarda Hesaplanan SGK Payı</div>
             <div className="stat-value">{formatCurrency(sgkTotal)}</div>
+            <div style={{fontSize:'0.72rem',color:'var(--gray-500)'}}>Ödeme değildir; dönem faturası SGK Ödeme Takvimi’ne manuel kaydedilir.</div>
           </div>
         </div>
       </div>
@@ -399,6 +408,7 @@ export default function CashPage() {
                     {(sale.items || []).map((item, i) => (
                       <div key={i} style={{ fontSize: '0.78rem', color: 'var(--gray-600)' }}>
                         {item.name} {item.quantity > 1 && `(${item.quantity} adet)`}
+                        {(item.serialNo || item.barcode) && <small style={{display:'block'}}>Seri: {item.serialNo || '—'} · Barkod: {item.barcode || '—'}</small>}
                       </div>
                     ))}
                   </td>
@@ -538,22 +548,7 @@ export default function CashPage() {
               </div>
               <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                  <label className="form-label">Ürün</label>
-                  <select
-                    className="form-select"
-                    value={formData.itemName}
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      let price = 120;
-                      if (name === 'Phonak Audéo P90') price = 85000;
-                      else if (name === 'Oticon More 1') price = 92000;
-                      setFormData({ ...formData, itemName: name, itemPrice: price });
-                    }}
-                  >
-                    <option value="Phonak Audéo P90">Phonak Audéo P90 — ₺85.000</option>
-                    <option value="Oticon More 1">Oticon More 1 — ₺92.000</option>
-                    <option value="Phonak Pil 312">Phonak Pil 312 — ₺120</option>
-                  </select>
+                  <DevicePicker items={stockList.filter(s => s.quantity > 0 && s.status !== 'Satıldı')} value={selectedStockId} onChange={item => { setSelectedStockId(item.id); setFormData(prev => ({ ...prev, itemName: item.name, itemPrice: item.price, quantity: 1 })); }} />
                 </div>
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
                   <label className="form-label">Aktarılacak Hesap</label>
@@ -627,7 +622,7 @@ export default function CashPage() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowSaleModal(false)}>İptal</button>
-              <button className="btn btn-primary" onClick={handleSaveSale}>Satışı Kaydet</button>
+              <button className="btn btn-primary" disabled={saleSaving} onClick={handleSaveSale}>{saleSaving ? 'Kaydediliyor…' : 'Satışı Kaydet'}</button>
             </div>
           </div>
         </div>
@@ -678,6 +673,7 @@ export default function CashPage() {
                 <thead>
                   <tr style={{ background: 'var(--primary-50)', borderBottom: '1px solid var(--primary-100)' }}>
                     <th style={{ padding: 8, textAlign: 'left' }}>Açıklama</th>
+                    <th style={{ padding: 8, textAlign: 'left' }}>Cihaz Kimliği</th>
                     <th style={{ padding: 8, textAlign: 'center' }}>Kategori</th>
                     <th style={{ padding: 8, textAlign: 'center' }}>Adet</th>
                     <th style={{ padding: 8, textAlign: 'right' }}>Birim Fiyat</th>
@@ -688,6 +684,7 @@ export default function CashPage() {
                   {selectedSaleForInvoice.items.map((item, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--gray-100)' }}>
                       <td style={{ padding: 8 }}>{item.name}</td>
+                      <td style={{ padding: 8 }}>Seri: {item.serialNo || '—'}<br />Barkod: {item.barcode || '—'}</td>
                       <td style={{ padding: 8, textAlign: 'center' }}>{item.type || 'Cihaz'}</td>
                       <td style={{ padding: 8, textAlign: 'center' }}>{item.quantity}</td>
                       <td style={{ padding: 8, textAlign: 'right' }}>{formatCurrency(item.price)}</td>

@@ -117,6 +117,7 @@ const columns: Record<string,string[]>={
     "created_at"
   ],
   "stock_items": [
+    "barcode",
     "id",
     "organization_id",
     "branch_id",
