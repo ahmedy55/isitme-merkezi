@@ -1,5 +1,4 @@
 import { Patient, StockItem, Appointment, AuditLogEntry } from '../../data/mockData';
-import { decryptText } from '../cryptoUtils';
 
 /**
  * Direct explicit entity mappers (Zero CPU overhead compared to recursive Object.keys)
@@ -9,7 +8,7 @@ export const mapPatientRowToDomain = (row: any): Patient => ({
   id: row.id,
   firstName: row.first_name || '',
   lastName: row.last_name || '',
-  tc: decryptText(row.tc || ''),
+  tc: row.tc || '',
   phone: row.phone || '',
   email: row.email || '',
   birthDate: row.birth_date || '1985-01-01',

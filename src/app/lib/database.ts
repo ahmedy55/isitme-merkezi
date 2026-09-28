@@ -1,6 +1,5 @@
 import { writePayload } from './writePayload';
 import { supabase } from './supabase';
-import { encryptText, decryptText } from './cryptoUtils';
 import { SystemUser, UserRole } from '../data/mockData';
 import { toCamelGeneric, toSnakeGeneric } from '../repositories/BaseRepository';
 import { patientRepository } from '../repositories/PatientRepository';
@@ -51,8 +50,14 @@ export const dbFetchPatients = async () => {
       .select('*, patient_timeline(*)')
       .order('created_at', { ascending: false });
     if (error) throw error;
+    const rows = data || [];
+    const { data: tcRows, error: tcError } = await supabase.rpc('decrypt_patient_tcs', {
+      p_patient_ids: rows.map((patient: any) => patient.id)
+    });
+    if (tcError) throw tcError;
+    const tcByPatientId = new Map((tcRows || []).map((row: any) => [row.patient_id, row.tc]));
     const items = toCamel<any[]>(data || []);
-    return items.map(p => ({ ...p, tc: decryptText(p.tc) }));
+    return items.map(p => ({ ...p, tc: tcByPatientId.get(p.id) || '' }));
   }, 'dbFetchPatients');
 };
 
@@ -62,9 +67,7 @@ export const dbInsertPatient = async (patient: any) => {
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     
     const { id, timeline, ...payload } = toSnake(patient);
-    if (payload.tc) {
-      payload.tc = encryptText(payload.tc);
-    }
+    const plaintextTc = payload.tc;
     
     const { data, error } = await supabase
       .from('patients')
@@ -72,9 +75,7 @@ export const dbInsertPatient = async (patient: any) => {
       .select();
     if (error) throw error;
     const result = toCamel<any>(data?.[0]);
-    if (result && result.tc) {
-      result.tc = decryptText(result.tc);
-    }
+    if (result) result.tc = plaintextTc || '';
     return result;
   }, 'dbInsertPatient');
 };
@@ -82,9 +83,7 @@ export const dbInsertPatient = async (patient: any) => {
 export const dbUpdatePatient = async (id: string, patient: any) => {
   return executeDbQuery(async () => {
     const { id: _, timeline, ...payload } = toSnake(patient);
-    if (payload.tc) {
-      payload.tc = encryptText(payload.tc);
-    }
+    const plaintextTc = payload.tc;
     const { data, error } = await supabase
       .from('patients')
       .update(await writePayload('patients',payload))
@@ -92,9 +91,7 @@ export const dbUpdatePatient = async (id: string, patient: any) => {
       .select();
     if (error) throw error;
     const result = toCamel<any>(data?.[0]);
-    if (result && result.tc) {
-      result.tc = decryptText(result.tc);
-    }
+    if (result) result.tc = plaintextTc || '';
     return result;
   }, 'dbUpdatePatient');
 };
