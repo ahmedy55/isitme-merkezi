@@ -173,9 +173,8 @@ export default function SupportPage() {
           </div>
           <div className={styles.heroArt} aria-hidden="true">
             <span className={styles.questionBubble}>?</span>
-            <span className={styles.bulb}>✦</span>
+            <span className={styles.bulb} />
             <span className={styles.book}><i /><i /><i /><i /><i /><i /></span>
-            <span className={styles.bookmark}>Yardım<br />rehberi</span>
             <span className={styles.artSpark}>✳</span>
           </div>
         </section>
@@ -199,14 +198,11 @@ export default function SupportPage() {
               <span className={styles.chevron}>›</span>
             </button>
           </section>
-          <section className={styles.availabilityCard}>
-            <span className={styles.availabilityIcon}>i</span>
-            <div><strong>Destek talebiniz mi var?</strong><p>Talebinizi bu ekrandan oluşturabilirsiniz. Gönderimler şu anda yalnızca oturum süresince saklanır.</p></div>
-          </section>
         </aside>
       </div>
 
-      <section className={styles.section} aria-labelledby="topics-heading">
+      <div className={styles.topicSupportGrid}>
+      <section className={`${styles.section} ${styles.topicSection}`} aria-labelledby="topics-heading">
         <div className={styles.sectionHeading}>
           <h2 id="topics-heading"><IconDashboardMark />Popüler Konular</h2>
           <button className={styles.textLink} onClick={() => scrollTo('support-guides')}>Tüm kılavuzları gör <span>→</span></button>
@@ -224,6 +220,11 @@ export default function SupportPage() {
           })}
         </div>
       </section>
+      <aside className={styles.availabilityCard}>
+        <span className={styles.availabilityIcon}>i</span>
+        <div><strong>Destek talebiniz mi var?</strong><p>Talebinizi bu ekrandan oluşturabilirsiniz. Gönderimler şu anda yalnızca oturum süresince saklanır.</p></div>
+      </aside>
+      </div>
 
       <section className={styles.section} id="support-guides" aria-labelledby="guides-heading">
         <div className={styles.sectionHeading}>
