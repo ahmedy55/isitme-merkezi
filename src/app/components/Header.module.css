@@ -1,0 +1,559 @@
+/* Header.module.css */
+.headerContainer {
+  height: 64px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  gap: 16px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+/* ── Left Side (Search Bar & Mobile Menu) ── */
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  max-width: 480px;
+}
+
+.hamburgerBtn {
+  display: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1024px) {
+  .hamburgerBtn {
+    display: flex;
+  }
+}
+
+.searchForm {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  color: #9ca3af;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 9px 36px 9px 36px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #111827;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.searchInput:focus {
+  background: #ffffff;
+  border-color: #08785b;
+  box-shadow: 0 0 0 2px rgba(8, 120, 91, 0.1);
+}
+
+.searchInput::placeholder {
+  color: #9ca3af;
+}
+
+.shortcutKbd {
+  position: absolute;
+  right: 10px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  color: #9ca3af;
+  font-family: inherit;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* ── Right Side Controls ── */
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Branch Selector Button */
+.branchSelectBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.branchSelectBtn:hover {
+  background: #dbeafe;
+}
+
+/* Branch Dropdown Menu */
+.branchDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.branchItem {
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.12s ease;
+}
+
+.branchItem:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.branchItemActive {
+  background: #eff6ff !important;
+  color: #2563eb !important;
+  font-weight: 600;
+}
+
+/* Notification Bell */
+.bellBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.bellBtn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.bellBadge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+}
+
+/* Notification Popover */
+.notifDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  padding: 14px;
+  text-align: left;
+}
+
+.notifHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #f3f4f6;
+  padding-bottom: 8px;
+}
+
+.notifTitle {
+  font-weight: 700;
+  font-size: 13px;
+  color: #111827;
+}
+
+.notifClear {
+  font-size: 11px;
+  color: #08785b;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.notifItem {
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  border-bottom: 1px solid #f9fafb;
+}
+
+.notifItem:hover {
+  background: #f9fafb;
+}
+
+.notifItemTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.notifItemDesc {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.notifItemTime {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 3px;
+}
+
+/* ── Profile Trigger Button ── */
+.profileTriggerBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.profileTriggerBtn:hover {
+  background: #f9fafb;
+}
+
+.triggerAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #083c31;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.triggerInfo {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.triggerName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.triggerRole {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.2;
+}
+
+.triggerChevron {
+  color: #374151;
+  display: flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+/* ── Profile Dropdown Card (Matching Screenshot) ── */
+.profileCard {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  z-index: 1000;
+  padding: 18px 16px;
+  box-sizing: border-box;
+  animation: cardFadeIn 0.15s ease-out;
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header inside Profile Card */
+.profileCardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.profileCardUser {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cardAvatarWrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.cardAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #083c31;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardOnlineDot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2.5px solid #ffffff;
+}
+
+.cardUserDetails {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cardUserName {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+.cardRoleBadge {
+  background: #e6f7f2;
+  color: #08785b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-top: 3px;
+  align-self: flex-start;
+}
+
+.cardUserEmail {
+  font-size: 11.5px;
+  color: #6b7280;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btnEditProfile {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btnEditProfile:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* ── Menu List inside Profile Card ── */
+.profileNavList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profileNavItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background-color 0.12s ease;
+  box-sizing: border-box;
+}
+
+.profileNavItem:hover {
+  background: #f9fafb;
+}
+
+.itemIconBox {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.iconMint {
+  background: #e6f7f2;
+  color: #08785b;
+}
+
+.iconBlue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.iconGray {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.iconAmber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.iconPurple {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.iconRed {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.itemContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.itemTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.25;
+}
+
+.itemTitleDanger {
+  color: #ef4444 !important;
+}
+
+.itemSubtitle {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.itemChevron {
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
