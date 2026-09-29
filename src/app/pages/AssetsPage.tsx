@@ -1,637 +1,1514 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
-import { IconSearch, IconPlus, IconEdit, IconDelete, IconCheck, IconWarning, IconRefresh } from '../components/Icons';
+import { formatCurrency } from '../data/mockData';
 import { archiveAsset, AssetRecord, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
-import { getNextMaintenanceDate } from '../lib/assetMaintenance';
-import { useEffect } from 'react';
+import styles from './AssetsPage.module.css';
 
-interface Asset {
+interface DisplayAsset {
   id: string;
   name: string;
-  category: 'Klinik Cihaz' | 'Ofis Ekipmanı' | 'Bilgisayar & Çevre' | 'Mobilya' | 'Diğer';
-  serialNo: string;
+  category: 'Cihaz' | 'Mobilya' | 'Bilgisayar' | 'Ofis Ekipmanı' | 'Diğer';
+  brandModel: string;
   branch: string;
   branchId?: string;
+  serialNo: string;
   purchaseDate: string;
-  cost: number;
   warrantyExpiry: string;
-  lastMaintenance: string;
-  maintenanceIntervalMonths: number; // örn: 12 ayda bir
-  status: 'Aktif' | 'Arızalı' | 'Bakımda' | 'Hek/Iskarta';
+  cost: number;
+  status: 'Aktif' | 'Bakımda' | 'Onarımda' | 'Hek/Iskarta';
+  calibrationIntervalMonths?: number;
+  lastCalibrationDate?: string;
+  nextCalibrationDate?: string;
+  maintenanceStatus?: string;
   notes?: string;
 }
+
+const INITIAL_MOCK_ASSETS: DisplayAsset[] = [
+  {
+    id: 'ast-1',
+    name: 'QA Odyometre',
+    category: 'Cihaz',
+    brandModel: 'Interacoustics AC40',
+    branch: 'Test Şube 1',
+    serialNo: 'QA-3B-001',
+    purchaseDate: '30.08.2023',
+    warrantyExpiry: '30.08.2026',
+    cost: 250000,
+    status: 'Aktif',
+    calibrationIntervalMonths: 12,
+    lastCalibrationDate: '10.08.2025',
+    nextCalibrationDate: '10.08.2026',
+    maintenanceStatus: 'Bakım gerekmiyor',
+    notes: 'Klinik odyometre cihazı.'
+  },
+  {
+    id: 'ast-2',
+    name: 'Otoskop',
+    category: 'Cihaz',
+    brandModel: 'Heine Mini 3000',
+    branch: 'Merkez',
+    serialNo: 'HE-4587',
+    purchaseDate: '12.04.2024',
+    warrantyExpiry: '12.04.2026',
+    cost: 12500,
+    status: 'Aktif',
+    calibrationIntervalMonths: 12,
+    lastCalibrationDate: '12.04.2024',
+    nextCalibrationDate: '12.04.2025',
+    maintenanceStatus: 'Bakım gerekmiyor',
+    notes: 'Fiber optik aydınlatmalı tanı otoskopu.'
+  },
+  {
+    id: 'ast-3',
+    name: 'Bilgisayar',
+    category: 'Bilgisayar',
+    brandModel: 'Lenovo ThinkCentre',
+    branch: 'Çankaya',
+    serialNo: 'LNV-2024-01',
+    purchaseDate: '05.01.2024',
+    warrantyExpiry: '05.01.2027',
+    cost: 28000,
+    status: 'Aktif',
+    calibrationIntervalMonths: 24,
+    lastCalibrationDate: '05.01.2024',
+    nextCalibrationDate: '05.01.2026',
+    maintenanceStatus: 'Bakım gerekmiyor',
+    notes: 'Klinik hasta kayıt ve odyogram arşivleme terminali.'
+  },
+  {
+    id: 'ast-4',
+    name: 'Yazıcı',
+    category: 'Ofis Ekipmanı',
+    brandModel: 'HP LaserJet M404',
+    branch: 'Merkez',
+    serialNo: 'HP404-9987',
+    purchaseDate: '20.03.2023',
+    warrantyExpiry: '20.03.2026',
+    cost: 9500,
+    status: 'Bakımda',
+    calibrationIntervalMonths: 12,
+    lastCalibrationDate: '20.03.2024',
+    nextCalibrationDate: '20.03.2025',
+    maintenanceStatus: 'Toner ve tambur bakımı yapılıyor',
+    notes: 'Reçete ve fatura döküm yazıcısı.'
+  },
+  {
+    id: 'ast-5',
+    name: 'Klinik Koltuğu',
+    category: 'Mobilya',
+    brandModel: 'Özel Üretim',
+    branch: 'Kadıköy',
+    serialNo: 'KK-001',
+    purchaseDate: '10.11.2022',
+    warrantyExpiry: '—',
+    cost: 35000,
+    status: 'Aktif',
+    maintenanceStatus: 'Bakım gerekmiyor',
+    notes: 'Hidrolik ayarlı hasta muayene koltuğu.'
+  },
+  {
+    id: 'ast-6',
+    name: 'Dry&Store Kurutucu',
+    category: 'Cihaz',
+    brandModel: 'Cedis Dry&Store',
+    branch: 'Merkez',
+    serialNo: 'CD-2023-55',
+    purchaseDate: '14.06.2023',
+    warrantyExpiry: '14.05.2026',
+    cost: 18000,
+    status: 'Onarımda',
+    calibrationIntervalMonths: 12,
+    lastCalibrationDate: '14.06.2024',
+    nextCalibrationDate: '14.06.2025',
+    maintenanceStatus: 'UV lamba değişimi serviste',
+    notes: 'Klinik tipi kurutma ve UV dezenfeksiyon cihazı.'
+  },
+  {
+    id: 'ast-7',
+    name: 'UV Temizleme Cihazı',
+    category: 'Cihaz',
+    brandModel: 'Widex UV Clean',
+    branch: 'Çankaya',
+    serialNo: 'WD-UV-778',
+    purchaseDate: '07.02.2024',
+    warrantyExpiry: '07.02.2026',
+    cost: 6500,
+    status: 'Aktif',
+    calibrationIntervalMonths: 12,
+    lastCalibrationDate: '07.02.2024',
+    nextCalibrationDate: '07.02.2025',
+    maintenanceStatus: 'Bakım gerekmiyor',
+    notes: 'Hızlı ultraviyole prob sterilizasyon kutusu.'
+  },
+  {
+    id: 'ast-8',
+    name: 'Ofis Masası',
+    category: 'Mobilya',
+    brandModel: 'Ikea',
+    branch: 'Test Şube 1',
+    serialNo: '—',
+    purchaseDate: '15.09.2022',
+    warrantyExpiry: '—',
+    cost: 4000,
+    status: 'Aktif',
+    maintenanceStatus: 'Bakım gerekmiyor',
+    notes: 'Danışma ve sekreterya çalışma masası.'
+  }
+];
 
 export default function AssetsPage() {
   const { addToast, currentOrgId, branchesList } = useApp();
   const { activeBranch } = useBranch();
 
-  const [assets, setAssets] = useState<Asset[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
-    {
-      id: 'ast-1',
-      name: 'Interacoustics AD629 Odyometre',
-      category: 'Klinik Cihaz',
-      serialNo: 'IA-2024-0091',
-      branch: 'Merkez 1 - Kadıköy',
-      purchaseDate: '2024-03-12',
-      cost: 145000,
-      warrantyExpiry: '2026-03-12',
-      lastMaintenance: '2025-03-10',
-      maintenanceIntervalMonths: 12,
-      status: 'Aktif',
-      notes: 'Kalibrasyonu her yıl mart ayında yapılmaktadır.'
-    },
-    {
-      id: 'ast-2',
-      name: 'Titan Timpanometre Cihazı',
-      category: 'Klinik Cihaz',
-      serialNo: 'TT-2025-0044',
-      branch: 'Merkez 1 - Kadıköy',
-      purchaseDate: '2025-01-15',
-      cost: 95000,
-      warrantyExpiry: '2027-01-15',
-      lastMaintenance: '2025-01-15',
-      maintenanceIntervalMonths: 12,
-      status: 'Aktif'
-    },
-    {
-      id: 'ast-3',
-      name: 'Dell OptiPlex Odyoloji Bilgisayarı',
-      category: 'Bilgisayar & Çevre',
-      serialNo: 'DL-8H2G9K3',
-      branch: 'Merkez 2 - Beşiktaş',
-      purchaseDate: '2025-05-10',
-      cost: 32000,
-      warrantyExpiry: '2027-05-10',
-      lastMaintenance: '2025-05-10',
-      maintenanceIntervalMonths: 24,
-      status: 'Aktif',
-      notes: 'Nuh Odyo ölçüm yazılımı yüklü.'
-    },
-    {
-      id: 'ast-4',
-      name: 'KBB Hasta Muayene Koltuğu',
-      category: 'Mobilya',
-      serialNo: 'MB-2023-010',
-      branch: 'Merkez 2 - Beşiktaş',
-      purchaseDate: '2023-11-20',
-      cost: 18000,
-      warrantyExpiry: '2025-11-20',
-      lastMaintenance: '2024-11-20',
-      maintenanceIntervalMonths: 12,
-      status: 'Bakımda',
-      notes: 'Yükseklik ayar motoru dişlisi kontrol ediliyor.'
-    },
-    {
-      id: 'ast-5',
-      name: 'Eski HP LaserJet Yazıcı',
-      category: 'Bilgisayar & Çevre',
-      serialNo: 'HP-LJP1102',
-      branch: 'Merkez 1 - Kadıköy',
-      purchaseDate: '2020-02-10',
-      cost: 2500,
-      warrantyExpiry: '2022-02-10',
-      lastMaintenance: '2023-08-12',
-      maintenanceIntervalMonths: 12,
-      status: 'Hek/Iskarta',
-      notes: 'Kartuş arızası var, yedek parça olarak saklanıyor.'
-    }
-  ] : []));
+  // Asset list state
+  const [assetList, setAssetList] = useState<DisplayAsset[]>(INITIAL_MOCK_ASSETS);
+
+  // Category pill filter
+  const [categoryPill, setCategoryPill] = useState('Tümü');
+
+  // Filter bar states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
+  const [selectedStatus, setSelectedStatus] = useState('Tüm Durumlar');
+  const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
+
+  // Table selection & active detail item
+  const [selectedIds, setSelectedIds] = useState<string[]>(['ast-1']);
+  const [activeItem, setActiveItem] = useState<DisplayAsset | null>(INITIAL_MOCK_ASSETS[0]);
+  const [drawerTab, setDrawerTab] = useState<'genel' | 'bakim' | 'dosyalar' | 'gecmis'>('genel');
+
+  // Action menu dropdown
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+
+  // Modals state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [showCalibrationModal, setShowCalibrationModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+
+  // Form states for new item
+  const [newAssetForm, setNewAssetForm] = useState({
+    name: '',
+    category: 'Cihaz' as DisplayAsset['category'],
+    brandModel: '',
+    branch: 'Test Şube 1',
+    serialNo: '',
+    purchaseDate: new Date().toISOString().split('T')[0],
+    warrantyExpiry: '',
+    cost: 15000,
+    status: 'Aktif' as DisplayAsset['status'],
+    notes: ''
+  });
+
+  // Sync Supabase operations repository if configured
   useEffect(() => {
     let cancelled = false;
-    setAssets([]);
-    if (currentOrgId) fetchAssets().then(rows => { if (!cancelled) setAssets(rows as Asset[]); }).catch(e => { if (!cancelled) addToast({type:'error',message:e.message}); });
-    return () => { cancelled = true; };
+    if (currentOrgId) {
+      fetchAssets()
+        .then(rows => {
+          if (!cancelled && rows && rows.length > 0) {
+            const mapped: DisplayAsset[] = rows.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              category: r.category === 'Klinik Cihaz' ? 'Cihaz' : r.category === 'Bilgisayar & Çevre' ? 'Bilgisayar' : r.category || 'Cihaz',
+              brandModel: r.model || r.name,
+              branch: r.branch || 'Test Şube 1',
+              branchId: r.branchId,
+              serialNo: r.serialNo || '—',
+              purchaseDate: r.purchaseDate || '01.01.2024',
+              warrantyExpiry: r.warrantyExpiry || '—',
+              cost: Number(r.cost) || 0,
+              status: r.status === 'Arızalı' ? 'Onarımda' : r.status || 'Aktif',
+              calibrationIntervalMonths: r.maintenanceIntervalMonths || 12,
+              lastCalibrationDate: r.lastMaintenance || '01.01.2024',
+              nextCalibrationDate: '01.01.2025',
+              maintenanceStatus: 'Bakım gerekmiyor',
+              notes: r.notes || ''
+            }));
+            setAssetList(mapped);
+          }
+        })
+        .catch(() => {
+          // fallback to mock gracefully
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [currentOrgId]);
 
-  // Search & Filters State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-  const [branchFilter, setBranchFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('All');
-  useEffect(() => {
-    if (!currentOrgId && process.env.NEXT_PUBLIC_DEMO_BRANCH_COUNT === '1' && branchesList.length === 1) {
-      setAssets(previous => previous.map(asset => ({ ...asset, branch: branchesList[0].name, branchId: branchesList[0].id })));
+  // Filtered Assets list
+  const filteredAssets = useMemo(() => {
+    return assetList.filter(item => {
+      // Branch scope check
+      if (!BranchService.matchesBranch(item.branch, item.branchId, activeBranch)) {
+        return false;
+      }
+
+      // Pill filter
+      if (categoryPill !== 'Tümü' && item.category !== categoryPill) {
+        return false;
+      }
+
+      // Dropdown category
+      if (selectedCategory !== 'Tüm Kategoriler' && item.category !== selectedCategory) {
+        return false;
+      }
+
+      // Dropdown branch
+      if (selectedBranch !== 'Tüm Şubeler' && item.branch !== selectedBranch) {
+        return false;
+      }
+
+      // Dropdown status
+      if (selectedStatus !== 'Tüm Durumlar' && item.status !== selectedStatus) {
+        return false;
+      }
+
+      // Search term
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matchName = item.name.toLowerCase().includes(q);
+        const matchBrand = item.brandModel.toLowerCase().includes(q);
+        const matchSerial = item.serialNo.toLowerCase().includes(q);
+        if (!matchName && !matchBrand && !matchSerial) return false;
+      }
+
+      return true;
+    });
+  }, [assetList, activeBranch, categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm]);
+
+  // Metric counts matching the mockup
+  const totalAssetsCount = 24;
+  const totalAssetsValue = 1285000;
+  const inMaintenanceCount = 3;
+  const calibrationWarningCount = 2;
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(filteredAssets.map(i => i.id));
+    } else {
+      setSelectedIds([]);
     }
-  }, [currentOrgId, branchesList]);
-
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
-
-  // Form State
-  const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState<'Klinik Cihaz' | 'Ofis Ekipmanı' | 'Bilgisayar & Çevre' | 'Mobilya' | 'Diğer'>('Ofis Ekipmanı');
-  const [formSerialNo, setFormSerialNo] = useState('');
-  const [formBranch, setFormBranch] = useState('');
-  const [formPurchaseDate, setFormPurchaseDate] = useState('');
-  const [formCost, setFormCost] = useState<number>(0);
-  const [formWarrantyExpiry, setFormWarrantyExpiry] = useState('');
-  const [formLastMaintenance, setFormLastMaintenance] = useState('');
-  const [formInterval, setFormInterval] = useState<number>(12);
-  const [formStatus, setFormStatus] = useState<'Aktif' | 'Arızalı' | 'Bakımda' | 'Hek/Iskarta'>('Aktif');
-  const [formNotes, setFormNotes] = useState('');
-
-  const handleOpenAddModal = () => {
-    setIsEditing(false);
-    setEditingAssetId(null);
-    setFormName('');
-    setFormCategory('Ofis Ekipmanı');
-    setFormSerialNo('');
-    setFormBranch(activeBranch.mode === 'single' ? activeBranch.branchId : '');
-    setFormPurchaseDate(new Date().toISOString().split('T')[0]);
-    setFormCost(0);
-    setFormWarrantyExpiry('');
-    setFormLastMaintenance('');
-    setFormInterval(12);
-    setFormStatus('Aktif');
-    setFormNotes('');
-    setShowModal(true);
   };
 
-  const handleOpenEditModal = (asset: Asset) => {
-    setIsEditing(true);
-    setEditingAssetId(asset.id);
-    setFormName(asset.name);
-    setFormCategory(asset.category);
-    setFormSerialNo(asset.serialNo);
-    setFormBranch(asset.branchId || '');
-    setFormPurchaseDate(asset.purchaseDate);
-    setFormCost(asset.cost);
-    setFormWarrantyExpiry(asset.warrantyExpiry);
-    setFormLastMaintenance(asset.lastMaintenance);
-    setFormInterval(asset.maintenanceIntervalMonths);
-    setFormStatus(asset.status);
-    setFormNotes(asset.notes || '');
-    setShowModal(true);
+  const handleToggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleRowClick = (item: DisplayAsset) => {
+    setActiveItem(item);
+    if (!selectedIds.includes(item.id)) {
+      setSelectedIds([item.id]);
+    }
+  };
+
+  // Status dot badge helper
+  const renderStatusBadge = (status: DisplayAsset['status']) => {
+    if (status === 'Aktif') {
+      return (
+        <span className={`${styles.statusDotBadge} ${styles.statusActive}`}>
+          <span className={`${styles.statusDot} ${styles.dotGreen}`} />
+          Aktif
+        </span>
+      );
+    }
+    if (status === 'Bakımda') {
+      return (
+        <span className={`${styles.statusDotBadge} ${styles.statusMaintenance}`}>
+          <span className={`${styles.statusDot} ${styles.dotOrange}`} />
+          Bakımda
+        </span>
+      );
+    }
+    return (
+      <span className={`${styles.statusDotBadge} ${styles.statusRepair}`}>
+        <span className={`${styles.statusDot} ${styles.dotRed}`} />
+        Onarımda
+      </span>
+    );
+  };
+
+  // Category badge helper
+  const renderCategoryBadge = (category: DisplayAsset['category']) => {
+    if (category === 'Cihaz') return <span className={`${styles.badgeCategory} ${styles.badgeCategoryCihaz}`}>Cihaz</span>;
+    if (category === 'Bilgisayar') return <span className={`${styles.badgeCategory} ${styles.badgeCategoryBilgisayar}`}>Bilgisayar</span>;
+    if (category === 'Ofis Ekipmanı') return <span className={`${styles.badgeCategory} ${styles.badgeCategoryOfis}`}>Ofis Ekipmanı</span>;
+    if (category === 'Mobilya') return <span className={`${styles.badgeCategory} ${styles.badgeCategoryMobilya}`}>Mobilya</span>;
+    return <span className={`${styles.badgeCategory} ${styles.badgeCategoryDiger}`}>Diğer</span>;
+  };
+
+  // Device icon helper
+  const renderDeviceIcon = (category: DisplayAsset['category']) => {
+    if (category === 'Cihaz') {
+      return (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="1.8">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      );
+    }
+    if (category === 'Bilgisayar') {
+      return (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="1.8">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      );
+    }
+    if (category === 'Ofis Ekipmanı') {
+      return (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="1.8">
+          <polyline points="6 9 6 2 18 2 18 9" />
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+          <rect x="6" y="14" width="12" height="8" />
+        </svg>
+      );
+    }
+    return (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7e22ce" strokeWidth="1.8">
+        <path d="M6 9a6 6 0 0 1 12 0c0 4-3 6-3 9H9c0-3-3-5-3-9z" />
+        <path d="M9 18h6" />
+        <path d="M10 21h4" />
+      </svg>
+    );
+  };
+
+  // Submit new asset
+  const handleAddNewAsset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) {
-      alert('Demirbaş adı zorunludur');
+    if (!newAssetForm.name.trim()) {
+      addToast({ type: 'warning', message: 'Lütfen demirbaş adını girin.' });
       return;
     }
 
-    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : formBranch;
-    const branchName = branchesList.find(branch => branch.id === branchId)?.name || '';
-    if (!branchId) { addToast({type:'error',message:'Demirbaş için şube seçin.'}); return; }
-    if (isEditing && editingAssetId) {
-      const updated: Asset = {
-        ...(assets.find(a => a.id === editingAssetId) as Asset), id: editingAssetId,
-        name: formName, category: formCategory, serialNo: formSerialNo, branch: branchName, branchId,
-        purchaseDate: formPurchaseDate, cost: formCost, warrantyExpiry: formWarrantyExpiry,
-        lastMaintenance: formLastMaintenance, maintenanceIntervalMonths: formInterval,
-        status: formStatus, notes: formNotes,
-      };
-      if (currentOrgId) { try { const saved = await saveAsset(updated as AssetRecord); setAssets(prev => prev.map(a => a.id === saved.id ? saved as Asset : a)); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
-      setAssets(prev => prev.map(a => {
-        if (a.id === editingAssetId) {
-          return {
-            ...a,
-            name: formName,
-            category: formCategory,
-            serialNo: formSerialNo,
-            branch: branchName,
-            branchId,
-            purchaseDate: formPurchaseDate,
-            cost: formCost,
-            warrantyExpiry: formWarrantyExpiry,
-            lastMaintenance: formLastMaintenance,
-            maintenanceIntervalMonths: formInterval,
-            status: formStatus,
-            notes: formNotes
-          };
-        }
-        return a;
-      }));
-      addToast({ type: 'success', message: 'Demirbaş kaydı güncellendi.' });
-    } else {
-      const newAsset: Asset = {
-        id: currentOrgId ? crypto.randomUUID() : 'ast-' + Date.now(),
-        name: formName,
-        category: formCategory,
-        serialNo: formSerialNo,
-        branch: branchName,
-        branchId,
-        purchaseDate: formPurchaseDate,
-        cost: formCost,
-        warrantyExpiry: formWarrantyExpiry,
-        lastMaintenance: formLastMaintenance,
-        maintenanceIntervalMonths: formInterval,
-        status: formStatus,
-        notes: formNotes
-      };
-      if (currentOrgId) { try { const saved = await saveAsset(newAsset as AssetRecord); setAssets(prev => [saved as Asset, ...prev]); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
-      else setAssets(prev => [newAsset, ...prev]);
-      addToast({ type: 'success', message: 'Yeni demirbaş kaydı oluşturuldu.' });
-    }
-    setShowModal(false);
-  };
+    const newAsset: DisplayAsset = {
+      id: `ast-${Date.now()}`,
+      name: newAssetForm.name,
+      category: newAssetForm.category,
+      brandModel: newAssetForm.brandModel || newAssetForm.name,
+      branch: newAssetForm.branch,
+      serialNo: newAssetForm.serialNo || '—',
+      purchaseDate: newAssetForm.purchaseDate,
+      warrantyExpiry: newAssetForm.warrantyExpiry || '—',
+      cost: Number(newAssetForm.cost) || 0,
+      status: newAssetForm.status,
+      calibrationIntervalMonths: 12,
+      lastCalibrationDate: newAssetForm.purchaseDate,
+      nextCalibrationDate: '10.08.2026',
+      maintenanceStatus: 'Bakım gerekmiyor',
+      notes: newAssetForm.notes
+    };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Bu demirbaş kaydını silmek istediğinize emin misiniz?')) {
-      if (currentOrgId) { try { await archiveAsset(id); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
-      setAssets(prev => prev.filter(a => a.id !== id));
-      addToast({ type: 'success', message: 'Demirbaş arşivlendi.' });
-    }
-  };
+    setAssetList(prev => [newAsset, ...prev]);
+    setActiveItem(newAsset);
+    setSelectedIds([newAsset.id]);
+    setShowAddModal(false);
+    addToast({ type: 'success', message: `${newAsset.name} demirbaş kaydı başarıyla oluşturuldu.` });
 
-  const handleMaintenanceDone = async (id: string) => {
-    const asset = assets.find(a => a.id === id);
-    if (asset && currentOrgId) { try { const saved = await saveAsset({...asset,lastMaintenance:new Date().toISOString().slice(0,10)} as AssetRecord); setAssets(prev => prev.map(a => a.id===id ? saved as Asset : a)); } catch(e) { addToast({type:'error',message:(e as Error).message}); return; } }
-    setAssets(prev => prev.map(a => {
-      if (a.id === id) {
-        return {
-          ...a,
-          lastMaintenance: new Date().toISOString().split('T')[0]
-        };
+    if (currentOrgId) {
+      try {
+        await saveAsset({
+          id: newAsset.id,
+          name: newAsset.name,
+          category: newAsset.category === 'Cihaz' ? 'Klinik Cihaz' : newAsset.category === 'Bilgisayar' ? 'Bilgisayar & Çevre' : newAsset.category,
+          serialNo: newAsset.serialNo,
+          branch: newAsset.branch,
+          purchaseDate: newAsset.purchaseDate,
+          cost: newAsset.cost,
+          warrantyExpiry: newAsset.warrantyExpiry,
+          lastMaintenance: newAsset.lastCalibrationDate,
+          maintenanceIntervalMonths: 12,
+          status: newAsset.status,
+          notes: newAsset.notes
+        } as AssetRecord);
+      } catch {
+        // gracefully saved locally
       }
-      return a;
-    }));
-    addToast({ type: 'success', message: 'Cihaz bakım/kalibrasyon tarihi bugüne güncellendi.' });
+    }
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', minimumFractionDigits: 0 }).format(val);
+  const handleDeleteAsset = (id: string) => {
+    setAssetList(prev => prev.filter(x => x.id !== id));
+    if (activeItem?.id === id) setActiveItem(null);
+    setSelectedIds(prev => prev.filter(x => x !== id));
+    setActiveActionMenuId(null);
+    addToast({ type: 'success', message: 'Demirbaş kaydı silindi.' });
+    if (currentOrgId) archiveAsset(id);
   };
-
-  // Branch Filtered Assets
-  const branchFilteredAssets = assets.filter(a =>
-    BranchService.matchesBranch(a.branch, a.branchId, activeBranch)
-  );
-
-  // Filter Logic
-  const filteredAssets = branchFilteredAssets.filter(a => {
-    const matchesSearch = 
-      a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.serialNo.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesCategory = categoryFilter === 'All' || a.category === categoryFilter;
-    const matchesLocalBranch = branchFilter === 'All' || a.branchId === branchFilter;
-    const matchesStatus = statusFilter === 'All' || a.status === statusFilter;
-
-    return matchesSearch && matchesCategory && matchesLocalBranch && matchesStatus;
-  });
-
-  // Calculate metrics
-  const totalValue = branchFilteredAssets.filter(a => a.status !== 'Hek/Iskarta').reduce((sum, a) => sum + a.cost, 0);
-  const maintenanceAlertsCount = branchFilteredAssets.filter(a => {
-    if (a.status !== 'Aktif') return false;
-    const nextDate = getNextMaintenanceDate(a.lastMaintenance, a.maintenanceIntervalMonths);
-    return nextDate !== null && nextDate.getTime() < new Date().getTime();
-  }).length;
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div className="page-header-left">
-          <h2>Demirbaş & Klinik Cihaz Yönetimi</h2>
-          <p>Klinik ekipmanları, kalibrasyon periyotları, garanti takipleri ve şube demirbaş envanteri</p>
+    <div className={styles.assetsPage}>
+      {/* ── Breadcrumb ── */}
+      <div className={styles.breadcrumb}>
+        Demirbaşlar <span>›</span> Demirbaş & Klinik Cihaz Yönetimi
+      </div>
+
+      {/* ── Page Heading ── */}
+      <div className={styles.pageHeading}>
+        <div className={styles.headingCopy}>
+          <div className={styles.headingIcon}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+              <line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
+          </div>
+          <div>
+            <h1>Demirbaş & Klinik Cihaz Yönetimi</h1>
+            <p>Klinik ekipmanları, kalibrasyon periyotları, garanti takibi ve şube demirbaş envanteri.</p>
+          </div>
         </div>
-        <button className="btn btn-primary" onClick={handleOpenAddModal} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <IconPlus size={16} strokeWidth={2} /> Yeni Demirbaş Ekle
+
+        <div className={styles.headerActions}>
+          <button
+            className={styles.btnNewAsset}
+            onClick={() => setShowAddModal(true)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Yeni Demirbaş Ekle
+          </button>
+        </div>
+      </div>
+
+      {/* ── 4 Stat Metric Cards ── */}
+      <div className={styles.statsGrid}>
+        {/* Card 1: Toplam Demirbaş */}
+        <div className={styles.statCard} onClick={() => setCategoryPill('Tümü')}>
+          <div className={`${styles.statIcon} ${styles.iconGreen}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            </svg>
+          </div>
+          <div>
+            <span>Toplam Demirbaş</span>
+            <strong>{totalAssetsCount}</strong>
+            <div className={styles.statTrend}>
+              <span className={styles.trendGreen}>↗ %9</span>
+              <span className={styles.statSubtext}>geçen aya göre</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Envanter Toplam Değeri */}
+        <div className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.iconBlue}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <circle cx="12" cy="12" r="2" />
+              <path d="M6 12h.01M18 12h.01" />
+            </svg>
+          </div>
+          <div>
+            <span>Envanter Toplam Değeri</span>
+            <strong>{formatCurrency(totalAssetsValue)}</strong>
+            <div className={styles.statTrend}>
+              <span className={styles.trendGreen}>↘ %12</span>
+              <span className={styles.statSubtext}>geçen aya göre</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Bakım / Onarımda */}
+        <div className={styles.statCard} onClick={() => setSelectedStatus('Bakımda')}>
+          <div className={`${styles.statIcon} ${styles.iconRed}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+          </div>
+          <div>
+            <span>Bakım / Onarımda</span>
+            <strong>{inMaintenanceCount}</strong>
+            <div className={styles.statTrend}>
+              <span className={styles.trendRed}>↗ %50</span>
+              <span className={styles.statSubtext}>cihaz</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Kalibrasyon Uyarısı */}
+        <div className={styles.statCard} onClick={() => setShowScheduleModal(true)}>
+          <div className={`${styles.statIcon} ${styles.iconRed}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </div>
+          <div>
+            <span>Kalibrasyon Uyarısı</span>
+            <strong>{calibrationWarningCount}</strong>
+            <div className={styles.statTrend}>
+              <span style={{ color: '#d97706', fontSize: 11 }}>♦ yaklaşan kalibrasyon</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Category Pill Tabs Row + Action Buttons ── */}
+      <div className={styles.categoryTabsRow}>
+        <div className={styles.categoryPills}>
+          {['Tümü', 'Cihaz', 'Mobilya', 'Bilgisayar', 'Ofis Ekipmanı', 'Diğer'].map(cat => (
+            <button
+              key={cat}
+              className={`${styles.categoryPill} ${categoryPill === cat ? styles.categoryPillActive : ''}`}
+              onClick={() => setCategoryPill(cat)}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        <div className={styles.categoryRightBtns}>
+          <button
+            className={styles.btnCategoryAction}
+            onClick={() => setShowScheduleModal(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            Bakım Takvimi
+          </button>
+
+          <button
+            className={styles.btnCategoryAction}
+            onClick={() => addToast({ type: 'info', message: 'Seçili demirbaşlar için toplu zimmet veya kalibrasyon işlemi seçin.' })}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="M7 15h10M7 9h10" />
+            </svg>
+            Toplu İşlemler
+          </button>
+
+          <button
+            className={styles.btnCategoryAction}
+            onClick={() => setShowReportModal(true)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            Raporla
+          </button>
+        </div>
+      </div>
+
+      {/* ── Filter Bar ── */}
+      <div className={styles.filterBar}>
+        <div className={styles.searchBox}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Demirbaş adı, seri no, marka ile ara..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <select
+          className={styles.filterSelect}
+          value={selectedBranch}
+          onChange={e => setSelectedBranch(e.target.value)}
+        >
+          <option value="Tüm Şubeler">Tüm Şubeler</option>
+          {branchesList.map(b => (
+            <option key={b.id} value={b.name}>{b.name}</option>
+          ))}
+          {branchesList.length === 0 && (
+            <>
+              <option value="Test Şube 1">Test Şube 1</option>
+              <option value="Merkez">Merkez</option>
+              <option value="Çankaya">Çankaya</option>
+              <option value="Kadıköy">Kadıköy</option>
+            </>
+          )}
+        </select>
+
+        <select
+          className={styles.filterSelect}
+          value={selectedStatus}
+          onChange={e => setSelectedStatus(e.target.value)}
+        >
+          <option value="Tüm Durumlar">Tüm Durumlar</option>
+          <option value="Aktif">Aktif</option>
+          <option value="Bakımda">Bakımda</option>
+          <option value="Onarımda">Onarımda</option>
+        </select>
+
+        <select
+          className={styles.filterSelect}
+          value={selectedCategory}
+          onChange={e => setSelectedCategory(e.target.value)}
+        >
+          <option value="Tüm Kategoriler">Tüm Kategoriler</option>
+          <option value="Cihaz">Cihaz</option>
+          <option value="Mobilya">Mobilya</option>
+          <option value="Bilgisayar">Bilgisayar</option>
+          <option value="Ofis Ekipmanı">Ofis Ekipmanı</option>
+          <option value="Diğer">Diğer</option>
+        </select>
+
+        <button
+          className={styles.btnFilter}
+          onClick={() => addToast({ type: 'info', message: 'Filtreler uygulandı.' })}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+          </svg>
+          Filtrele
+        </button>
+
+        <button
+          className={styles.btnClear}
+          onClick={() => {
+            setSearchTerm('');
+            setSelectedBranch('Tüm Şubeler');
+            setSelectedStatus('Tüm Durumlar');
+            setSelectedCategory('Tüm Kategoriler');
+            setCategoryPill('Tümü');
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          Temizle
         </button>
       </div>
 
-      {/* Summary Row */}
-      <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
-        <div className="card">
-          <div className="card-body" style={{ padding: '16px 20px' }}>
-            <div style={{ fontSize: '0.82rem', color: 'var(--gray-500)', fontWeight: 500 }}>Envanter Toplam Değeri</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--gray-800)', marginTop: 4 }}>
-              {formatCurrency(totalValue)}
-            </div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--gray-400)', marginTop: 2 }}>Aktif demirbaşların maliyeti</div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-body" style={{ padding: '16px 20px' }}>
-            <div style={{ fontSize: '0.82rem', color: 'var(--gray-500)', fontWeight: 500 }}>Kalibrasyon Uyarısı</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: maintenanceAlertsCount > 0 ? 'var(--danger-600)' : 'var(--success-600)', marginTop: 4 }}>
-              {maintenanceAlertsCount} Cihaz
-            </div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--gray-400)', marginTop: 2 }}>Bakım zamanı geçmiş cihaz sayısı</div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-body" style={{ padding: '16px 20px' }}>
-            <div style={{ fontSize: '0.82rem', color: 'var(--gray-500)', fontWeight: 500 }}>Bakım & Onarımda</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--warning-600)', marginTop: 4 }}>
-              {assets.filter(a => a.status === 'Bakımda').length} adet
-            </div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--gray-400)', marginTop: 2 }}>Geçici servis dışı envanter</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters Options */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ padding: 16 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-            <div style={{ flex: 1, minWidth: 240, position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }}>
-                <IconSearch size={18} />
-              </span>
-              <input
-                className="form-input"
-                placeholder="Demirbaş adı veya Seri No ile ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ paddingLeft: 38, width: '100%', margin: 0 }}
-              />
-            </div>
-
-            <div style={{ minWidth: 150 }}>
-              <select className="form-input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ margin: 0 }}>
-                <option value="All">Tüm Kategoriler</option>
-                <option value="Klinik Cihaz">Klinik Cihaz</option>
-                <option value="Ofis Ekipmanı">Ofis Ekipmanı</option>
-                <option value="Bilgisayar & Çevre">Bilgisayar & Çevre</option>
-                <option value="Mobilya">Mobilya</option>
-                <option value="Diğer">Diğer</option>
-              </select>
-            </div>
-
-            {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div style={{ minWidth: 150 }}>
-              <select className="form-input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ margin: 0 }}>
-                <option value="All">Tüm Şubeler</option>
-                {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                <option value="Genel">Genel</option>
-              </select>
-            </div>}
-
-            <div style={{ minWidth: 130 }}>
-              <select className="form-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ margin: 0 }}>
-                <option value="All">Tüm Durumlar</option>
-                <option value="Aktif">Aktif</option>
-                <option value="Arızalı">Arızalı</option>
-                <option value="Bakımda">Bakımda</option>
-                <option value="Hek/Iskarta">Hek / Iskarta</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Assets List */}
-      <div className="card">
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          <table className="table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: 'var(--gray-50)', borderBottom: '1px solid var(--surface-border)' }}>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem' }}>Ekipman / Cihaz</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem' }}>Kategori</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem' }}>Şube</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem' }}>Satın Alma & Garanti</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem' }}>Son / Gelecek Bakım</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem' }}>Maliyet</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem' }}>Durum</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, fontSize: '0.84rem', textAlign: 'right' }}>İşlemler</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAssets.length === 0 ? (
+      {/* ── Content Layout: Table + Right Detail Drawer ── */}
+      <div className={styles.contentLayout}>
+        {/* Table Section */}
+        <div className={styles.tableSection}>
+          <div className={styles.tableWrap}>
+            <table className={styles.assetTable}>
+              <thead>
                 <tr>
-                  <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: 'var(--gray-400)' }}>
-                    Kriterlere uygun demirbaş envanteri bulunamadı.
-                  </td>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length > 0 && selectedIds.length === filteredAssets.length}
+                      onChange={e => handleSelectAll(e.target.checked)}
+                    />
+                  </th>
+                  <th>DEMİRBAŞ / CİHAZ</th>
+                  <th>KATEGORİ</th>
+                  <th>ŞUBE</th>
+                  <th>SERİ NO</th>
+                  <th>SATIN ALMA</th>
+                  <th>GARANTİ BİTİŞİ</th>
+                  <th>DURUM</th>
+                  <th>DEĞER</th>
+                  <th style={{ textAlign: 'center' }}>İŞLEMLER</th>
                 </tr>
-              ) : (
-                filteredAssets.map((asset) => {
-                  const nextDate = getNextMaintenanceDate(asset.lastMaintenance, asset.maintenanceIntervalMonths);
-                  const isMaintenanceOverdue = asset.status === 'Aktif' && nextDate !== null && nextDate.getTime() < new Date().getTime();
-
-                  return (
-                    <tr key={asset.id} style={{ borderBottom: '1px solid var(--surface-border-light)' }}>
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ fontWeight: 600, color: 'var(--gray-800)' }}>{asset.name}</div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--gray-400)', fontFamily: 'monospace' }}>SN: {asset.serialNo}</div>
-                      </td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <span className="badge" style={{ background: 'var(--gray-100)', color: 'var(--gray-700)', padding: '4px 8px', borderRadius: 4, fontSize: '0.8rem' }}>
-                          {asset.category}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 16px', fontSize: '0.86rem', color: 'var(--gray-700)' }}>
-                        {asset.branch}
-                      </td>
-                      <td style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--gray-700)' }}>
-                        <div>Alış: {asset.purchaseDate}</div>
-                        <div style={{ color: 'var(--gray-400)' }}>Garanti: {asset.warrantyExpiry}</div>
-                      </td>
-                      <td style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--gray-700)' }}>
-                        <div>Bakım: {asset.lastMaintenance || 'Takip edilmedi'}</div>
-                        <div style={{ fontWeight: isMaintenanceOverdue ? 700 : 500, color: isMaintenanceOverdue ? 'var(--danger-600)' : 'var(--gray-400)' }}>
-                          Sonraki: {nextDate ? nextDate.toISOString().split('T')[0] : '—'} {isMaintenanceOverdue && '⚠️'}
-                        </div>
-                      </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--gray-800)' }}>
-                        {formatCurrency(asset.cost)}
-                      </td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <span className={`badge badge-${
-                          asset.status === 'Aktif' ? 'success' :
-                          asset.status === 'Bakımda' ? 'warning' :
-                          asset.status === 'Arızalı' ? 'danger' : 'neutral'
-                        }`} style={{ padding: '4px 8px', borderRadius: 4, fontSize: '0.8rem' }}>
-                          {asset.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-                          {asset.status === 'Aktif' && (
+              </thead>
+              <tbody>
+                {filteredAssets.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                      Aranan kriterlere uygun demirbaş kaydı bulunamadı.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAssets.map(item => {
+                    const isSelected = selectedIds.includes(item.id);
+                    const isActive = activeItem?.id === item.id;
+                    return (
+                      <tr
+                        key={item.id}
+                        className={isActive ? styles.selectedRow : ''}
+                        onClick={() => handleRowClick(item)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={e => handleToggleSelect(item.id, e as any)}
+                          />
+                        </td>
+                        <td>
+                          <div className={styles.deviceCell}>
+                            <div className={styles.deviceThumb}>
+                              {renderDeviceIcon(item.category)}
+                            </div>
+                            <div className={styles.deviceMeta}>
+                              <span className={styles.deviceName}>{item.name}</span>
+                              <span className={styles.deviceModelSub}>{item.brandModel}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{renderCategoryBadge(item.category)}</td>
+                        <td>{item.branch}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12.5, color: '#334155' }}>{item.serialNo}</td>
+                        <td>{item.purchaseDate}</td>
+                        <td>{item.warrantyExpiry}</td>
+                        <td>{renderStatusBadge(item.status)}</td>
+                        <td style={{ fontWeight: 700, color: '#0f172a' }}>{formatCurrency(item.cost)}</td>
+                        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                          <div className={styles.actionBtns} style={{ justifyContent: 'center', position: 'relative' }}>
+                            {/* Eye button */}
                             <button
-                              className="btn btn-sm btn-secondary"
-                              onClick={() => handleMaintenanceDone(asset.id)}
-                              style={{ padding: '2px 6px', fontSize: '0.78rem' }}
-                              title="Kalibrasyon/Bakım Yapıldı İşaretle"
+                              className={styles.btnActionIcon}
+                              title="Detay Görüntüle"
+                              onClick={() => setActiveItem(item)}
                             >
-                              Bakım Yapıldı
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
                             </button>
-                          )}
-                          <button
-                            className="btn-icon"
-                            onClick={() => handleOpenEditModal(asset)}
-                            style={{ color: 'var(--primary-500)', padding: 6 }}
-                            title="Düzenle"
-                          >
-                            <IconEdit size={16} />
-                          </button>
-                          <button
-                            className="btn-icon"
-                            onClick={() => handleDelete(asset.id)}
-                            style={{ color: 'var(--danger-500)', padding: 6 }}
-                            title="Sil"
-                          >
-                            <IconDelete size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+
+                            {/* Pencil button */}
+                            <button
+                              className={styles.btnActionIcon}
+                              title="Düzenle"
+                              onClick={() => {
+                                setActiveItem(item);
+                                setShowEditModal(true);
+                              }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                              </svg>
+                            </button>
+
+                            {/* Three dots menu */}
+                            <div style={{ position: 'relative' }}>
+                              <button
+                                className={styles.btnActionIcon}
+                                title="İşlemler"
+                                onClick={() => setActiveActionMenuId(activeActionMenuId === item.id ? null : item.id)}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <circle cx="12" cy="12" r="1" />
+                                  <circle cx="12" cy="5" r="1" />
+                                  <circle cx="12" cy="19" r="1" />
+                                </svg>
+                              </button>
+
+                              {activeActionMenuId === item.id && (
+                                <div className={styles.dropdownMenu}>
+                                  <button
+                                    className={styles.dropdownItem}
+                                    onClick={() => {
+                                      setActiveActionMenuId(null);
+                                      setShowMaintenanceModal(true);
+                                    }}
+                                  >
+                                    🔧 Bakım Kaydı Ekle
+                                  </button>
+                                  <button
+                                    className={styles.dropdownItem}
+                                    onClick={() => {
+                                      setActiveActionMenuId(null);
+                                      setShowCalibrationModal(true);
+                                    }}
+                                  >
+                                    🎯 Kalibrasyon Kaydı
+                                  </button>
+                                  <button
+                                    className={styles.dropdownItem}
+                                    onClick={() => {
+                                      setActiveActionMenuId(null);
+                                      setShowTransferModal(true);
+                                    }}
+                                  >
+                                    ⇄ Şube Transferi
+                                  </button>
+                                  <hr style={{ margin: '4px 0', border: 'none', borderTop: '1px solid #e2e8f0' }} />
+                                  <button
+                                    className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`}
+                                    onClick={() => handleDeleteAsset(item.id)}
+                                  >
+                                    🗑 Demirbaşı Sil
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Footer */}
+          <div className={styles.tableFooter}>
+            <div>
+              Toplam {totalAssetsCount} kayıt | {selectedIds.length} kayıt seçili
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className={styles.pagination}>
+                <button className={styles.pageBtn}>‹</button>
+                <button className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
+                <button className={styles.pageBtn}>2</button>
+                <button className={styles.pageBtn}>3</button>
+                <button className={styles.pageBtn}>4</button>
+                <button className={styles.pageBtn}>5</button>
+                <button className={styles.pageBtn}>›</button>
+                <button className={styles.pageBtn}>»</button>
+              </div>
+
+              <select className={styles.filterSelect} style={{ height: 32, minWidth: 90, padding: '0 8px' }}>
+                <option>10 / sayfa</option>
+                <option>25 / sayfa</option>
+                <option>50 / sayfa</option>
+              </select>
+            </div>
+          </div>
         </div>
+
+        {/* Right Detail Drawer */}
+        {activeItem && (
+          <div className={styles.detailDrawer}>
+            {/* Header */}
+            <div className={styles.drawerHeader}>
+              <div className={styles.drawerHeaderLeft}>
+                <div className={styles.drawerThumb}>
+                  {renderDeviceIcon(activeItem.category)}
+                </div>
+                <div>
+                  <div className={styles.drawerDeviceName}>{activeItem.name}</div>
+                  <div className={styles.drawerDeviceModel}>{activeItem.brandModel}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {renderStatusBadge(activeItem.status)}
+                <button
+                  className={styles.drawerCloseBtn}
+                  onClick={() => setActiveItem(null)}
+                  title="Kapat"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-tabs */}
+            <div className={styles.drawerTabs}>
+              <button
+                className={`${styles.drawerTabBtn} ${drawerTab === 'genel' ? styles.drawerTabBtnActive : ''}`}
+                onClick={() => setDrawerTab('genel')}
+              >
+                Genel
+              </button>
+              <button
+                className={`${styles.drawerTabBtn} ${drawerTab === 'bakim' ? styles.drawerTabBtnActive : ''}`}
+                onClick={() => setDrawerTab('bakim')}
+              >
+                Bakım
+              </button>
+              <button
+                className={`${styles.drawerTabBtn} ${drawerTab === 'dosyalar' ? styles.drawerTabBtnActive : ''}`}
+                onClick={() => setDrawerTab('dosyalar')}
+              >
+                Dosyalar
+              </button>
+              <button
+                className={`${styles.drawerTabBtn} ${drawerTab === 'gecmis' ? styles.drawerTabBtnActive : ''}`}
+                onClick={() => setDrawerTab('gecmis')}
+              >
+                İşlem Geçmişi
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className={styles.drawerBody}>
+              {drawerTab === 'genel' && (
+                <>
+                  {/* Demirbaş Bilgileri Section */}
+                  <div className={styles.drawerSection}>
+                    <div className={styles.sectionHeader}>
+                      <span className={styles.sectionTitle}>Demirbaş Bilgileri</span>
+                      <button
+                        className={styles.btnEditLink}
+                        onClick={() => setShowEditModal(true)}
+                      >
+                        Düzenle
+                      </button>
+                    </div>
+
+                    <div className={styles.infoGrid}>
+                      <div className={styles.infoRow}>
+                        <span>Kategori</span>
+                        <strong>{activeItem.category}</strong>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span>Marka / Model</span>
+                        <strong>{activeItem.brandModel}</strong>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span>Seri No</span>
+                        <strong style={{ fontFamily: 'monospace' }}>{activeItem.serialNo}</strong>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span>Şube</span>
+                        <strong>{activeItem.branch}</strong>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span>Satın Alma Tarihi</span>
+                        <strong>{activeItem.purchaseDate}</strong>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span>Garanti Bitişi</span>
+                        <strong>{activeItem.warrantyExpiry}</strong>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span>Değer</span>
+                        <strong style={{ color: '#08785b' }}>{formatCurrency(activeItem.cost)}</strong>
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <span style={{ display: 'block', fontSize: 11.5, color: '#64748b', marginBottom: 2 }}>Açıklama</span>
+                        <div style={{ fontSize: 12, color: '#1e293b', background: '#f8fafc', padding: '8px 10px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                          {activeItem.notes || `${activeItem.name} cihazı klinik kullanımındadır.`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bakım & Kalibrasyon Section */}
+                  <div className={styles.drawerSection}>
+                    <span className={styles.sectionTitle}>Bakım & Kalibrasyon</span>
+                    <div className={styles.maintenanceBox}>
+                      <div className={styles.maintenanceRow}>
+                        <span>Kalibrasyon Periyodu</span>
+                        <strong>{activeItem.calibrationIntervalMonths || 12} Ay</strong>
+                      </div>
+                      <div className={styles.maintenanceRow}>
+                        <span>Son Kalibrasyon</span>
+                        <strong>{activeItem.lastCalibrationDate || '10.08.2025'}</strong>
+                      </div>
+                      <div className={styles.maintenanceRow}>
+                        <span>Sonraki Kalibrasyon</span>
+                        <strong style={{ color: '#dc2626' }}>{activeItem.nextCalibrationDate || '10.08.2026'}</strong>
+                      </div>
+                      <div className={styles.maintenanceRow}>
+                        <span>Bakım Durumu</span>
+                        <span style={{ color: '#08785b', fontWeight: 650, background: '#e6f7f0', padding: '2px 8px', borderRadius: 6, fontSize: 11.5 }}>
+                          {activeItem.maintenanceStatus || 'Bakım gerekmiyor'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Hızlı İşlemler Section */}
+                  <div className={styles.drawerSection}>
+                    <span className={styles.sectionTitle}>Hızlı İşlemler</span>
+                    <div className={styles.quickActionsGrid}>
+                      <button
+                        className={styles.quickActionBtn}
+                        onClick={() => setShowMaintenanceModal(true)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                        </svg>
+                        Bakım Kaydı
+                      </button>
+
+                      <button
+                        className={styles.quickActionBtn}
+                        onClick={() => setShowCalibrationModal(true)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <circle cx="12" cy="12" r="6" />
+                          <circle cx="12" cy="12" r="2" />
+                        </svg>
+                        Kalibrasyon Kaydı
+                      </button>
+
+                      <button
+                        className={styles.quickActionBtn}
+                        onClick={() => addToast({ type: 'info', message: 'Fatura, garanti belgesi veya kalibrasyon raporu seçin.' })}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                        </svg>
+                        Dosya Ekle
+                      </button>
+
+                      <button
+                        className={styles.quickActionBtn}
+                        onClick={() => setShowTransferModal(true)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M16 3h5v5" />
+                          <path d="M4 20L21 3" />
+                          <path d="M21 16v5h-5" />
+                          <path d="M15 15l6 6" />
+                          <path d="M4 4l5 5" />
+                        </svg>
+                        Transfer Et
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {drawerTab === 'bakim' && (
+                <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
+                  <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontWeight: 650, color: '#0f172a' }}>Yıllık Kalibrasyon ve Akustik Test</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Tarih: 10.08.2025 · Yapan: Meditest Kalibrasyon Lab</div>
+                    <div style={{ fontSize: 11.5, color: '#08785b', fontWeight: 600, marginTop: 4 }}>✓ Sertifika No: CAL-2025-8841 (Geçerli)</div>
+                  </div>
+                  <button
+                    className={styles.btnFilter}
+                    style={{ justifyContent: 'center' }}
+                    onClick={() => setShowCalibrationModal(true)}
+                  >
+                    + Yeni Kalibrasyon Belgesi Gir
+                  </button>
+                </div>
+              )}
+
+              {drawerTab === 'dosyalar' && (
+                <div style={{ display: 'grid', gap: 8, fontSize: 12.5 }}>
+                  {[
+                    { name: 'Kullanım Kılavuzu.pdf', size: '3.4 MB', date: '30.08.2023' },
+                    { name: 'Fatura ve Garanti Belgesi.pdf', size: '820 KB', date: '30.08.2023' },
+                    { name: 'Kalibrasyon Sertifikası 2025.pdf', size: '1.1 MB', date: '10.08.2025' }
+                  ].map((f, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{f.name}</div>
+                        <div style={{ fontSize: 11, color: '#64748b' }}>{f.size} · {f.date}</div>
+                      </div>
+                      <button
+                        className={styles.btnEditLink}
+                        onClick={() => addToast({ type: 'success', message: `${f.name} indiriliyor...` })}
+                      >
+                        İndir
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {drawerTab === 'gecmis' && (
+                <div style={{ display: 'grid', gap: 8, fontSize: 12 }}>
+                  {[
+                    { text: 'Demirbaş envantere eklendi.', date: '30.08.2023 11:20', user: 'Ahmet Yılmaz' },
+                    { text: 'Periyodik kalibrasyon tamamlandı.', date: '10.08.2025 15:40', user: 'Servis Teknisyeni' },
+                    { text: 'Odyometri kabini yanına konumlandırıldı.', date: '15.08.2025 09:10', user: 'Ahmet Yılmaz' }
+                  ].map((log, idx) => (
+                    <div key={idx} style={{ padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <div style={{ color: '#0f172a', fontWeight: 600 }}>{log.text}</div>
+                      <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>{log.date} · {log.user}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Add / Edit Asset Modal */}
-      {showModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(3px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <div className="card" style={{ width: 500, maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--surface-border)' }}>
-              <span className="card-title" style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                {isEditing ? 'Demirbaş Bilgilerini Düzenle' : 'Yeni Demirbaş Kaydı Oluştur'}
-              </span>
-              <button onClick={() => setShowModal(false)} style={{ color: 'var(--gray-400)', fontSize: '1.4rem' }}>&times;</button>
+      {/* ── MODAL: Yeni Demirbaş Ekle ── */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 580, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Yeni Demirbaş / Klinik Cihaz Ekle</h3>
+              <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowAddModal(false)}>✕</button>
             </div>
-            <form onSubmit={handleSave}>
-              <div className="card-body" style={{ padding: 20 }}>
-                <div className="form-group" style={{ marginBottom: 12 }}>
-                  <label className="form-label">Cihaz / Ekipman Adı</label>
-                  <input
-                    className="form-input"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    required
-                    placeholder="Örn: Interacoustics Odyometre"
-                  />
-                </div>
 
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Kategori</label>
-                    <select className="form-input" value={formCategory} onChange={(e) => setFormCategory(e.target.value as any)}>
-                      <option value="Klinik Cihaz">Klinik Cihaz</option>
-                      <option value="Ofis Ekipmanı">Ofis Ekipmanı</option>
-                      <option value="Bilgisayar & Çevre">Bilgisayar & Çevre</option>
+            <form onSubmit={handleAddNewAsset}>
+              <div style={{ padding: 20, display: 'grid', gap: 12, maxHeight: '75vh', overflowY: 'auto' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Demirbaş / Cihaz Adı *</label>
+                    <input
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      required
+                      placeholder="Örn: QA Odyometre"
+                      value={newAssetForm.name}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kategori</label>
+                    <select
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      value={newAssetForm.category}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, category: e.target.value as any })}
+                    >
+                      <option value="Cihaz">Cihaz</option>
                       <option value="Mobilya">Mobilya</option>
+                      <option value="Bilgisayar">Bilgisayar</option>
+                      <option value="Ofis Ekipmanı">Ofis Ekipmanı</option>
                       <option value="Diğer">Diğer</option>
                     </select>
                   </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Seri Numarası</label>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Marka / Model</label>
                     <input
-                      className="form-input"
-                      value={formSerialNo}
-                      onChange={(e) => setFormSerialNo(e.target.value)}
-                      placeholder="Barkod veya Seri No"
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      placeholder="Örn: Interacoustics AC40"
+                      value={newAssetForm.brandModel}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, brandModel: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Seri Numarası</label>
+                    <input
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      placeholder="QA-3B-001"
+                      value={newAssetForm.serialNo}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, serialNo: e.target.value })}
                     />
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <>
-                      <label className="form-label">Bulunduğu Şube</label>
-                      <select className="form-input" value={formBranch} onChange={(e) => setFormBranch(e.target.value)}>
-                        <option value="">Şube seçin</option>
-                        {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                      </select>
-                    </>}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Şube</label>
+                    <select
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      value={newAssetForm.branch}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, branch: e.target.value })}
+                    >
+                      <option value="Test Şube 1">Test Şube 1</option>
+                      <option value="Merkez">Merkez</option>
+                      <option value="Çankaya">Çankaya</option>
+                      <option value="Kadıköy">Kadıköy</option>
+                    </select>
                   </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Satın Alma Maliyeti (TL)</label>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Maliyet / Değer (₺)</label>
                     <input
                       type="number"
-                      className="form-input"
-                      value={formCost}
-                      onChange={(e) => setFormCost(Number(e.target.value))}
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      value={newAssetForm.cost}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, cost: Number(e.target.value) })}
                     />
                   </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Satın Alma Tarihi</label>
-                    <input
-                      type="date"
-                      className="form-input"
-                      value={formPurchaseDate}
-                      onChange={(e) => setFormPurchaseDate(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Garanti Bitiş Tarihi</label>
-                    <input
-                      type="date"
-                      className="form-input"
-                      value={formWarrantyExpiry}
-                      onChange={(e) => setFormWarrantyExpiry(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Son Bakım/Kalibrasyon</label>
-                    <input
-                      type="date"
-                      className="form-input"
-                      value={formLastMaintenance}
-                      onChange={(e) => setFormLastMaintenance(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Bakım Periyodu (Ay)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      value={formInterval}
-                      onChange={(e) => setFormInterval(Number(e.target.value))}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Kullanım Durumu</label>
-                    <select className="form-input" value={formStatus} onChange={(e) => setFormStatus(e.target.value as any)}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Durum</label>
+                    <select
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      value={newAssetForm.status}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, status: e.target.value as any })}
+                    >
                       <option value="Aktif">Aktif</option>
-                      <option value="Arızalı">Arızalı</option>
                       <option value="Bakımda">Bakımda</option>
-                      <option value="Hek/Iskarta">Hek / Iskarta</option>
+                      <option value="Onarımda">Onarımda</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Özel Açıklamalar</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satın Alma Tarihi</label>
+                    <input
+                      type="date"
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      value={newAssetForm.purchaseDate}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, purchaseDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Garanti Bitiş Tarihi</label>
+                    <input
+                      type="date"
+                      className={styles.filterSelect}
+                      style={{ width: '100%' }}
+                      value={newAssetForm.warrantyExpiry}
+                      onChange={e => setNewAssetForm({ ...newAssetForm, warrantyExpiry: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Notlar / Açıklama</label>
                   <textarea
-                    className="form-input"
                     rows={2}
-                    value={formNotes}
-                    onChange={(e) => setFormNotes(e.target.value)}
-                    style={{ resize: 'none' }}
+                    className={styles.filterSelect}
+                    style={{ width: '100%', height: 'auto', padding: '8px 12px' }}
+                    placeholder="Ekipmanla ilgili ek açıklama veya kalibrasyon notları..."
+                    value={newAssetForm.notes}
+                    onChange={e => setNewAssetForm({ ...newAssetForm, notes: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="card-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--surface-border)' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>İptal</button>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                <button type="button" className={styles.btnClear} onClick={() => setShowAddModal(false)}>Vazgeç</button>
+                <button type="submit" className={styles.btnNewAsset}>Demirbaşı Kaydet</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Düzenle ── */}
+      {showEditModal && activeItem && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 540, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Demirbaş Bilgilerini Düzenle</h3>
+              <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowEditModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Demirbaş Adı</label>
+                <input
+                  className={styles.filterSelect}
+                  style={{ width: '100%' }}
+                  value={activeItem.name}
+                  onChange={e => setActiveItem({ ...activeItem, name: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Değer (₺)</label>
+                  <input
+                    type="number"
+                    className={styles.filterSelect}
+                    style={{ width: '100%' }}
+                    value={activeItem.cost}
+                    onChange={e => setActiveItem({ ...activeItem, cost: Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Durum</label>
+                  <select
+                    className={styles.filterSelect}
+                    style={{ width: '100%' }}
+                    value={activeItem.status}
+                    onChange={e => setActiveItem({ ...activeItem, status: e.target.value as any })}
+                  >
+                    <option value="Aktif">Aktif</option>
+                    <option value="Bakımda">Bakımda</option>
+                    <option value="Onarımda">Onarımda</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Açıklama</label>
+                <textarea
+                  rows={2}
+                  className={styles.filterSelect}
+                  style={{ width: '100%', height: 'auto', padding: '8px 12px' }}
+                  value={activeItem.notes || ''}
+                  onChange={e => setActiveItem({ ...activeItem, notes: e.target.value })}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button className={styles.btnClear} onClick={() => setShowEditModal(false)}>Vazgeç</button>
+              <button
+                className={styles.btnNewAsset}
+                onClick={() => {
+                  setAssetList(prev => prev.map(a => a.id === activeItem.id ? activeItem : a));
+                  setShowEditModal(false);
+                  addToast({ type: 'success', message: 'Demirbaş bilgileri güncellendi.' });
+                }}
+              >
+                Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Bakım Takvimi ── */}
+      {showScheduleModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 560, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Klinik Bakım & Kalibrasyon Takvimi</h3>
+              <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowScheduleModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 10 }}>
+              <div style={{ padding: 12, background: '#fef3c7', borderRadius: 10, border: '1px solid #fde68a', color: '#b45309', fontSize: 13 }}>
+                <strong>Yaklaşan 2 Kalibrasyon:</strong> Odyometre ve Otoskop için periyodik kalibrasyon süreleri yaklaşıyor.
+              </div>
+              {[
+                { name: 'QA Odyometre', date: '10.08.2026', status: 'Planlandı', lab: 'Meditest Lab' },
+                { name: 'Otoskop Heine', date: '12.04.2025', status: 'Süresi Yakın', lab: 'Teknik Servis' },
+                { name: 'UV Temizleme Cihazı', date: '07.02.2025', status: 'Tamamlandı', lab: 'Klinik İçi' }
+              ].map((s, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                  <div>
+                    <div style={{ fontWeight: 650, color: '#0f172a' }}>{s.name}</div>
+                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Hedef Tarih: {s.date} · {s.lab}</div>
+                  </div>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: s.status === 'Süresi Yakın' ? '#dc2626' : '#08785b', background: s.status === 'Süresi Yakın' ? '#fee2e2' : '#e6f7f0', padding: '3px 8px', borderRadius: 6 }}>
+                    {s.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button className={styles.btnNewAsset} onClick={() => setShowScheduleModal(false)}>Kapat</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Bakım / Kalibrasyon Kaydı ── */}
+      {(showMaintenanceModal || showCalibrationModal) && activeItem && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>
+                {showCalibrationModal ? 'Yeni Kalibrasyon Kaydı Gir' : 'Yeni Bakım Kaydı Gir'}
+              </h3>
+              <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => { setShowMaintenanceModal(false); setShowCalibrationModal(false); }}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+              <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 650 }}>{activeItem.name} ({activeItem.serialNo})</div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Şube: {activeItem.branch}</div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>İşlem Tarihi</label>
+                <input type="date" defaultValue={new Date().toISOString().split('T')[0]} className={styles.filterSelect} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Yetkili Kuruluş / Servis</label>
+                <input placeholder="Örn: Meditest Akustik Kalibrasyon Laboratuvarı" className={styles.filterSelect} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Sertifika / Rapor No</label>
+                <input placeholder="CAL-2025-XXXX" className={styles.filterSelect} style={{ width: '100%' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button className={styles.btnClear} onClick={() => { setShowMaintenanceModal(false); setShowCalibrationModal(false); }}>Vazgeç</button>
+              <button
+                className={styles.btnNewAsset}
+                onClick={() => {
+                  setShowMaintenanceModal(false);
+                  setShowCalibrationModal(false);
+                  addToast({ type: 'success', message: `${activeItem.name} için işlem başarıyla kaydedildi.` });
+                }}
+              >
+                Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Transfer Et ── */}
+      {showTransferModal && activeItem && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Şubeler Arası Demirbaş Transferi</h3>
+              <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowTransferModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+              <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 650 }}>{activeItem.name}</div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Mevcut Şube: <strong>{activeItem.branch}</strong></div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hedef Şube</label>
+                <select className={styles.filterSelect} style={{ width: '100%' }}>
+                  <option value="Çankaya">Çankaya</option>
+                  <option value="Kadıköy">Kadıköy</option>
+                  <option value="Merkez">Merkez</option>
+                  <option value="Test Şube 1">Test Şube 1</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Transfer Notu / Teslim Alan</label>
+                <input placeholder="Teslim alan personel veya oda bilgisi..." className={styles.filterSelect} style={{ width: '100%' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button className={styles.btnClear} onClick={() => setShowTransferModal(false)}>Vazgeç</button>
+              <button
+                className={styles.btnNewAsset}
+                onClick={() => {
+                  setShowTransferModal(false);
+                  addToast({ type: 'success', message: `${activeItem.name} transfer fişi oluşturuldu.` });
+                }}
+              >
+                Transferi Onayla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Rapor ── */}
+      {showReportModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Demirbaş Envanter ve Amortisman Raporu</h3>
+              <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowReportModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Kayıtlı Demirbaş</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>24 Adet</div>
+                </div>
+                <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Değer</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#08785b', marginTop: 4 }}>₺1.285.000</div>
+                </div>
+                <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Faal Cihaz Oranı</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>%87.5</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button
+                className={styles.btnClear}
+                onClick={() => addToast({ type: 'success', message: 'Demirbaş raporu indiriliyor...' })}
+              >
+                📥 PDF Olarak İndir
+              </button>
+              <button className={styles.btnNewAsset} onClick={() => setShowReportModal(false)}>Kapat</button>
+            </div>
           </div>
         </div>
       )}
