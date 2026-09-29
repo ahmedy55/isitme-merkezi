@@ -387,20 +387,6 @@ export default function AppointmentsPage() {
         </div>
 
         <div className={styles.headerActions}>
-          <button
-            type="button"
-            className={styles.actionButton}
-            onClick={() => addToast({ type: 'info', message: 'Geçmiş randevu aktarım penceresi açılıyor.' })}
-          >
-            <IconCalendarCard size={15} /> Geçmiş Aktar
-          </button>
-          <button
-            type="button"
-            className={styles.actionButton}
-            onClick={() => addToast({ type: 'info', message: 'Toplu randevu ekleme penceresi açılıyor.' })}
-          >
-            <IconFileText size={15} /> Toplu Ekle
-          </button>
           {/* Critical: New Appointment button triggering NewAppointmentModal */}
           <button
             type="button"
