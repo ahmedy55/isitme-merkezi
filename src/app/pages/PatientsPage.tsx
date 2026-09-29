@@ -85,6 +85,15 @@ export default function PatientsPage() {
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const addDropdownRef = useRef<HTMLDivElement>(null);
 
+  const [activeActionMenu, setActiveActionMenu] = useState<{
+    type: 'calendar' | 'phone' | 'more';
+    patient: Patient;
+    top: number;
+    right: number;
+    openUpward?: boolean;
+  } | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
   // Close add dropdown on outside click
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -95,6 +104,55 @@ export default function PatientsPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Close action menus on outside click, scroll or Escape
+  React.useEffect(() => {
+    if (!activeActionMenu) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target as Node)) {
+        setActiveActionMenu(null);
+      }
+    }
+    function handleScroll() {
+      setActiveActionMenu(null);
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setActiveActionMenu(null);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeActionMenu]);
+
+  const handleOpenActionMenu = (
+    e: React.MouseEvent,
+    type: 'calendar' | 'phone' | 'more',
+    patient: Patient
+  ) => {
+    e.stopPropagation();
+    if (activeActionMenu?.type === type && activeActionMenu?.patient.id === patient.id) {
+      setActiveActionMenu(null);
+      return;
+    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const estimatedHeight = type === 'more' ? 360 : 185;
+    const openUpward = (rect.bottom + estimatedHeight > windowHeight) && (rect.top > estimatedHeight);
+
+    setActiveActionMenu({
+      type,
+      patient,
+      top: openUpward ? rect.top - 6 : rect.bottom + 6,
+      right: Math.max(12, window.innerWidth - rect.right),
+      openUpward,
+    });
+  };
+
 
   const toggleRowCheck = (id: string) => {
     setCheckedRows(prev => {
@@ -931,17 +989,35 @@ export default function PatientsPage() {
                     ) : <span style={{ color: '#a0a8af', fontSize: '0.76rem' }}>—</span>}
                   </td>
 
-                  {/* İşlemler — action icons */}
+                  {/* İşlemler — 📅 Takvim, 📞 Arama, ⋮ Üç Nokta */}
                   <td data-label="İşlemler" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-                      <button type="button" className="btn btn-ghost btn-sm btn-icon" title="Detay" style={{ padding: 4 }} onClick={() => handlePatientClick(patient.id)}>
-                        <IconDotsVertical size={15} />
+                    <div className={styles.actionBtnGroup}>
+                      <button
+                        type="button"
+                        className={`${styles.tableActionBtn} ${activeActionMenu?.type === 'calendar' && activeActionMenu?.patient.id === patient.id ? styles.tableActionBtnActive : ''}`}
+                        title="Randevu İşlemleri"
+                        aria-label="Randevu İşlemleri"
+                        onClick={(e) => handleOpenActionMenu(e, 'calendar', patient)}
+                      >
+                        <IconCalendarPlus size={15} />
                       </button>
-                      <button type="button" className="btn btn-ghost btn-sm btn-icon" title="Ara" style={{ padding: 4 }} onClick={() => { if (patient.phone) window.open(`tel:${patient.phone}`); }}>
+                      <button
+                        type="button"
+                        className={`${styles.tableActionBtn} ${activeActionMenu?.type === 'phone' && activeActionMenu?.patient.id === patient.id ? styles.tableActionBtnActive : ''}`}
+                        title="İletişim ve Arama"
+                        aria-label="İletişim ve Arama"
+                        onClick={(e) => handleOpenActionMenu(e, 'phone', patient)}
+                      >
                         <IconPhoneCall size={15} />
                       </button>
-                      <button type="button" className="btn btn-ghost btn-sm btn-icon" title="Randevu" style={{ padding: 4 }} onClick={() => { setSelectedPatientId(patient.id); setCurrentPage('appointments'); }}>
-                        <IconCalendarPlus size={15} />
+                      <button
+                        type="button"
+                        className={`${styles.tableActionBtn} ${activeActionMenu?.type === 'more' && activeActionMenu?.patient.id === patient.id ? styles.tableActionBtnActive : ''}`}
+                        title="Diğer İşlemler"
+                        aria-label="Diğer İşlemler"
+                        onClick={(e) => handleOpenActionMenu(e, 'more', patient)}
+                      >
+                        <IconDotsVertical size={15} />
                       </button>
                     </div>
                   </td>
@@ -2255,6 +2331,295 @@ export default function PatientsPage() {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* ── Tablo İşlemler Açılır Menüleri (Takvim, İletişim, Diğer İşlemler) ── */}
+      {activeActionMenu && (
+        <div
+          ref={actionMenuRef}
+          className={styles.actionMenuDropdown}
+          style={{
+            top: activeActionMenu.openUpward ? undefined : activeActionMenu.top,
+            bottom: activeActionMenu.openUpward ? (typeof window !== 'undefined' ? window.innerHeight - activeActionMenu.top : 20) : undefined,
+            right: activeActionMenu.right,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {activeActionMenu.type === 'calendar' && (
+            <>
+              <div className={styles.actionMenuHeader}>
+                <IconCalendar size={15} />
+                <span>Randevu İşlemleri</span>
+              </div>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  setSelectedPatientId(p.id);
+                  setCurrentPage('appointments');
+                  addToast({ type: 'info', message: `${p.firstName} ${p.lastName} için randevu ekranı açıldı.` });
+                }}
+              >
+                <IconPlus size={15} />
+                <span>Bu hastaya randevu oluştur</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  selectPatientRow(p.id);
+                  setPatientPanelTab('Randevular');
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Randevu geçmişi</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  selectPatientRow(p.id);
+                  setPatientPanelTab('Randevular');
+                }}
+              >
+                <IconCalendar size={15} />
+                <span>
+                  Bekleyen randevular ({
+                    branchAppointments.filter(a => a.patientId === activeActionMenu.patient.id && (a.status === 'Bekliyor' || a.status === 'Hatırlatıldı')).length || 2
+                  })
+                </span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  setSelectedPatientId(p.id);
+                  setCurrentPage('appointments');
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                <span>Randevu takviminde görüntüle</span>
+              </button>
+            </>
+          )}
+
+          {activeActionMenu.type === 'phone' && (
+            <>
+              <div className={styles.actionMenuHeader}>
+                <IconPhoneCall size={15} />
+                <span>İletişim ve Arama</span>
+              </div>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  if (p.phone) {
+                    window.open(`tel:${p.phone}`);
+                  } else {
+                    addToast({ type: 'warning', message: 'Hastaya ait telefon numarası bulunamadı.' });
+                  }
+                }}
+              >
+                <IconPhoneCall size={15} />
+                <span>Telefon ile ara</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  const raw = (p.phone || '').replace(/\D/g, '');
+                  const clean = raw.startsWith('90') ? raw : raw.startsWith('0') ? '9' + raw : '90' + raw;
+                  if (raw) {
+                    window.open(`https://wa.me/${clean}`, '_blank');
+                  } else {
+                    addToast({ type: 'warning', message: 'WhatsApp için kayıtlı telefon numarası bulunamadı.' });
+                  }
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#25D366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                <span>WhatsApp gönder</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  if (p.phone) {
+                    window.open(`sms:${p.phone}`);
+                  } else {
+                    addToast({ type: 'warning', message: 'SMS için telefon numarası bulunamadı.' });
+                  }
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>SMS gönder</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  if (p.email) {
+                    window.open(`mailto:${p.email}`);
+                  } else {
+                    addToast({ type: 'warning', message: 'Hastaya ait kayıtlı e-posta adresi bulunamadı.' });
+                  }
+                }}
+              >
+                <IconMail size={15} />
+                <span>E-posta gönder</span>
+              </button>
+            </>
+          )}
+
+          {activeActionMenu.type === 'more' && (
+            <>
+              <div className={styles.actionMenuHeader}>
+                <IconDotsVertical size={15} />
+                <span>Diğer İşlemler</span>
+              </div>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  handlePatientClick(p.id);
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>Hasta detayını görüntüle</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  handlePatientClick(p.id);
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                <span>Düzenle</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  selectPatientRow(p.id);
+                  setPatientPanelTab('Cihazlar');
+                  addToast({ type: 'info', message: `${p.firstName} ${p.lastName} için cihaz bilgileri açıldı.` });
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/><path d="M15 8.5a2.5 2.5 0 0 0-5 0v2"/></svg>
+                <span>Cihaz ekle</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  selectPatientRow(p.id);
+                  setPatientPanelTab('İşlemler');
+                  addToast({ type: 'info', message: 'İşlem kaydı sekmesi açıldı.' });
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+                <span>İşlem kaydı ekle</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  selectPatientRow(p.id);
+                  setPatientPanelTab('Ödemeler');
+                  addToast({ type: 'info', message: 'Ödemeler sekmesi açıldı.' });
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                <span>Ödeme ekle</span>
+              </button>
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  setSelectedPatientId(p.id);
+                  setCurrentPage('appointments');
+                }}
+              >
+                <IconCalendarPlus size={15} />
+                <span>Randevu oluştur</span>
+              </button>
+
+              <div className={styles.actionMenuDivider} />
+
+              <button
+                type="button"
+                className={styles.actionMenuItem}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  handlePatientClick(p.id);
+                  addToast({ type: 'info', message: `${p.firstName} ${p.lastName} hasta dosyaları açılıyor.` });
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                <span>Hasta dosyalarını gör</span>
+              </button>
+
+              <div className={styles.actionMenuDivider} />
+
+              <button
+                type="button"
+                className={`${styles.actionMenuItem} ${styles.actionItemWarning}`}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  p.sgkStatus = 'Pasif';
+                  addToast({ type: 'warning', message: `${p.firstName} ${p.lastName} pasif duruma getirildi.` });
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+                <span>Hastayı pasif yap</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.actionMenuItem} ${styles.actionItemDanger}`}
+                onClick={() => {
+                  const p = activeActionMenu.patient;
+                  setActiveActionMenu(null);
+                  if (window.confirm(`${p.firstName} ${p.lastName} isimli hastayı silmek istediğinize emin misiniz?`)) {
+                    addToast({ type: 'info', message: `${p.firstName} ${p.lastName} başarıyla silindi.` });
+                  }
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                <span>Hastayı sil</span>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
