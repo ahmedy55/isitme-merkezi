@@ -10,7 +10,7 @@ import DeviceIdentityFields from '../components/DeviceIdentityFields';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
-  const { stockList, updateStockItem, addStockItem, deleteStockItem, patientsList, updatePatient, addToast, setCurrentPage, branchesList } = useApp();
+  const { stockList, updateStockItem, addStockItem, deleteStockItem, adjustStockItem, patientsList, updatePatient, addToast, setCurrentPage, branchesList } = useApp();
   const { activeBranch } = useBranch();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
@@ -25,6 +25,11 @@ export default function StockPage() {
   const [hekModalItem, setHekModalItem] = useState<StockItem | null>(null);
   const [selectedHekType, setSelectedHekType] = useState<string | null>(null);
   const [adjustmentModalItem, setAdjustmentModalItem] = useState<StockItem | null>(null);
+  const [adjustmentOperation, setAdjustmentOperation] = useState<'azalt' | 'artir' | 'duzelt'>('azalt');
+  const [adjustmentQuantity, setAdjustmentQuantity] = useState(1);
+  const [adjustmentReason, setAdjustmentReason] = useState('');
+  const [adjustmentNotes, setAdjustmentNotes] = useState('');
+  const [hekNotes, setHekNotes] = useState('');
   const [showUtsImportModal, setShowUtsImportModal] = useState(false);
   const [autoCreateManufacturerToggle, setAutoCreateManufacturerToggle] = useState(true);
   const [showQuickSaleModal, setShowQuickSaleModal] = useState(false);
@@ -495,7 +500,7 @@ export default function StockPage() {
                         {/* 3. ÜTS Bildirimi / HEK Zayiat Button (Red Border) */}
                         <button
                           type="button"
-                          title="HEK / Zayiat Bildirimi"
+                          title="Stoktan Çıkış Kaydı (HEK/Zayiat)"
                           onClick={() => {
                             setSelectedHekType(null);
                             setHekModalItem(item);
@@ -526,7 +531,13 @@ export default function StockPage() {
                         <button
                           type="button"
                           title="Stok Düzeltme / Zayiat (sebepli)"
-                          onClick={() => setAdjustmentModalItem(item)}
+                          onClick={() => {
+                            setAdjustmentOperation('azalt');
+                            setAdjustmentQuantity(1);
+                            setAdjustmentReason('');
+                            setAdjustmentNotes('');
+                            setAdjustmentModalItem(item);
+                          }}
                           style={{
                             width: 30,
                             height: 30,
@@ -628,10 +639,14 @@ export default function StockPage() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    deleteStockItem(item.id);
-                                    addToast({ type: 'success', message: `${item.name} stoğundan kaldırıldı.` });
-                                    setDeleteConfirmId(null);
+                                  onClick={async () => {
+                                    try {
+                                      await deleteStockItem(item.id);
+                                      addToast({ type: 'success', message: `${item.name} envanterden arşivlendi.` });
+                                      setDeleteConfirmId(null);
+                                    } catch (error) {
+                                      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Ürün arşivlenemedi.' });
+                                    }
                                   }}
                                   style={{
                                     padding: '4px 14px',
@@ -1637,13 +1652,13 @@ export default function StockPage() {
         </div>
       )}
 
-      {/* HEK / Zayiat Bildirimi Modal */}
+      {/* Kurum içi stoktan çıkış modalı */}
       {hekModalItem && (
         <div className="modal-overlay" onClick={() => setHekModalItem(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 740, width: '95%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', borderRadius: 12 }}>
             <div className="modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--gray-200)' }}>
               <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, color: '#dc2626' }}>
-                <span>⚠️</span> HEK / Zayiat Bildirimi
+                <span>⚠️</span> Stoktan Çıkış Kaydı (HEK/Zayiat)
               </span>
               <button className="modal-close" onClick={() => setHekModalItem(null)}>✕</button>
             </div>
@@ -1680,10 +1695,10 @@ export default function StockPage() {
                     Bu işlem geri alınamaz
                   </div>
                   <div>
-                    HEK/Zayiat kaydı oluşturulduğunda ürün kalıcı olarak stoktan düşürülür. ÜTS'ye bildirim yapılması durumunda ürün ÜTS'de "HEK" (Hurda/Enkaz/Köhne) durumuna geçer.
+                    Bu ekran yalnızca kurum içi stoktan çıkış kaydı oluşturur. Uygulamada ÜTS bağlantısı yoktur; burada ÜTS bildirimi yapılmaz.
                   </div>
                   <div style={{ marginTop: 6, fontSize: '0.78rem', color: '#b91c1c' }}>
-                    HEK = Hurda / Enkaz / Köhne kelimelerinin kısaltmasıdır. Ekonomik ömrünü tamamlayan veya zayi olan tıbbi cihazlar için ÜTS'ye yapılan zorunlu bildirimdir.
+                    Resmi ÜTS bildiriminizi ayrıca ilgili ÜTS sistemi üzerinden tamamlayın.
                   </div>
                 </div>
               </div>
@@ -1727,7 +1742,7 @@ export default function StockPage() {
                   <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 }}>i</div>
                   <div style={{ fontSize: '0.81rem', color: '#0369a1' }}>
                     <span style={{ fontWeight: 600 }}>Ürünün neden kullanım dışı bırakıldığını belirten türü seçin</span>
-                    <div style={{ fontSize: '0.76rem', color: '#0284c7', marginTop: 1 }}>Seçtiğiniz tür ÜTS'ye (Ürün Takip Sistemi) bildirilecektir. Her tür için farklı yasal süreçler geçerli olabilir.</div>
+                    <div style={{ fontSize: '0.76rem', color: '#0284c7', marginTop: 1 }}>Bu tür yalnızca kurum içi stok hareketine açıklama olarak kaydedilir.</div>
                   </div>
                 </div>
 
@@ -1737,8 +1752,8 @@ export default function StockPage() {
                     { id: 'HEK', title: 'HEK (Hurda/Enkaz/Köhne)', tag: 'HEK', desc: 'Ürün ekonomik ömrünü tamamlamıştır veya tamir edilemez düzeyde arızalıdır. İşitme cihazlarında genellikle tamiri mümkün olmayan elektronik arıza, fiziksel hasar (kırılma, su hasarı) veya teknolojik eskime nedeniyle kullanılır. Ürün artık kullanılamaz durumdadır ve hurdaya ayrılacaktır.' },
                     { id: 'DOGAL_AFET', title: 'Doğal Afet', tag: 'DOGAL_AFET', desc: 'Ürün deprem, sel, fırtına gibi doğal afet nedeniyle zarar görmüştür. Doğal afet sonucu kullanılamaz hale gelen tüm tıbbi cihazlar için bu tür seçilir.' },
                     { id: 'YANGIN', title: 'Yangın', tag: 'YANGIN', desc: 'Ürün yangın nedeniyle hasar görmüş ve kullanılamaz hale gelmiştir. Yangın hasarı sonucu fonksiyonunu yitiren cihazlar için kullanılır.' },
-                    { id: 'CALINMA', title: 'Çalınma', tag: 'CALINMA', desc: 'Ürün çalınmıştır. Hırsızlık sonucu kaybedilen tıbbi cihazlar için bu tür seçilir. Çalıntı bildirimi yapıldığında ilgili yasal süreçlerin de başlatılması önerilir.' },
-                    { id: 'STOK_DUZELTME', title: 'Stok Düzeltme', tag: 'STOK_DUZELTME', desc: 'Stok sayımı sonucunda fiziksel olarak bulunamayan ürün için kullanılır. Envanter sayımında eksik çıkan, ancak çalıntı veya kayıp olduğu kesin olmayan ürünler için bu tür tercih edilir. Sayım farkını ÜTS ile uyumlu hale getirir.' },
+                    { id: 'CALINMA', title: 'Çalınma', tag: 'CALINMA', desc: 'Kurum içi envanterde kayıp/çalıntı olarak işaretlemek için kullanılır. Resmi bildirim bu işlemle yapılmaz.' },
+                    { id: 'STOK_DUZELTME', title: 'Stok Düzeltme', tag: 'STOK_DUZELTME', desc: 'Fiziksel stok sayımıyla sistem miktarı arasındaki farkı kayıt altına alır. ÜTS ile eşitleme yapmaz.' },
                     { id: 'DIGER', title: 'Diğer', tag: 'DIGER', desc: 'Yukarıdaki kategorilere uymayan durumlar için kullanılır. Bu tür seçildiğinde açıklama alanı zorunludur ve durumun detaylı açıklaması yazılmalıdır. Örneğin: üretici geri çağırma, yasal el koyma, vb.' }
                   ].map((option) => (
                     <label key={option.id} style={{ display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
@@ -1770,43 +1785,13 @@ export default function StockPage() {
                 <textarea
                   className="form-input"
                   rows={2}
-                  placeholder="HEK/Zayiat ile ilgili ek notlar..."
+                  value={hekNotes}
+                  onChange={event => setHekNotes(event.target.value)}
+                  placeholder="Stoktan çıkış nedeni ve ek açıklama..."
                   style={{ width: '100%', resize: 'vertical' }}
                 />
               </div>
 
-              {/* Section 4: UTS Bildirimi */}
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 8, color: 'var(--gray-900)' }}>
-                  ÜTS Bildirimi
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <label style={{ display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
-                    <input type="radio" name="utsOption" defaultChecked style={{ marginTop: 3, accentColor: '#0284c7' }} />
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.88rem', color: 'var(--gray-900)' }}>
-                        HEK/Zayiat Bildirimi Gönder
-                        <span style={{ fontSize: '0.66rem', fontWeight: 600, background: '#e0f2fe', color: '#0284c7', padding: '1px 6px', borderRadius: 4 }}>Önerilen</span>
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', lineHeight: 1.45, marginTop: 2 }}>
-                        ÜTS'ye HEK/Zayiat bildirimi gönderilir. Ürün ÜTS'de kalıcı olarak "HEK" (Hurda/Enkaz/Köhne) durumuna geçer. Bu bildirim, ürünün artık kullanılamaz olduğunu ve stoktan kalıcı olarak çıktığını resmi kayıt altına alır. ÜTS'de bu ürün üzerinde başka bildirim yapılamaz (iptal hariç).
-                      </div>
-                    </div>
-                  </label>
-                  <label style={{ display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
-                    <input type="radio" name="utsOption" style={{ marginTop: 3, accentColor: '#0284c7' }} />
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.88rem', color: 'var(--gray-900)' }}>
-                        ÜTS İşlemi Yapma
-                        <span style={{ fontSize: '0.66rem', fontWeight: 600, background: 'var(--gray-100)', color: 'var(--gray-600)', padding: '1px 6px', borderRadius: 4 }}>ÜTS'ye bildirim gitmez</span>
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', lineHeight: 1.45, marginTop: 2 }}>
-                        Hiçbir ÜTS bildirimi gönderilmez. Sadece CRM'deki HEK kaydı oluşturulur ve ürün stoktan düşürülür. ÜTS'deki ürün durumu değişmez. Bu seçenek, ÜTS bildirimi daha sonra manuel yapılacaksa kullanılabilir.
-                      </div>
-                    </div>
-                  </label>
-                </div>
-              </div>
             </div>
 
             <div className="modal-footer" style={{ borderTop: '1px solid var(--gray-200)', padding: '12px 24px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -1822,11 +1807,16 @@ export default function StockPage() {
                 type="button"
                 className="btn btn-secondary"
                 disabled={!selectedHekType}
-                onClick={() => {
-                  if (!selectedHekType) return;
-                  deleteStockItem(hekModalItem.id);
-                  addToast({ type: 'warning', message: `${hekModalItem.name} için HEK / Zayiat kaydı oluşturuldu ve ürün stoktan düşürüldü.` });
-                  setHekModalItem(null);
+                onClick={async () => {
+                  if (!selectedHekType || hekModalItem.quantity <= 0) return;
+                  try {
+                    await adjustStockItem(hekModalItem.id, -hekModalItem.quantity, selectedHekType, hekNotes, true);
+                    addToast({ type: 'success', message: `${hekModalItem.name} için kurum içi stoktan çıkış kaydedildi. ÜTS bildirimi yapılmadı.` });
+                    setHekModalItem(null);
+                    setHekNotes('');
+                  } catch (error) {
+                    addToast({ type: 'error', message: error instanceof Error ? error.message : 'Stoktan çıkış kaydedilemedi.' });
+                  }
                 }}
                 style={{
                   padding: '8px 20px',
@@ -1887,8 +1877,8 @@ export default function StockPage() {
             }}>
               <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#0284c7', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0, marginTop: 1 }}>i</div>
               <div style={{ fontSize: '0.81rem', color: '#0369a1', lineHeight: 1.45 }}>
-                <div style={{ fontWeight: 700, marginBottom: 2, color: '#0c4a6e' }}>Bu ekran sarf malzeme ve ÜTS dışı ürünler içindir.</div>
-                ÜTS'ye kayıtlı (barkodlu) cihazlar bu ekrandan düzeltilemez; onların zayiatı, Bakanlığa bildirim gönderen HEK / Zayiat işlemiyle yapılır. Bu nedenle ÜTS'li cihazların satırında bu buton görünmez.
+                <div style={{ fontWeight: 700, marginBottom: 2, color: '#0c4a6e' }}>Bu işlem kurum içi stok miktarını düzeltir.</div>
+                Bu uygulamada ÜTS entegrasyonu yoktur; barkodlu cihaz hareketleri de ÜTS&apos;ye bildirilmez. Resmi ÜTS işlemini ilgili sistemde ayrıca tamamlayın.
               </div>
             </div>
 
@@ -1898,7 +1888,7 @@ export default function StockPage() {
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> İşlem
                 </label>
-                <select className="form-select">
+                <select className="form-select" value={adjustmentOperation} onChange={event => setAdjustmentOperation(event.target.value as typeof adjustmentOperation)}>
                   <option value="azalt">Stok Azalt (zayiat/kayıp)</option>
                   <option value="artir">Stok Artır (sayım fazlası)</option>
                   <option value="duzelt">Stok Düzelt (sayım eşitleme)</option>
@@ -1913,8 +1903,9 @@ export default function StockPage() {
                 <input
                   type="number"
                   className="form-input"
-                  defaultValue={1}
-                  min={1}
+                  value={adjustmentQuantity}
+                  onChange={event => setAdjustmentQuantity(Number(event.target.value))}
+                  min={adjustmentOperation === 'duzelt' ? 0 : 1}
                 />
               </div>
 
@@ -1923,7 +1914,7 @@ export default function StockPage() {
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   <span style={{ color: '#ef4444', marginRight: 2 }}>*</span> Sebep
                 </label>
-                <select className="form-select" defaultValue="">
+                <select className="form-select" value={adjustmentReason} onChange={event => setAdjustmentReason(event.target.value)}>
                   <option value="" disabled>Sebep seçin</option>
                   <option value="kirilma">Kırılma / Bozulma</option>
                   <option value="kayıp">Kaybolma / Eksik Sayım</option>
@@ -1940,6 +1931,8 @@ export default function StockPage() {
                 <textarea
                   className="form-input"
                   rows={2}
+                  value={adjustmentNotes}
+                  onChange={event => setAdjustmentNotes(event.target.value)}
                   placeholder="Ne oldu? (opsiyonel, Diğer'de zorunlu)"
                   style={{ width: '100%', resize: 'vertical' }}
                 />
@@ -1958,9 +1951,23 @@ export default function StockPage() {
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => {
-                  addToast({ type: 'success', message: `${adjustmentModalItem.name} stok düzeltme işlemi kaydedildi.` });
-                  setAdjustmentModalItem(null);
+                onClick={async () => {
+                  const delta = adjustmentOperation === 'azalt'
+                    ? -adjustmentQuantity
+                    : adjustmentOperation === 'artir'
+                      ? adjustmentQuantity
+                      : adjustmentQuantity - adjustmentModalItem.quantity;
+                  if (!Number.isInteger(adjustmentQuantity) || adjustmentQuantity < 0 || (adjustmentOperation !== 'duzelt' && adjustmentQuantity === 0) || !adjustmentReason || delta === 0) {
+                    addToast({ type: 'error', message: 'Geçerli adet ve sebep girin; miktar değişmiyorsa kayıt oluşturulmaz.' });
+                    return;
+                  }
+                  try {
+                    await adjustStockItem(adjustmentModalItem.id, delta, adjustmentReason, adjustmentNotes, false);
+                    addToast({ type: 'success', message: `${adjustmentModalItem.name} için stok hareketi kaydedildi.` });
+                    setAdjustmentModalItem(null);
+                  } catch (error) {
+                    addToast({ type: 'error', message: error instanceof Error ? error.message : 'Stok düzeltmesi kaydedilemedi.' });
+                  }
                 }}
                 style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
               >

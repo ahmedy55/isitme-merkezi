@@ -278,6 +278,20 @@ export const dbInsertStockMovement = async (movement: any) => {
   }, 'dbInsertStockMovement');
 };
 
+export const dbAdjustStockItem = async (itemId: string, delta: number, reason: string, notes = '', isLoss = false) => {
+  return executeDbQuery(async () => {
+    const { data, error } = await supabase.rpc('adjust_stock_item', {
+      p_item: itemId,
+      p_delta: delta,
+      p_reason: reason,
+      p_notes: notes,
+      p_is_loss: isLoss,
+    });
+    if (error) throw new DatabaseError('Stok hareketi kaydedilemedi.', error);
+    return toCamel<any>(data);
+  }, 'dbAdjustStockItem');
+};
+
 // ═══════════════════════════════════════════════
 // 4. Sales Records (Satışlar)
 // ═══════════════════════════════════════════════
@@ -492,8 +506,8 @@ export const dbFetchAuditLogs = async (): Promise<any[]> => {
     const rawList = toCamel(data || []);
     return rawList.map((item: any) => ({
       ...item,
-      timestamp: item.timestamp || item.createdAt || new Date().toISOString(),
-      userName: item.userName || item.userId || 'Dr. Elif Arslan'
+      timestamp: item.timestamp || item.createdAt || '',
+      userName: item.userName || item.userId || 'Kullanıcı bilgisi yok'
     }));
   }, 'dbFetchAuditLogs');
 };
@@ -522,7 +536,10 @@ export const dbFetchBranches = async () => {
       .select('*')
       .order('name', { ascending: true });
     if (error) throw error;
-    return toCamel(data || []);
+    return toCamel<any[]>(data || []).map(branch => ({
+      ...branch,
+      status: branch.status === 'active' ? 'Aktif' : branch.status === 'inactive' ? 'Pasif' : branch.status,
+    }));
   }, 'dbFetchBranches');
 };
 
@@ -537,7 +554,8 @@ export const dbInsertBranch = async (branch: any) => {
       .insert([{ ...await writePayload('branches',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    const mappedBranch = toCamel<any>(data?.[0]);
+    return mappedBranch ? { ...mappedBranch, status: mappedBranch.status === 'active' ? 'Aktif' : mappedBranch.status === 'inactive' ? 'Pasif' : mappedBranch.status } : mappedBranch;
   }, 'dbInsertBranch');
 };
 
@@ -552,7 +570,8 @@ export const dbUpdateBranch = async (id: string, branch: any) => {
       .maybeSingle();
     if (error) throw error;
     if (!data) throw new DatabaseError('Şube kaydedilemedi veya erişim yetkisi yok.');
-    return toCamel(data);
+    const mappedBranch = toCamel<any>(data);
+    return { ...mappedBranch, status: mappedBranch.status === 'active' ? 'Aktif' : mappedBranch.status === 'inactive' ? 'Pasif' : mappedBranch.status };
   }, 'dbUpdateBranch');
 };
 
@@ -574,13 +593,13 @@ export const dbFetchMemberships = async (): Promise<SystemUser[]> => {
       branchId: m.branch_id,
       firstName: m.first_name || m.email?.split('@')[0] || 'Kullanıcı',
       lastName: m.last_name || '',
-      email: m.email || 'kullanici@audipro.com',
+      email: m.email || '',
       phone: m.phone || '',
-      roles: (m.roles || ['Odyometrist']) as UserRole[],
+      roles: (m.roles || []) as UserRole[],
       branch: m.branches?.name || 'Tüm Şubeler',
       status: (m.status === 'inactive' ? 'Pasif' : 'Aktif') as 'Aktif' | 'Pasif',
-      createdAt: m.joined_at ? m.joined_at.split('T')[0] : new Date().toISOString().split('T')[0],
-      lastLogin: m.joined_at ? m.joined_at.split('T')[0] : undefined
+      createdAt: m.joined_at ? m.joined_at.split('T')[0] : '',
+      lastLogin: undefined
     }));
   }, 'dbFetchMemberships');
 };

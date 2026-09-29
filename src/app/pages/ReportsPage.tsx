@@ -33,7 +33,8 @@ export default function ReportsPage() {
 
     // Dönüşüm Oranı (Satış Yapıldı olan hastaların oranı)
     const totalPatients = patientsList.length;
-    const patientsWithSales = patientsList.filter(p => p.salesStage === 'Satış Yapıldı').length;
+    const patientIdsWithSales = new Set(annualSales.map(sale => sale.patientId));
+    const patientsWithSales = patientsList.filter(patient => patientIdsWithSales.has(patient.id)).length;
     const conversionRate = totalPatients > 0 ? Math.round((patientsWithSales / totalPatients) * 100) : 0;
 
     // Ortalama Hasta Başı Ciro
@@ -82,11 +83,12 @@ export default function ReportsPage() {
       'Sosyal Medya': 0,
       'Tavsiye': 0,
       'Yürüyerek': 0,
-      'Web': 0
+      'Web': 0,
+      'Belirtilmemiş': 0
     };
 
     patientsList.forEach(p => {
-      const src = p.source || 'Tavsiye';
+      const src = p.source || 'Belirtilmemiş';
       if (src in sources) {
         sources[src as keyof typeof sources]++;
       }
@@ -97,7 +99,8 @@ export default function ReportsPage() {
       'Sosyal Medya': 'Sosyal Medya',
       'Tavsiye': 'Tavsiye',
       'Yürüyerek': 'Yürüyerek',
-      'Web': 'Web Sitesi'
+      'Web': 'Web Sitesi',
+      'Belirtilmemiş': 'Belirtilmemiş'
     };
 
     return Object.keys(sources).map(key => ({
@@ -108,10 +111,11 @@ export default function ReportsPage() {
   }, [patientsList]);
 
   const funnelBarData = useMemo(() => {
-    const totalApts = appointmentsList.length;
-    const visitedApts = appointmentsList.filter(a => a.status === 'Geldi').length;
+    const annualAppointments = appointmentsList.filter(a => a.date.startsWith(selectedYear));
+    const totalApts = annualAppointments.length;
+    const visitedApts = annualAppointments.filter(a => a.status === 'Geldi').length;
     const triedDevice = patientsList.filter(p => p.salesStage === 'Cihaz Denendi' || p.salesStage === 'Teklif Verildi' || p.salesStage === 'Satış Yapıldı').length;
-    const soldCount = patientsList.filter(p => p.salesStage === 'Satış Yapıldı').length;
+    const soldCount = new Set(salesList.filter(sale => sale.date.startsWith(selectedYear)).map(sale => sale.patientId)).size;
 
     return [
       { asama: 'Satış', adet: soldCount },
@@ -119,7 +123,7 @@ export default function ReportsPage() {
       { asama: 'Muayene', adet: visitedApts },
       { asama: 'Randevu', adet: totalApts }
     ];
-  }, [appointmentsList, patientsList]);
+  }, [appointmentsList, patientsList, salesList, selectedYear]);
 
   const audiologistData = useMemo(() => {
     const names = Array.from(new Set([
@@ -153,7 +157,13 @@ export default function ReportsPage() {
     }
 
     const headers = ['Satış ID', 'Hasta Adı', 'Tarih', 'Toplam Tutar', 'SGK Katkısı', 'Hasta Payı', 'Ödeme Yöntemi', 'Odyolog'];
-    const rows = salesList.map(sale => [
+    const yearSales = salesList.filter(sale => sale.date.startsWith(selectedYear));
+    if (yearSales.length === 0) {
+      addToast({ type: 'warning', message: `${selectedYear} yılında indirilecek satış verisi bulunamadı.` });
+      return;
+    }
+
+    const rows = yearSales.map(sale => [
       sale.id,
       sale.patientName,
       sale.date,
@@ -179,7 +189,7 @@ export default function ReportsPage() {
     link.click();
     document.body.removeChild(link);
 
-    const exportedSalesCount = salesList.filter(sale => sale.date.startsWith(selectedYear)).length;
+    const exportedSalesCount = yearSales.length;
     addToast({
       type: 'success',
       message: `${selectedYear} yılına ait ciro raporu (${exportedSalesCount} kayıt) başarıyla bilgisayarınıza indirildi.`

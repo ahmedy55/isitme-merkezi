@@ -797,7 +797,7 @@ export const expenses: Expense[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 ] : []);
 
 // ─── Kullanıcı Yönetimi ─────────────────
-export type UserRole = 'Firma Yöneticisi' | 'Odyometrist' | 'Sekreter' | 'Muhasebe';
+export type UserRole = 'Firma Yöneticisi' | 'Şube Yöneticisi' | 'Odyolog' | 'Odyometrist' | 'Sekreter' | 'Resepsiyon' | 'Muhasebe';
 
 export interface SystemUser {
   password?: string;

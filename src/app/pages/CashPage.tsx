@@ -54,14 +54,16 @@ export default function CashPage() {
         if (dbTxs) {
           const mapped: CashTransaction[] = dbTxs.map(t => ({
             id: t.id,
-            date: t.createdAt ? t.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+            date: t.createdAt ? t.createdAt.split('T')[0] : '',
             accountId: t.cashRegisterId || 'kas-1',
-            accountName: t.cashRegisterId || 'Ana Kasa',
+            accountName: t.cashRegisterId === 'kas-1' ? 'Ana Kasa' : `Kasa (${t.cashRegisterId || 'kas-1'})`,
             type: (t.type === 'INCOME' ? 'Giriş' : 'Çıkış') as CashTransaction['type'],
             category: t.category || 'Genel',
             amount: t.amount,
             description: t.description || '',
-            createdBy: 'Sistem',
+            createdBy: app.usersList.find(user => user.userId === t.performedBy)
+              ? `${app.usersList.find(user => user.userId === t.performedBy)?.firstName || ''} ${app.usersList.find(user => user.userId === t.performedBy)?.lastName || ''}`.trim()
+              : 'Kullanıcı bilgisi yok',
             branchId: t.branchId
           })).filter(t => matches(undefined, t.branchId));
           setTransactions(mapped);
@@ -69,7 +71,7 @@ export default function CashPage() {
         }
       }).catch(err => console.warn('[CashPage] dbFetchCashTransactions warning:', err.message));
     }
-  }, [currentOrgId, matches, app.expensesList, app.salesList]);
+  }, [currentOrgId, matches, app.expensesList, app.salesList, app.usersList]);
 
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [selectedAccountIdFilter, setSelectedAccountIdFilter] = useState('All');
@@ -191,7 +193,9 @@ export default function CashPage() {
       category: txCategory,
       amount: txAmount,
       description: txDescription,
-      createdBy: 'Dr. Elif Arslan'
+      createdBy: app.usersList.find(user => user.userId === app.currentUser?.id)
+        ? `${app.usersList.find(user => user.userId === app.currentUser?.id)?.firstName || ''} ${app.usersList.find(user => user.userId === app.currentUser?.id)?.lastName || ''}`.trim()
+        : 'Kullanıcı bilgisi yok'
       ,branchId: selectedBranchId
     };
 

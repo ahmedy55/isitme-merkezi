@@ -1968,9 +1968,39 @@ export default function SuppliersPage() {
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => {
-                  addToast({ type: 'success', message: `${purchaseModalSupplier.companyName} için alış faturası kaydedildi ve stok eklendi.` });
-                  setPurchaseModalSupplier(null);
+                onClick={async () => {
+                  const total = purItems.reduce((sum, item) => {
+                    const subtotal = item.unitPrice * (item.serials.length || 1);
+                    const discounted = subtotal * (1 - item.discount / 100);
+                    return sum + discounted * (1 + item.vat / 100);
+                  }, 0);
+                  if (!purInvoiceNo.trim() || !purItems.every(item => item.name.trim() && item.unitPrice > 0) || total <= 0) {
+                    addToast({ type: 'error', message: 'Fatura numarası, ürün adı ve geçerli alış fiyatı zorunludur.' });
+                    return;
+                  }
+                  const paymentStatus: SupplierPurchase['paymentStatus'] = purPaidAmountModal >= total
+                    ? 'Ödendi'
+                    : purPaidAmountModal > 0 ? 'Kısmi Ödendi' : 'Bekliyor';
+                  const purchase: SupplierPurchase = {
+                    id: crypto.randomUUID(),
+                    supplierId: purchaseModalSupplier.id,
+                    date: purInvoiceDate,
+                    invoiceNo: purInvoiceNo.trim(),
+                    items: purItems.map(item => ({
+                      name: item.name.trim(),
+                      quantity: item.serials.length || 1,
+                      unitPrice: item.unitPrice
+                    })),
+                    total,
+                    paymentStatus,
+                    paymentMethod: purPaymentMethodModal as SupplierPurchase['paymentMethod']
+                  };
+                  try {
+                    await addSupplierPurchaseTransaction(purchaseModalSupplier.id, purchase, purCashId || undefined);
+                    setPurchaseModalSupplier(null);
+                  } catch {
+                    // Keep the form open so the user can retry after the blocker is resolved.
+                  }
                 }}
                 style={{ padding: '8px 24px', borderRadius: 6, background: '#0284c7', borderColor: '#0284c7' }}
               >

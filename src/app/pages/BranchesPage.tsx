@@ -330,8 +330,11 @@ export default function BranchesPage() {
               <select className="form-input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={{ margin: 0 }}>
                 <option value="All">Tüm Roller</option>
                 <option value="Firma Yöneticisi">Firma Yöneticisi</option>
+                <option value="Şube Yöneticisi">Şube Yöneticisi</option>
+                <option value="Odyolog">Odyolog</option>
                 <option value="Odyometrist">Odyometrist</option>
                 <option value="Sekreter">Sekreter</option>
+                <option value="Resepsiyon">Resepsiyon</option>
                 <option value="Muhasebe">Muhasebe</option>
               </select>
             </div>
@@ -622,7 +625,7 @@ export default function BranchesPage() {
                     borderRadius: 'var(--radius-md)',
                     background: 'var(--gray-25)'
                   }}>
-                    {(['Firma Yöneticisi', 'Odyometrist', 'Sekreter', 'Muhasebe'] as UserRole[]).map((role) => {
+                    {(['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyolog', 'Odyometrist', 'Sekreter', 'Resepsiyon', 'Muhasebe'] as UserRole[]).map((role) => {
                       const isChecked = formRoles.includes(role);
                       return (
                         <label key={role} style={{

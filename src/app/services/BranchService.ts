@@ -5,6 +5,10 @@ export type BranchMode =
   | { mode: 'single'; branchId: string; slug: string; branch?: Branch }
   | { mode: 'region'; regionId: string; regionName: string };
 
+export function isActiveBranch(branch: Pick<Branch, 'status'>): boolean {
+  return branch.status === 'Aktif' || (branch.status as string) === 'active';
+}
+
 export class BranchService {
   private static STORAGE_KEY = 'isitme_active_branch_slug';
 
@@ -62,7 +66,7 @@ export class BranchService {
     defaultBranchId?: string,
     scopeId?: string
   ): { branchContext: BranchMode; isFallback: boolean; fallbackReason?: string } {
-    const activeBranches = branchesList.filter(branch => branch.status === 'Aktif');
+    const activeBranches = branchesList.filter(isActiveBranch);
     const allBranchesContext = (): BranchMode => activeBranches.length === 1
       ? this.toSingleBranchContext(activeBranches[0])
       : { mode: 'all' };
@@ -141,7 +145,7 @@ export class BranchService {
     allowedBranchIds: string[] | null,
     defaultBranchId?: string
   ): BranchMode {
-    const activeBranches = branchesList.filter(branch => branch.status === 'Aktif');
+    const activeBranches = branchesList.filter(isActiveBranch);
     const isAllowed = (bId: string) => {
       if (!allowedBranchIds) return true;
       return allowedBranchIds.includes(bId);

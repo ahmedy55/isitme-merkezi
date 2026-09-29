@@ -68,7 +68,12 @@ export default function OrgSelectPage() {
       addToast({ type: 'success', message: `${orgName} şubesi ile giriş yapıldı.` });
       setCurrentPage('dashboard');
     } catch (err: any) {
-      addToast({ type: 'error', message: 'Klinik seçimi gerçekleştirilemedi. Lütfen tekrar deneyin.' });
+      addToast({
+        type: 'error',
+        message: err instanceof Error && err.message
+          ? `Klinik seçimi başarısız: ${err.message}`
+          : 'Klinik seçimi gerçekleştirilemedi. Lütfen tekrar deneyin.'
+      });
     } finally {
       setSelectingId(null);
     }

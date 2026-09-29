@@ -14,6 +14,12 @@ describe('BranchService Production Architecture', () => {
     expect(result.branchContext.mode).toBe('single');
     if (result.branchContext.mode === 'single') expect(result.branchContext.branchId).toBe(branch.id);
   });
+  it('recognizes the database active status before and after domain mapping', () => {
+    const branch = { ...mockBranches[0], status: 'active' as Branch['status'] };
+    const result = BranchService.resolveActiveBranch('all', [branch], null);
+    expect(result.branchContext.mode).toBe('single');
+    if (result.branchContext.mode === 'single') expect(result.branchContext.branchId).toBe(branch.id);
+  });
   it('single-branch view rejects unassigned data and fuzzy demo names', () => {
     const context={mode:'single' as const,branchId:'a',slug:'kadikoy'};
     expect(BranchService.matchesBranch(undefined,undefined,context)).toBe(false);

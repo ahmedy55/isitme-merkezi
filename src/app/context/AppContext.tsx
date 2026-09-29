@@ -21,13 +21,13 @@ import { SaleDomainService } from '../services/SaleDomainService';
 import { StockDomainService } from '../services/StockDomainService';
 import { CashDomainService } from '../services/CashDomainService';
 import { PurchaseDomainService } from '../services/PurchaseDomainService';
-import { SGKDomainService } from '../services/SGKDomainService';
 import { ServiceDomainService } from '../services/ServiceDomainService';
 import { EventBus } from '../services/EventBus';
 import {
   dbFetchPatients, dbInsertPatient, dbUpdatePatient,
   dbFetchAppointments, dbInsertAppointment, dbUpdateAppointmentStatus,
   dbFetchStockItems, dbInsertStockItem, dbUpdateStockItem, dbDeleteStockItem,
+  dbAdjustStockItem,
   dbFetchSales, dbInsertSale,
   dbFetchRecallItems, dbUpdateRecallStatus,
   dbFetchSuppliers, dbInsertSupplier, dbUpdateSupplier, dbDeleteSupplier,
@@ -118,6 +118,7 @@ interface AppContextType {
   completeServiceTicket: (ticketId: string, patientName: string, serviceFee: number, partsUsed?: { stockItemId: string; stockItemName: string; quantity: number; price: number }[], cashRegisterId?: string) => Promise<void>;
   addStockItem: (item: StockItem) => Promise<void>;
   updateStockItem: (item: StockItem) => Promise<void>;
+  adjustStockItem: (itemId: string, delta: number, reason: string, notes?: string, isLoss?: boolean) => Promise<void>;
   deleteStockItem: (id: string) => void;
   updateRecallItemStatus: (id: string, status: RecallItem['status']) => void;
   
@@ -510,11 +511,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addSupplierPurchaseTransaction = async (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => {
     try {
+      // Purchases currently have no server-side transaction/RPC. Never simulate
+      // stock, supplier debt, or cash changes against a live organization.
+      if (currentOrgId) {
+        throw new Error('Canlı alış faturası kaydı için atomik Supabase işlemi henüz hazır değil. Kayıt yapılmadı.');
+      }
+      if (!demoModeActive) throw new Error('Alış faturası için demo veya aktif firma gerekli.');
       const result = await PurchaseDomainService.executePurchaseTransaction(suppliersList, stockList, {
         supplierId,
         purchase,
         cashRegisterId,
-        organizationId: currentOrgId || undefined
       });
 
       setSuppliersList(result.updatedSuppliers);
@@ -522,24 +528,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addToast({ type: 'success', message: 'Alış faturası kaydedildi, tedarikçi borcu ve stoklar güncellendi.' });
     } catch (err: any) {
       addToast({ type: 'error', message: `Alış faturası işlenemedi: ${err.message}` });
+      throw err;
     }
   };
 
   const approveSGKPrescription = async (patientId: string, prescriptionNo: string, reportNo: string) => {
-    try {
-      const result = await SGKDomainService.approvePrescription(patientsList, recallList, {
-        patientId,
-        prescriptionNo,
-        reportNo,
-        organizationId: currentOrgId || undefined
-      });
-
-      setPatientsList(result.updatedPatients);
-      setRecallList(result.updatedRecalls);
-      addToast({ type: 'success', message: 'SGK Reçetesi onaylandı ve 5 yıllık yenileme takibi kuruldu.' });
-    } catch (err: any) {
-      addToast({ type: 'error', message: `SGK Reçetesi onaylanamadı: ${err.message}` });
-    }
+    const patient = patientsList.find(item => item.id === patientId);
+    if (!patient) throw new Error('Hasta kaydı bulunamadı.');
+    if (!prescriptionNo.trim() || !reportNo.trim()) throw new Error('Reçete ve rapor numarası zorunludur.');
+    const updatedPatient = { ...patient, prescriptionNo: prescriptionNo.trim(), reportNo: reportNo.trim() };
+    if (currentOrgId) await dbUpdatePatient(patientId, updatedPatient);
+    setPatientsList(previous => previous.map(item => item.id === patientId ? updatedPatient : item));
+    addToast({ type: 'success', message: 'Reçete ve rapor numarası hasta kaydına eklendi. SGK/Medula uygunluk onayı verilmedi.' });
   };
 
   const completeServiceTicket = async (
@@ -595,6 +595,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else if (demoModeActive) setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
   };
 
+  const adjustStockItem = async (itemId: string, delta: number, reason: string, notes = '', isLoss = false) => {
+    if (!Number.isInteger(delta) || delta === 0) throw new Error('Stok değişimi sıfırdan farklı tam sayı olmalıdır.');
+    if (currentOrgId) {
+      const saved = await dbAdjustStockItem(itemId, delta, reason, notes, isLoss);
+      setStockList(previous => previous.map(item => item.id === itemId ? { ...item, quantity: saved.quantity, status: saved.status } : item));
+    } else if (demoModeActive) {
+      setStockList(previous => previous.map(item => item.id === itemId ? { ...item, quantity: item.quantity + delta } : item));
+    } else throw new Error('Aktif firma gerekli.');
+  };
+
   // Fix #2: Stok silme artık DB'ye de yazılıyor
   const deleteStockItem = async (id: string) => {
     if (currentOrgId) {
@@ -610,6 +620,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (err: any) {
         logger.warn(`dbDeleteStockItem background sync error: ${err.message}`, 'AppContext');
         addToast({ type: 'error', message: 'Ürün silinemedi. Kayıt listede tutuldu.' });
+        throw err;
       }
     } else if (demoModeActive) {
       setStockList(prev => prev.filter(s => s.id !== id));
@@ -874,6 +885,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       completeServiceTicket,
       addStockItem,
       updateStockItem,
+      adjustStockItem,
       deleteStockItem,
       updateRecallItemStatus,
       
