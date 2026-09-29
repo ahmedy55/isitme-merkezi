@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import styles from './SettingsPage.module.css';
 import { useApp } from '../context/AppContext';
 import { supabase, isConfigured } from '../lib/supabase';
 import {
   IconBuilding, IconSGK, IconTag, IconDocument, IconMessage,
   IconBell, IconLock, IconPhone, IconMail, IconMapPin,
   IconSave, IconDatabase, IconShield, IconPlug,
-  IconCalendar, IconRecall, IconStock, IconCash, IconInfo
+  IconCalendar, IconRecall, IconStock, IconCash, IconInfo, IconSettings
 } from '../components/Icons';
 import { IntegrationService } from '../services/IntegrationService';
 
@@ -27,11 +28,11 @@ export default function SettingsPage() {
 
   const [medulaSettings, setMedulaSettings] = useState({
     facilityCode: '', username: '', password: '',
-    wsdlUrl: 'https://medula.sgk.gov.tr/MedulaWS/services/...', environment: 'test'
+    wsdlUrl: '', environment: 'test'
   });
 
   const [utsSettings, setUtsSettings] = useState({ token: '', environment: 'test', firmCode: '' });
-  const [faturaSettings, setFaturaSettings] = useState({ provider: 'Paraşüt', apiKey: '', apiSecret: '', seriNo: 'EP', baslangicSiraNo: '1001' });
+  const [faturaSettings, setFaturaSettings] = useState({ provider: 'Paraşüt', apiKey: '', apiSecret: '', seriNo: '', baslangicSiraNo: '' });
   const [whatsappSettings, setWhatsappSettings] = useState({ provider: 'meta', apiToken: '', phoneNumberId: '', isConnected: false });
   const [securityForm, setSecurityForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
 
@@ -131,7 +132,7 @@ export default function SettingsPage() {
     setTestingService('fatura');
     try {
       const res = await IntegrationService.testEfaturaConnection(faturaSettings.provider, faturaSettings.apiKey);
-      addToast({ type: 'success', message: res.message });
+      addToast({ type: res.status === 'online' ? 'success' : 'warning', message: res.message });
     } finally {
       setTestingService(null);
     }
@@ -141,8 +142,8 @@ export default function SettingsPage() {
     setTestingService('whatsapp');
     try {
       const res = await IntegrationService.testWhatsappConnection(whatsappSettings.provider, whatsappSettings.phoneNumberId);
-      setWhatsappSettings(s => ({ ...s, isConnected: true }));
-      addToast({ type: 'success', message: res.message });
+      setWhatsappSettings(s => ({ ...s, isConnected: res.status === 'online' }));
+      addToast({ type: res.status === 'online' ? 'success' : 'warning', message: res.message });
     } finally {
       setTestingService(null);
     }
@@ -197,96 +198,53 @@ export default function SettingsPage() {
     setNotifSettings(notifSettings.map(n => n.id === id ? { ...n, checked: !n.checked } : n));
   };
 
-  const navGroups = [
-    {
-      title: 'İŞLETME',
-      items: [
-        { id: 'firma', label: 'Firma bilgileri', icon: 'building' },
-      ]
-    },
-    {
-      title: 'ENTEGRASYONLAR',
-      items: [
-        { id: 'medula', label: 'Medula (SGK)', icon: 'sgk' },
-        { id: 'uts', label: 'ÜTS entegrasyonu', icon: 'tag' },
-        { id: 'fatura', label: 'E-Fatura / E-Arşiv', icon: 'document' },
-        { id: 'whatsapp', label: 'WhatsApp / SMS', icon: 'message' },
-      ]
-    },
-    {
-      title: 'HESAP',
-      items: [
-        { id: 'bildirim', label: 'Bildirimler', icon: 'bell' },
-        { id: 'guvenlik', label: 'Güvenlik', icon: 'lock' },
-      ]
-    }
+  const sections = [
+    { id: 'firma', label: 'Firma Bilgileri', icon: <IconBuilding size={17} /> },
+    { id: 'medula', label: 'Medula (SGK)', icon: <IconSGK size={17} /> },
+    { id: 'uts', label: 'ÜTS Entegrasyonu', icon: <IconTag size={17} /> },
+    { id: 'fatura', label: 'E-Fatura / E-Arşiv', icon: <IconDocument size={17} /> },
+    { id: 'whatsapp', label: 'WhatsApp / SMS', icon: <IconMessage size={17} /> },
+    { id: 'bildirim', label: 'Bildirimler', icon: <IconBell size={17} /> },
+    { id: 'guvenlik', label: 'Güvenlik', icon: <IconLock size={17} /> },
   ];
 
   return (
-    <div style={{ fontFamily: "'Segoe UI', Arial, sans-serif", background: '#F3F0E8', borderRadius: 12, border: '0.5px solid #E2DED0', overflow: 'hidden' }}>
-      
-      {/* Header Banner */}
-      <div style={{ padding: '22px 28px 0' }}>
-        <div style={{ fontSize: 20, fontWeight: 600, color: '#22281F' }}>Ayarlar</div>
-        <div style={{ fontSize: 13, color: '#6B685E', marginTop: 2 }}>Sistem ve entegrasyon yapılandırması</div>
-      </div>
-
-      {/* Main Grid Layout */}
-      <div style={{ display: 'flex', gap: 20, padding: '20px 28px 28px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        
-        {/* Left Navigation Sidebar (220px Fixed Width) */}
-        <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {navGroups.map((group, idx) => (
-            <div key={idx}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: '#8A8776', letterSpacing: '.4px', padding: '0 4px 6px' }}>
-                {group.title}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {group.items.map(item => {
-                  const isActive = activeSection === item.id;
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => setActiveSection(item.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        padding: '9px 12px',
-                        borderRadius: 8,
-                        background: isActive ? '#0F5C43' : 'transparent',
-                        color: isActive ? '#fff' : '#3A3A36',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: isActive ? 600 : 500,
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      <span style={{ color: isActive ? '#fff' : '#6B685E', display: 'flex' }}>
-                        {item.icon === 'building' && <IconBuilding size={15} />}
-                        {item.icon === 'sgk' && <IconSGK size={15} />}
-                        {item.icon === 'tag' && <IconTag size={15} />}
-                        {item.icon === 'document' && <IconDocument size={15} />}
-                        {item.icon === 'message' && <IconMessage size={15} />}
-                        {item.icon === 'bell' && <IconBell size={15} />}
-                        {item.icon === 'lock' && <IconLock size={15} />}
-                      </span>
-                      <span>{item.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+    <div className={styles.settingsPage}>
+      <header className={styles.pageHeading}>
+        <div className={styles.headingIcon}><IconSettings size={23} /></div>
+        <div>
+          <h1>Ayarlar</h1>
+          <p>İşletmenizin temel bilgilerini ve sistem tercihlerini buradan yönetin.</p>
         </div>
+      </header>
 
-        {/* Right Content Panel (Dynamic per activeSection) */}
-        <div style={{ flex: 1, minWidth: 280 }}>
+      <nav className={styles.tabs} aria-label="Ayar kategorileri">
+        {sections.map(section => (
+          <button
+            type="button"
+            key={section.id}
+            className={`${styles.tab} ${activeSection === section.id ? styles.activeTab : ''}`}
+            aria-current={activeSection === section.id ? 'page' : undefined}
+            onClick={() => setActiveSection(section.id)}
+          >
+            {section.icon}<span>{section.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className={styles.contentPanel}>
+        {['medula', 'uts', 'fatura', 'whatsapp'].includes(activeSection) && (
+          <div className={styles.connectionNotice} role="status">
+            <IconInfo size={17} />
+            <span>Bu servis bağlantısı henüz uygulanmış değil. Bağlantı testi gerçek servise çağrı yapmaz; bu ekrandaki bazı alanlar henüz veritabanına kaydedilmiyor.</span>
+          </div>
+        )}
           
           {/* SECTION 1: Firma Bilgileri */}
           {activeSection === 'firma' && (
             <>
-              <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
+              <div className={styles.companyLayout}>
+              <div className={`${styles.card} ${styles.companyForm}`} style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '22px 26px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 2 }}>
                   <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E1F0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F5C43' }}>
                     <IconBuilding size={16} />
@@ -366,6 +324,33 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
+
+              <aside className={`${styles.card} ${styles.companyPreview}`}>
+                <h2>Kartvizit / Fatura Önizleme</h2>
+                <p>Firma bilgilerinizin belgelerde görünecek örnek görünümü.</p>
+                <div className={styles.previewPaper}>
+                  <div className={styles.previewMark}><IconBuilding size={24} /></div>
+                  <strong>{firmSettings.firmName || 'Firma adı girilmedi'}</strong>
+                  <span>{firmSettings.taxNo ? `Vergi No: ${firmSettings.taxNo}` : 'Vergi numarası eklenmedi'}</span>
+                  <span>{firmSettings.address || 'Adres eklenmedi'}</span>
+                  <span>{firmSettings.phone || 'Telefon eklenmedi'}</span>
+                  <span>{firmSettings.email || 'E-posta eklenmedi'}</span>
+                </div>
+                <div className={styles.previewNote}>
+                  <IconInfo size={17} />
+                  <span>Önizleme, girdiğiniz bilgileri anlık gösterir. Kaydedilmemiş bilgiler sisteme uygulanmaz.</span>
+                </div>
+              </aside>
+              </div>
+
+              <section className={`${styles.card} ${styles.hoursNotice}`}>
+                <div className={styles.hoursIcon}><IconCalendar size={18} /></div>
+                <div>
+                  <h2>Çalışma Saatleri</h2>
+                  <p>Çalışma saatleri şu anda veritabanında saklanmıyor. Bu nedenle kaybolabilecek bir saat formu yerine, bu ayarın henüz kullanıma açılmadığını belirtiyoruz.</p>
+                </div>
+                <span>Henüz yapılandırılmadı</span>
+              </section>
 
               {/* Compact Otomatik Yedekleme Kartı */}
               <div style={{ background: '#fff', border: '0.5px solid #E2DED0', borderRadius: 12, padding: '16px 20px', marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -833,10 +818,7 @@ export default function SettingsPage() {
             </>
           )}
 
-        </div>
-
       </div>
-
     </div>
   );
 }

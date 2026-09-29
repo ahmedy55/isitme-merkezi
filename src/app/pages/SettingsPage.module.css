@@ -1,0 +1,277 @@
+.settingsPage {
+  --settings-ink: #12242d;
+  --settings-muted: #64748b;
+  --settings-green: #08785b;
+  --settings-line: #e5ebee;
+  color: var(--settings-ink);
+  padding: 8px 2px 24px;
+}
+
+.pageHeading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 14px 20px;
+}
+
+.headingIcon,
+.hoursIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 15px;
+  color: var(--settings-green);
+  background: #e5f4ef;
+}
+
+.pageHeading h1 {
+  margin: 0;
+  color: #10232b;
+  font-size: clamp(23px, 2.3vw, 30px);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.pageHeading p,
+.companyPreview > p,
+.hoursNotice p {
+  margin: 5px 0 0;
+  color: var(--settings-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--settings-line);
+  border-radius: 15px;
+  background: #fff;
+  scrollbar-width: thin;
+}
+
+.tab {
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 45px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #f7f9fa;
+  color: #233640;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+
+.tab:hover {
+  border-color: #cde6dd;
+  background: #eff8f4;
+}
+
+.activeTab {
+  border-color: var(--settings-green);
+  background: var(--settings-green);
+  color: #fff;
+}
+
+.contentPanel {
+  min-width: 0;
+  margin-top: 14px;
+}
+
+.connectionNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 13px 16px;
+  border: 1px solid #cfe2fa;
+  border-radius: 11px;
+  background: #f1f7ff;
+  color: #275184;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.connectionNotice svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.companyLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, .75fr);
+  align-items: stretch;
+  gap: 14px;
+}
+
+.card {
+  min-width: 0;
+  border: 1px solid var(--settings-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(19 44 57 / 3%);
+}
+
+.companyForm {
+  height: fit-content;
+}
+
+.companyPreview {
+  padding: 22px 20px;
+}
+
+.companyPreview h2,
+.hoursNotice h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--settings-ink);
+}
+
+.previewPaper {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+  padding: 24px 15px;
+  border: 1px solid var(--settings-line);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fff, #fbfdfc);
+  text-align: center;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+.previewMark {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 4px;
+  border-radius: 15px;
+  background: #e7f5f0;
+  color: var(--settings-green);
+}
+
+.previewPaper strong {
+  font-size: 17px;
+}
+
+.previewPaper span {
+  color: #51616b;
+  font-size: 12px;
+}
+
+.previewNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f1f7ff;
+  color: #285389;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.previewNote svg {
+  flex: 0 0 auto;
+}
+
+.hoursNotice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 17px 20px;
+}
+
+.hoursIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+.hoursNotice > div:nth-child(2) {
+  flex: 1;
+}
+
+.hoursNotice > span {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 20px;
+  background: #f1f4f5;
+  color: #596b74;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (max-width: 1000px) {
+  .tabs {
+    justify-content: flex-start;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+  }
+
+  .companyLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .settingsPage {
+    padding: 0 0 18px;
+  }
+
+  .pageHeading {
+    padding: 4px 4px 16px;
+    gap: 12px;
+  }
+
+  .headingIcon {
+    width: 46px;
+    height: 46px;
+  }
+
+  .pageHeading p {
+    font-size: 12px;
+  }
+
+  .tabs {
+    gap: 6px;
+    margin: 0 -2px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .tab {
+    min-height: 40px;
+    padding: 0 11px;
+    font-size: 11px;
+  }
+
+  .hoursNotice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 15px;
+  }
+
+  .hoursNotice > span {
+    margin-left: 56px;
+  }
+}
