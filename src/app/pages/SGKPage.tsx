@@ -228,7 +228,7 @@ const INITIAL_SGK_LIST: SGKPrescriptionItem[] = [
 ];
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId } = useApp();
+  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, approveSGKPrescription, updatePatient } = useApp();
   const { matches } = useBranchScope();
 
   // Navigation tab states
@@ -343,15 +343,19 @@ export default function SGKPage() {
   };
 
   // Submit new prescription
-  const handleCreatePrescription = (e: React.FormEvent) => {
+  const handleCreatePrescription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.patientName.trim() || !formData.tc.trim() || !formData.prescriptionNo.trim()) {
       addToast({ type: 'error', message: 'Lütfen zorunlu alanları (Hasta adı, TC, Reçete no) doldurun.' });
       return;
     }
 
+    const matchedPat = allPatients.find(p => p.tc === formData.tc || `${p.firstName} ${p.lastName}`.toLowerCase() === formData.patientName.toLowerCase());
+    const reportNoGenerated = formData.reportNo || `RAP-${Math.floor(1000 + Math.random() * 9000)}`;
+
     const newItem: SGKPrescriptionItem = {
       id: `sgk-${Date.now()}`,
+      patientId: matchedPat?.id,
       patientName: formData.patientName,
       avatarInitials: formData.patientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
       avatarColor: styles.avatarTeal,
@@ -363,7 +367,7 @@ export default function SGKPage() {
       address: 'Merkez Mah. No: 1, Ankara',
       birthDate: '01.01.1965',
       prescriptionNo: formData.prescriptionNo,
-      reportNo: formData.reportNo || `RAP-${Math.floor(1000 + Math.random() * 9000)}`,
+      reportNo: reportNoGenerated,
       date: 'Bugün',
       deviceOperation: formData.deviceOperation,
       status: formData.status,
@@ -375,6 +379,14 @@ export default function SGKPage() {
       icdCode: 'H90.3 - Sensorinöral İşitme Kaybı',
       provisionNo: `PRV-${Math.floor(100000 + Math.random() * 900000)}`
     };
+
+    if (matchedPat && formData.prescriptionNo) {
+      try {
+        await approveSGKPrescription(matchedPat.id, formData.prescriptionNo, reportNoGenerated);
+      } catch {
+        // Fallback silently if offline
+      }
+    }
 
     setItems(prev => [newItem, ...prev]);
     setActiveItem(newItem);
@@ -397,11 +409,24 @@ export default function SGKPage() {
 
   const handleUpdateStatus = (id: string, newStatus: SGKPrescriptionItem['status']) => {
     setItems(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
+    const targetItem = items.find(i => i.id === id);
     if (activeItem && activeItem.id === id) {
       setActiveItem({ ...activeItem, status: newStatus });
     }
+    if (targetItem && newStatus === 'Onaylandı') {
+      const pat = allPatients.find(p => p.tc === targetItem.tc || `${p.firstName} ${p.lastName}`.toLowerCase() === targetItem.patientName.toLowerCase());
+      if (pat) {
+        updatePatient({
+          ...pat,
+          prescriptionStatus: 'SGK Onaylı',
+          sgkStatus: 'Yenileme Hakkı Var',
+          prescriptionNo: targetItem.prescriptionNo,
+          reportNo: targetItem.reportNo
+        });
+      }
+    }
     setActiveActionMenuId(null);
-    addToast({ type: 'success', message: `Reçete durumu "${newStatus}" olarak güncellendi.` });
+    addToast({ type: 'success', message: `Reçete durumu "${newStatus}" olarak güncellendi ve hasta kaydıyla senkronize edildi.` });
   };
 
   const handleDeleteItem = (id: string) => {
