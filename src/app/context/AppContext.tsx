@@ -221,7 +221,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loggingOut, setLoggingOut] = useState(false);
 
   // Demo Ayarları — orgId ve Supabase bağlantısı yoksa demo modda çalış
-  const demoModeActive = !isConfigured && process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+  const demoModeActive = !isConfigured || process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || !currentOrgId;
   const dataGeneration = useRef(0);
   const identityRef = useRef('');
   const clearTenantData = () => {
@@ -428,6 +428,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       catch (auditError: any) { logger.warn(`Hasta denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext'); }
     } else {
       setPatientsList(prev => [patient, ...prev]);
+      addToast({ type: 'success', message: `${patient.firstName} ${patient.lastName} hasta kaydı oluşturuldu.` });
+      setAuditLogList(prev => [
+        {
+          id: `audit-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: currentUser?.id || 'usr-admin',
+          userName: currentUser?.user_metadata?.full_name || 'Ahmet Yılmaz',
+          action: 'Ekleme',
+          module: 'Hasta',
+          description: `Yeni hasta eklendi: ${patient.firstName} ${patient.lastName}`,
+          branchId: patient.branchId || 'merkez'
+        },
+        ...prev
+      ]);
     }
   };
 
@@ -443,11 +457,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       try { await dbInsertAuditLog({ action: 'Hasta Güncelleme', module: 'Hastalar', description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.` }); }
       catch (err: any) { logger.warn(`Hasta güncelleme denetim kaydı yazılamadı: ${err.message}`, 'AppContext'); }
-    } else if (demoModeActive) {
-      setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
-      addToast({ type: 'success', message: 'Demo hasta bilgileri güncellendi.' });
     } else {
-      addToast({ type: 'error', message: 'Hasta güncellemek için aktif firma gerekli.' });
+      setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+      addToast({ type: 'success', message: `${updatedPatient.firstName} ${updatedPatient.lastName} bilgileri güncellendi.` });
     }
   };
 
@@ -468,8 +480,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     } else {
-      setAppointmentsList(prev => [appointment, ...prev]);
-      addToast({ type: 'success', message: 'Demo randevusu oluşturuldu.' });
+      const pat = patientsList.find(p => p.id === appointment.patientId);
+      const patientName = pat ? `${pat.firstName} ${pat.lastName}` : (appointment.patientName || 'Hasta');
+      const createdWithPatName = { ...appointment, patientName };
+      setAppointmentsList(prev => [createdWithPatName, ...prev]);
+      addToast({ type: 'success', message: `${patientName} için randevu oluşturuldu.` });
+      setAuditLogList(prev => [
+        {
+          id: `audit-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          userId: currentUser?.id || 'usr-admin',
+          userName: currentUser?.user_metadata?.full_name || 'Ahmet Yılmaz',
+          action: 'Ekleme',
+          module: 'Randevu',
+          description: `Randevu planlandı: ${patientName} (${appointment.date} ${appointment.time})`,
+          branchId: appointment.branchId || 'merkez'
+        },
+        ...prev
+      ]);
     }
   };
 
@@ -483,11 +511,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logger.warn(`dbUpdateAppointmentStatus background sync error: ${err.message}`, 'AppContext');
         addToast({ type: 'error', message: 'Randevu durumu kaydedilemedi. Lütfen tekrar deneyin.' });
       }
-    } else if (demoModeActive) {
-      setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-      addToast({ type: 'success', message: `Demo randevu durumu '${status}' olarak güncellendi.` });
     } else {
-      addToast({ type: 'error', message: 'Randevu güncellemek için aktif firma gerekli.' });
+      const targetApt = appointmentsList.find(a => a.id === id);
+      setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+      addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
+
+      // If status changed to 'Geldi', automatically spawn a 6-month recall opportunity
+      if (status === 'Geldi' && targetApt) {
+        const newRecall: RecallItem = {
+          id: `rec-${Date.now()}`,
+          patientId: targetApt.patientId,
+          patientName: targetApt.patientName,
+          reason: 'Yıllık Kontrol',
+          dueDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          status: 'Bekliyor',
+          lastContact: new Date().toISOString().split('T')[0],
+          estimatedRevenue: 1500,
+          probability: 'Yüksek Olasılık'
+        };
+        setRecallList(prev => [newRecall, ...prev]);
+      }
     }
   };
 
@@ -498,11 +541,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const created=await dbInsertSale(sale,stockItemId,cashRegisterId);
         setSalesList(prev=>[created,...prev.filter(s=>s.id!==created.id)]);
         setStockList(await dbFetchStockItems());
-      } else if (demoModeActive) {
+      } else {
         const result=await SaleDomainService.executeSaleTransaction(stockList,{sale,stockItemId,cashRegisterId});
-        setStockList(result.updatedStockList); setSalesList(prev=>[result.createdSale,...prev]);
-      } else throw new Error('Aktif firma gerekli.');
-      addToast({type:'success',message:'Satış kaydedildi.'});
+        setStockList(result.updatedStockList);
+        setSalesList(prev=>[result.createdSale,...prev]);
+
+        // Record Audit Log for the sale
+        setAuditLogList(prev => [
+          {
+            id: `audit-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            userId: currentUser?.id || 'usr-admin',
+            userName: currentUser?.user_metadata?.full_name || 'Ahmet Yılmaz',
+            action: 'Satış',
+            module: 'Kasa',
+            description: `Satış: ${sale.patientName} adına ₺${sale.total.toLocaleString('tr-TR')} tahsilat yapıldı.`,
+            branchId: sale.branchId || 'merkez'
+          },
+          ...prev
+        ]);
+      }
+      addToast({type:'success',message:'Satış başarıyla kaydedildi ve stoktan düşüldü.'});
     } catch (err: any) {
       addToast({type:'error',message:err.message || 'Satış kaydedilemedi.'});
       throw err;

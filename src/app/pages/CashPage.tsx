@@ -227,9 +227,10 @@ export default function CashPage() {
 
   // New Sale Form State
   const [saleForm, setSaleForm] = useState({
+    patientId: '',
     patientName: '',
     productId: '',
-    paymentMethod: 'Nakit',
+    paymentMethod: 'Nakit' as 'Nakit' | 'Kredi Kartı' | 'Havale' | 'Taksit',
     amount: 12500,
     account: 'Ana Kasa'
   });
@@ -310,25 +311,66 @@ export default function CashPage() {
   };
 
   // Handle New Sale
-  const handleCreateSale = (e: React.FormEvent) => {
+  const handleCreateSale = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newMovement: CashMovement = {
-      id: `csh-${Date.now()}`,
-      date: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      account: saleForm.account,
-      type: 'Giriş',
-      category: 'Cihaz Satışı',
-      description: 'İşitme cihazı satışı',
-      patientOrEntity: saleForm.patientName || 'Perakende Müşteri',
-      amount: Number(saleForm.amount) || 0,
-      paymentMethod: saleForm.paymentMethod,
-      status: 'Tahsil Edildi',
-      branch: 'Test Şube 1'
-    };
+    const amount = Number(saleForm.amount) || 0;
+    const saleId = `sale-${Date.now()}`;
+    const selectedStock = stockList.find(s => s.id === saleForm.productId);
 
-    setCashMovements(prev => [newMovement, ...prev]);
-    setShowNewSaleModal(false);
-    addToast({ type: 'success', message: 'Satış tahsilatı başarıyla işlendi ve kasaya eklendi.' });
+    if (saleForm.productId && selectedStock && selectedStock.quantity <= 0) {
+      addToast({ type: 'error', message: 'Seçilen ürünün stoğu tükenmiş.' });
+      return;
+    }
+
+    try {
+      await addSale({
+        id: saleId,
+        idempotencyKey: crypto.randomUUID(),
+        patientId: 'pat-1',
+        patientName: saleForm.patientName || 'Perakende Müşteri',
+        date: new Date().toISOString().split('T')[0],
+        items: [
+          {
+            name: selectedStock ? selectedStock.name : 'İşitme Cihazı Satışı',
+            quantity: 1,
+            price: amount,
+            type: selectedStock?.category === 'Cihaz' ? 'Cihaz' : 'Aksesuar',
+            stockItemId: selectedStock?.id,
+            serialNo: selectedStock?.serialNo
+          }
+        ],
+        total: amount,
+        sgkAmount: 0,
+        patientAmount: amount,
+        paymentMethod: saleForm.paymentMethod,
+        status: 'Tahsil Edildi',
+        branchId: activeBranch.mode === 'single' ? activeBranch.branchId : 'merkez'
+      }, selectedStock?.id);
+
+      const branchName = activeBranch.mode === 'single'
+        ? (branchesList.find(b => b.id === activeBranch.branchId)?.name || 'Merkez')
+        : 'Merkez';
+
+      const newMovement: CashMovement = {
+        id: `csh-${Date.now()}`,
+        date: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        account: saleForm.account,
+        type: 'Giriş',
+        category: 'Cihaz Satışı',
+        description: selectedStock ? `${selectedStock.name} satışı (Stoktan -1 düşüldü)` : 'İşitme cihazı satışı',
+        patientOrEntity: saleForm.patientName || 'Perakende Müşteri',
+        amount: amount,
+        paymentMethod: saleForm.paymentMethod,
+        status: 'Tahsil Edildi',
+        branch: branchName
+      };
+
+      setCashMovements(prev => [newMovement, ...prev]);
+      setShowNewSaleModal(false);
+      addToast({ type: 'success', message: `${formatCurrency(amount)} satış tahsilatı kaydedildi ve stoktan düşüldü.` });
+    } catch (err: any) {
+      addToast({ type: 'error', message: err.message || 'Satış kaydedilemedi.' });
+    }
   };
 
   // Handle New Expense
@@ -1413,14 +1455,57 @@ export default function CashPage() {
             <form onSubmit={handleCreateSale}>
               <div style={{ padding: 20, display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hasta Adı Soyadı</label>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kayıtlı Hasta Seçimi (İsteğe Bağlı)</label>
+                  <select
+                    className={styles.filterSelect}
+                    style={{ width: '100%', marginBottom: 6 }}
+                    value={saleForm.patientId}
+                    onChange={e => {
+                      const selectedPatId = e.target.value;
+                      const pat = patientsList.find(p => p.id === selectedPatId);
+                      setSaleForm({
+                        ...saleForm,
+                        patientId: selectedPatId,
+                        patientName: pat ? `${pat.firstName} ${pat.lastName}` : saleForm.patientName
+                      });
+                    }}
+                  >
+                    <option value="">-- Kayıtlı Hastalardan Seçin (veya aşağıya yazın) --</option>
+                    {patientsList.map(p => (
+                      <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.phone || p.tc || 'Kayıtlı'})</option>
+                    ))}
+                  </select>
                   <input
-                    placeholder="Örn: Ayşe Yılmaz"
+                    placeholder="Veya Hasta Adı Soyadı yazın (Örn: Ayşe Yılmaz)"
                     className={styles.filterSelect}
                     style={{ width: '100%' }}
                     value={saleForm.patientName}
                     onChange={e => setSaleForm({ ...saleForm, patientName: e.target.value })}
                   />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satılacak Ürün / Cihaz (Stoktan Düşülecek)</label>
+                  <select
+                    className={styles.filterSelect}
+                    style={{ width: '100%' }}
+                    value={saleForm.productId}
+                    onChange={e => {
+                      const selectedId = e.target.value;
+                      const found = stockList.find(s => s.id === selectedId);
+                      setSaleForm({
+                        ...saleForm,
+                        productId: selectedId,
+                        amount: found ? found.price : saleForm.amount
+                      });
+                    }}
+                  >
+                    <option value="">-- Stoktan Ürün Seçin --</option>
+                    {stockList.map(item => (
+                      <option key={item.id} value={item.id} disabled={item.quantity <= 0}>
+                        {item.name} ({item.category}) — Stok: {item.quantity} adet — ₺{item.price.toLocaleString('tr-TR')}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
@@ -1439,7 +1524,7 @@ export default function CashPage() {
                       className={styles.filterSelect}
                       style={{ width: '100%' }}
                       value={saleForm.paymentMethod}
-                      onChange={e => setSaleForm({ ...saleForm, paymentMethod: e.target.value })}
+                      onChange={e => setSaleForm({ ...saleForm, paymentMethod: e.target.value as 'Nakit' | 'Kredi Kartı' | 'Havale' | 'Taksit' })}
                     >
                       <option value="Nakit">Nakit</option>
                       <option value="Kredi Kartı">Kredi Kartı</option>
