@@ -121,6 +121,7 @@ interface AppContextType {
   adjustStockItem: (itemId: string, delta: number, reason: string, notes?: string, isLoss?: boolean) => Promise<void>;
   deleteStockItem: (id: string) => void;
   updateRecallItemStatus: (id: string, status: RecallItem['status']) => void;
+  addRecallItem: (item: RecallItem) => Promise<void>;
   
   // P0 — Tedarikçi
   addSupplier: (supplier: Supplier) => void;
@@ -705,6 +706,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addRecallItem = async (item: RecallItem) => {
+    setRecallList(prev => [item, ...prev]);
+    const auditEntry: AuditLogEntry = {
+      id: `aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      userId: currentUser?.id || 'usr-admin',
+      userName: currentUser?.name || 'Sistem Yöneticisi',
+      module: 'Hasta',
+      action: 'Ekleme',
+      description: `${item.patientName} için ${item.reason} hatırlatması planlandı (Vade: ${item.dueDate}).`,
+      details: `Vade: ${item.dueDate}`
+    };
+    setAuditLogList(prev => [auditEntry, ...prev]);
+    addToast({ type: 'success', message: `${item.patientName} için hatırlatma kaydı oluşturuldu.` });
+  };
+
   // P0 — Tedarikçi CRUD
   const addSupplier = async (supplier: Supplier) => {
     if (currentOrgId) {
@@ -947,6 +964,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adjustStockItem,
       deleteStockItem,
       updateRecallItemStatus,
+      addRecallItem,
       
       addSupplier,
       updateSupplier,

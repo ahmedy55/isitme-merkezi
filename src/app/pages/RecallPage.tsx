@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
-import { getAvatarColor, getInitials, calculateAge } from '../data/mockData';
+import { getAvatarColor, getInitials, calculateAge, type RecallItem } from '../data/mockData';
 import { IconCalendar, IconCheck, IconSearch, IconClose, IconPlus, IconPhone, IconMail } from '../components/Icons';
 import styles from './RecallPage.module.css';
 
@@ -280,7 +280,7 @@ const defaultShowcaseRecalls: ShowcaseRecall[] = [
 ];
 
 export default function RecallPage() {
-  const { recallList, patientsList, branchesList, addToast, setCurrentPage, setSelectedPatientId } = useApp();
+  const { recallList, patientsList, branchesList, addToast, setCurrentPage, setSelectedPatientId, addRecallItem, updateRecallItemStatus } = useApp();
   const { matches } = useBranchScope();
 
   // Selected tab: 'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi'
@@ -302,6 +302,7 @@ export default function RecallPage() {
 
   // Modal for New Recall
   const [showNewModal, setShowNewModal] = useState<boolean>(false);
+  const [newPatientId, setNewPatientId] = useState('');
   const [newPatientName, setNewPatientName] = useState('');
   const [newRecallType, setNewRecallType] = useState('Pil değişimi');
   const [newDueDate, setNewDueDate] = useState('');
@@ -322,9 +323,37 @@ export default function RecallPage() {
     setCheckedIds(prev => prev.size === allIds.length ? new Set() : new Set(allIds));
   };
 
+  // Convert live recallList items to ShowcaseRecall format and merge
+  const allRecalls = useMemo<ShowcaseRecall[]>(() => {
+    const liveConverted: ShowcaseRecall[] = recallList.map(item => {
+      const p = patientsList.find(pt => pt.id === item.patientId || `${pt.firstName} ${pt.lastName}` === item.patientName);
+      return {
+        id: item.id,
+        patientId: item.patientId,
+        patientName: item.patientName,
+        patientAge: p ? calculateAge(p.birthDate) : 60,
+        patientGender: p?.gender || 'Belirtilmemiş',
+        patientPhone: p?.phone || '+90 500 000 00 00',
+        patientEmail: p?.email || '',
+        patientAddress: p?.address || '—',
+        patientDevice: p?.currentDevice || '—',
+        patientDeviceSn: '—',
+        patientInitials: getInitials(item.patientName, ''),
+        avatarColor: getAvatarColor(item.patientName),
+        typeTitle: item.reason,
+        typeSub: `(${item.probability || 'Planlandı'})`,
+        planDate: item.dueDate || new Date().toISOString().split('T')[0],
+        planTime: '10:00',
+        status: (item.status === 'Gönderildi' ? 'Bekliyor' : item.status) as any,
+        lastAction: item.lastContact ? `Son temas: ${item.lastContact}` : '—',
+      };
+    });
+    return [...liveConverted, ...defaultShowcaseRecalls];
+  }, [recallList, patientsList]);
+
   // Filtered rows
   const filteredRecalls = useMemo(() => {
-    return defaultShowcaseRecalls.filter(item => {
+    return allRecalls.filter(item => {
       // Tab filter
       if (activeTab !== 'Tümü') {
         if (activeTab === 'Gönderildi' && item.status !== 'Bekliyor') {
@@ -350,9 +379,9 @@ export default function RecallPage() {
 
       return true;
     });
-  }, [activeTab, searchQuery, filterType]);
+  }, [allRecalls, activeTab, searchQuery, filterType]);
 
-  const activeRecall = defaultShowcaseRecalls.find(r => r.id === selectedRecallId) || defaultShowcaseRecalls[0];
+  const activeRecall = allRecalls.find(r => r.id === selectedRecallId) || allRecalls[0] || defaultShowcaseRecalls[0];
 
   const handleOpenAppointment = (patientId: string) => {
     setSelectedPatientId(patientId);
@@ -360,6 +389,9 @@ export default function RecallPage() {
   };
 
   const handleSendReminder = (patientName: string) => {
+    if (activeRecall) {
+      updateRecallItemStatus(activeRecall.id, 'Gönderildi');
+    }
     addToast({ type: 'success', message: `${patientName} için hatırlatma bildirimi başarıyla gönderildi.` });
   };
 
@@ -836,6 +868,16 @@ export default function RecallPage() {
                   >
                     🔔 Hatırlatmayı Gönder
                   </button>
+                  <button
+                    type="button"
+                    style={{ fontSize: '11px', fontWeight: 600, padding: '7px 12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => {
+                      updateRecallItemStatus(activeRecall.id, 'Tamamlandı');
+                      addToast({ type: 'success', message: `${activeRecall.patientName} hatırlatması tamamlandı olarak işaretlendi.` });
+                    }}
+                  >
+                    ✓ Tamamlandı
+                  </button>
                 </div>
               </div>
             </div>
@@ -897,12 +939,28 @@ export default function RecallPage() {
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
-                  Hasta Adı Soyadı *
+                  Kayıtlı Hasta Seçimi (veya serbest yazın) *
                 </label>
+                <select
+                  className="form-select"
+                  style={{ width: '100%', height: 38, marginBottom: 6 }}
+                  value={newPatientId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setNewPatientId(id);
+                    const found = patientsList.find(p => p.id === id);
+                    if (found) setNewPatientName(`${found.firstName} ${found.lastName}`);
+                  }}
+                >
+                  <option value="">-- Kayıtlı Hastalardan Seçin --</option>
+                  {patientsList.map(p => (
+                    <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.phone || p.tc || 'Kayıtlı'})</option>
+                  ))}
+                </select>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Örn: Ayşe Yılmaz"
+                  placeholder="Veya serbest hasta adı yazın..."
                   value={newPatientName}
                   onChange={(e) => setNewPatientName(e.target.value)}
                   style={{ width: '100%', height: 38 }}
@@ -964,13 +1022,26 @@ export default function RecallPage() {
                 type="button"
                 className="btn btn-primary"
                 style={{ background: '#08785b', borderColor: '#08785b' }}
-                onClick={() => {
+                onClick={async () => {
                   if (!newPatientName.trim()) {
                     addToast({ type: 'warning', message: 'Lütfen hasta adı girin.' });
                     return;
                   }
-                  addToast({ type: 'success', message: `${newPatientName} için yeni hatırlatma kaydedildi.` });
+                  const matchedPat = patientsList.find(p => p.id === newPatientId || `${p.firstName} ${p.lastName}`.toLowerCase() === newPatientName.trim().toLowerCase());
+                  const newRecall: RecallItem = {
+                    id: `rec-${Date.now().toString().slice(-6)}`,
+                    patientId: matchedPat?.id || `pat-${Date.now().toString().slice(-4)}`,
+                    patientName: newPatientName.trim(),
+                    reason: (newRecallType === 'SGK Yenileme' ? 'SGK Yenileme' : 'Yıllık Kontrol') as any,
+                    dueDate: newDueDate || new Date().toISOString().split('T')[0],
+                    status: 'Bekliyor',
+                    lastContact: null,
+                    estimatedRevenue: 15000,
+                    probability: 'Yüksek Olasılık'
+                  };
+                  await addRecallItem(newRecall);
                   setShowNewModal(false);
+                  setNewPatientId('');
                   setNewPatientName('');
                   setNewDueDate('');
                   setNewNotes('');

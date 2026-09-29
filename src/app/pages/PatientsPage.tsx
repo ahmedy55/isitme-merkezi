@@ -324,10 +324,13 @@ export default function PatientsPage() {
       addToast({ type: 'warning', message: '⚠️ DİKKAT: Kişisel Sağlık Verilerinin İşlenmesine İlişkin KVKK Açık Rıza Onayı verilmeden hasta kaydı oluşturulamaz.' });
       return;
     }
-    const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : formBranchId;
-    const assignedBranch = branchesList.find(branch => branch.id === assignedBranchId);
-    if (!assignedBranchId || !assignedBranch) {
-      addToast({ type: 'error', message: 'Hasta kaydı için şube seçin.' });
+    const defaultBranch = branchesList.find(b => b.status === 'Aktif') || branchesList[0];
+    const assignedBranchId = activeBranch.mode === 'single'
+      ? activeBranch.branchId
+      : (formBranchId || defaultBranch?.id);
+    const assignedBranch = branchesList.find(branch => branch.id === assignedBranchId) || defaultBranch;
+    if (!assignedBranch) {
+      addToast({ type: 'error', message: 'Hasta kaydı için geçerli bir şube bulunamadı.' });
       return;
     }
     const newPatient: Patient = {

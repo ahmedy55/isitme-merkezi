@@ -205,6 +205,7 @@ export default function AppointmentsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'bekleyen' | 'tamamlanan' | 'iptal'>('all');
 
   // Modals and action dropdown
+  const [showcaseList, setShowcaseList] = useState<ShowcaseSlot[]>(defaultShowcaseSlots);
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeSlotMenu, setActiveSlotMenu] = useState<{ id: string; top: number; right: number; patientName: string; phone?: string } | null>(null);
   const slotMenuRef = useRef<HTMLDivElement>(null);
@@ -308,7 +309,7 @@ export default function AppointmentsPage() {
     const liveForDay = appointmentsList.filter(a => a.date === selectedDateStr);
     
     if (selectedDateStr === '2025-09-12') {
-      if (liveForDay.length === 0) return defaultShowcaseSlots;
+      if (liveForDay.length === 0) return showcaseList;
       // Merge live appointments
       const extraSlots: ShowcaseSlot[] = liveForDay.map(apt => {
         const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
@@ -326,7 +327,7 @@ export default function AppointmentsPage() {
           status: (apt.status === 'Hatırlatıldı' ? 'Randevu Onayı' : apt.status) as any,
         };
       });
-      return [...defaultShowcaseSlots, ...extraSlots];
+      return [...showcaseList, ...extraSlots];
     }
 
     // For any other date, show live appointments or fallback
@@ -349,8 +350,8 @@ export default function AppointmentsPage() {
       });
     }
 
-    return defaultShowcaseSlots;
-  }, [selectedDateStr, appointmentsList, patientsList]);
+    return showcaseList;
+  }, [selectedDateStr, appointmentsList, patientsList, showcaseList]);
 
   // Open slot action dropdown
   const handleOpenSlotMenu = (e: React.MouseEvent, slot: ShowcaseSlot) => {
@@ -998,7 +999,8 @@ export default function AppointmentsPage() {
             type="button"
             className={styles.actionDropdownItem}
             onClick={() => {
-              addToast({ type: 'success', message: `${activeSlotMenu.patientName} 'Geldi' olarak güncellendi.` });
+              updateAppointmentStatus(activeSlotMenu.id, 'Geldi');
+              setShowcaseList(prev => prev.map(s => s.id === activeSlotMenu.id ? { ...s, status: 'Geldi' } : s));
               setActiveSlotMenu(null);
             }}
           >
@@ -1009,7 +1011,8 @@ export default function AppointmentsPage() {
             type="button"
             className={styles.actionDropdownItem}
             onClick={() => {
-              addToast({ type: 'info', message: `${activeSlotMenu.patientName} için WhatsApp hatırlatması gönderildi.` });
+              updateAppointmentStatus(activeSlotMenu.id, 'Hatırlatıldı');
+              setShowcaseList(prev => prev.map(s => s.id === activeSlotMenu.id ? { ...s, status: 'Randevu Onayı' } : s));
               setActiveSlotMenu(null);
             }}
           >
@@ -1021,8 +1024,12 @@ export default function AppointmentsPage() {
             type="button"
             className={styles.actionDropdownItem}
             onClick={() => {
-              if (activeSlotMenu.phone) window.open(`https://wa.me/${activeSlotMenu.phone.replace(/\D/g, '')}`, '_blank');
-              else addToast({ type: 'warning', message: 'Telefon numarası bulunamadı.' });
+              if (activeSlotMenu.phone) {
+                const clean = activeSlotMenu.phone.replace(/\D/g, '');
+                window.open(`https://wa.me/${clean.startsWith('90') ? clean : '90' + clean}`, '_blank');
+              } else {
+                addToast({ type: 'warning', message: 'Telefon numarası bulunamadı.' });
+              }
               setActiveSlotMenu(null);
             }}
           >
@@ -1034,7 +1041,8 @@ export default function AppointmentsPage() {
             type="button"
             className={`${styles.actionDropdownItem} ${styles.actionItemDanger}`}
             onClick={() => {
-              addToast({ type: 'warning', message: `${activeSlotMenu.patientName} randevusu iptal edildi.` });
+              updateAppointmentStatus(activeSlotMenu.id, 'İptal');
+              setShowcaseList(prev => prev.map(s => s.id === activeSlotMenu.id ? { ...s, status: 'İptal' } : s));
               setActiveSlotMenu(null);
             }}
           >
@@ -1220,11 +1228,13 @@ export function NewAppointmentModal({
     const minStr = selectedDate.getMinutes().toString().padStart(2, '0');
     const timeStr = `${hourStr}:${minStr}`;
 
-    const linkedPatient = patientsList.find(patient => patient.id === patientIdFinal);
-    if (linkedPatient && !linkedPatient.branchId) { addToast?.({ type: 'error', message: 'Bu hastanın şube bilgisi eksik. Önce hasta kaydını düzeltin.' }); return; }
-    const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : linkedPatient?.branchId || branch;
-    const assignedBranch = branchesList.find(item => item.id === assignedBranchId);
-    if (!assignedBranchId || !assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için şube seçin.' }); return; }
+    const linkedPatient = patientsList.find(p => p.id === patientIdFinal);
+    const defaultBranch = branchesList.find(b => b.status === 'Aktif') || branchesList[0];
+    const assignedBranchId = activeBranch.mode === 'single'
+      ? activeBranch.branchId
+      : (linkedPatient?.branchId || branch || defaultBranch?.id);
+    const assignedBranch = branchesList.find(item => item.id === assignedBranchId) || defaultBranch;
+    if (!assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için geçerli bir şube bulunamadı.' }); return; }
     const newApt = {
       id: `apt-${Date.now().toString().slice(-6)}`,
       patientId: patientIdFinal,

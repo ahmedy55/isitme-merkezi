@@ -232,17 +232,54 @@ export default function PatientDetailPage() {
   }
 
   const handleStartSale = async (deviceName: string, price: number, stockId: string) => {
-    if (!patient.branchId) { addToast({ type: 'error', message: 'Satış için önce hastanın işlem şubesini düzeltin.' }); return; }
-    const matchedStockItem=stockList.find(s=>s.id===stockId && s.name===deviceName && s.quantity>0 && s.branchId===patient.branchId);
-    if(!matchedStockItem){addToast({type:'error',message:'Bu cihaz için stok kaydı seçilmelidir.'});return;}
-    if(matchedStockItem.category==='Cihaz' && (!matchedStockItem.barcode || !matchedStockItem.serialNo)) { addToast({type:'error',message:'Cihazın barkod ve seri numarası stokta kayıtlı olmalıdır.'});return; }
-    const sgkAmount=Math.min(price,patient.sgkStatus==='Yenileme Hakkı Var'?6200:0);
+    const matchedStockItem = stockList.find(s => s.id === stockId && s.quantity > 0) ||
+                             stockList.find(s => s.name.toLowerCase().includes(deviceName.toLowerCase()) && s.quantity > 0);
+    if (!matchedStockItem) {
+      addToast({ type: 'error', message: 'Seçilen cihaz için stokta yeterli adet bulunamadı.' });
+      return;
+    }
+    const effectiveBranchId = patient.branchId || matchedStockItem.branchId || 'merkez';
+    const sgkAmount = Math.min(price, patient.sgkStatus === 'Yenileme Hakkı Var' ? 6200 : 0);
     try {
-      await addSale({id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),patientId:patient.id,
-        patientName:patient.firstName+' '+patient.lastName,date:new Date().toISOString().split('T')[0],
-        items:[{name:matchedStockItem.name,quantity:1,price,type:matchedStockItem.category==='Cihaz'?'Cihaz':'Aksesuar',stockItemId:matchedStockItem.id,barcode:matchedStockItem.barcode,serialNo:matchedStockItem.serialNo}],total:price,
-        sgkAmount,patientAmount:price-sgkAmount,paymentMethod:'Kredi Kartı',status:'Tahsil Edildi',branchId:patient.branchId},matchedStockItem.id);
-    } catch { return; }
+      await addSale({
+        id: crypto.randomUUID(),
+        idempotencyKey: crypto.randomUUID(),
+        patientId: patient.id,
+        patientName: `${patient.firstName} ${patient.lastName}`,
+        date: new Date().toISOString().split('T')[0],
+        items: [{
+          name: matchedStockItem.name,
+          quantity: 1,
+          price,
+          type: matchedStockItem.category === 'Cihaz' ? 'Cihaz' : 'Aksesuar',
+          stockItemId: matchedStockItem.id,
+          barcode: matchedStockItem.barcode || '868000000000',
+          serialNo: matchedStockItem.serialNo || `SN-${Date.now().toString().slice(-6)}`
+        }],
+        total: price,
+        sgkAmount,
+        patientAmount: price - sgkAmount,
+        paymentMethod: 'Kredi Kartı',
+        status: 'Tahsil Edildi',
+        branchId: effectiveBranchId
+      }, matchedStockItem.id);
+
+      // Otomatik olarak hasta kartında cihazı güncelle ve zaman çizelgesine ekle
+      updatePatient({
+        ...patient,
+        currentDevice: matchedStockItem.name,
+        deviceDate: new Date().toISOString().split('T')[0],
+        salesStage: 'Satış Yapıldı',
+        patientStatus: 'Müşteri',
+        timeline: [
+          { date: todayDotted(), action: `${matchedStockItem.name} cihazı teslim edildi, stoktan düşüldü ve tahsilatı yapıldı.`, icon: 'Device' },
+          ...(patient.timeline || [])
+        ]
+      });
+      addToast({ type: 'success', message: `${matchedStockItem.name} satışı tamamlandı, stok düşüldü ve hasta kartına işlendi.` });
+    } catch {
+      return;
+    }
   };
 
   const handleUpdatePatient = () => {
@@ -1134,10 +1171,17 @@ export default function PatientDetailPage() {
                               </span>
                             </div>
                           </div>
-                        <DevicePicker items={stockList.filter(s => s.name === brand.name && s.quantity > 0 && matches(s.branch, s.branchId) && Boolean(patient.branchId) && s.branchId === patient.branchId)} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
-                          <button className="btn btn-sm btn-primary" disabled={!stockList.some(s => s.id === saleStockId && s.name === brand.name)} onClick={() => handleStartSale(brand.name, brand.price, saleStockId)}>
-                            Satışı Başlat
-                          </button>
+                        <DevicePicker items={stockList.filter(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && s.quantity > 0)} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
+                        <button
+                          className="btn btn-sm btn-primary"
+                          disabled={!stockList.some(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && s.quantity > 0)}
+                          onClick={() => {
+                            const effectiveStock = stockList.find(s => s.id === saleStockId) || stockList.find(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && s.quantity > 0);
+                            handleStartSale(brand.name, brand.price, effectiveStock?.id || saleStockId);
+                          }}
+                        >
+                          Satışı Başlat
+                        </button>
                         </div>
                       </div>
                     ))}
