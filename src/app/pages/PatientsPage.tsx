@@ -14,7 +14,7 @@ import {
 } from '../data/mockData';
 import {
   IconPlus, IconSearch, IconArrowRight, IconClose, IconPatients, IconCalendar,
-  IconRecall, IconDevice, IconRefresh, IconUsers
+  IconRecall, IconDevice, IconRefresh, IconUsers, IconPhone, IconMail, IconMapPin, IconCash
 } from '../components/Icons';
 
 type SortKey = 'name' | 'tc' | 'phone' | 'age' | 'hearingLoss' | 'device' | 'sgkStatus' | 'lastVisit';
@@ -45,7 +45,7 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading, branchesList, appointmentsList, stockList } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading, branchesList, appointmentsList, stockList, salesList } = useApp();
   const { activeBranch } = useBranch();
 
   const [search, setSearch] = useState('');
@@ -57,6 +57,9 @@ export default function PatientsPage() {
   const [filterDevice, setFilterDevice] = useState('Tümü');
   const [filterAppointment, setFilterAppointment] = useState('Tümü');
   const [quickFilter, setQuickFilter] = useState('Tümü');
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [showPatientPanel, setShowPatientPanel] = useState(true);
+  const [patientPanelTab, setPatientPanelTab] = useState<'Genel' | 'Cihazlar' | 'Randevular' | 'İşlemler' | 'Ödemeler'>('Genel');
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [formBranchId, setFormBranchId] = useState('');
@@ -476,6 +479,17 @@ export default function PatientsPage() {
     setCurrentPage('patient-detail');
   };
 
+  const activePatient = sorted.find(patient => patient.id === selectedRowId) || sorted[0] || null;
+  const activePatientAppointments = activePatient
+    ? branchAppointments.filter(appointment => appointment.patientId === activePatient.id).sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
+    : [];
+  const activePatientSales = activePatient ? salesList.filter(sale => sale.patientId === activePatient.id) : [];
+  const selectPatientRow = (patientId: string) => {
+    setSelectedRowId(patientId);
+    setShowPatientPanel(true);
+    setPatientPanelTab('Genel');
+  };
+
   const thStyle: React.CSSProperties = { cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' };
 
   return (
@@ -651,7 +665,8 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {/* Patient Table */}
+      {/* Hasta listesi ve seçili hasta özeti */}
+      <div className={styles.patientWorkspace}>
       <div className={`card ${styles.tableCard}`}>
         <div className="table-container">
           <table className={`mobile-cards ${styles.patientTable}`}>
@@ -672,8 +687,12 @@ export default function PatientsPage() {
               {sorted.map((patient) => (
                 <tr
                   key={patient.id}
+                  className={activePatient?.id === patient.id ? styles.selectedPatientRow : undefined}
+                  aria-selected={activePatient?.id === patient.id}
                   style={{ cursor: 'pointer' }}
-                  onClick={() => handlePatientClick(patient.id)}
+                  onClick={() => selectPatientRow(patient.id)}
+                  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectPatientRow(patient.id); } }}
+                  tabIndex={0}
                 >
                   <td data-label="Hasta">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -736,6 +755,83 @@ export default function PatientsPage() {
             <p>Arama kriterlerinizi değiştirmeyi deneyin.</p>
           </div>
         )}
+      </div>
+
+      {showPatientPanel && activePatient && (
+        <aside className={styles.patientPanel} aria-label={`${activePatient.firstName} ${activePatient.lastName} hasta özeti`}>
+          <div className={styles.patientPanelHeader}>
+            <div className={styles.patientAvatar} style={{ background: getAvatarColor(activePatient.firstName) }}>{getInitials(activePatient.firstName, activePatient.lastName)}</div>
+            <div className={styles.patientPanelIdentity}>
+              <strong>{activePatient.firstName} {activePatient.lastName}</strong>
+              <span>{calculateAge(activePatient.birthDate)} yaş · {activePatient.gender}</span>
+            </div>
+            <span className={styles.patientStatus}>{activePatient.patientStatus || 'Durum belirtilmemiş'}</span>
+            <button className={styles.panelClose} type="button" aria-label="Hasta özetini kapat" onClick={() => setShowPatientPanel(false)}><IconClose size={16} /></button>
+          </div>
+
+          <nav className={styles.patientPanelTabs} aria-label="Hasta bilgi sekmeleri">
+            {(['Genel', 'Cihazlar', 'Randevular', 'İşlemler', 'Ödemeler'] as const).map(tab => (
+              <button key={tab} type="button" className={patientPanelTab === tab ? styles.panelTabActive : ''} aria-pressed={patientPanelTab === tab} onClick={() => setPatientPanelTab(tab)}>{tab}</button>
+            ))}
+          </nav>
+
+          <div className={styles.patientPanelBody}>
+            {patientPanelTab === 'Genel' && (
+              <>
+                <div className={styles.panelSectionHeading}><strong>İletişim Bilgileri</strong><button type="button" onClick={() => handlePatientClick(activePatient.id)}>Düzenle</button></div>
+                <a className={styles.contactRow} href={`tel:${activePatient.phone}`}><IconPhone size={16} /><span>{activePatient.phone || 'Telefon bilgisi yok'}</span></a>
+                <div className={styles.contactRow}><IconMail size={16} /><span>{activePatient.email || 'E-posta bilgisi yok'}</span></div>
+                <div className={styles.contactRow}><IconMapPin size={16} /><span>{activePatient.address || 'Adres bilgisi yok'}</span></div>
+                <div className={styles.patientFacts}>
+                  <div><span>İşitme kaybı</span><strong>{activePatient.hearingLoss} · {activePatient.hearingLossSide}</strong></div>
+                  <div><span>SGK durumu</span><strong>{activePatient.sgkStatus || 'Belirtilmemiş'}</strong></div>
+                  <div><span>Son ziyaret</span><strong>{activePatient.lastVisit ? formatDate(activePatient.lastVisit) : 'Kayıt yok'}</strong></div>
+                </div>
+              </>
+            )}
+            {patientPanelTab === 'Cihazlar' && (
+              <>
+                <div className={styles.panelSectionHeading}><strong>Kayıtlı Cihaz</strong><button type="button" onClick={() => handlePatientClick(activePatient.id)}>Hasta detayında aç</button></div>
+                {activePatient.currentDevice || assignedStockByPatient.get(activePatient.id) ? (
+                  <div className={styles.infoCard}>
+                    <strong>{activePatient.currentDevice || assignedStockByPatient.get(activePatient.id)?.model}</strong>
+                    {assignedStockByPatient.get(activePatient.id)?.serialNo && <span>Seri No: {assignedStockByPatient.get(activePatient.id)?.serialNo}</span>}
+                    {assignedStockByPatient.get(activePatient.id)?.barcode && <span>Barkod: {assignedStockByPatient.get(activePatient.id)?.barcode}</span>}
+                  </div>
+                ) : <p className={styles.panelEmpty}>Bu hasta için kayıtlı cihaz bulunmuyor.</p>}
+              </>
+            )}
+            {patientPanelTab === 'Randevular' && (
+              <>
+                <div className={styles.panelSectionHeading}><strong>Randevu Geçmişi</strong><button type="button" onClick={() => { setSelectedPatientId(activePatient.id); setCurrentPage('appointments'); }}>Takvime git</button></div>
+                {activePatientAppointments.length ? activePatientAppointments.slice(0, 5).map(appointment => (
+                  <div className={styles.listItem} key={appointment.id}><strong>{appointment.type}</strong><span>{formatDate(appointment.date)} · {appointment.time} · {appointment.status}</span></div>
+                )) : <p className={styles.panelEmpty}>Bu hasta için kayıtlı randevu bulunmuyor.</p>}
+              </>
+            )}
+            {patientPanelTab === 'İşlemler' && (
+              <>
+                <div className={styles.panelSectionHeading}><strong>Satış / İşlem Kayıtları</strong><IconCash size={17} /></div>
+                {activePatientSales.length ? activePatientSales.slice(0, 5).map(sale => (
+                  <div className={styles.listItem} key={sale.id}><strong>{sale.items.map(item => item.name).join(', ') || 'Satış kaydı'}</strong><span>{formatDate(sale.date)} · {sale.total.toLocaleString('tr-TR')} ₺</span></div>
+                )) : <p className={styles.panelEmpty}>Bu hasta için kayıtlı satış/işlem bulunmuyor.</p>}
+              </>
+            )}
+            {patientPanelTab === 'Ödemeler' && (
+              <>
+                <div className={styles.panelSectionHeading}><strong>Tahsilat Durumu</strong><IconCash size={17} /></div>
+                {activePatientSales.length ? activePatientSales.map(sale => (
+                  <div className={styles.listItem} key={sale.id}><strong>{sale.patientAmount.toLocaleString('tr-TR')} ₺ hasta payı</strong><span>{formatDate(sale.date)} · {sale.status}</span></div>
+                )) : <p className={styles.panelEmpty}>Bu hasta için kayıtlı tahsilat bulunmuyor.</p>}
+              </>
+            )}
+          </div>
+
+          <div className={styles.patientPanelFooter}>
+            <button type="button" className={styles.primaryPanelAction} onClick={() => handlePatientClick(activePatient.id)}>Hasta Detayını Görüntüle <IconArrowRight size={15} /></button>
+          </div>
+        </aside>
+      )}
       </div>
 
 
