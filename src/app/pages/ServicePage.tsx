@@ -1,2139 +1,1851 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
-import DeviceIdentityFields from '../components/DeviceIdentityFields';
-import DevicePicker from '../components/DevicePicker';
-import { fetchServiceTickets, saveServiceTicket } from '../repositories/ServiceTicketRepository';
-import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
-import { IconPlus, IconService, IconCheck, IconCash, IconShield, IconArrowRight, IconEye, IconSearch } from '../components/Icons';
+import { formatCurrency } from '../data/mockData';
+import styles from './ServicePage.module.css';
 
-interface ServiceRecord {
+export interface ServiceItem {
   id: string;
   patientId?: string;
-  branchId?: string;
-  stockItemId?: string;
-  barcode?: string;
   patientName: string;
+  patientPhone: string;
+  patientInitials: string;
+  avatarColor: string;
   deviceName: string;
+  earSide: 'Sol kulak' | 'Sağ kulak' | 'Binaural';
   serialNo: string;
-  receivedDate: string;
-  estimatedDate: string;
-  returnedDate: string | null;
+  barcode: string;
   problem: string;
-  operations: { description: string; cost: number }[];
-  totalCost: number;
-  status: 'Alındı' | 'İnceleniyor' | 'Tamir Ediliyor' | 'Hazır' | 'Teslim Edildi';
-  technician: string;
-  warrantyRepair: boolean;
-  notes: string;
-  accessoriesTaken?: string[];
-  complaints?: string[];
+  receivedDate: string;
+  estimatedDeliveryDate: string;
+  returnedDate?: string | null;
+  status: 'Alındı' | 'İnceleniyor' | 'Tamir Ediliyor' | 'Teslime Hazır' | 'Garanti' | 'Teslim Edildi';
+  warrantyStatus: 'Garanti Kapsamında' | 'Garanti Dışı';
+  deviceType: string;
+  notes?: string;
+  technician?: string;
+  branch?: string;
+  operations?: { description: string; cost: number; date: string }[];
+  files?: { name: string; size: string; date: string }[];
+  history?: { title: string; date: string; user: string; note: string }[];
 }
 
-const serviceRecords: ServiceRecord[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
+const INITIAL_SERVICE_RECORDS: ServiceItem[] = [
   {
-    id: 'srv1',
-    patientName: 'Ayşe Yılmaz',
-    deviceName: 'Phonak Audéo P90',
-    serialNo: 'PH-2024-00142',
-    receivedDate: '2026-07-01',
-    estimatedDate: '2026-07-10',
-    returnedDate: null,
-    problem: 'Cihaz zayıf ses veriyor, pil tüketimi artmış',
-    operations: [
-      { description: 'Mikrofon temizliği', cost: 500 },
-      { description: 'Hoparlör değişimi', cost: 1200 },
-      { description: 'Yazılım güncellemesi', cost: 300 },
-    ],
-    totalCost: 2000,
-    status: 'Tamir Ediliyor',
-    technician: 'Emre Koç',
-    warrantyRepair: false,
-    notes: 'Hoparlör yurt dışından sipariş edildi.',
-  },
-  {
-    id: 'srv2',
-    patientName: 'Mehmet Kaya',
+    id: 'srv-1',
+    patientName: 'Test Hasta Üç',
+    patientPhone: '0532 123 45 67',
+    patientInitials: 'TH',
+    avatarColor: '#0d9488',
     deviceName: 'Oticon More 1',
-    serialNo: 'OT-2024-00089',
-    receivedDate: '2026-07-05',
-    estimatedDate: '2026-07-08',
-    returnedDate: '2026-07-08',
-    problem: 'Bluetooth bağlantı sorunu',
+    earSide: 'Sol kulak',
+    serialNo: '1234567890',
+    barcode: 'OT-001',
+    problem: 'Ses kesilmesi',
+    receivedDate: '29.09.2026',
+    estimatedDeliveryDate: '02.10.2026',
+    status: 'Alındı',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Zaman zaman ses kesiliyor.',
+    technician: 'Teknik Servis',
+    branch: 'Test Şube 1',
     operations: [
-      { description: 'Firmware güncellemesi', cost: 0 },
-      { description: 'Bluetooth modül kalibrasyonu', cost: 0 },
+      { description: 'Giriş kontrolü ve akustik test', cost: 0, date: '29.09.2026' }
     ],
-    totalCost: 0,
-    status: 'Teslim Edildi',
-    technician: 'Emre Koç',
-    warrantyRepair: true,
-    notes: 'Garanti kapsamında ücretsiz onarıldı.',
+    files: [
+      { name: 'Giriş_Kabul_Fotoğrafı.jpg', size: '1.8 MB', date: '29.09.2026' }
+    ],
+    history: [
+      { title: 'Servis Kabul Edildi', date: '29.09.2026 14:10', user: 'Ahmet Yılmaz', note: 'Cihaz teslim alındı, genel kontrol başlatıldı.' }
+    ]
   },
   {
-    id: 'srv3',
-    patientName: 'Ali Demir',
-    deviceName: 'Phonak Naída P70',
-    serialNo: 'PH-2024-00215',
-    receivedDate: '2026-07-07',
-    estimatedDate: '2026-07-12',
-    returnedDate: null,
-    problem: 'Cihaz açılmıyor, düşme sonrası hasar',
-    operations: [
-      { description: 'Kasa değişimi', cost: 2500 },
-      { description: 'Devre kartı kontrol', cost: 400 },
-    ],
-    totalCost: 2900,
+    id: 'srv-2',
+    patientName: 'Ayşe Yılmaz',
+    patientPhone: '0533 222 11 44',
+    patientInitials: 'AY',
+    avatarColor: '#2563eb',
+    deviceName: 'Phonak Audeo L',
+    earSide: 'Sağ kulak',
+    serialNo: '9876543210',
+    barcode: 'PH-002',
+    problem: 'Cihaz açılmıyor',
+    receivedDate: '28.09.2026',
+    estimatedDeliveryDate: '04.10.2026',
     status: 'İnceleniyor',
-    technician: 'Emre Koç',
-    warrantyRepair: false,
-    notes: 'Fiziksel hasar olduğu için garanti kapsamı dışında.',
+    warrantyStatus: 'Garanti Kapsamında',
+    deviceType: 'RIC (Hoparlör Kulak İçi)',
+    notes: 'Şarj ünitesine takıldığında tepki vermiyor.',
+    technician: 'Teknik Servis',
+    branch: 'Merkez Şube',
+    operations: [
+      { description: 'Batarya ve devre kontrolü', cost: 0, date: '28.09.2026' }
+    ],
+    files: [],
+    history: [
+      { title: 'İncelemeye Alındı', date: '28.09.2026 11:30', user: 'Emre Koç', note: 'Elektronik test ünitesine bağlandı.' }
+    ]
   },
   {
-    id: 'srv4',
-    patientName: 'Hasan Çelik',
-    deviceName: 'ReSound ONE 9',
-    serialNo: 'RS-2024-00331',
-    receivedDate: '2026-07-08',
-    estimatedDate: '2026-07-09',
-    returnedDate: null,
-    problem: 'Kulak kalıbı ile uyum sorunu, geri bildirim sesi',
+    id: 'srv-3',
+    patientName: 'Mehmet Kaya',
+    patientPhone: '0505 111 22 33',
+    patientInitials: 'MK',
+    avatarColor: '#10b981',
+    deviceName: 'Widex Moment',
+    earSide: 'Binaural',
+    serialNo: '4567891234',
+    barcode: 'WD-003',
+    problem: 'Ses cızırtısı',
+    receivedDate: '26.09.2026',
+    estimatedDeliveryDate: '—',
+    status: 'Tamir Ediliyor',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Yüksek frekanslarda parazit ve cızırtı mevcut.',
+    technician: 'Teknik Servis',
+    branch: 'Merkez Şube',
     operations: [
-      { description: 'Kalıp uyumu ayarlama', cost: 200 },
-      { description: 'Feedback bastırma kalibrasyonu', cost: 300 },
+      { description: 'Mikrofon filtre değişimi', cost: 450, date: '27.09.2026' },
+      { description: 'Akustik kalibrasyon', cost: 300, date: '28.09.2026' }
     ],
-    totalCost: 500,
-    status: 'Hazır',
-    technician: 'Emre Koç',
-    warrantyRepair: false,
-    notes: 'Hasta yarın teslim almaya gelecek.',
+    files: [],
+    history: [
+      { title: 'Onarım Başladı', date: '27.09.2026 09:15', user: 'Teknik Servis', note: 'Parça değişimi yapılıyor.' }
+    ]
   },
   {
-    id: 'srv5',
-    patientName: 'Fatma Özkan',
-    deviceName: 'Signia Pure 7Nx',
-    serialNo: 'SG-2024-00176',
-    receivedDate: '2026-06-25',
-    estimatedDate: '2026-06-28',
-    returnedDate: '2026-06-28',
-    problem: 'Rutin yıllık bakım',
+    id: 'srv-4',
+    patientName: 'Elif Demir',
+    patientPhone: '0532 987 65 43',
+    patientInitials: 'ED',
+    avatarColor: '#b45309',
+    deviceName: 'Signia Pure 312',
+    earSide: 'Sol kulak',
+    serialNo: '3216549870',
+    barcode: 'SG-004',
+    problem: 'Pil problemi',
+    receivedDate: '24.09.2026',
+    estimatedDeliveryDate: '01.10.2026',
+    status: 'Teslime Hazır',
+    warrantyStatus: 'Garanti Kapsamında',
+    deviceType: 'Kulak arkası',
+    notes: 'Pil yuvası korozyonu temizlendi, yeni pil kapağı takıldı.',
+    technician: 'Teknik Servis',
+    branch: 'Kadıköy Şube',
     operations: [
-      { description: 'Genel temizlik', cost: 300 },
-      { description: 'Pil yuvası temizliği', cost: 100 },
-      { description: 'Tüp değişimi', cost: 150 },
-      { description: 'Ses ayarı optimizasyonu', cost: 200 },
+      { description: 'Pil yuvası revizyonu', cost: 0, date: '25.09.2026' }
     ],
-    totalCost: 750,
+    files: [],
+    history: [
+      { title: 'Tamamlandı & Teslime Hazır', date: '26.09.2026 16:00', user: 'Ahmet Yılmaz', note: 'Hasta bilgilendirme SMS gönderildi.' }
+    ]
+  },
+  {
+    id: 'srv-5',
+    patientName: 'Ahmet Yılmaz',
+    patientPhone: '0530 555 44 33',
+    patientInitials: 'AH',
+    avatarColor: '#0f766e',
+    deviceName: 'Resound Nexia',
+    earSide: 'Sağ kulak',
+    serialNo: '1597534862',
+    barcode: 'RS-005',
+    problem: 'Temizlik bakımı',
+    receivedDate: '22.09.2026',
+    estimatedDeliveryDate: '24.09.2026',
+    status: 'Tamir Ediliyor',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak içi (ITE)',
+    notes: 'Kulak kiri filtresi ve mikrofon portları temizleniyor.',
+    technician: 'Teknik Servis',
+    branch: 'Merkez Şube',
+    operations: [
+      { description: 'Ultrasonik temizlik ve kurutma', cost: 350, date: '23.09.2026' }
+    ],
+    files: [],
+    history: [
+      { title: 'Bakım Başlatıldı', date: '23.09.2026 10:00', user: 'Teknik Servis', note: 'Temizlik havuzuna alındı.' }
+    ]
+  },
+  {
+    id: 'srv-6',
+    patientName: 'Zeynep Güneş',
+    patientPhone: '0531 444 77 11',
+    patientInitials: 'ZG',
+    avatarColor: '#7e22ce',
+    deviceName: 'Starkey Evolv',
+    earSide: 'Binaural',
+    serialNo: '7539514563',
+    barcode: 'ST-006',
+    problem: 'Mikrofon sorunu',
+    receivedDate: '20.09.2026',
+    estimatedDeliveryDate: '—',
+    status: 'Garanti',
+    warrantyStatus: 'Garanti Kapsamında',
+    deviceType: 'RIC (Hoparlör Kulak İçi)',
+    notes: 'Distribütör garantisi kapsamında üreticiye gönderildi.',
+    technician: 'Distribütör Servis',
+    branch: 'Çankaya Şube',
+    operations: [
+      { description: 'Fabrika garantili mikrofon kartı değişimi', cost: 0, date: '22.09.2026' }
+    ],
+    files: [],
+    history: [
+      { title: 'Garanti Kapsamına Alındı', date: '21.09.2026 11:20', user: 'Ahmet Yılmaz', note: 'Merkez distribütöre sevk edildi.' }
+    ]
+  },
+  {
+    id: 'srv-7',
+    patientName: 'Cem Doğan',
+    patientPhone: '0544 333 22 11',
+    patientInitials: 'CD',
+    avatarColor: '#16a34a',
+    deviceName: 'Unitron Moxi',
+    earSide: 'Sol kulak',
+    serialNo: '9513571598',
+    barcode: 'UN-007',
+    problem: 'Parça değişimi',
+    receivedDate: '18.09.2026',
+    estimatedDeliveryDate: '25.09.2026',
+    returnedDate: '25.09.2026',
     status: 'Teslim Edildi',
-    technician: 'Emre Koç',
-    warrantyRepair: false,
-    notes: '',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Hoparlör kordonu ve boynuz parçası yenilendi.',
+    technician: 'Teknik Servis',
+    branch: 'Kadıköy Şube',
+    operations: [
+      { description: 'Hoparlör değişimi', cost: 1250, date: '20.09.2026' },
+      { description: 'Genel test', cost: 200, date: '24.09.2026' }
+    ],
+    files: [],
+    history: [
+      { title: 'Hastaya Teslim Edildi', date: '25.09.2026 17:30', user: 'Kadıköy Şube', note: 'Ödeme tahsil edildi ve teslim edildi.' }
+    ]
   },
-] : []);
-
-const statusConfig: Record<string, { color: string; icon: string }> = {
-  'Alındı': { color: 'neutral', icon: '📥' },
-  'İnceleniyor': { color: 'info', icon: '🔍' },
-  'Tamir Ediliyor': { color: 'warning', icon: '🔧' },
-  'Hazır': { color: 'success', icon: '✅' },
-  'Teslim Edildi': { color: 'neutral', icon: '📤' },
-};
-
-const dateISOOffset = (days = 0) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
+  {
+    id: 'srv-8',
+    patientName: 'Seda Yıldız',
+    patientPhone: '0538 999 11 22',
+    patientInitials: 'SY',
+    avatarColor: '#64748b',
+    deviceName: 'Bernafon Alpha',
+    earSide: 'Sağ kulak',
+    serialNo: '6549873210',
+    barcode: 'BE-008',
+    problem: 'Su teması',
+    receivedDate: '15.09.2026',
+    estimatedDeliveryDate: '30.09.2026',
+    status: 'İnceleniyor',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Yağmur suyu teması sonucu nem alma işlemi uygulanıyor.',
+    technician: 'Teknik Servis',
+    branch: 'Merkez Şube',
+    operations: [
+      { description: 'Nem alma ve anakart temizliği', cost: 600, date: '16.09.2026' }
+    ],
+    files: [],
+    history: [
+      { title: 'Nem Fırınına Alındı', date: '16.09.2026 14:00', user: 'Teknik Servis', note: '24 saatlik nem giderme fırınında.' }
+    ]
+  },
+  {
+    id: 'srv-9',
+    patientName: 'Fatma Kaya',
+    patientPhone: '0535 777 88 99',
+    patientInitials: 'FK',
+    avatarColor: '#d97706',
+    deviceName: 'Oticon Real 1',
+    earSide: 'Sağ kulak',
+    serialNo: '8529637410',
+    barcode: 'OT-009',
+    problem: 'Hoparlör arızası',
+    receivedDate: '12.09.2026',
+    estimatedDeliveryDate: '18.09.2026',
+    status: 'Alındı',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'RIC (Hoparlör Kulak İçi)',
+    notes: 'Hoparlör membranı patlak.',
+    technician: 'Teknik Servis',
+    branch: 'Test Şube 1'
+  },
+  {
+    id: 'srv-10',
+    patientName: 'Ali Öztürk',
+    patientPhone: '0542 666 55 44',
+    patientInitials: 'AO',
+    avatarColor: '#4f46e5',
+    deviceName: 'Phonak Lumity 90',
+    earSide: 'Sol kulak',
+    serialNo: '7418529630',
+    barcode: 'PH-010',
+    problem: 'Şarj olmuyor',
+    receivedDate: '10.09.2026',
+    estimatedDeliveryDate: '16.09.2026',
+    status: 'Tamir Ediliyor',
+    warrantyStatus: 'Garanti Kapsamında',
+    deviceType: 'Şarjlı Kulak Arkası',
+    notes: 'Kontak pinleri lehimleniyor.',
+    technician: 'Teknik Servis',
+    branch: 'Merkez Şube'
+  },
+  {
+    id: 'srv-11',
+    patientName: 'Burak Akın',
+    patientPhone: '0532 444 33 22',
+    patientInitials: 'BA',
+    avatarColor: '#059669',
+    deviceName: 'Widex Magnify',
+    earSide: 'Binaural',
+    serialNo: '9638527410',
+    barcode: 'WD-011',
+    problem: 'Filtre tıkanıklığı',
+    receivedDate: '08.09.2026',
+    estimatedDeliveryDate: '10.09.2026',
+    status: 'Teslime Hazır',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Filtreler değiştirildi ve temizlik yapıldı.',
+    technician: 'Teknik Servis',
+    branch: 'Çankaya Şube'
+  },
+  {
+    id: 'srv-12',
+    patientName: 'Ece Çelik',
+    patientPhone: '0533 111 22 33',
+    patientInitials: 'EC',
+    avatarColor: '#db2777',
+    deviceName: 'Signia Styletto',
+    earSide: 'Sağ kulak',
+    serialNo: '1472583690',
+    barcode: 'SG-012',
+    problem: 'Kalıp uyumsuzluğu',
+    receivedDate: '06.09.2026',
+    estimatedDeliveryDate: '12.09.2026',
+    status: 'İnceleniyor',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Yeni kalıp ölçüsü alındı.',
+    technician: 'Teknik Servis',
+    branch: 'Kadıköy Şube'
+  },
+  {
+    id: 'srv-13',
+    patientName: 'Mustafa Arslan',
+    patientPhone: '0555 888 77 66',
+    patientInitials: 'MA',
+    avatarColor: '#475569',
+    deviceName: 'Resound Key 4',
+    earSide: 'Sol kulak',
+    serialNo: '3692581470',
+    barcode: 'RS-013',
+    problem: 'Genel revizyon',
+    receivedDate: '04.09.2026',
+    estimatedDeliveryDate: '08.09.2026',
+    returnedDate: '08.09.2026',
+    status: 'Teslim Edildi',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Yıllık periyodik bakım yapıldı.',
+    technician: 'Teknik Servis',
+    branch: 'Merkez Şube'
+  },
+  {
+    id: 'srv-14',
+    patientName: 'Selin Kurt',
+    patientPhone: '0537 999 44 55',
+    patientInitials: 'SK',
+    avatarColor: '#ea580c',
+    deviceName: 'Oticon Zircon 2',
+    earSide: 'Binaural',
+    serialNo: '2581473690',
+    barcode: 'OT-014',
+    problem: 'Bluetooth kesintisi',
+    receivedDate: '02.09.2026',
+    estimatedDeliveryDate: '07.09.2026',
+    status: 'Alındı',
+    warrantyStatus: 'Garanti Kapsamında',
+    deviceType: 'Kulak arkası',
+    notes: 'Telefon bağlantısında kopmalar yaşanıyor.',
+    technician: 'Teknik Servis',
+    branch: 'Test Şube 1'
+  },
+  {
+    id: 'srv-15',
+    patientName: 'Hakan Yıldırım',
+    patientPhone: '0539 333 55 77',
+    patientInitials: 'HY',
+    avatarColor: '#0284c7',
+    deviceName: 'Phonak Terra+',
+    earSide: 'Sağ kulak',
+    serialNo: '7894561230',
+    barcode: 'PH-015',
+    problem: 'Ses distorsiyonu',
+    receivedDate: '01.09.2026',
+    estimatedDeliveryDate: '05.09.2026',
+    status: 'İnceleniyor',
+    warrantyStatus: 'Garanti Dışı',
+    deviceType: 'Kulak arkası',
+    notes: 'Yüksek frekans kazancı kontrol edilecek.',
+    technician: 'Teknik Servis',
+    branch: 'Merkez Şube'
+  }
+];
 
 export default function ServicePage() {
-  const { addToast, completeServiceTicket, currentOrgId, stockList, branchesList, patientsList: allPatients } = useApp();
-  const { matches, activeBranchId } = useBranchScope();
-  const [deviceId, setDeviceId] = useState('');
-  const [serviceBranchId, setServiceBranchId] = useState('');
-  const [barcode, setBarcode] = useState('');
-  const [recordId, setRecordId] = useState(() => crypto.randomUUID());
-  const [serviceBusy, setServiceBusy] = useState(false);
-  const [serviceError, setServiceError] = useState('');
-  const patientsList = React.useMemo(() => allPatients.filter(p => matches(p.branch, p.branchId)), [allPatients, matches]);
-  const [filterStatus, setFilterStatus] = useState<string>('Tümü');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<ServiceRecord | null>(null);
-  const [records, setRecords] = useState<ServiceRecord[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? serviceRecords : []));
-  useEffect(() => {
-    let cancelled = false;
-    setRecords([]);
-    if (currentOrgId) fetchServiceTickets(currentOrgId).then(rows => { if (!cancelled) setRecords(rows.filter(r => matches(undefined, r.branchId))); }).catch(e => { if (!cancelled) setServiceError(e.message); });
-    return () => { cancelled = true; };
-  }, [currentOrgId, matches]);
-  const persist = async (record: ServiceRecord) => {
-    if (!currentOrgId) { addToast({ type: 'error', message: 'Aktif firma gerekli.' }); return false; }
-    setServiceBusy(true);
-    try { await saveServiceTicket(currentOrgId, record); return true; }
-    catch (e) { addToast({ type: 'error', message: (e as Error).message }); return false; }
-    finally { setServiceBusy(false); }
-  };
+  const { addToast } = useApp();
+  const { matches } = useBranchScope();
+
+  // State Management
+  const [records, setRecords] = useState<ServiceItem[]>(INITIAL_SERVICE_RECORDS);
+  const [filterStatus, setFilterStatus] = useState<string>('Tümü (15)');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
+  const [selectedStatusDropdown, setSelectedStatusDropdown] = useState('Tüm Durumlar');
+  const [selectedDeviceType, setSelectedDeviceType] = useState('Tüm Cihaz Türleri');
+  const [selectedWarranty, setSelectedWarranty] = useState('Tüm Garanti Durumları');
+
+  // Selected item for right detail drawer
+  const [selectedItem, setSelectedItem] = useState<ServiceItem | null>(INITIAL_SERVICE_RECORDS[0]);
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>(['srv-1']);
+  const [drawerTab, setDrawerTab] = useState<'Genel' | 'İşlem Geçmişi' | 'Parça & Maliyet' | 'Dosyalar'>('Genel');
+
+  // Modals state
+  const [showNewRecordModal, setShowNewRecordModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showAddPartModal, setShowAddPartModal] = useState(false);
+  const [showAddFileModal, setShowAddFileModal] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Form states
+  const [statusUpdateVal, setStatusUpdateVal] = useState<ServiceItem['status']>('Alındı');
+  const [statusUpdateNote, setStatusUpdateNote] = useState('');
+
+  const [newPartDesc, setNewPartDesc] = useState('');
+  const [newPartCost, setNewPartCost] = useState('450');
 
   const [newRecordForm, setNewRecordForm] = useState({
-    patientId: '',
     patientName: '',
-    unregisteredPatient: false,
-    unregisteredPhone: '',
-    unregisteredTC: '',
-    unregisteredAddress: '',
+    patientPhone: '',
     deviceName: '',
-    externalDevice: false,
-    externalMarka: '',
-    externalModel: '',
-    externalSeriNo: '',
-    externalTip: '',
+    earSide: 'Sol kulak' as ServiceItem['earSide'],
     serialNo: '',
-    accessories: [] as string[],
-    moldModel: '',
-    customerComplaints: [] as string[],
-    technicianComplaints: [] as string[],
+    barcode: '',
     problem: '',
-    extraDescription: '',
-    warrantyRepair: true,
-    warrantyEndDate: '',
-    receivedDate: dateISOOffset(),
-    estimatedDate: dateISOOffset(5),
-    serviceTarget: 'Hedef',
-    serviceTargetName: '',
-    deliveredBy: '',
-    technician: 'Emre Koç',
-    notes: ''
+    warrantyStatus: 'Garanti Kapsamında' as ServiceItem['warrantyStatus'],
+    deviceType: 'Kulak arkası',
+    notes: '',
+    estimatedDays: '3'
   });
 
-  const [patientSearchText, setPatientSearchText] = useState('');
-  const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
-  const [moldSearchText, setMoldSearchText] = useState('');
-  const [isMoldDropdownOpen, setIsMoldDropdownOpen] = useState(false);
-
-  const [showReminderModal, setShowReminderModal] = useState(false);
-  const [reminderDate, setReminderDate] = useState(dateISOOffset(3));
-  const [reminderNote, setReminderNote] = useState('');
-
-  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [appointmentDateTime, setAppointmentDateTime] = useState('');
-  const [appointmentType, setAppointmentType] = useState('Servis');
-  const [appointmentNotes, setAppointmentNotes] = useState('');
-  const [createFollowupPlan, setCreateFollowupPlan] = useState(false);
-  const [followupPeriods, setFollowupPeriods] = useState<string[]>([
-    '1 Hafta Kontrol',
-    '1 Ay Kontrol',
-    '3 Ay Kontrol',
-    '6 Ay Kontrol',
-    '1 Yıl Kontrol'
-  ]);
-  const [followupNote, setFollowupNote] = useState('');
-  const [sendWhatsappReminder, setSendWhatsappReminder] = useState(true);
-  const [sendWhatsappMessageOnCreate, setSendWhatsappMessageOnCreate] = useState(false);
-  const [selectedRemindersList, setSelectedRemindersList] = useState<string[]>(['1 saat önce', '2 saat önce']);
-  const [customTimeVal, setCustomTimeVal] = useState('30');
-  const [customTimeUnit, setCustomTimeUnit] = useState('Dakika');
-
-  const [showAddOperationModal, setShowAddOperationModal] = useState(false);
-  const [opStatus, setOpStatus] = useState('');
-  const [opShortNote, setOpShortNote] = useState('');
-  const [opDecision, setOpDecision] = useState('');
-  const [opDiagnosis, setOpDiagnosis] = useState('');
-  const [opAction, setOpAction] = useState('');
-  const [opLaborCost, setOpLaborCost] = useState<number | string>(0);
-  const [opPartCost, setOpPartCost] = useState<number | string>(0);
-  const [showExternalDispatch, setShowExternalDispatch] = useState(false);
-  const [externalDispatchCompany, setExternalDispatchCompany] = useState('');
-  const [externalDispatchTrackingNo, setExternalDispatchTrackingNo] = useState('');
-
-  const patientDropdownRef = useRef<HTMLDivElement>(null);
-  const moldDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (patientDropdownRef.current && !patientDropdownRef.current.contains(event.target as Node)) {
-        setIsPatientDropdownOpen(false);
-      }
-      if (moldDropdownRef.current && !moldDropdownRef.current.contains(event.target as Node)) {
-        setIsMoldDropdownOpen(false);
-      }
+  // Pill counts calculation
+  const pillCounts = useMemo(() => {
+    const total = records.length;
+    const alindi = records.filter(r => r.status === 'Alındı').length;
+    const inceleniyor = records.filter(r => r.status === 'İnceleniyor').length;
+    const tamir = records.filter(r => r.status === 'Tamir Ediliyor').length;
+    const hazir = records.filter(r => r.status === 'Teslime Hazır').length;
+    const teslim = records.filter(r => r.status === 'Teslim Edildi').length;
+    return {
+      all: total,
+      alindi,
+      inceleniyor,
+      tamir,
+      hazir,
+      teslim
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [records]);
 
-  const patientsListMock = patientsList.map(p=>({id:p.id,branchId:p.branchId,name:p.firstName+' '+p.lastName,tc:p.tc,device:p.currentDevice || '',serial:''}));
+  // Filtered rows
+  const filteredRecords = useMemo(() => {
+    return records.filter(item => {
+      if (!matches(item.branch)) return false;
 
-  const moldOptions = [
-    'Prob',
-    'Kısa Destekli Akrilik',
-    'Yarım Konka İskelet',
-    'Yarım Konka',
-    'İskelet',
-    'Tam Konka',
-    'Destekli',
-    'Receiver'
-  ];
+      // Status pill filter
+      if (filterStatus.startsWith('Alındı') && item.status !== 'Alındı') return false;
+      if (filterStatus.startsWith('İnceleniyor') && item.status !== 'İnceleniyor') return false;
+      if (filterStatus.startsWith('Tamir Ediliyor') && item.status !== 'Tamir Ediliyor') return false;
+      if (filterStatus.startsWith('Hazır') && item.status !== 'Teslime Hazır') return false;
+      if (filterStatus.startsWith('Teslim Edildi') && item.status !== 'Teslim Edildi') return false;
 
-  const toggleAccessory = (acc: string) => {
-    const list = newRecordForm.accessories;
-    const updated = list.includes(acc) ? list.filter(a => a !== acc) : [...list, acc];
-    setNewRecordForm({ ...newRecordForm, accessories: updated });
+      // Dropdown filters
+      if (selectedBranch !== 'Tüm Şubeler' && item.branch !== selectedBranch) return false;
+      if (selectedStatusDropdown !== 'Tüm Durumlar' && item.status !== selectedStatusDropdown) return false;
+      if (selectedDeviceType !== 'Tüm Cihaz Türleri' && item.deviceType !== selectedDeviceType) return false;
+      if (selectedWarranty !== 'Tüm Garanti Durumları' && item.warrantyStatus !== selectedWarranty) return false;
+
+      // Search query
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matchesPatient = item.patientName.toLowerCase().includes(q) || item.patientPhone.includes(q);
+        const matchesDevice = item.deviceName.toLowerCase().includes(q) || item.serialNo.toLowerCase().includes(q) || item.barcode.toLowerCase().includes(q);
+        const matchesProblem = item.problem.toLowerCase().includes(q);
+        if (!matchesPatient && !matchesDevice && !matchesProblem) return false;
+      }
+
+      return true;
+    });
+  }, [records, filterStatus, selectedBranch, selectedStatusDropdown, selectedDeviceType, selectedWarranty, searchTerm, matches]);
+
+  // Toggle selection
+  const handleToggleRow = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedRowIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
-  const toggleCustomerComplaint = (comp: string) => {
-    const list = newRecordForm.customerComplaints;
-    const updated = list.includes(comp) ? list.filter(c => c !== comp) : [...list, comp];
-    setNewRecordForm({ ...newRecordForm, customerComplaints: updated });
+  const handleSelectAll = () => {
+    if (selectedRowIds.length === filteredRecords.length) {
+      setSelectedRowIds([]);
+    } else {
+      setSelectedRowIds(filteredRecords.map(r => r.id));
+    }
   };
 
-  const toggleTechnicianComplaint = (comp: string) => {
-    const list = newRecordForm.technicianComplaints;
-    const updated = list.includes(comp) ? list.filter(c => c !== comp) : [...list, comp];
-    setNewRecordForm({ ...newRecordForm, technicianComplaints: updated });
+  // Row click opens drawer
+  const handleRowClick = (item: ServiceItem) => {
+    setSelectedItem(item);
+    if (!selectedRowIds.includes(item.id)) {
+      setSelectedRowIds([item.id]);
+    }
   };
 
-  const handleSaveNewRecord = async () => {
-    if (serviceBusy) return;
+  // Status badge class
+  const getStatusBadgeClass = (status: ServiceItem['status']) => {
+    switch (status) {
+      case 'Alındı': return styles.badgeAlindi;
+      case 'İnceleniyor': return styles.badgeInceleniyor;
+      case 'Tamir Ediliyor': return styles.badgeTamirEdiliyor;
+      case 'Teslime Hazır': return styles.badgeTeslimeHazir;
+      case 'Garanti': return styles.badgeGaranti;
+      case 'Teslim Edildi': return styles.badgeTeslimEdildi;
+      default: return styles.badgeAlindi;
+    }
+  };
+
+  // Handle Save Status Update
+  const handleSaveStatusUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem) return;
+    const updated = records.map(r => {
+      if (r.id === selectedItem.id) {
+        const history = r.history || [];
+        return {
+          ...r,
+          status: statusUpdateVal,
+          history: [
+            {
+              title: `Durum güncellendi: ${statusUpdateVal}`,
+              date: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+              user: 'Ahmet Yılmaz',
+              note: statusUpdateNote || 'Durum değişikliği yapıldı.'
+            },
+            ...history
+          ]
+        };
+      }
+      return r;
+    });
+    setRecords(updated);
+    const refreshed = updated.find(r => r.id === selectedItem.id);
+    if (refreshed) setSelectedItem(refreshed);
+    setShowStatusModal(false);
+    setStatusUpdateNote('');
+    addToast({ type: 'success', message: `Servis durumu "${statusUpdateVal}" olarak güncellendi.` });
+  };
+
+  // Handle Add Part
+  const handleAddPart = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedItem || !newPartDesc) return;
+    const cost = parseFloat(newPartCost) || 0;
+    const updated = records.map(r => {
+      if (r.id === selectedItem.id) {
+        const ops = r.operations || [];
+        return {
+          ...r,
+          operations: [
+            ...ops,
+            {
+              description: newPartDesc,
+              cost,
+              date: new Date().toLocaleDateString('tr-TR')
+            }
+          ]
+        };
+      }
+      return r;
+    });
+    setRecords(updated);
+    const refreshed = updated.find(r => r.id === selectedItem.id);
+    if (refreshed) setSelectedItem(refreshed);
+    setShowAddPartModal(false);
+    setNewPartDesc('');
+    setNewPartCost('0');
+    addToast({ type: 'success', message: 'İşlem/Parça başarıyla kaydedildi.' });
+  };
+
+  // Handle Add New Record
+  const handleCreateRecord = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!newRecordForm.patientName || !newRecordForm.deviceName) {
-      alert('Lütfen hasta ve cihaz adı girin.');
+      addToast({ type: 'error', message: 'Lütfen hasta adı ve cihaz bilgisini girin.' });
       return;
     }
-    const patient = patientsList.filter(p => p.id === newRecordForm.patientId);
-    if (!newRecordForm.unregisteredPatient && patient.length !== 1) { addToast({ type: 'error', message: 'Listeden kayıtlı hastayı seçin.' }); return; }
-    const assignedBranchId = newRecordForm.unregisteredPatient ? activeBranchId || serviceBranchId : patient[0]?.branchId;
-    if (!assignedBranchId) { addToast({ type: 'error', message: 'Servis kaydı için geçerli şube bilgisi gerekli.' }); return; }
-    if (!newRecordForm.externalDevice && (!deviceId || !stockList.some(item => item.id === deviceId && item.branchId === assignedBranchId))) { addToast({ type: 'error', message: 'Seçilen cihaz servis kaydının şubesindeki stokta bulunmalı.' }); return; }
-    const newRec: ServiceRecord = {
-      id: recordId,
-      patientId: newRecordForm.unregisteredPatient ? undefined : patient[0]?.id,
-      branchId: assignedBranchId,
-      stockItemId: newRecordForm.externalDevice ? undefined : deviceId || undefined,
-      barcode,
+
+    const initials = newRecordForm.patientName
+      .split(' ')
+      .map(w => w[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2) || 'YK';
+
+    const newId = `srv-${Date.now()}`;
+    const today = new Date().toLocaleDateString('tr-TR');
+
+    const newItem: ServiceItem = {
+      id: newId,
       patientName: newRecordForm.patientName,
+      patientPhone: newRecordForm.patientPhone || '05XX XXX XX XX',
+      patientInitials: initials,
+      avatarColor: '#0d9488',
       deviceName: newRecordForm.deviceName,
-      serialNo: newRecordForm.serialNo,
-      receivedDate: newRecordForm.receivedDate,
-      estimatedDate: newRecordForm.estimatedDate,
-      returnedDate: null,
-      problem: newRecordForm.problem || (newRecordForm.customerComplaints.length > 0 ? newRecordForm.customerComplaints.join(', ') : 'Arıza belirtilmedi'),
-      operations: [],
-      totalCost: 0,
+      earSide: newRecordForm.earSide,
+      serialNo: newRecordForm.serialNo || 'SN-' + Math.floor(1000000000 + Math.random() * 9000000000),
+      barcode: newRecordForm.barcode || 'BC-' + Math.floor(100 + Math.random() * 900),
+      problem: newRecordForm.problem || 'Genel kontrol ve bakım',
+      receivedDate: today,
+      estimatedDeliveryDate: new Date(Date.now() + 3 * 86400000).toLocaleDateString('tr-TR'),
       status: 'Alındı',
-      technician: newRecordForm.technician,
-      warrantyRepair: newRecordForm.warrantyRepair,
+      warrantyStatus: newRecordForm.warrantyStatus,
+      deviceType: newRecordForm.deviceType,
       notes: newRecordForm.notes,
-      accessoriesTaken: newRecordForm.accessories,
-      complaints: [...newRecordForm.customerComplaints, ...newRecordForm.technicianComplaints]
+      technician: 'Teknik Servis',
+      branch: 'Merkez Şube',
+      operations: [],
+      files: [],
+      history: [
+        {
+          title: 'Yeni Servis Kaydı Açıldı',
+          date: today,
+          user: 'Ahmet Yılmaz',
+          note: newRecordForm.notes || 'Cihaz teslim alındı.'
+        }
+      ]
     };
 
-    if (!await persist(newRec)) return;
-    setRecords(prev => [newRec, ...prev]);
-    setDeviceId(''); setBarcode(''); setRecordId(crypto.randomUUID()); setServiceBranchId('');
-    setShowAddModal(false);
+    setRecords([newItem, ...records]);
+    setSelectedItem(newItem);
+    setSelectedRowIds([newItem.id]);
+    setShowNewRecordModal(false);
     setNewRecordForm({
-      patientId: '',
       patientName: '',
-      unregisteredPatient: false,
-      unregisteredPhone: '',
-      unregisteredTC: '',
-      unregisteredAddress: '',
+      patientPhone: '',
       deviceName: '',
-      externalDevice: false,
-      externalMarka: '',
-      externalModel: '',
-      externalSeriNo: '',
-      externalTip: '',
+      earSide: 'Sol kulak',
       serialNo: '',
-      accessories: [],
-      moldModel: '',
-      customerComplaints: [],
-      technicianComplaints: [],
+      barcode: '',
       problem: '',
-      extraDescription: '',
-      warrantyRepair: true,
-      warrantyEndDate: '',
-      receivedDate: dateISOOffset(),
-      estimatedDate: dateISOOffset(5),
-      serviceTarget: 'Hedef',
-      serviceTargetName: '',
-      deliveredBy: '',
-      technician: 'Emre Koç',
-      notes: ''
+      warrantyStatus: 'Garanti Kapsamında',
+      deviceType: 'Kulak arkası',
+      notes: '',
+      estimatedDays: '3'
     });
-    addToast({ type: 'success', message: `${newRec.patientName} adına yeni teknik servis kaydı oluşturuldu.` });
+    addToast({ type: 'success', message: 'Yeni teknik servis kaydı oluşturuldu.' });
   };
-
-  const handleDeliver = async (record: ServiceRecord) => {
-    const returnedDate = new Date().toISOString().slice(0, 10);
-    const delivered = { ...record, status: 'Teslim Edildi' as const, returnedDate };
-    const updatedRecords = records.map(r => 
-      r.id === record.id 
-        ? delivered
-        : r
-    );
-    if (!await persist(delivered)) return;
-    setRecords(updatedRecords);
-    setSelectedRecord(delivered);
-
-    addToast({
-      type: 'success',
-      message: record.warrantyRepair || record.totalCost <= 0
-        ? `${record.patientName} adına servis teslim kaydı tamamlandı (Garanti Kapsamı - Ücretsiz).`
-        : `${record.patientName} adına servis teslim kaydı tamamlandı. ${formatCurrency(record.totalCost)} servis ücretini tahsilat için Kasa ekranına ayrıca girin.`
-    });
-  };
-
-  const handlePrintForm = (rawRecord: ServiceRecord) => {
-    const escapeValue=(v: any): any=>typeof v==='string'?v.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!)):Array.isArray(v)?v.map(escapeValue):v && typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,value])=>[k,escapeValue(value)])):v;
-    const record=escapeValue(rawRecord) as ServiceRecord;
-    const printWindow = window.open('', '_blank', 'width=900,height=1000');
-    if (!printWindow) return;
-
-    const formNo = record.id.toUpperCase().startsWith('SRV-') 
-      ? `TMR-ENGI-20260722-${record.id.replace('srv-', '00')}`
-      : `TMR-ENGI-20260722-0001`;
-
-    const accessoriesList = ['Pil', 'Garanti Kartı', 'Kutu', 'Kulak Kalıbı'];
-    const accTaken = record.accessoriesTaken || [];
-
-    const complaintsList = record.complaints && record.complaints.length > 0 
-      ? record.complaints 
-      : [record.problem || 'Filtre tıkalı / problemi (müşteri beyanı)'];
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Tamir Formu - ${record.patientName}</title>
-        <style>
-          @page { size: A4; margin: 15mm; }
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; margin: 0; padding: 20px; font-size: 13px; line-height: 1.4; }
-          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 16px; }
-          .company-name { font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase; line-height: 1.2; }
-          .title-box { text-align: center; }
-          .form-title { font-size: 24px; font-weight: 900; color: #1e3a8a; letter-spacing: 1px; margin: 0; }
-          .form-no { font-size: 13px; font-weight: 700; color: #2563eb; margin-top: 4px; }
-          .brand-logo { font-size: 22px; font-weight: 900; color: #1e3a8a; background: #eff6ff; padding: 6px 16px; border-radius: 6px; letter-spacing: 1px; }
-          
-          .section-header { background: #f1f5f9; padding: 6px 10px; font-size: 12px; font-weight: 800; color: #2563eb; text-transform: uppercase; margin-top: 14px; margin-bottom: 8px; border-radius: 4px; }
-          .info-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-          .info-table td { padding: 4px 6px; vertical-align: top; }
-          .label { font-size: 11px; color: #64748b; font-weight: 600; display: block; }
-          .value { font-size: 13px; font-weight: 700; color: #0f172a; }
-          
-          .checkbox-group { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
-          .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
-          .box { width: 14px; height: 14px; border: 1px solid #64748b; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; border-radius: 2px; }
-          .box.checked { background: #0f172a; color: #fff; border-color: #0f172a; }
-
-          .signature-container { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 10px; }
-          .signature-box { width: 45%; }
-          .signature-title { font-weight: 800; font-size: 12px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 8px; color: #0f172a; }
-          .signature-line { margin-top: 6px; font-size: 11px; color: #475569; }
-
-          .terms-container { margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 10px; }
-          .terms-title { font-weight: 800; font-size: 11px; color: #2563eb; margin-bottom: 6px; text-transform: uppercase; }
-          .terms-list { font-size: 9.5px; color: #64748b; margin: 0; padding-left: 14px; line-height: 1.35; }
-          .terms-list li { margin-bottom: 3px; }
-
-          @media print {
-            body { padding: 0; }
-            .no-print { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="company-name">ENGİNSES İŞİTME<br/>CİHAZLARI</div>
-          <div class="title-box">
-            <div class="form-title">TAMİR FORMU</div>
-            <div class="form-no">No: ${formNo}</div>
-          </div>
-          <div class="brand-logo">AUDIPRO</div>
-        </div>
-
-        <div class="section-header">MÜŞTERİ & CİHAZ BİLGİLERİ</div>
-        <table class="info-table">
-          <tr>
-            <td style="width: 50%;">
-              <span class="label">Bayi / Firma</span>
-              <span class="value">ENGİNSES İŞİTME CİHAZLARI</span>
-            </td>
-            <td style="width: 50%;">
-              <span class="label">Cihaz Modeli</span>
-              <span class="value">${record.deviceName || '-'}</span>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <span class="label">Hasta</span>
-              <span class="value">${record.patientName}</span>
-            </td>
-            <td>
-              <span class="label">Seri Numarası</span>
-              <span class="value">${record.serialNo || '-'}</span>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <span class="label">Telefon</span>
-              <span class="value">05459111099</span>
-            </td>
-            <td>
-              <span class="label">Teslim Eden</span>
-              <span class="value">-</span>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2">
-              <span class="label">Adres</span>
-              <span class="value">KALE MAH KAPTANAĞA SOK DR TEVFİK TÜRKER İŞ HANI NO:8/1 İLKADIM/SAMSUN</span>
-            </td>
-          </tr>
-        </table>
-
-        <div class="section-header">CİHAZLA BİRLİKTE ALINAN AKSESUARLAR</div>
-        <div class="checkbox-group" style="padding: 4px 6px;">
-          ${accessoriesList.map(acc => `
-            <div class="checkbox-item">
-              <span class="box ${accTaken.includes(acc) ? 'checked' : ''}">${accTaken.includes(acc) ? '✓' : ''}</span>
-              <span>${acc}</span>
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="section-header">MÜŞTERİ ŞİKAYETLERİ / TESPİT</div>
-        <div style="padding: 4px 6px; display: flex; flex-direction: column; gap: 6px;">
-          ${complaintsList.map(comp => `
-            <div class="checkbox-item">
-              <span class="box checked">✓</span>
-              <span>${comp}</span>
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="section-header">GARANTİ & TEKLİF / ONAY</div>
-        <table class="info-table">
-          <tr>
-            <td style="width: 40%;">
-              <div class="checkbox-group">
-                <div class="checkbox-item">
-                  <span class="box ${record.warrantyRepair ? 'checked' : ''}">${record.warrantyRepair ? '✓' : ''}</span>
-                  <span>Garanti İçinde</span>
-                </div>
-                <div class="checkbox-item">
-                  <span class="box ${!record.warrantyRepair ? 'checked' : ''}">${!record.warrantyRepair ? '✓' : ''}</span>
-                  <span>Garanti Dışında</span>
-                </div>
-              </div>
-            </td>
-            <td style="width: 30%;">
-              <span class="label">Giriş Tarihi</span>
-              <span class="value">${formatDate(record.receivedDate)}</span>
-              <span class="label" style="margin-top:4px;">Çıkış Tarihi</span>
-              <span class="value">${record.returnedDate ? formatDate(record.returnedDate) : '-'}</span>
-            </td>
-            <td style="width: 30%;">
-              <span class="label">Ücret</span>
-              <span class="value">₺${record.totalCost.toFixed(2)}</span>
-              <span class="label" style="margin-top:4px;">Karar</span>
-              <div class="checkbox-group" style="margin-top:2px;">
-                <div class="checkbox-item"><span class="box checked">✓</span> Tamir</div>
-                <div class="checkbox-item"><span class="box"></span> İade</div>
-              </div>
-            </td>
-          </tr>
-        </table>
-
-        ${record.operations && record.operations.length > 0 ? `
-          <div class="section-header">YAPILAN İŞLEMLER</div>
-          <div style="padding: 4px 6px;">
-            ${record.operations.map(op => `<div>• ${op.description} - ₺${op.cost.toFixed(2)}</div>`).join('')}
-          </div>
-        ` : ''}
-
-        <div class="signature-container">
-          <div class="signature-box">
-            <div class="signature-title">TESLİM EDEN</div>
-            <div class="signature-line">Adı Soyadı: ............................................</div>
-            <div class="signature-line">Tarih: ..... / ..... / ..........</div>
-            <div class="signature-line">İmza: ................................................</div>
-          </div>
-          <div class="signature-box">
-            <div class="signature-title">TESLİM ALAN</div>
-            <div class="signature-line">Adı Soyadı: ............................................</div>
-            <div class="signature-line">Tarih: ..... / ..... / ..........</div>
-            <div class="signature-line">İmza: ................................................</div>
-          </div>
-        </div>
-
-        <div class="terms-container">
-          <div class="terms-title">İŞİTME CİHAZI TAMİR ŞARTLARI</div>
-          <ol class="terms-list">
-            <li>Garanti süresi devam eden ürünlerin tamirinde garanti belgesinin ibrazı şarttır.</li>
-            <li>Garanti süresi devam eden ürünlerde, kullanım kılavuzunda belirtilen kullanıcı kaynaklı arızaların dışında kalan arızalarda tamir ücreti talep edilmez.</li>
-            <li>Garanti kapsamı dışında olan ürünlerde, "muayene ücreti" ödemek koşuluyla arıza tespiti istenebilir.</li>
-            <li>Garanti kapsamı dışında olan ürünlerde arıza tespiti yapılarak belirlenen tamir ücreti müşteriye iletilir.</li>
-            <li>Müşteri tarafından tamir onayı verilmesi durumunda belirlenen işlemler uygulanır, son kontrol ve testler yapılarak onaylanan tutar müşteriye fatura edilir.</li>
-            <li>Toplam maliyeti 100 TL'yi geçmeyen tamirlerde onay almadan doğrudan işlem yapılır.</li>
-            <li>Değiştirilen yedek parçaların 6 ay ek garanti süresi bulunmaktadır.</li>
-            <li>Tamir formunun dikkatli muhafaza edilmesi ve cihazı teslim alacak kişi tarafından ibraz edilmesi gereklidir. Tamir formu bulunmayan cihazlar teslim edilmez.</li>
-            <li>Olumlu veya olumsuz sonuç bilgisi müşteriye iletilmiş olan cihazlar 3 ay içerisinde alınmadığı takdirde hiçbir şekilde sorumluluk kabul edilmeyecektir.</li>
-            <li>Kullanım hataları, fiziksel darbeler, sıvı teması gibi sebepler dışında oluşan arızaların 1 yıl içerisinde tekrarlaması durumunda verilen bakım, onarım, tamir ücreti alınmaz.</li>
-            <li>Ürünlerin arızasının 10 (on) iş günü içerisinde giderilmemesi halinde, imalatçı-üretici veya ithalatçı, ürünlerin tamiri tamamlanıncaya kadar benzer özelliklere sahip başka bir ürünü tüketicinin kullanımına tahsis etmek zorundadır.</li>
-          </ol>
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  };
-
-  const handleAddOperation = async () => {
-    if (serviceBusy) return;
-    if (!selectedRecord) return;
-
-    const labor = Number(opLaborCost) || 0;
-    const part = Number(opPartCost) || 0;
-    const total = labor + part;
-
-    const actionText = opAction || opDiagnosis || 'Servis İşlemi Yapıldı';
-
-    const newOp = {
-      description: actionText,
-      cost: total
-    };
-
-    const updatedOperations = [...selectedRecord.operations, newOp];
-    const newTotalCost = selectedRecord.warrantyRepair ? 0 : updatedOperations.reduce((sum, o) => sum + o.cost, 0);
-
-    const updatedStatus = opStatus && opStatus !== 'Durum değiştir'
-      ? (opStatus as any)
-      : selectedRecord.status;
-
-    const updatedRecord: ServiceRecord = {
-      ...selectedRecord,
-      operations: updatedOperations,
-      totalCost: newTotalCost,
-      status: updatedStatus,
-      notes: opShortNote ? (selectedRecord.notes ? `${selectedRecord.notes} | ${opShortNote}` : opShortNote) : selectedRecord.notes
-    };
-
-    if (!await persist(updatedRecord)) return;
-    const updatedRecords = records.map(r => r.id === selectedRecord.id ? updatedRecord : r);
-    setRecords(updatedRecords);
-    setSelectedRecord(updatedRecord);
-    setShowAddOperationModal(false);
-
-    setOpStatus('');
-    setOpShortNote('');
-    setOpDecision('');
-    setOpDiagnosis('');
-    setOpAction('');
-    setOpLaborCost(0);
-    setOpPartCost(0);
-    setShowExternalDispatch(false);
-
-    addToast({ type: 'success', message: `${selectedRecord.patientName} kaydına yeni servis işlemi eklendi.` });
-  };
-
-  const filtered = records.filter(r => {
-    const matchesStatus = filterStatus === 'Tümü' || r.status === filterStatus;
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return matchesStatus;
-
-    const matchesName = (r.patientName || '').toLowerCase().includes(q);
-    const matchesDevice = (r.deviceName || '').toLowerCase().includes(q);
-    const matchesSerial = [r.serialNo, r.barcode].some(v => v?.toLowerCase().includes(q));
-    const matchesProblem = (r.problem || '').toLowerCase().includes(q);
-    const matchesTechnician = (r.technician || '').toLowerCase().includes(q);
-
-    return matchesStatus && (matchesName || matchesDevice || matchesSerial || matchesProblem || matchesTechnician);
-  });
-
-  const activeCount = records.filter(r => !['Teslim Edildi'].includes(r.status)).length;
-  const waitingCount = records.filter(r => r.status === 'Hazır').length;
-  const totalRevenue = records.reduce((sum, r) => sum + r.totalCost, 0);
-  const warrantyCount = records.filter(r => r.warrantyRepair).length;
 
   return (
-    <div className="page">
-      {serviceError && <p role="alert">{serviceError}</p>}
-      <div className="page-header">
-        <div className="page-header-left">
-          <h2>Teknik Servis Takibi</h2>
-          <p>{serviceRecords.length} servis kaydı</p>
+    <div className={styles.servicePage}>
+      {/* ── Breadcrumb ── */}
+      <div className={styles.breadcrumb}>
+        <span>Teknik Servis</span>
+        <span>&gt;</span>
+        <span style={{ color: '#334155', fontWeight: 500 }}>Servis Takibi</span>
+      </div>
+
+      {/* ── Page Heading ── */}
+      <div className={styles.pageHeading}>
+        <div className={styles.headingCopy}>
+          <div className={styles.headingIcon}>
+            {/* Wrench icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+          </div>
+          <div>
+            <h1>Teknik Servis</h1>
+            <p>Cihaz tamir, bakım ve servis süreçlerinizi tek ekranda yönetin.</p>
+          </div>
         </div>
-        <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <IconPlus size={15} strokeWidth={2} /> Yeni Servis Kaydı
+
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.btnSecondaryAction}
+            onClick={() => setShowReportModal(true)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            Servis Raporu
+          </button>
+
+          <button
+            type="button"
+            className={styles.btnPrimaryAction}
+            onClick={() => setShowNewRecordModal(true)}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Yeni Servis Kaydı
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon warning">
-            <IconService size={20} strokeWidth={1.6} />
+      {/* ── 4 Stat Cards ── */}
+      <div className={styles.statsGrid}>
+        {/* Card 1 */}
+        <div className={styles.statCard}>
+          <div className={`${styles.statIconBox} ${styles.statIconBoxOrange}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
           </div>
-          <div className="stat-content">
-            <div className="stat-label">Serviste Bekleyen</div>
-            <div className="stat-value">{activeCount}</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon success">
-            <IconCheck size={20} strokeWidth={1.6} />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Teslime Hazır</div>
-            <div className="stat-value">{waitingCount}</div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Serviste Bekleyen</span>
+            <span className={styles.statValue}>4</span>
+            <div className={styles.statTrend}>
+              <span className={styles.trendUpRed}>↑ %33</span>
+              <span className={styles.trendMuted}>geçen aya göre</span>
+            </div>
           </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon primary">
-            <IconCash size={20} strokeWidth={1.6} />
+
+        {/* Card 2 */}
+        <div className={styles.statCard}>
+          <div className={`${styles.statIconBox} ${styles.statIconBoxGreen}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
           </div>
-          <div className="stat-content">
-            <div className="stat-label">Toplam Servis Geliri</div>
-            <div className="stat-value">{formatCurrency(totalRevenue)}</div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Teslime Hazır</span>
+            <span className={styles.statValue}>2</span>
+            <div className={styles.statTrend}>
+              <span className={styles.trendUpRed}>↑ %100</span>
+              <span className={styles.trendMuted}>geçen aya göre</span>
+            </div>
           </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon info">
-            <IconShield size={20} strokeWidth={1.6} />
+
+        {/* Card 3 */}
+        <div className={styles.statCard}>
+          <div className={`${styles.statIconBox} ${styles.statIconBoxBlue}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+              <line x1="2" y1="10" x2="22" y2="10"></line>
+            </svg>
           </div>
-          <div className="stat-content">
-            <div className="stat-label">Garanti Kapsamında</div>
-            <div className="stat-value">{warrantyCount}</div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Toplam Servis Geliri</span>
+            <span className={styles.statValue}>₺8.750</span>
+            <div className={styles.statTrend}>
+              <span className={styles.trendUpGreen}>↑ %25</span>
+              <span className={styles.trendMuted}>bu ay</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4 */}
+        <div className={styles.statCard}>
+          <div className={`${styles.statIconBox} ${styles.statIconBoxPurple}`}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <polyline points="9 12 11 14 15 10"></polyline>
+            </svg>
+          </div>
+          <div className={styles.statInfo}>
+            <span className={styles.statLabel}>Garanti Kapsamında</span>
+            <span className={styles.statValue}>3</span>
+            <div className={styles.statTrend}>
+              <span className={styles.trendMuted}>Toplamın %27'si</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Filters & Search Bar */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 16,
-          flexWrap: 'wrap'
-        }}>
-          <div className="tabs" style={{ margin: 0 }}>
-            {['Tümü', 'Alındı', 'İnceleniyor', 'Tamir Ediliyor', 'Hazır', 'Teslim Edildi'].map(s => (
+      {/* ── Filter Pills & Quick Search Row ── */}
+      <div className={styles.filterPillsRow}>
+        <div className={styles.pillsList}>
+          {[
+            { label: `Tümü (${pillCounts.all})`, key: 'Tümü' },
+            { label: `Alındı (${pillCounts.alindi})`, key: 'Alındı' },
+            { label: `İnceleniyor (${pillCounts.inceleniyor})`, key: 'İnceleniyor' },
+            { label: `Tamir Ediliyor (${pillCounts.tamir})`, key: 'Tamir Ediliyor' },
+            { label: `Hazır (${pillCounts.hazir})`, key: 'Hazır' },
+            { label: `Teslim Edildi (${pillCounts.teslim})`, key: 'Teslim Edildi' }
+          ].map(pill => {
+            const isActive = filterStatus.startsWith(pill.key);
+            return (
               <button
-                key={s}
-                className={`tab ${filterStatus === s ? 'active' : ''}`}
-                onClick={() => setFilterStatus(s)}
+                key={pill.key}
+                type="button"
+                className={`${styles.pillBtn} ${isActive ? styles.pillBtnActive : ''}`}
+                onClick={() => setFilterStatus(pill.label)}
               >
-                {s}
+                {pill.label}
               </button>
-            ))}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* Search Box */}
-          <div style={{ position: 'relative', width: 340, maxWidth: '100%' }}>
-            <div style={{
-              position: 'absolute',
-              left: 12,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--gray-400)',
-              display: 'flex',
-              alignItems: 'center',
-              pointerEvents: 'none'
-            }}>
-              <IconSearch size={16} strokeWidth={2} />
-            </div>
+        <div className={styles.quickSearchActions}>
+          <div className={styles.searchInputWrapper}>
+            <svg className={styles.searchIcon} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
             <input
               type="text"
-              className="form-input"
-              placeholder="Hasta adı, cihaz veya seri no ile ara..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                paddingLeft: 36,
-                paddingRight: searchQuery ? 32 : 12,
-                height: 38,
-                fontSize: '0.84rem',
-                borderRadius: 'var(--radius-md)',
-                borderColor: 'var(--gray-200)',
-                background: 'var(--gray-50)',
-                transition: 'all 0.15s ease'
-              }}
+              placeholder="Hasta adı, cihaz, seri no ile ara..."
+              className={styles.searchInput}
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                style={{
-                  position: 'absolute',
-                  right: 10,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--gray-400)',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  padding: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                title="Aramayı Temizle"
-              >
-                ✕
-              </button>
-            )}
           </div>
+
+          <button
+            type="button"
+            className={styles.btnFilterOutline}
+            onClick={() => addToast({ type: 'info', message: 'Filtreler uygulandı.' })}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+            </svg>
+            Filtrele
+          </button>
+
+          <button
+            type="button"
+            className={styles.btnClearOutline}
+            onClick={() => {
+              setSearchTerm('');
+              setFilterStatus('Tümü (15)');
+              setSelectedBranch('Tüm Şubeler');
+              setSelectedStatusDropdown('Tüm Durumlar');
+              setSelectedDeviceType('Tüm Cihaz Türleri');
+              setSelectedWarranty('Tüm Garanti Durumları');
+              addToast({ type: 'info', message: 'Filtreler sıfırlandı.' });
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <polyline points="23 20 23 14 17 14"></polyline>
+              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+            </svg>
+            Temizle
+          </button>
         </div>
       </div>
 
-      {/* Service Table */}
-      <div className="card">
-        <div className="table-container">
-          <table className="mobile-cards">
-            <thead>
-              <tr>
-                <th>Hasta</th>
-                <th>Cihaz</th>
-                <th>Seri No</th>
-                <th>Arıza / Sorun</th>
-                <th>Alım Tarihi</th>
-                <th>Tahmini Teslim</th>
-                <th>Yapılan İşlemler</th>
-                <th>Tutar</th>
-                <th>Durum</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
+      {/* ── Secondary Filter Row ── */}
+      <div className={styles.secondaryFilterBar}>
+        <div className={styles.dateFilterBox}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          <span>01.09.2026 - 30.09.2026</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+
+        <select
+          className={styles.filterSelect}
+          value={selectedBranch}
+          onChange={e => setSelectedBranch(e.target.value)}
+        >
+          <option value="Tüm Şubeler">Tüm Şubeler</option>
+          <option value="Merkez Şube">Merkez Şube</option>
+          <option value="Kadıköy Şube">Kadıköy Şube</option>
+          <option value="Çankaya Şube">Çankaya Şube</option>
+          <option value="Test Şube 1">Test Şube 1</option>
+        </select>
+
+        <select
+          className={styles.filterSelect}
+          value={selectedStatusDropdown}
+          onChange={e => setSelectedStatusDropdown(e.target.value)}
+        >
+          <option value="Tüm Durumlar">Tüm Durumlar</option>
+          <option value="Alındı">Alındı</option>
+          <option value="İnceleniyor">İnceleniyor</option>
+          <option value="Tamir Ediliyor">Tamir Ediliyor</option>
+          <option value="Teslime Hazır">Teslime Hazır</option>
+          <option value="Garanti">Garanti</option>
+          <option value="Teslim Edildi">Teslim Edildi</option>
+        </select>
+
+        <select
+          className={styles.filterSelect}
+          value={selectedDeviceType}
+          onChange={e => setSelectedDeviceType(e.target.value)}
+        >
+          <option value="Tüm Cihaz Türleri">Tüm Cihaz Türleri</option>
+          <option value="Kulak arkası">Kulak arkası</option>
+          <option value="RIC (Hoparlör Kulak İçi)">RIC (Hoparlör Kulak İçi)</option>
+          <option value="Kulak içi (ITE)">Kulak içi (ITE)</option>
+          <option value="Şarjlı Kulak Arkası">Şarjlı Kulak Arkası</option>
+        </select>
+
+        <select
+          className={styles.filterSelect}
+          value={selectedWarranty}
+          onChange={e => setSelectedWarranty(e.target.value)}
+        >
+          <option value="Tüm Garanti Durumları">Tüm Garanti Durumları</option>
+          <option value="Garanti Kapsamında">Garanti Kapsamında</option>
+          <option value="Garanti Dışı">Garanti Dışı</option>
+        </select>
+      </div>
+
+      {/* ── Main Layout: Table + Detail Drawer ── */}
+      <div className={styles.mainLayoutContainer}>
+        {/* Table Column */}
+        <div className={`${styles.tableSection} ${selectedItem ? styles.tableSectionWithDrawer : ''}`}>
+          <div className={styles.tableWrapper}>
+            <table className={styles.serviceTable}>
+              <thead>
                 <tr>
-                  <td colSpan={10} style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--gray-500)' }}>
-                    <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>🔍</div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--gray-700)' }}>Aranan kriterlere uygun servis kaydı bulunamadı</div>
-                    <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Arama terimini veya durum filtresini değiştirerek tekrar deneyebilirsiniz.</div>
-                  </td>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      className={styles.checkboxInput}
+                      checked={selectedRowIds.length === filteredRecords.length && filteredRecords.length > 0}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
+                  <th>HASTA</th>
+                  <th>CİHAZ</th>
+                  <th>SERİ NO / BARKOD</th>
+                  <th>ARIZA / SORUN</th>
+                  <th>ALIM TARİHİ</th>
+                  <th>TAHMİNİ TESLİM</th>
+                  <th>DURUM</th>
+                  <th style={{ textAlign: 'center' }}>İŞLEMLER</th>
                 </tr>
-              ) : (
-                filtered.map(record => {
-                const cfg = statusConfig[record.status];
-                return (
-                  <tr key={record.id}>
-                    <td data-label="Hasta">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="avatar" style={{ background: getAvatarColor(record.patientName) }}>
-                          {record.patientName.split(' ').map(n => n[0]).join('')}
-                        </div>
-                        <span className="td-primary">{record.patientName}</span>
-                      </div>
-                    </td>
-                    <td data-label="Cihaz" style={{ fontWeight: 600, fontSize: '0.85rem' }}>{record.deviceName}</td>
-                    <td data-label="Seri No / Barkod" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{record.serialNo}<br />Barkod: {record.barcode || 'Kaydedilmemiş'}</td>
-                    <td data-label="Arıza" style={{ maxWidth: 200, fontSize: '0.82rem', color: 'var(--gray-600)' }}>
-                      {record.problem}
-                    </td>
-                    <td data-label="Alım Tarihi">{formatDate(record.receivedDate)}</td>
-                    <td data-label="Tahmini Teslim">
-                      {record.returnedDate ? (
-                        <span style={{ color: 'var(--success-600)', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <IconCheck size={12} strokeWidth={2} /> {formatDate(record.returnedDate)}
-                        </span>
-                      ) : (
-                        formatDate(record.estimatedDate)
-                      )}
-                    </td>
-                    <td data-label="İşlemler">
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-600)' }}>
-                        {record.operations.length} işlem
-                      </span>
-                    </td>
-                    <td data-label="Tutar">
-                      {record.warrantyRepair ? (
-                        <span className="badge badge-info" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <IconShield size={11} strokeWidth={1.7} /> Garanti
-                        </span>
-                      ) : (
-                        <span style={{ fontWeight: 700 }}>{formatCurrency(record.totalCost)}</span>
-                      )}
-                    </td>
-                    <td data-label="Durum">
-                      <span className={`badge badge-${cfg.color}`}>
-                        {record.status}
-                      </span>
-                    </td>
-                    <td data-label="">
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => setSelectedRecord(record)}
-                      >
-                        Detay <IconArrowRight size={13} strokeWidth={1.8} />
-                      </button>
+              </thead>
+              <tbody>
+                {filteredRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '40px 16px', color: '#64748b' }}>
+                      Kriterlere uygun teknik servis kaydı bulunamadı.
                     </td>
                   </tr>
-                );
-              }))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Detail Modal */}
-      {selectedRecord && (
-        <div className="modal-overlay" onClick={() => setSelectedRecord(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
-            <div className="modal-header">
-              <span className="modal-title">🔧 Servis Detayı — {selectedRecord.deviceName}</span>
-              <button className="modal-close" onClick={() => setSelectedRecord(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {/* Device & Patient Info */}
-              <div className="responsive-grid-2" style={{ marginBottom: 20 }}>
-                <div style={{
-                  padding: '14px',
-                  background: 'var(--gray-50)',
-                  borderRadius: 'var(--radius-lg)',
-                }}>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 8 }}>Hasta & Cihaz</div>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    <div>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Hasta: </span>
-                      <span style={{ fontWeight: 600 }}>{selectedRecord.patientName}</span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Cihaz: </span>
-                      <span style={{ fontWeight: 600 }}>{selectedRecord.deviceName}</span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Seri No: </span>
-                      <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>{selectedRecord.serialNo}</span>
-                      <span>Barkod: {selectedRecord.barcode || 'Kaydedilmemiş'}</span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Teknisyen: </span>
-                      <span style={{ fontWeight: 600 }}>{selectedRecord.technician}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{
-                  padding: '14px',
-                  background: 'var(--gray-50)',
-                  borderRadius: 'var(--radius-lg)',
-                }}>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 8 }}>Tarihler & Durum</div>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    <div>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Alım: </span>
-                      <span style={{ fontWeight: 600 }}>{formatDate(selectedRecord.receivedDate)}</span>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Tahmini: </span>
-                      <span style={{ fontWeight: 600 }}>{formatDate(selectedRecord.estimatedDate)}</span>
-                    </div>
-                    {selectedRecord.returnedDate && (
-                      <div>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Teslim: </span>
-                        <span style={{ fontWeight: 600, color: 'var(--success-600)' }}>{formatDate(selectedRecord.returnedDate)}</span>
-                      </div>
-                    )}
-                    <div>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Garanti: </span>
-                      <span className={`badge badge-${selectedRecord.warrantyRepair ? 'success' : 'neutral'}`}>
-                        {selectedRecord.warrantyRepair ? '✓ Garanti kapsamında' : 'Garanti dışı'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Action Buttons: Hatırlatma Ekle & Randevu Oluştur */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowReminderModal(true)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 14px', borderRadius: 6 }}
-                >
-                  🔔 Hatırlatma Ekle
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowAppointmentModal(true)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', padding: '6px 14px', borderRadius: 6 }}
-                >
-                  📅 Randevu Oluştur
-                </button>
-              </div>
-
-              {/* Problem */}
-              <div style={{
-                padding: '12px 16px',
-                background: 'var(--warning-50)',
-                border: '1px solid var(--warning-100)',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: 16,
-              }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--warning-600)', marginBottom: 4, fontWeight: 600 }}>Bildirilen Arıza</div>
-                <div style={{ fontSize: '0.88rem', color: 'var(--gray-800)' }}>{selectedRecord.problem}</div>
-              </div>
-
-              {/* Accessories and Checklist */}
-              {((selectedRecord.accessoriesTaken && selectedRecord.accessoriesTaken.length > 0) || 
-                (selectedRecord.complaints && selectedRecord.complaints.length > 0)) && (
-                <div className="responsive-grid-2" style={{ marginBottom: 16 }}>
-                  {selectedRecord.accessoriesTaken && selectedRecord.accessoriesTaken.length > 0 && (
-                    <div style={{
-                      padding: '12px 14px',
-                      background: 'var(--primary-50)',
-                      border: '1px solid var(--primary-100)',
-                      borderRadius: 'var(--radius-md)',
-                    }}>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--primary-600)', marginBottom: 6, fontWeight: 600 }}>Teslim Alınan Aksesuarlar</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {selectedRecord.accessoriesTaken.map((acc, index) => (
-                          <span key={index} className="badge badge-info" style={{ fontSize: '0.74rem' }}>{acc}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {selectedRecord.complaints && selectedRecord.complaints.length > 0 && (
-                    <div style={{
-                      padding: '12px 14px',
-                      background: 'var(--danger-50)',
-                      border: '1px solid var(--danger-100)',
-                      borderRadius: 'var(--radius-md)',
-                    }}>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--danger-600)', marginBottom: 6, fontWeight: 600 }}>Çeklist Şikayetleri</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {selectedRecord.complaints.map((comp, index) => (
-                          <span key={index} className="badge badge-neutral" style={{ fontSize: '0.74rem', background: 'var(--gray-200)', color: 'var(--gray-700)' }}>{comp}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Operations */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--gray-700)' }}>
-                    🛠️ Yapılan İşlemler
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => setShowAddOperationModal(true)}
-                    style={{ fontSize: '0.78rem', padding: '4px 12px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                  >
-                    + İşlem Ekle
-                  </button>
-                </div>
-                <div style={{ border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-                  {selectedRecord.operations.map((op, i) => (
-                    <div key={i} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '10px 14px',
-                      borderBottom: i < selectedRecord.operations.length - 1 ? '1px solid var(--gray-100)' : 'none',
-                      fontSize: '0.85rem',
-                    }}>
-                      <span>
-                        <span style={{ color: 'var(--primary-500)', marginRight: 6 }}>●</span>
-                        {op.description}
-                      </span>
-                      <span style={{ fontWeight: 600 }}>
-                        {op.cost > 0 ? formatCurrency(op.cost) : <span style={{ color: 'var(--success-600)' }}>Ücretsiz</span>}
-                      </span>
-                    </div>
-                  ))}
-                  {/* Total */}
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px 14px',
-                    background: 'var(--gray-50)',
-                    borderTop: '2px solid var(--gray-200)',
-                    fontWeight: 700,
-                    fontSize: '0.95rem',
-                  }}>
-                    <span>Toplam</span>
-                    <span style={{ color: 'var(--primary-600)', fontSize: '1.05rem' }}>
-                      {selectedRecord.warrantyRepair ? (
-                        <span style={{ color: 'var(--success-600)' }}>Garanti — Ücretsiz</span>
-                      ) : (
-                        formatCurrency(selectedRecord.totalCost)
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Notes */}
-              {selectedRecord.notes && (
-                <div style={{
-                  padding: '10px 14px',
-                  background: 'var(--gray-50)',
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: '0.82rem',
-                  color: 'var(--gray-600)',
-                }}>
-                  <strong>📝 Not: </strong>{selectedRecord.notes}
-                </div>
-              )}
-            </div>
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {selectedRecord.status === 'Hazır' && (
-                  <button className="btn btn-primary" onClick={() => handleDeliver(selectedRecord)}>
-                    Teslim Edildi Olarak İşaretle
-                  </button>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => handlePrintForm(selectedRecord)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.84rem' }}
-                >
-                  🖨️ Form (PDF)
-                </button>
-                <button className="btn btn-secondary" onClick={() => setSelectedRecord(null)}>Kapat</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tamir Kabul - Yeni Kayıt Modal */}
-      {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680, width: '95%' }}>
-            
-            {/* Modal Header */}
-            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: '1.2rem' }}>🔑</span>
-                <span className="modal-title" style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a' }}>
-                  Tamir Kabul - Yeni Kayıt
-                </span>
-              </div>
-              <button className="modal-close" onClick={() => setShowAddModal(false)}>✕</button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="modal-body" style={{ padding: 20, maxHeight: '78vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              
-              {/* 1. HASTA SECTION */}
-              {newRecordForm.unregisteredPatient && !activeBranchId && <label className="form-label">Kayıt şubesi<select className="form-select" value={serviceBranchId} onChange={e => setServiceBranchId(e.target.value)}><option value="">Şube seçin</option>{branchesList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Hasta
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: '#475569', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={newRecordForm.unregisteredPatient}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredPatient: e.target.checked })}
-                    />
-                    Kayıtsız hasta (dışarıdan geldi)
-                  </label>
-                </div>
-
-                {newRecordForm.unregisteredPatient ? (
-                  /* Kayıtsız Hasta Inputs (Matching Screenshot 2) */
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Ad Soyad *"
-                        value={newRecordForm.patientName}
-                        onChange={(e) => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
-                      />
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Telefon"
-                        value={newRecordForm.unregisteredPhone}
-                        onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredPhone: e.target.value })}
-                      />
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="TC No"
-                        value={newRecordForm.unregisteredTC}
-                        onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredTC: e.target.value })}
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Adres"
-                      value={newRecordForm.unregisteredAddress}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, unregisteredAddress: e.target.value })}
-                    />
-                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 4 }}>
-                      Kaydedince hasta "Tamir için gelen" durumuyla oluşturulur.
-                    </div>
-                  </div>
                 ) : (
-                  /* Searchable Patient Dropdown (Matching Screenshot 1) */
-                  <div ref={patientDropdownRef} style={{ position: 'relative' }}>
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <input
-                        type="text"
-                        className="form-input"
-                        style={{ paddingRight: 36, borderColor: isPatientDropdownOpen ? '#0091ff' : undefined }}
-                        placeholder="Hasta ara ve seç"
-                        value={patientSearchText || newRecordForm.patientName}
-                        onFocus={() => setIsPatientDropdownOpen(true)}
-                        onChange={(e) => {
-                          setPatientSearchText(e.target.value);
-                          setNewRecordForm({ ...newRecordForm, patientId: '', patientName: e.target.value });
-                          setIsPatientDropdownOpen(true);
-                        }}
-                      />
-                      <span style={{ position: 'absolute', right: 12, color: '#94a3b8', pointerEvents: 'none', fontSize: '0.88rem' }}>🔍</span>
-                    </div>
-
-                    {isPatientDropdownOpen && (
-                      <div style={{
-                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30,
-                        background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8,
-                        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 180, overflowY: 'auto'
-                      }}>
-                        {patientsListMock
-                          .filter(p => `${p.name} ${p.tc}`.toLowerCase().includes((patientSearchText || '').toLowerCase()))
-                          .map((p, idx) => (
-                            <div
-                              key={idx}
-                              onClick={() => {
-                                setNewRecordForm({
-                                  ...newRecordForm,
-                                  patientId: p.id,
-                                  patientName: p.name,
-                                  deviceName: p.device || '',
-                                  serialNo: p.serial || ''
-                                });
-                                setPatientSearchText(`${p.name} (${p.tc})`);
-                                setIsPatientDropdownOpen(false);
-                              }}
-                              style={{
-                                padding: '10px 14px', fontSize: '0.84rem', cursor: 'pointer',
-                                color: '#1e293b', borderBottom: idx < patientsListMock.length - 1 ? '1px solid #f1f5f9' : 'none',
-                                background: newRecordForm.patientName === p.name ? '#f8fafc' : '#ffffff'
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                              onMouseLeave={(e) => e.currentTarget.style.background = newRecordForm.patientName === p.name ? '#f8fafc' : '#ffffff'}
-                            >
-                              {p.name} ({p.tc})
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* 2. CİHAZ SECTION */}
-              <DevicePicker items={stockList.filter(s => matches(s.branch, s.branchId) && s.branchId === (newRecordForm.unregisteredPatient ? activeBranchId || serviceBranchId : patientsList.find(patient => patient.id === newRecordForm.patientId)?.branchId))} value={deviceId} onChange={item => { setDeviceId(item.id); setBarcode(item.barcode || ''); setNewRecordForm(prev => ({ ...prev, deviceName: item.name, serialNo: item.serialNo, externalDevice: false })); }} />
-              <DeviceIdentityFields value={{ barcode, serialNo: newRecordForm.serialNo }} onChange={value => { setBarcode(value.barcode || ''); setNewRecordForm(prev => ({ ...prev, serialNo: value.serialNo || '' })); }} />
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Cihaz
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: '#475569', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={newRecordForm.externalDevice}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalDevice: e.target.checked })}
-                    />
-                    Dış cihaz (bizim sattığımız değil)
-                  </label>
-                </div>
-
-                {newRecordForm.externalDevice ? (
-                  /* External Device 4 Inputs (Matching Screenshot 4) */
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Marka"
-                      value={newRecordForm.externalMarka}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalMarka: e.target.value, deviceName: `${e.target.value} ${newRecordForm.externalModel}` })}
-                    />
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Model"
-                      value={newRecordForm.externalModel}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalModel: e.target.value, deviceName: `${newRecordForm.externalMarka} ${e.target.value}` })}
-                    />
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Seri No"
-                      value={newRecordForm.externalSeriNo}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalSeriNo: e.target.value, serialNo: e.target.value })}
-                    />
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Tip"
-                      value={newRecordForm.externalTip}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, externalTip: e.target.value })}
-                    />
-                  </div>
-                ) : (
-                  /* Standard Device Form Input */
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Bu hastaya ait cihaz bulunamadı — dış cihaz işaretleyin"
-                    value={newRecordForm.deviceName}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
-                  />
-                )}
-              </div>
-
-              {/* 3. BİRLİKTE ALINAN AKSESUARLAR */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
-                  Birlikte alınan aksesuarlar
-                </label>
-                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: '0.86rem', color: '#334155' }}>
-                  {['Pil', 'Garanti Kartı', 'Kutu', 'Kulak Kalıbı'].map((acc) => (
-                    <label key={acc} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={newRecordForm.accessories.includes(acc)}
-                        onChange={() => toggleAccessory(acc)}
-                      />
-                      {acc}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* 4. KALIP MODELİ (Matching Screenshot 5) */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                  Kalıp Modeli <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(kalıp siparişi değilse boş bırakın)</span>
-                </label>
-
-                <div ref={moldDropdownRef} style={{ position: 'relative' }}>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ paddingRight: 36, borderColor: isMoldDropdownOpen ? '#0091ff' : undefined }}
-                      placeholder="Kalıp modeli seçin"
-                      value={moldSearchText || newRecordForm.moldModel}
-                      onFocus={() => setIsMoldDropdownOpen(true)}
-                      onChange={(e) => {
-                        setMoldSearchText(e.target.value);
-                        setNewRecordForm({ ...newRecordForm, moldModel: e.target.value });
-                        setIsMoldDropdownOpen(true);
-                      }}
-                    />
-                    <span style={{ position: 'absolute', right: 12, color: '#94a3b8', pointerEvents: 'none', fontSize: '0.88rem' }}>🔍</span>
-                  </div>
-
-                  {isMoldDropdownOpen && (
-                    <div style={{
-                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30,
-                      background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8,
-                      boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', marginTop: 4, maxHeight: 180, overflowY: 'auto'
-                    }}>
-                      {moldOptions
-                        .filter(m => m.toLowerCase().includes((moldSearchText || '').toLowerCase()))
-                        .map((m, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => {
-                              setNewRecordForm({ ...newRecordForm, moldModel: m });
-                              setMoldSearchText(m);
-                              setIsMoldDropdownOpen(false);
-                            }}
-                            style={{
-                              padding: '10px 14px', fontSize: '0.84rem', cursor: 'pointer',
-                              color: '#1e293b', borderBottom: idx < moldOptions.length - 1 ? '1px solid #f1f5f9' : 'none',
-                              background: newRecordForm.moldModel === m ? '#f8fafc' : '#ffffff'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = newRecordForm.moldModel === m ? '#f8fafc' : '#ffffff'}
-                          >
-                            {m}
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 5. ŞİKAYET / ARIZA CHECKLIST MATRIX (MÜŞTERİ / TEKNİSYEN) */}
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a', marginBottom: 8 }}>
-                  Şikayet / Arıza
-                </div>
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-                  <div style={{
-                    display: 'flex', background: '#f8fafc', padding: '8px 14px', borderBottom: '1px solid #e2e8f0',
-                    fontSize: '0.78rem', fontWeight: 700, color: '#475569'
-                  }}>
-                    <div style={{ flex: 1 }}>Arıza Tanımı</div>
-                    <div style={{ width: 90, textAlign: 'center' }}>Müşteri</div>
-                    <div style={{ width: 90, textAlign: 'center' }}>Teknisyen</div>
-                  </div>
-                  {[
-                    'Çalışmıyor',
-                    'Ara ara kesiliyor',
-                    'Açma-kapama anahtarı arızalı',
-                    'Ses kontrol düğmesi arızalı',
-                    'Yüksek pil tüketimi',
-                    'Feedback (çınlama)',
-                    'Program geçişi yapmıyor'
-                  ].map((comp, idx, arr) => (
-                    <div key={idx} style={{
-                      display: 'flex', alignItems: 'center', padding: '8px 14px',
-                      borderBottom: idx === arr.length - 1 ? 'none' : '1px solid #f1f5f9',
-                      fontSize: '0.84rem', background: idx % 2 === 0 ? '#ffffff' : '#fafafa'
-                    }}>
-                      <div style={{ flex: 1, color: '#334155' }}>{comp}</div>
-                      <div style={{ width: 90, textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={newRecordForm.customerComplaints.includes(comp)}
-                          onChange={() => toggleCustomerComplaint(comp)}
-                        />
-                      </div>
-                      <div style={{ width: 90, textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={newRecordForm.technicianComplaints.includes(comp)}
-                          onChange={() => toggleTechnicianComplaint(comp)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <textarea
-                  className="form-textarea"
-                  style={{ marginTop: 10, height: 70, fontSize: '0.84rem' }}
-                  placeholder="Ek açıklama (opsiyonel)"
-                  value={newRecordForm.extraDescription}
-                  onChange={(e) => setNewRecordForm({ ...newRecordForm, extraDescription: e.target.value })}
-                />
-              </div>
-
-              {/* 6. GARANTİ KAPSAMINDA TOGGLE SWITCH & BİTİŞ TARİHİ */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: '#f8fafc', padding: '14px 16px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <button
-                    type="button"
-                    onClick={() => setNewRecordForm({ ...newRecordForm, warrantyRepair: !newRecordForm.warrantyRepair })}
-                    style={{
-                      width: 44, height: 24, borderRadius: 12,
-                      background: newRecordForm.warrantyRepair ? '#2563eb' : '#cbd5e1',
-                      border: 'none', cursor: 'pointer', position: 'relative',
-                      transition: 'all 0.2s ease', padding: 2, flexShrink: 0
-                    }}
-                  >
-                    <div style={{
-                      width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
-                      position: 'absolute', top: 2,
-                      left: newRecordForm.warrantyRepair ? 22 : 2,
-                      transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                    }} />
-                  </button>
-                  <span style={{ fontWeight: 600, fontSize: '0.88rem', color: '#0f172a' }}>
-                    Garanti kapsamında
-                  </span>
-                </div>
-
-                {newRecordForm.warrantyRepair && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                    <span style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 500 }}>Garanti bitiş:</span>
-                    <input
-                      type="date"
-                      className="form-input"
-                      style={{ padding: '6px 10px', fontSize: '0.84rem', width: 160 }}
-                      value={newRecordForm.warrantyEndDate}
-                      onChange={(e) => setNewRecordForm({ ...newRecordForm, warrantyEndDate: e.target.value })}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* 7. TAMİRE TESLİM TARİHİ */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                  Tamire teslim tarihi
-                </label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={newRecordForm.receivedDate}
-                  onChange={(e) => setNewRecordForm({ ...newRecordForm, receivedDate: e.target.value })}
-                />
-              </div>
-
-              {/* 8. TEKNİK SERVİSE GÖNDERİLECEKSE (OPSİYONEL) */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                  Teknik servise gönderilecekse <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(opsiyonel)</span>
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 10 }}>
-                  <select
-                    className="form-select"
-                    value={newRecordForm.serviceTarget}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, serviceTarget: e.target.value })}
-                  >
-                    <option value="Hedef">Hedef</option>
-                    <option value="Merkez Servis">Merkez Servis</option>
-                    <option value="Tedarikçi Servis">Tedarikçi Servis</option>
-                    <option value="Şube İçi">Şube İçi</option>
-                  </select>
-
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Hangi teknik servis (ad)"
-                    value={newRecordForm.serviceTargetName}
-                    onChange={(e) => setNewRecordForm({ ...newRecordForm, serviceTargetName: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {/* 9. TESLİM EDEN (CİHAZI BIRAKAN KİŞİ) */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                  Teslim eden <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.78rem' }}>(cihazı bırakan kişi / opsiyonel)</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Teslim eden adı / yakını (örn: Oğlu Mehmet)"
-                  value={newRecordForm.deliveredBy}
-                  onChange={(e) => setNewRecordForm({ ...newRecordForm, deliveredBy: e.target.value })}
-                />
-              </div>
-
-            </div>
-
-            {/* Modal Footer Controls */}
-            <div className="modal-footer" style={{ padding: '14px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowAddModal(false)}
-              >
-                İptal
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSaveNewRecord}
-                style={{ background: '#2563eb', padding: '8px 22px' }}
-              >
-                Kaydet / Tamir Kaydı Oluştur
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* 1. HATIRLATMA EKLE MODAL (Matching Screenshot 1) */}
-      {showReminderModal && selectedRecord && (
-        <div className="modal-overlay" onClick={() => setShowReminderModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, width: '90%', borderRadius: 12 }}>
-            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-              <span className="modal-title" style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
-                Hatırlatma Ekle
-              </span>
-              <button className="modal-close" onClick={() => setShowReminderModal(false)}>✕</button>
-            </div>
-
-            <div className="modal-body" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Info Callout Box */}
-              <div style={{
-                background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: 8,
-                padding: '12px 14px', display: 'flex', gap: 10, alignItems: 'flex-start'
-              }}>
-                <span style={{ fontSize: '1.1rem', color: '#0284c7' }}>ℹ️</span>
-                <span style={{ fontSize: '0.8rem', color: '#0369a1', lineHeight: 1.35 }}>
-                  Bu hatırlatma yalnızca size (merkez personeline) düşer; hastaya mesaj gönderilmez.
-                </span>
-              </div>
-
-              {/* Tarih Input */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
-                  Tarih
-                </label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={reminderDate}
-                  onChange={(e) => setReminderDate(e.target.value)}
-                />
-              </div>
-
-              {/* Hatırlatma Notu Textarea */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
-                  Hatırlatma notu
-                </label>
-                <textarea
-                  className="form-textarea"
-                  style={{ height: 80, fontSize: '0.84rem' }}
-                  placeholder="Örn: Tedarikçiyi ara — parça geldi mi kontrol et"
-                  value={reminderNote}
-                  onChange={(e) => setReminderNote(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-secondary" onClick={() => setShowReminderModal(false)}>Vazgeç</button>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setShowReminderModal(false);
-                  addToast({ type: 'success', message: `${selectedRecord.patientName} için personel hatırlatması oluşturuldu.` });
-                  setReminderNote('');
-                }}
-              >
-                Ekle
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. YENİ RANDEVU MODAL (Matching Screenshots 2 & 3) */}
-      {showAppointmentModal && selectedRecord && (
-        <div className="modal-overlay" onClick={() => setShowAppointmentModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540, width: '95%', borderRadius: 12 }}>
-            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>📅</span>
-                <span className="modal-title" style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
-                  Yeni Randevu
-                </span>
-              </div>
-              <button className="modal-close" onClick={() => setShowAppointmentModal(false)}>✕</button>
-            </div>
-
-            <div className="modal-body" style={{ padding: 20, maxHeight: '78vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Hasta Dropdown & Selected Card */}
-              <div>
-                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
-                  <span style={{ color: '#ef4444' }}>*</span> 👤 Hasta
-                </label>
-                <select
-                  className="form-select"
-                  value={selectedRecord.patientName}
-                  disabled
-                  style={{ background: '#e2e8f0', color: '#475569', cursor: 'not-allowed', borderColor: '#cbd5e1', fontWeight: 500 }}
-                >
-                  <option>{selectedRecord.patientName} - 05459111099</option>
-                </select>
-
-                <div style={{
-                  background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8,
-                  padding: '12px 14px', marginTop: 8, fontSize: '0.84rem', color: '#1e293b'
-                }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 4 }}>{selectedRecord.patientName}</div>
-                  <div style={{ color: '#64748b', fontSize: '0.8rem' }}>📞 05459111099</div>
-                  <div style={{ color: '#64748b', fontSize: '0.8rem' }}>TC: 12638639514</div>
-                </div>
-              </div>
-
-              {/* Grid: Tarih ve Saat | Randevu Tipi */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
-                    <span style={{ color: '#ef4444' }}>*</span> 📅 Tarih ve Saat
-                  </label>
-                  <input
-                    type="datetime-local"
-                    className="form-input"
-                    value={appointmentDateTime}
-                    onChange={(e) => setAppointmentDateTime(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', marginBottom: 4 }}>
-                    <span style={{ color: '#ef4444' }}>*</span> 🏥 Randevu Tipi
-                  </label>
-                  <select
-                    className="form-select"
-                    value={appointmentType}
-                    onChange={(e) => setAppointmentType(e.target.value)}
-                  >
-                    <option value="Muayene">● Muayene</option>
-                    <option value="Kontrol">● Kontrol</option>
-                    <option value="Test">● Test</option>
-                    <option value="Cihaz Denemesi">● Cihaz Denemesi</option>
-                    <option value="Cihaz Teslim">● Cihaz Teslim</option>
-                    <option value="Servis">● Servis</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Notlar */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0f172a', margin: 0 }}>
-                    Notlar
-                  </label>
-                  <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>{appointmentNotes.length} / 500</span>
-                </div>
-                <textarea
-                  className="form-textarea"
-                  style={{ height: 75, fontSize: '0.84rem' }}
-                  placeholder="Randevu ile ilgili notlar..."
-                  maxLength={500}
-                  value={appointmentNotes}
-                  onChange={(e) => setAppointmentNotes(e.target.value)}
-                />
-              </div>
-
-              {/* Takip Planı Section (Matching Screenshot 2) */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
-                <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb', marginBottom: 8 }}>
-                  📅 Takip Planı
-                </div>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={createFollowupPlan}
-                    onChange={(e) => setCreateFollowupPlan(e.target.checked)}
-                    style={{ marginTop: 2, width: 16, height: 16, accentColor: '#2563eb' }}
-                  />
-                  <div>
-                    <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>Takip planı oluştur</div>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b' }}>
-                      Randevu tarihinden itibaren periyodik kontrol hatırlatmaları oluşturulur
-                    </div>
-                  </div>
-                </label>
-
-                {createFollowupPlan && (
-                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 14, marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.84rem', color: '#0f172a' }}>Kontrol Dönemleri</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {['1 Hafta Kontrol', '1 Ay Kontrol', '3 Ay Kontrol', '6 Ay Kontrol', '1 Yıl Kontrol'].map((period) => (
-                        <label key={period} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.84rem', color: '#1e293b', cursor: 'pointer' }}>
+                  filteredRecords.map(item => {
+                    const isSelected = selectedRowIds.includes(item.id);
+                    const isCurrentDetail = selectedItem?.id === item.id;
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`${styles.tableRow} ${isCurrentDetail ? styles.tableRowSelected : ''}`}
+                        onClick={() => handleRowClick(item)}
+                      >
+                        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                           <input
                             type="checkbox"
-                            checked={followupPeriods.includes(period)}
-                            onChange={() => {
-                              if (followupPeriods.includes(period)) {
-                                setFollowupPeriods(followupPeriods.filter(p => p !== period));
-                              } else {
-                                setFollowupPeriods([...followupPeriods, period]);
-                              }
-                            }}
-                            style={{ width: 16, height: 16, accentColor: '#2563eb' }}
+                            className={styles.checkboxInput}
+                            checked={isSelected}
+                            onChange={(e) => handleToggleRow(item.id, e as unknown as React.MouseEvent)}
                           />
-                          {period}
-                        </label>
-                      ))}
-                    </div>
+                        </td>
 
-                    <div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 4 }}>Takip Notu (opsiyonel)</div>
-                      <textarea
-                        className="form-textarea"
-                        style={{ height: 65, fontSize: '0.82rem' }}
-                        placeholder="Takip planı için not..."
-                        value={followupNote}
-                        onChange={(e) => setFollowupNote(e.target.value)}
-                      />
-                      <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'right', marginTop: 2 }}>{followupNote.length} / 500</div>
-                    </div>
+                        <td>
+                          <div className={styles.patientCell}>
+                            <div
+                              className={styles.patientAvatar}
+                              style={{ background: item.avatarColor }}
+                            >
+                              {item.patientInitials}
+                            </div>
+                            <div className={styles.patientMeta}>
+                              <span className={styles.patientName}>{item.patientName}</span>
+                              <span className={styles.patientPhone}>{item.patientPhone}</span>
+                            </div>
+                          </div>
+                        </td>
 
-                    {/* Info Callout */}
-                    <div style={{ background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: 6, padding: '8px 12px', fontSize: '0.76rem', color: '#0369a1', lineHeight: 1.35 }}>
-                      📅 Seçilen dönemlerde personele hatırlatma bildirimi gönderilir. Aynı gün randevu hatırlatması varsa çift mesaj gitmez.
-                    </div>
-                  </div>
-                )}
-              </div>
+                        <td>
+                          <div className={styles.deviceCell}>
+                            <span className={styles.deviceName}>{item.deviceName}</span>
+                            <span className={styles.deviceEar}>{item.earSide}</span>
+                          </div>
+                        </td>
 
-              {/* WhatsApp Hatırlatma Section */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
-                <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#16a34a', marginBottom: 8 }}>
-                  💬 WhatsApp Hatırlatma
-                </div>
+                        <td>
+                          <div className={styles.serialCell}>
+                            <span className={styles.serialNo}>SN: {item.serialNo}</span>
+                            <span className={styles.barcodeNo}>Barkod: {item.barcode}</span>
+                          </div>
+                        </td>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>Hatırlatma Gönder</span>
-                  <button
-                    type="button"
-                    onClick={() => setSendWhatsappReminder(!sendWhatsappReminder)}
-                    style={{
-                      width: 44, height: 24, borderRadius: 12,
-                      background: sendWhatsappReminder ? '#2563eb' : '#cbd5e1',
-                      border: 'none', cursor: 'pointer', position: 'relative',
-                      transition: 'all 0.2s ease', padding: 2
-                    }}
-                  >
-                    <div style={{
-                      width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
-                      position: 'absolute', top: 2,
-                      left: sendWhatsappReminder ? 22 : 2,
-                      transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                    }} />
-                  </button>
-                </div>
+                        <td>
+                          <div className={styles.problemCell} title={item.problem}>
+                            {item.problem}
+                          </div>
+                        </td>
 
-                {sendWhatsappReminder && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {/* Hızlı Ekle Badges */}
-                    <div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 6 }}>Hızlı Ekle:</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {['15 dakika önce', '30 dakika önce', '1 saat önce', '2 saat önce', '1 gün önce'].map((timeStr) => (
-                          <button
-                            key={timeStr}
-                            type="button"
-                            onClick={() => {
-                              if (!selectedRemindersList.includes(timeStr)) {
-                                setSelectedRemindersList([...selectedRemindersList, timeStr]);
-                              }
-                            }}
-                            style={{
-                              padding: '4px 10px', fontSize: '0.78rem', background: '#f1f5f9',
-                              border: '1px solid #cbd5e1', borderRadius: 6, cursor: 'pointer', color: '#1e293b'
-                            }}
-                          >
-                            {timeStr}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                        <td>
+                          <span className={styles.dateCell}>{item.receivedDate}</span>
+                        </td>
 
-                    {/* Özel Zaman Ekle */}
-                    <div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: 4 }}>Özel Zaman Ekle:</div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          className="form-input"
-                          style={{ width: 60, padding: '4px 8px', fontSize: '0.82rem' }}
-                          value={customTimeVal}
-                          onChange={(e) => setCustomTimeVal(e.target.value)}
-                        />
-                        <select
-                          className="form-select"
-                          style={{ width: 100, padding: '4px 8px', fontSize: '0.82rem' }}
-                          value={customTimeUnit}
-                          onChange={(e) => setCustomTimeUnit(e.target.value)}
-                        >
-                          <option value="Dakika">Dakika</option>
-                          <option value="Saat">Saat</option>
-                          <option value="Gün">Gün</option>
-                        </select>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 12px', fontSize: '0.82rem' }}
-                          onClick={() => {
-                            const newReminderStr = `${customTimeVal} ${customTimeUnit.toLowerCase()} önce`;
-                            if (!selectedRemindersList.includes(newReminderStr)) {
-                              setSelectedRemindersList([...selectedRemindersList, newReminderStr]);
-                            }
-                          }}
-                        >
-                          + Ekle
-                        </button>
-                      </div>
-                    </div>
+                        <td>
+                          <span className={styles.dateCell}>{item.estimatedDeliveryDate}</span>
+                        </td>
 
-                    {/* Seçili Hatırlatmalar */}
-                    <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                        ⏰ Seçili Hatırlatmalar ({selectedRemindersList.length})
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {selectedRemindersList.map((rem, idx) => (
-                          <div key={idx} style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            background: '#ffffff', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: 6, fontSize: '0.8rem'
-                          }}>
-                            <span style={{ color: '#1e293b' }}>🔔 {rem}</span>
+                        <td>
+                          <span className={`${styles.badgeStatus} ${getStatusBadgeClass(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </td>
+
+                        <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                          <div className={styles.actionButtonsCell} style={{ justifyContent: 'center' }}>
                             <button
                               type="button"
-                              onClick={() => setSelectedRemindersList(selectedRemindersList.filter((_, i) => i !== idx))}
-                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.9rem' }}
+                              className={styles.iconBtn}
+                              title="Görüntüle"
+                              onClick={() => setSelectedItem(item)}
                             >
-                              🗑️
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                              </svg>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.iconBtn}
+                              title="Düzenle"
+                              onClick={() => {
+                                setSelectedItem(item);
+                                setShowEditModal(true);
+                              }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                              </svg>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.iconBtn}
+                              title="Diğer İşlemler"
+                              onClick={() => {
+                                setSelectedItem(item);
+                                setShowStatusModal(true);
+                              }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="1"></circle>
+                                <circle cx="12" cy="5" r="1"></circle>
+                                <circle cx="12" cy="19" r="1"></circle>
+                              </svg>
                             </button>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── Table Pagination Bar ── */}
+          <div className={styles.paginationRow}>
+            <div>
+              Toplam {filteredRecords.length} kayıt |{' '}
+              <span className={styles.selectedCount}>{selectedRowIds.length} kayıt seçili</span>
+            </div>
+
+            <div className={styles.pageControls}>
+              <button type="button" className={styles.pageBtn} title="İlk Sayfa">«</button>
+              <button type="button" className={styles.pageBtn} title="Önceki Sayfa">‹</button>
+              <button type="button" className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
+              <button type="button" className={styles.pageBtn}>2</button>
+              <button type="button" className={styles.pageBtn} title="Sonraki Sayfa">›</button>
+              <button type="button" className={styles.pageBtn} title="Son Sayfa">»</button>
+
+              <select className={styles.pageSizeSelect} defaultValue="10">
+                <option value="10">10 / sayfa</option>
+                <option value="25">25 / sayfa</option>
+                <option value="50">50 / sayfa</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right Detail Drawer ── */}
+        {selectedItem && (
+          <div className={styles.detailDrawer}>
+            {/* Drawer Header */}
+            <div className={styles.drawerHeader}>
+              <div className={styles.drawerPatientInfo}>
+                <div className={styles.drawerAvatar}>
+                  {selectedItem.patientInitials}
+                </div>
+                <div className={styles.drawerTitleWrap}>
+                  <h3>{selectedItem.patientName}</h3>
+                  <p>{selectedItem.patientPhone}</p>
+                </div>
               </div>
 
-              {/* WhatsApp Mesajı Warning Callout & Toggle */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
-                <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 700, color: '#0284c7', marginBottom: 8 }}>
-                  ✈️ Randevu Mesajı
-                </div>
-
-                <div style={{
-                  background: '#fefce8', border: '1px solid #fef08a', borderRadius: 8,
-                  padding: '12px 14px', marginBottom: 12
-                }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700, color: '#854d0e', fontSize: '0.82rem', marginBottom: 4 }}>
-                    <span>⚠️</span> WhatsApp bağlı değil — bilgilendirme mesajı gönderilmeyecek
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#a16207', lineHeight: 1.35 }}>
-                    Bu şubede WhatsApp entegrasyonu kapalı. Randevu normal şekilde kaydedilir, ancak hastaya otomatik mesaj gitmez. Mesaj göndermek için Uyarlamalar {'>'} WhatsApp bölümünden bağlantı kurun.
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>Oluştururken WhatsApp Mesajı Gönder</span>
-                  <button
-                    type="button"
-                    onClick={() => setSendWhatsappMessageOnCreate(!sendWhatsappMessageOnCreate)}
-                    style={{
-                      width: 44, height: 24, borderRadius: 12,
-                      background: sendWhatsappMessageOnCreate ? '#2563eb' : '#cbd5e1',
-                      border: 'none', cursor: 'pointer', position: 'relative',
-                      transition: 'all 0.2s ease', padding: 2
-                    }}
-                  >
-                    <div style={{
-                      width: 20, height: 20, borderRadius: '50%', background: '#ffffff',
-                      position: 'absolute', top: 2,
-                      left: sendWhatsappMessageOnCreate ? 22 : 2,
-                      transition: 'all 0.2s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                    }} />
-                  </button>
-                </div>
+              <div className={styles.drawerHeaderRight}>
+                <span className={`${styles.badgeStatus} ${getStatusBadgeClass(selectedItem.status)}`}>
+                  ● {selectedItem.status}
+                </span>
+                <button
+                  type="button"
+                  className={styles.drawerCloseBtn}
+                  onClick={() => setSelectedItem(null)}
+                  title="Detayı Kapat"
+                >
+                  ✕
+                </button>
               </div>
             </div>
 
-            <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-secondary" onClick={() => setShowAppointmentModal(false)}>Vazgeç</button>
+            {/* Drawer Sub-Tabs */}
+            <div className={styles.drawerTabs}>
+              {(['Genel', 'İşlem Geçmişi', 'Parça & Maliyet', 'Dosyalar'] as const).map(tab => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`${styles.drawerTabBtn} ${drawerTab === tab ? styles.drawerTabBtnActive : ''}`}
+                  onClick={() => setDrawerTab(tab)}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* Drawer Content */}
+            <div className={styles.drawerBody}>
+              {drawerTab === 'Genel' && (
+                <>
+                  {/* Cihaz Bilgileri */}
+                  <div className={styles.sectionBlock}>
+                    <div className={styles.sectionHeaderRow}>
+                      <span className={styles.sectionTitle}>Cihaz Bilgileri</span>
+                      <button
+                        type="button"
+                        className={styles.btnEditMini}
+                        onClick={() => setShowEditModal(true)}
+                      >
+                        Düzenle
+                      </button>
+                    </div>
+
+                    <div className={styles.deviceVisualBox}>
+                      <div className={styles.deviceIconPlaceholder}>
+                        {/* Hearing Aid Ear Device SVG */}
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 3-1.5 5.5-3.5 7.5l-.5.5a3 3 0 0 0-1 2.2v.3a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-.8a4.5 4.5 0 0 1 1.3-3.2l.7-.7c1.5-1.5 2.5-3.3 2.5-5.8a4.5 4.5 0 1 0-9 0" />
+                          <circle cx="10" cy="14" r="1" />
+                        </svg>
+                      </div>
+                      <div className={styles.deviceVisualInfo}>
+                        <h4>{selectedItem.deviceName}</h4>
+                        <span>{selectedItem.earSide}</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.keyValueGrid}>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Seri No</span>
+                        <span className={styles.keyVal} style={{ fontFamily: 'monospace' }}>{selectedItem.serialNo}</span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Barkod</span>
+                        <span className={styles.keyVal}>{selectedItem.barcode}</span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Garanti Durumu</span>
+                        <span className={selectedItem.warrantyStatus === 'Garanti Kapsamında' ? styles.badgeGarantiVar : styles.badgeGarantiDisi}>
+                          {selectedItem.warrantyStatus}
+                        </span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Cihaz Türü</span>
+                        <span className={styles.keyVal}>{selectedItem.deviceType}</span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Alım Tarihi</span>
+                        <span className={styles.keyVal}>{selectedItem.receivedDate}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Servis Bilgileri */}
+                  <div className={styles.sectionBlock}>
+                    <span className={styles.sectionTitle}>Servis Bilgileri</span>
+
+                    <div className={styles.keyValueGrid}>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Arıza / Sorun</span>
+                        <span className={styles.keyVal} style={{ fontWeight: 600 }}>{selectedItem.problem}</span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Açıklama</span>
+                        <span className={styles.keyVal}>{selectedItem.notes || '—'}</span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Alım Tarihi</span>
+                        <span className={styles.keyVal}>{selectedItem.receivedDate}</span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Tahmini Teslim</span>
+                        <span className={styles.keyVal}>{selectedItem.estimatedDeliveryDate}</span>
+                      </div>
+                      <div className={styles.keyValueRow}>
+                        <span className={styles.keyLabel}>Sorumlu</span>
+                        <span className={styles.keyVal}>{selectedItem.technician || 'Teknik Servis'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Hızlı İşlemler (2x2 Grid) */}
+                  <div className={styles.sectionBlock}>
+                    <span className={styles.sectionTitle}>Hızlı İşlemler</span>
+
+                    <div className={styles.quickActionsGrid}>
+                      <button
+                        type="button"
+                        className={styles.quickActionBtn}
+                        onClick={() => {
+                          setStatusUpdateVal(selectedItem.status);
+                          setShowStatusModal(true);
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="23 4 23 10 17 10"></polyline>
+                          <polyline points="1 20 1 14 7 14"></polyline>
+                          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Durum Güncelle
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.quickActionBtn}
+                        onClick={() => setShowAddPartModal(true)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="3"></circle>
+                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        Parça Ekle
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.quickActionBtn}
+                        onClick={() => setShowAddFileModal(true)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                        </svg>
+                        Dosya Ekle
+                      </button>
+
+                      <button
+                        type="button"
+                        className={styles.quickActionBtn}
+                        onClick={() => setShowPrintModal(true)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                          <rect x="6" y="14" width="12" height="8"></rect>
+                        </svg>
+                        Servis Formu Yazdır
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {drawerTab === 'İşlem Geçmişi' && (
+                <div className={styles.sectionBlock}>
+                  <span className={styles.sectionTitle}>Servis Zaman Çizelgesi</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 6 }}>
+                    {(selectedItem.history && selectedItem.history.length > 0) ? (
+                      selectedItem.history.map((hist, idx) => (
+                        <div key={idx} style={{ borderLeft: '2px solid #0d9488', paddingLeft: 12, position: 'relative' }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{hist.title}</div>
+                          <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{hist.date} • {hist.user}</div>
+                          <div style={{ fontSize: 12, color: '#334155', marginTop: 4 }}>{hist.note}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ color: '#64748b', fontSize: 12 }}>Henüz geçmiş kaydı bulunmuyor.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {drawerTab === 'Parça & Maliyet' && (
+                <div className={styles.sectionBlock}>
+                  <div className={styles.sectionHeaderRow}>
+                    <span className={styles.sectionTitle}>Kullanılan Parçalar ve Ücretler</span>
+                    <button
+                      type="button"
+                      className={styles.btnEditMini}
+                      onClick={() => setShowAddPartModal(true)}
+                    >
+                      + Ekle
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                    {(selectedItem.operations && selectedItem.operations.length > 0) ? (
+                      selectedItem.operations.map((op, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 12 }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{op.description}</div>
+                            <div style={{ fontSize: 10, color: '#64748b' }}>{op.date}</div>
+                          </div>
+                          <div style={{ fontWeight: 700, color: op.cost > 0 ? '#0f766e' : '#16a34a' }}>
+                            {op.cost > 0 ? formatCurrency(op.cost) : 'Ücretsiz'}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ color: '#64748b', fontSize: 12 }}>Henüz parça veya işlem eklenmedi.</p>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: 10, marginTop: 6, fontWeight: 700, fontSize: 13 }}>
+                      <span>Toplam Tutar:</span>
+                      <span style={{ color: '#0d9488' }}>
+                        {formatCurrency((selectedItem.operations || []).reduce((acc, o) => acc + o.cost, 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {drawerTab === 'Dosyalar' && (
+                <div className={styles.sectionBlock}>
+                  <div className={styles.sectionHeaderRow}>
+                    <span className={styles.sectionTitle}>Ekli Dosyalar & Belgeler</span>
+                    <button
+                      type="button"
+                      className={styles.btnEditMini}
+                      onClick={() => setShowAddFileModal(true)}
+                    >
+                      + Yükle
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+                    {(selectedItem.files && selectedItem.files.length > 0) ? (
+                      selectedItem.files.map((file, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 12 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+                              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                              <polyline points="13 2 13 9 20 9"></polyline>
+                            </svg>
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#1e293b' }}>{file.name}</div>
+                              <div style={{ fontSize: 10, color: '#64748b' }}>{file.size} • {file.date}</div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className={styles.iconBtn}
+                            onClick={() => addToast({ type: 'info', message: `${file.name} indiriliyor...` })}
+                          >
+                            ↓
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ color: '#64748b', fontSize: 12 }}>Ekli dosya bulunmuyor.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── MODAL 1: Durum Güncelle ── */}
+      {showStatusModal && selectedItem && (
+        <div className={styles.modalOverlay} onClick={() => setShowStatusModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>🔄 Servis Durumu Güncelle — {selectedItem.patientName}</h2>
+              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowStatusModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleSaveStatusUpdate}>
+              <div className={styles.modalBody}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Yeni Durum Seçin</label>
+                  <select
+                    className={styles.formSelect}
+                    value={statusUpdateVal}
+                    onChange={e => setStatusUpdateVal(e.target.value as ServiceItem['status'])}
+                  >
+                    <option value="Alındı">Alındı</option>
+                    <option value="İnceleniyor">İnceleniyor</option>
+                    <option value="Tamir Ediliyor">Tamir Ediliyor</option>
+                    <option value="Teslime Hazır">Teslime Hazır</option>
+                    <option value="Garanti">Garanti</option>
+                    <option value="Teslim Edildi">Teslim Edildi</option>
+                  </select>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>İşlem / Teknisyen Notu</label>
+                  <textarea
+                    rows={3}
+                    className={styles.formTextarea}
+                    placeholder="Durum değişikliği ile ilgili açıklama yazın..."
+                    value={statusUpdateNote}
+                    onChange={e => setStatusUpdateNote(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowStatusModal(false)}>İptal</button>
+                <button type="submit" className={styles.btnPrimaryAction}>Güncellemeyi Kaydet</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 2: Parça & İşlem Ekle ── */}
+      {showAddPartModal && selectedItem && (
+        <div className={styles.modalOverlay} onClick={() => setShowAddPartModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>⚙️ Parça veya İşlem Ekle — {selectedItem.deviceName}</h2>
+              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowAddPartModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleAddPart}>
+              <div className={styles.modalBody}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>İşlem / Parça Adı</label>
+                  <input
+                    type="text"
+                    required
+                    className={styles.formInput}
+                    placeholder="Örn: Mikrofon filtresi değişimi"
+                    value={newPartDesc}
+                    onChange={e => setNewPartDesc(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Ücret (TL) — Garanti kapsamında ise 0 yazabilirsiniz</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    className={styles.formInput}
+                    value={newPartCost}
+                    onChange={e => setNewPartCost(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowAddPartModal(false)}>İptal</button>
+                <button type="submit" className={styles.btnPrimaryAction}>Parçayı Ekle</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 3: Dosya Ekle ── */}
+      {showAddFileModal && selectedItem && (
+        <div className={styles.modalOverlay} onClick={() => setShowAddFileModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>📎 Dosya & Belge Ekle</h2>
+              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowAddFileModal(false)}>✕</button>
+            </div>
+            <div className={styles.modalBody}>
+              <div style={{ border: '2px dashed #cbd5e1', borderRadius: 12, padding: 30, textAlign: 'center', background: '#f8fafc' }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" style={{ margin: '0 auto 10px' }}>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>Belge veya fotoğrafı buraya sürükleyin</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>PNG, JPG, PDF (maks 10MB)</div>
+                <button
+                  type="button"
+                  className={styles.btnSecondaryAction}
+                  style={{ marginTop: 14 }}
+                  onClick={() => {
+                    const newFile = {
+                      name: 'Cihaz_Durum_Raporu.pdf',
+                      size: '1.2 MB',
+                      date: new Date().toLocaleDateString('tr-TR')
+                    };
+                    const updated = records.map(r => r.id === selectedItem.id ? { ...r, files: [...(r.files || []), newFile] } : r);
+                    setRecords(updated);
+                    setSelectedItem(updated.find(r => r.id === selectedItem.id) || null);
+                    setShowAddFileModal(false);
+                    addToast({ type: 'success', message: 'Dosya başarıyla yüklendi.' });
+                  }}
+                >
+                  Dosya Seçin
+                </button>
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowAddFileModal(false)}>Kapat</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 4: Servis Formu Yazdır ── */}
+      {showPrintModal && selectedItem && (
+        <div className={styles.modalOverlay} onClick={() => setShowPrintModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: 540 }}>
+            <div className={styles.modalHeader}>
+              <h2>🖨️ Servis Kabul & Teslim Formu</h2>
+              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowPrintModal(false)}>✕</button>
+            </div>
+            <div className={styles.modalBody}>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 18, background: '#ffffff', fontFamily: 'sans-serif' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #004d40', paddingBottom: 10, marginBottom: 14 }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#004d40', fontSize: 16 }}>İŞİTME MERKEZİ TEKNİK SERVİS</h3>
+                    <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748b' }}>Servis Takip Fişi: #{selectedItem.barcode}</p>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: 11, color: '#64748b' }}>
+                    Tarih: {selectedItem.receivedDate}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12, marginBottom: 14 }}>
+                  <div><strong>Hasta:</strong> {selectedItem.patientName}</div>
+                  <div><strong>Telefon:</strong> {selectedItem.patientPhone}</div>
+                  <div><strong>Cihaz:</strong> {selectedItem.deviceName} ({selectedItem.earSide})</div>
+                  <div><strong>Seri No:</strong> {selectedItem.serialNo}</div>
+                  <div><strong>Garanti:</strong> {selectedItem.warrantyStatus}</div>
+                  <div><strong>Tahmini Teslim:</strong> {selectedItem.estimatedDeliveryDate}</div>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: 10, borderRadius: 6, fontSize: 12, marginBottom: 14 }}>
+                  <strong>Bildirilen Arıza / Sorun:</strong>
+                  <div style={{ marginTop: 4, color: '#334155' }}>{selectedItem.problem}</div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 30, fontSize: 11, color: '#64748b', textAlign: 'center' }}>
+                  <div style={{ width: 140, borderTop: '1px solid #cbd5e1', paddingTop: 4 }}>Teslim Eden (Hasta/Yakını)</div>
+                  <div style={{ width: 140, borderTop: '1px solid #cbd5e1', paddingTop: 4 }}>Teslim Alan (Teknisyen)</div>
+                </div>
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowPrintModal(false)}>Kapat</button>
               <button
-                className="btn btn-primary"
+                type="button"
+                className={styles.btnPrimaryAction}
                 onClick={() => {
-                  setShowAppointmentModal(false);
-                  addToast({ type: 'success', message: `${selectedRecord.patientName} adına yeni servis randevusu oluşturuldu.` });
+                  window.print();
+                  setShowPrintModal(false);
                 }}
               >
-                📅 Randevu Oluştur
+                Yazdır / PDF İndir
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 3. İŞLEM EKLE MODAL (Matching Screenshots 2, 3, 4) */}
-      {showAddOperationModal && selectedRecord && (
-        <div className="modal-overlay" onClick={() => setShowAddOperationModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, width: '95%', borderRadius: 12 }}>
-            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-              <span className="modal-title" style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>
-                İşlem Ekle
-              </span>
-              <button className="modal-close" onClick={() => setShowAddOperationModal(false)}>✕</button>
+      {/* ── MODAL 5: Servis Raporu ── */}
+      {showReportModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowReportModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>📊 Aylık Servis Faaliyet Raporu</h2>
+              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowReportModal(false)}>✕</button>
             </div>
-
-            <div className="modal-body" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* Row 1: Durum (opsiyonel) | Not */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
-                    Durum (opsiyonel)
-                  </label>
-                  <select
-                    className="form-select"
-                    value={opStatus}
-                    onChange={(e) => setOpStatus(e.target.value)}
-                  >
-                    <option value="">Durum değiştir</option>
-                    <option value="İnceleniyor">İnceleniyor</option>
-                    <option value="Tamir Ediliyor">Tamir Ediliyor</option>
-                    <option value="Dışarı Gönderildi">Dışarı Gönderildi</option>
-                    <option value="Hazır">Hazır</option>
-                    <option value="Teslim Edildi">Teslim Edildi</option>
-                    <option value="İptal">İptal</option>
-                  </select>
+            <div className={styles.modalBody}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10 }}>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Kayıt</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{records.length} adet</div>
                 </div>
-
-                <div>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
-                    Not
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Kısa not (opsiyonel)"
-                    value={opShortNote}
-                    onChange={(e) => setOpShortNote(e.target.value)}
-                  />
+                <div style={{ background: '#f0fdf4', padding: 14, borderRadius: 10 }}>
+                  <div style={{ fontSize: 12, color: '#16a34a' }}>Başarı ile Teslim Edilen</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a' }}>{records.filter(r => r.status === 'Teslim Edildi').length} adet</div>
                 </div>
-              </div>
-
-              {/* Row 2: Karar (Teklif & Onay) */}
-              <div style={{ width: '50%' }}>
-                <label className="form-label" style={{ fontWeight: 600, fontSize: '0.82rem', color: '#64748b', marginBottom: 4 }}>
-                  Karar (Teklif & Onay)
-                </label>
-                <select
-                  className="form-select"
-                  value={opDecision}
-                  onChange={(e) => setOpDecision(e.target.value)}
-                >
-                  <option value="">Tamir / İade</option>
-                  <option value="Tamir">Tamir</option>
-                  <option value="İade">İade (tamir edilmeden)</option>
-                </select>
-              </div>
-
-              {/* Teşhis & Yapılan İşlem Section */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-                <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
-                  Teşhis & Yapılan İşlem
+                <div style={{ background: '#eff6ff', padding: 14, borderRadius: 10 }}>
+                  <div style={{ fontSize: 12, color: '#2563eb' }}>Garanti Kapsamı Oranı</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb' }}>%27</div>
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <textarea
-                    className="form-textarea"
-                    style={{ height: 60, fontSize: '0.82rem' }}
-                    placeholder="Teşhis (teknisyen tespiti)"
-                    value={opDiagnosis}
-                    onChange={(e) => setOpDiagnosis(e.target.value)}
-                  />
-                  <textarea
-                    className="form-textarea"
-                    style={{ height: 60, fontSize: '0.82rem' }}
-                    placeholder="Yapılan işlem / kullanılan parça"
-                    value={opAction}
-                    onChange={(e) => setOpAction(e.target.value)}
-                  />
+                <div style={{ background: '#fef3c7', padding: 14, borderRadius: 10 }}>
+                  <div style={{ fontSize: 12, color: '#b45309' }}>Ortalama Onarım Süresi</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#b45309' }}>2.4 Gün</div>
                 </div>
-              </div>
-
-              {/* Costs Row: İşçilik | Parça | Toplam */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 4 }}>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.78rem', color: '#64748b', marginBottom: 2 }}>
-                    İşçilik
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ fontSize: '0.85rem' }}
-                      value={opLaborCost}
-                      onChange={(e) => setOpLaborCost(e.target.value)}
-                    />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>₺</span>
-                  </div>
-                </div>
-
-                <div style={{ flex: 1 }}>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.78rem', color: '#64748b', marginBottom: 2 }}>
-                    Parça
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ fontSize: '0.85rem' }}
-                      value={opPartCost}
-                      onChange={(e) => setOpPartCost(e.target.value)}
-                    />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>₺</span>
-                  </div>
-                </div>
-
-                <div style={{ flex: 1 }}>
-                  <label className="form-label" style={{ fontWeight: 600, fontSize: '0.78rem', color: '#64748b', marginBottom: 2 }}>
-                    Toplam
-                  </label>
-                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', paddingTop: 6 }}>
-                    {formatCurrency((Number(opLaborCost) || 0) + (Number(opPartCost) || 0))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Link: + Dışarı gönderim bilgisi ekle */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowExternalDispatch(!showExternalDispatch)}
-                  style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.78rem', cursor: 'pointer', padding: 0 }}
-                >
-                  + Dışarı gönderim bilgisi ekle
-                </button>
-                {showExternalDispatch && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8, background: '#f8fafc', padding: 10, borderRadius: 6 }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Firma / Lab adı"
-                      value={externalDispatchCompany}
-                      onChange={(e) => setExternalDispatchCompany(e.target.value)}
-                    />
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Takip / Kargo No"
-                      value={externalDispatchTrackingNo}
-                      onChange={(e) => setExternalDispatchTrackingNo(e.target.value)}
-                    />
-                  </div>
-                )}
               </div>
             </div>
-
-            <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-secondary" onClick={() => setShowAddOperationModal(false)}>Vazgeç</button>
+            <div className={styles.modalFooter}>
+              <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowReportModal(false)}>Kapat</button>
               <button
-                className="btn btn-primary"
-                onClick={handleAddOperation}
+                type="button"
+                className={styles.btnPrimaryAction}
+                onClick={() => {
+                  addToast({ type: 'success', message: 'Rapor PDF formatında dışa aktarıldı.' });
+                  setShowReportModal(false);
+                }}
               >
-                Ekle
+                Raporu Dışa Aktar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 6: Yeni Servis Kaydı ── */}
+      {showNewRecordModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowNewRecordModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>➕ Yeni Teknik Servis Kaydı</h2>
+              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowNewRecordModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleCreateRecord}>
+              <div className={styles.modalBody}>
+                <div className={styles.formGrid2}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Hasta Adı Soyadı *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Örn: Ahmet Can"
+                      className={styles.formInput}
+                      value={newRecordForm.patientName}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Hasta Telefon</label>
+                    <input
+                      type="text"
+                      placeholder="05XX XXX XX XX"
+                      className={styles.formInput}
+                      value={newRecordForm.patientPhone}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, patientPhone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.formGrid2}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Cihaz Modeli *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Örn: Oticon Real 1"
+                      className={styles.formInput}
+                      value={newRecordForm.deviceName}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, deviceName: e.target.value })}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Kulak Yönü</label>
+                    <select
+                      className={styles.formSelect}
+                      value={newRecordForm.earSide}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, earSide: e.target.value as ServiceItem['earSide'] })}
+                    >
+                      <option value="Sol kulak">Sol kulak</option>
+                      <option value="Sağ kulak">Sağ kulak</option>
+                      <option value="Binaural">Binaural (Çift)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className={styles.formGrid2}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Seri No</label>
+                    <input
+                      type="text"
+                      placeholder="Örn: 1234567890"
+                      className={styles.formInput}
+                      value={newRecordForm.serialNo}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, serialNo: e.target.value })}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Barkod No</label>
+                    <input
+                      type="text"
+                      placeholder="Örn: OT-001"
+                      className={styles.formInput}
+                      value={newRecordForm.barcode}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, barcode: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.formGrid2}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Garanti Durumu</label>
+                    <select
+                      className={styles.formSelect}
+                      value={newRecordForm.warrantyStatus}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, warrantyStatus: e.target.value as ServiceItem['warrantyStatus'] })}
+                    >
+                      <option value="Garanti Kapsamında">Garanti Kapsamında</option>
+                      <option value="Garanti Dışı">Garanti Dışı</option>
+                    </select>
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Cihaz Türü</label>
+                    <select
+                      className={styles.formSelect}
+                      value={newRecordForm.deviceType}
+                      onChange={e => setNewRecordForm({ ...newRecordForm, deviceType: e.target.value })}
+                    >
+                      <option value="Kulak arkası">Kulak arkası</option>
+                      <option value="RIC (Hoparlör Kulak İçi)">RIC (Hoparlör Kulak İçi)</option>
+                      <option value="Kulak içi (ITE)">Kulak içi (ITE)</option>
+                      <option value="Şarjlı Kulak Arkası">Şarjlı Kulak Arkası</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Arıza / Sorun Tanımı *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Örn: Ses kesilmesi, cızırtı, cihaz açılmıyor..."
+                    className={styles.formInput}
+                    value={newRecordForm.problem}
+                    onChange={e => setNewRecordForm({ ...newRecordForm, problem: e.target.value })}
+                  />
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Ek Açıklama & Notlar</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Müşterinin belirttiği ek detaylar..."
+                    className={styles.formTextarea}
+                    value={newRecordForm.notes}
+                    onChange={e => setNewRecordForm({ ...newRecordForm, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowNewRecordModal(false)}>İptal</button>
+                <button type="submit" className={styles.btnPrimaryAction}>Servis Kaydını Aç</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL 7: Düzenle ── */}
+      {showEditModal && selectedItem && (
+        <div className={styles.modalOverlay} onClick={() => setShowEditModal(false)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>✏️ Cihaz & Servis Bilgilerini Düzenle</h2>
+              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowEditModal(false)}>✕</button>
+            </div>
+            <form onSubmit={e => {
+              e.preventDefault();
+              setShowEditModal(false);
+              addToast({ type: 'success', message: 'Kayıt bilgileri başarıyla güncellendi.' });
+            }}>
+              <div className={styles.modalBody}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Cihaz Modeli</label>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    defaultValue={selectedItem.deviceName}
+                    onChange={e => setSelectedItem({ ...selectedItem, deviceName: e.target.value })}
+                  />
+                </div>
+                <div className={styles.formGrid2}>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Seri No</label>
+                    <input
+                      type="text"
+                      className={styles.formInput}
+                      defaultValue={selectedItem.serialNo}
+                      onChange={e => setSelectedItem({ ...selectedItem, serialNo: e.target.value })}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label className={styles.formLabel}>Barkod</label>
+                    <input
+                      type="text"
+                      className={styles.formInput}
+                      defaultValue={selectedItem.barcode}
+                      onChange={e => setSelectedItem({ ...selectedItem, barcode: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Arıza / Sorun</label>
+                  <input
+                    type="text"
+                    className={styles.formInput}
+                    defaultValue={selectedItem.problem}
+                    onChange={e => setSelectedItem({ ...selectedItem, problem: e.target.value })}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Ek Not</label>
+                  <textarea
+                    rows={2}
+                    className={styles.formTextarea}
+                    defaultValue={selectedItem.notes || ''}
+                    onChange={e => setSelectedItem({ ...selectedItem, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className={styles.modalFooter}>
+                <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowEditModal(false)}>İptal</button>
+                <button type="submit" className={styles.btnPrimaryAction}>Kaydet</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
