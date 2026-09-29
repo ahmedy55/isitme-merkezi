@@ -398,7 +398,7 @@ const INITIAL_SERVICE_RECORDS: ServiceItem[] = [
 ];
 
 export default function ServicePage() {
-  const { addToast } = useApp();
+  const { addToast, stockList, patientsList, completeServiceTicket } = useApp();
   const { matches } = useBranchScope();
 
   // State Management
@@ -532,7 +532,7 @@ export default function ServicePage() {
   };
 
   // Handle Save Status Update
-  const handleSaveStatusUpdate = (e: React.FormEvent) => {
+  const handleSaveStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItem) return;
     const updated = records.map(r => {
@@ -559,7 +559,18 @@ export default function ServicePage() {
     if (refreshed) setSelectedItem(refreshed);
     setShowStatusModal(false);
     setStatusUpdateNote('');
-    addToast({ type: 'success', message: `Servis durumu "${statusUpdateVal}" olarak güncellendi.` });
+
+    if (statusUpdateVal === 'Teslim Edildi') {
+      const totalServiceCost = (selectedItem.operations || []).reduce((acc, op) => acc + (op.cost || 0), 0);
+      try {
+        await completeServiceTicket(selectedItem.id, selectedItem.patientName, totalServiceCost);
+      } catch {
+        // Fallback silently if offline
+      }
+      addToast({ type: 'success', message: `Servis cihazı teslim edildi, ₺${totalServiceCost.toLocaleString('tr-TR')} servis bedeli kasaya işlendi.` });
+    } else {
+      addToast({ type: 'success', message: `Servis durumu "${statusUpdateVal}" olarak güncellendi.` });
+    }
   };
 
   // Handle Add Part

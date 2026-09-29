@@ -233,11 +233,11 @@ export default function StockPage() {
 
   // Combine demo / app stock items seamlessly
   const allStockItems = useMemo(() => {
-    if (stockList && stockList.length > 5) {
+    if (stockList && stockList.length > 0) {
       return stockList.map(item => ({
         ...item,
         branchStockBreakdown: { 'Merkez': Math.max(0, Math.floor(item.quantity / 2)), 'Çankaya': Math.max(0, Math.ceil(item.quantity / 2)), 'Kadıköy': 0 },
-        description: `${item.brand} ${item.model} ${item.category}`
+        description: item.brand && item.model ? `${item.brand} ${item.model} ${item.category}` : item.name
       }));
     }
     return DEFAULT_MOCK_ITEMS;

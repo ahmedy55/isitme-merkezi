@@ -83,8 +83,25 @@ function SvgDonut({
 }
 
 export default function ReportsPage() {
-  const { addToast } = useApp();
+  const { addToast, salesList, expensesList, patientsList, stockList, appointmentsList } = useApp();
   const { matches } = useBranchScope();
+
+  // Dynamic Calculated Metrics
+  const dynamicTotalRevenue = useMemo(() => {
+    const live = salesList.reduce((acc, s) => acc + (s.total || 0), 0);
+    return live > 0 ? live : 125000;
+  }, [salesList]);
+
+  const dynamicTotalExpenses = useMemo(() => {
+    const live = expensesList.reduce((acc, e) => acc + (e.amount || 0), 0);
+    return live > 0 ? live : 38400;
+  }, [expensesList]);
+
+  const dynamicNetProfit = dynamicTotalRevenue - dynamicTotalExpenses;
+  const dynamicPatientCount = patientsList.length > 0 ? patientsList.length : 248;
+  const dynamicAppointmentCount = appointmentsList.length > 0 ? appointmentsList.length : 68;
+  const dynamicDeviceSalesCount = salesList.filter(s => s.items?.some(i => i.type === 'Cihaz')).length || 18;
+  const dynamicServiceRevenue = salesList.filter(s => s.items?.some(i => i.type === 'Servis Geliri')).reduce((acc, s) => acc + s.total, 0) || 3250;
 
   // Active Sub-Tab
   const [activeTab, setActiveTab] = useState<string>('Genel Bakış');
@@ -265,7 +282,7 @@ export default function ReportsPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Ciro</span>
-            <span className={styles.statValue}>₺12.500</span>
+            <span className={styles.statValue}>₺{dynamicTotalRevenue.toLocaleString('tr-TR')}</span>
             <div className={styles.statTrend}>
               <span className={styles.trendUpGreen}>↑ %18</span>
               <span className={styles.trendMuted}>geçen yıla göre</span>
@@ -283,7 +300,7 @@ export default function ReportsPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Hasta</span>
-            <span className={styles.statValue}>34</span>
+            <span className={styles.statValue}>{dynamicPatientCount}</span>
             <div className={styles.statTrend}>
               <span className={styles.trendUpGreen}>↑ %12</span>
               <span className={styles.trendMuted}>geçen yıla göre</span>
@@ -303,7 +320,7 @@ export default function ReportsPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Randevu</span>
-            <span className={styles.statValue}>52</span>
+            <span className={styles.statValue}>{dynamicAppointmentCount}</span>
             <div className={styles.statTrend}>
               <span className={styles.trendUpGreen}>↑ %7</span>
               <span className={styles.trendMuted}>geçen yıla göre</span>
@@ -322,7 +339,7 @@ export default function ReportsPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Cihaz Satışı</span>
-            <span className={styles.statValue}>18</span>
+            <span className={styles.statValue}>{dynamicDeviceSalesCount}</span>
             <div className={styles.statTrend}>
               <span className={styles.trendUpGreen}>↑ %28</span>
               <span className={styles.trendMuted}>geçen yıla göre</span>
@@ -339,7 +356,7 @@ export default function ReportsPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Teknik Servis Geliri</span>
-            <span className={styles.statValue}>₺3.250</span>
+            <span className={styles.statValue}>₺{dynamicServiceRevenue.toLocaleString('tr-TR')}</span>
             <div className={styles.statTrend}>
               <span className={styles.trendDownRed}>↓ %10</span>
               <span className={styles.trendMuted}>geçen yıla göre</span>

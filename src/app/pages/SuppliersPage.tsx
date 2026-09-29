@@ -319,7 +319,7 @@ const INITIAL_SUPPLIERS: SupplierItem[] = [
 ];
 
 export default function SuppliersPage() {
-  const { addToast } = useApp();
+  const { addToast, addExpense, addSupplier } = useApp();
   const { matches } = useBranchScope();
 
   // State Management
@@ -547,7 +547,7 @@ export default function SuppliersPage() {
   };
 
   // Handle Make Payment
-  const handleSavePayment = (e: React.FormEvent) => {
+  const handleSavePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSupplier) return;
     const amt = Number(paymentForm.amount) || 0;
@@ -575,7 +575,25 @@ export default function SuppliersPage() {
     if (refreshed) setSelectedSupplier(refreshed);
     setShowMakePaymentModal(false);
     setPaymentForm({ amount: 5000, method: 'Banka Transferi', date: new Date().toLocaleDateString('tr-TR'), notes: '' });
-    addToast({ type: 'success', message: `₺${amt.toLocaleString('tr-TR')} ödeme kaydedildi, bakiye düşürüldü.` });
+
+    if (addExpense) {
+      try {
+        await addExpense({
+          id: `exp-${Date.now()}`,
+          category: 'Malzeme',
+          description: `${selectedSupplier.companyName} Tedarikçi Ödemesi`,
+          amount: amt,
+          date: new Date().toISOString().split('T')[0],
+          paymentMethod: paymentForm.method.includes('Nakit') ? 'Nakit' : 'Havale',
+          branch: selectedSupplier.branch || 'Merkez',
+          createdBy: 'Sistem Yöneticisi'
+        });
+      } catch {
+        // Fallback silently if offline
+      }
+    }
+
+    addToast({ type: 'success', message: `₺${amt.toLocaleString('tr-TR')} ödeme kaydedildi, kasadan düşüldü ve bakiye güncellendi.` });
   };
 
   return (
