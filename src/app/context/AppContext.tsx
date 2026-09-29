@@ -59,6 +59,7 @@ type Page =
   | 'support'
   | 'activity-log'
   | 'branch-activities'
+  | 'profile'
   | 'login'
   | 'org-select';
 
@@ -89,6 +90,8 @@ interface AppContextType {
   currentOrgId: string | null;
   currentOrg?: any;
   logout: () => Promise<void>;
+  loggingOut: boolean;
+  startDemoSession: () => void;
   dataLoading: boolean;
   refreshOrganizationData: () => Promise<void>;
   
@@ -105,9 +108,9 @@ interface AppContextType {
   branchesList: Branch[];
   
   // Veri Güncelleme Metotları
-  addPatient: (patient: Patient) => void;
+  addPatient: (patient: Patient) => Promise<void>;
   updatePatient: (patient: Patient) => void;
-  addAppointment: (appointment: Appointment) => void;
+  addAppointment: (appointment: Appointment) => Promise<void>;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
   addSale: (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => Promise<void>;
   addSupplierPurchaseTransaction: (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => Promise<void>;
@@ -145,8 +148,14 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const fallbackDemoBranches: Branch[] = [
+  { id: 'demo-branch-1', name: 'Merkez 1', address: '', phone: '', patientsCount: 0, status: 'Aktif' },
+  { id: 'demo-branch-2', name: 'Merkez 2', address: '', phone: '', patientsCount: 0, status: 'Aktif' },
+];
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPageState] = useState<Page>('login');
+  const currentPageRef = useRef<Page>('login');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<string>('genel');
   const [showModal, setShowModal] = useState<string | null>(null);
@@ -155,20 +164,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Tarayıcı Geri/İleri butonları & URL Hash (#page) entegrasyonu
   const setCurrentPage = (pageOrFn: Page | ((prev: Page) => Page), replace = false) => {
-    setCurrentPageState(prev => {
-      const nextPage = typeof pageOrFn === 'function' ? pageOrFn(prev) : pageOrFn;
-      if (typeof window !== 'undefined') {
-        const hash = `#${nextPage}`;
-        if (window.location.hash !== hash) {
-          if (replace) {
-            window.history.replaceState({ page: nextPage }, '', hash);
-          } else {
-            window.history.pushState({ page: nextPage }, '', hash);
-          }
+    const nextPage = typeof pageOrFn === 'function' ? pageOrFn(currentPageRef.current) : pageOrFn;
+    currentPageRef.current = nextPage;
+    setCurrentPageState(nextPage);
+    if (typeof window !== 'undefined') {
+      const hash = `#${nextPage}`;
+      if (window.location.hash !== hash) {
+        if (replace) {
+          window.history.replaceState({ page: nextPage }, '', hash);
+        } else {
+          window.history.pushState({ page: nextPage }, '', hash);
         }
       }
-      return nextPage;
-    });
+    }
   };
 
   // Tarayıcının Geri (<-) / İleri (->) butonlarına tıklandığında sayfayı değiştir
@@ -178,8 +186,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const handlePopState = (e: PopStateEvent) => {
       const hash = window.location.hash.replace('#', '') as Page;
       if (hash) {
+        currentPageRef.current = hash;
         setCurrentPageState(hash);
       } else if (e.state?.page) {
+        currentPageRef.current = e.state.page;
         setCurrentPageState(e.state.page);
       }
     };
@@ -207,6 +217,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
   const [currentOrg, setCurrentOrg] = useState<any>(null);
   const [dataLoading, setDataLoading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // Demo Ayarları — orgId ve Supabase bağlantısı yoksa demo modda çalış
   const demoModeActive = !isConfigured && process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
@@ -281,21 +292,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Fix #1: Organizasyon seçimi değiştiğinde verileri otomatik yükle
   useEffect(() => {
-    clearTenantData();
     if (currentOrgId) {
+      clearTenantData();
       loadAllData();
     } else if (demoModeActive && !mockDataLoaded) {
+      clearTenantData();
       // Demo mod: orgId yoksa mock veriyi yükle (sadece bir kez)
-      setPatientsList(initialPatients);
-      setAppointmentsList(initialAppointments);
-      setStockList(initialStock);
-      setSalesList(initialSales);
+      const singleBranchDemo = process.env.NEXT_PUBLIC_DEMO_BRANCH_COUNT === '1';
+      const demoBranches = initialBranches.length > 0 ? initialBranches : fallbackDemoBranches;
+      const demoBranch = singleBranchDemo ? { ...demoBranches[0], name: 'İşitme Merkezi' } : null;
+      const demoBranchId = demoBranch?.id;
+      const demoBranchName = demoBranch?.name;
+      setPatientsList(singleBranchDemo ? initialPatients.map(patient => ({ ...patient, branchId: demoBranchId, branch: demoBranchName })) : initialPatients);
+      setAppointmentsList(singleBranchDemo ? initialAppointments.map(appointment => ({ ...appointment, branchId: demoBranchId, branch: demoBranchName! })) : initialAppointments);
+      setStockList(singleBranchDemo ? initialStock.map(item => ({ ...item, branchId: demoBranchId, branch: demoBranchName! })) : initialStock);
+      setSalesList(singleBranchDemo ? initialSales.map(sale => ({ ...sale, branchId: demoBranchId })) : initialSales);
       setRecallList(initialRecall);
       setSuppliersList(initialSuppliers);
-      setExpensesList(initialExpenses);
+      setExpensesList(singleBranchDemo ? initialExpenses.map(expense => expense.branch === 'Genel' ? expense : { ...expense, branch: demoBranchName!, branchId: demoBranchId }) : initialExpenses);
       setUsersList(initialUsers);
       setAuditLogList(initialAuditLog);
-      setBranchesList(initialBranches);
+      setBranchesList(singleBranchDemo && demoBranch ? [demoBranch] : demoBranches);
       setMockDataLoaded(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -306,6 +323,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let disposed = false;
     let authVersion = 0;
     const applySession = async (user: any) => {
+      if (demoModeActive && !user) return;
       const version = ++authVersion;
       let membership = null;
       const orgId = user?.app_metadata?.organization_id;
@@ -339,15 +357,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      addToast({ type: 'error', message: 'Çıkış yapılırken bir hata oluştu.' });
-    } else {
-      addToast({ type: 'success', message: 'Güvenli çıkış yapıldı.' });
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      if (currentUser?.id !== 'demo-user') {
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+      }
+      dataGeneration.current++;
+      clearTenantData();
+      setMockDataLoaded(false);
       setCurrentUser(null);
       setCurrentOrgId(null);
       setCurrentPage('login');
+      addToast({ type: 'success', message: currentUser?.id === 'demo-user' ? 'Demo oturumundan çıkış yapıldı.' : 'Güvenli çıkış yapıldı.' });
+    } catch (error) {
+      logger.warn(`Oturum kapatılamadı: ${String(error)}`, 'AppContext');
+      addToast({ type: 'error', message: 'Çıkış yapılamadı. Bağlantınızı kontrol edip tekrar deneyin.' });
+    } finally {
+      setLoggingOut(false);
     }
+  };
+
+  const startDemoSession = () => {
+    if (!demoModeActive) return;
+    setCurrentUser({
+      id: 'demo-user',
+      email: 'demo@audipro.local',
+      user_metadata: { full_name: 'Demo Kullanıcısı' },
+      membership: { roles: ['Firma Yöneticisi'], branch_id: process.env.NEXT_PUBLIC_DEMO_BRANCH_COUNT === '1' ? (initialBranches[0]?.id || fallbackDemoBranches[0].id) : undefined }
+    });
+    setCurrentPage('dashboard');
   };
 
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
@@ -371,41 +411,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
         type: 'warning',
         message: 'Deneme sürümü (Trial) hasta limitinize ulaştınız (Maksimum 50 hasta). Üst pakete geçmek için SaaS yöneticiniz ile iletişime geçin.'
       });
-      return;
+      throw new Error('Deneme paketi hasta kayıt limitine ulaştı.');
     }
     if (currentOrgId) {
+      let created: Patient;
       try {
-        const created = await dbInsertPatient(patient);
+        created = await dbInsertPatient(patient);
         setPatientsList(prev => [created, ...prev]);
         addToast({ type: 'success', message: 'Hasta başarıyla eklendi.' });
-        await dbInsertAuditLog({
-          action: 'Hasta Ekleme',
-          module: 'Hastalar',
-          description: `${patient.firstName} ${patient.lastName} eklendi.`
-        });
       } catch (err: any) {
         addToast({ type: 'error', message: `Hasta eklenemedi: ${err.message}` });
+        throw err;
       }
+      try { await dbInsertAuditLog({ action: 'Hasta Ekleme', module: 'Hastalar', description: `${patient.firstName} ${patient.lastName} eklendi.` }); }
+      catch (auditError: any) { logger.warn(`Hasta denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext'); }
     } else {
       setPatientsList(prev => [patient, ...prev]);
     }
   };
 
   const updatePatient = async (updatedPatient: Patient) => {
-    setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
-    addToast({ type: 'success', message: 'Hasta bilgileri güncellendi.' });
     if (currentOrgId && updatedPatient.id) {
       try {
         await dbUpdatePatient(updatedPatient.id, updatedPatient);
-        await dbInsertAuditLog({
-          action: 'Hasta Güncelleme',
-          module: 'Hastalar',
-          description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.`
-        });
+        setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+        addToast({ type: 'success', message: 'Hasta bilgileri güncellendi.' });
       } catch (err: any) {
-        logger.warn(`dbUpdatePatient background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Hasta verisi yerelde güncellendi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: `Hasta bilgileri kaydedilemedi: ${err.message}` });
+        return;
       }
+      try { await dbInsertAuditLog({ action: 'Hasta Güncelleme', module: 'Hastalar', description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.` }); }
+      catch (err: any) { logger.warn(`Hasta güncelleme denetim kaydı yazılamadı: ${err.message}`, 'AppContext'); }
+    } else if (demoModeActive) {
+      setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
+      addToast({ type: 'success', message: 'Demo hasta bilgileri güncellendi.' });
+    } else {
+      addToast({ type: 'error', message: 'Hasta güncellemek için aktif firma gerekli.' });
     }
   };
 
@@ -419,29 +460,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setAppointmentsList(prev => [...prev, createdWithPatName]);
         addToast({ type: 'success', message: 'Randevu başarıyla oluşturuldu.' });
-        await dbInsertAuditLog({
-          action: 'Randevu Ekleme',
-          module: 'Randevular',
-          description: `Randevu tarihi: ${appointment.date}`
-        });
+        try { await dbInsertAuditLog({ action: 'Randevu Ekleme', module: 'Randevular', description: `Randevu tarihi: ${appointment.date}` }); }
+        catch (auditError: any) { logger.warn(`Randevu denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext'); }
       } catch (err: any) {
         addToast({ type: 'error', message: `Randevu eklenemedi: ${err.message}` });
+        throw err;
       }
     } else {
       setAppointmentsList(prev => [appointment, ...prev]);
+      addToast({ type: 'success', message: 'Demo randevusu oluşturuldu.' });
     }
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
-    setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-    addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
     if (currentOrgId) {
       try {
         await dbUpdateAppointmentStatus(id, status);
+        setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+        addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
       } catch (err: any) {
         logger.warn(`dbUpdateAppointmentStatus background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Randevu durumu yerelde güncellendi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: 'Randevu durumu kaydedilemedi. Lütfen tekrar deneyin.' });
       }
+    } else if (demoModeActive) {
+      setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+      addToast({ type: 'success', message: `Demo randevu durumu '${status}' olarak güncellendi.` });
+    } else {
+      addToast({ type: 'error', message: 'Randevu güncellemek için aktif firma gerekli.' });
     }
   };
 
@@ -552,11 +597,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Fix #2: Stok silme artık DB'ye de yazılıyor
   const deleteStockItem = async (id: string) => {
-    setStockList(prev => prev.filter(s => s.id !== id));
-    addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
     if (currentOrgId) {
       try {
         await dbDeleteStockItem(id);
+        setStockList(prev => prev.filter(s => s.id !== id));
+        addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
         await dbInsertAuditLog({
           action: 'Stok Silme',
           module: 'Stok',
@@ -564,21 +609,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       } catch (err: any) {
         logger.warn(`dbDeleteStockItem background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Ürün yerelde silindi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: 'Ürün silinemedi. Kayıt listede tutuldu.' });
       }
+    } else if (demoModeActive) {
+      setStockList(prev => prev.filter(s => s.id !== id));
+      addToast({ type: 'success', message: 'Demo ürün envanterden silindi.' });
     }
   };
 
   const updateRecallItemStatus = async (id: string, status: RecallItem['status']) => {
-    setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: new Date().toISOString().split('T')[0] } : r));
-    addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
     if (currentOrgId) {
       try {
         await dbUpdateRecallStatus(id, status);
+        setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: new Date().toISOString().split('T')[0] } : r));
+        addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
       } catch (err: any) {
         logger.warn(`dbUpdateRecallStatus background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Hatırlatma kaydı yerelde güncellendi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: 'Hatırlatma kaydedilemedi. Lütfen tekrar deneyin.' });
       }
+    } else if (demoModeActive) {
+      setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: new Date().toISOString().split('T')[0] } : r));
+      addToast({ type: 'success', message: 'Demo hatırlatma durumu güncellendi.' });
+    } else {
+      addToast({ type: 'error', message: 'Hatırlatma güncellemek için aktif firma gerekli.' });
     }
   };
 
@@ -597,14 +650,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   const updateSupplier = async (updatedSupplier: Supplier) => {
-    setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
     if (currentOrgId && updatedSupplier.id) {
       try {
-        await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
+        const saved = await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
+        if (!saved) throw new Error('Kayıt bulunamadı veya erişim yetkisi yok.');
+        setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? saved : s));
+        addToast({ type: 'success', message: 'Tedarikçi bilgileri güncellendi.' });
       } catch (err: any) {
-        logger.warn(`dbUpdateSupplier background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Tedarikçi bilgileri yerelde güncellendi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: `Tedarikçi güncellenemedi: ${err.message}` });
       }
+    } else if (demoModeActive) {
+      setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
     }
   };
   const deleteSupplier = async (id: string) => {
@@ -756,15 +812,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateBranch = async (updatedBranch: Branch) => {
-    setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
-    addToast({ type: 'success', message: 'Şube bilgileri güncellendi.' });
     if (currentOrgId && updatedBranch.id) {
       try {
-        await dbUpdateBranch(updatedBranch.id, updatedBranch);
+        const saved = await dbUpdateBranch(updatedBranch.id, updatedBranch);
+        if (!saved) throw new Error('Kayıt bulunamadı veya erişim yetkisi yok.');
+        setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? saved : b));
+        addToast({ type: 'success', message: 'Şube bilgileri güncellendi.' });
       } catch (err: any) {
-        logger.warn(`dbUpdateBranch background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'warning', message: 'Şube bilgileri yerelde güncellendi ancak veritabanına eşlenemedi.' });
+        addToast({ type: 'error', message: `Şube bilgileri kaydedilemedi: ${err.message}` });
       }
+    } else if (demoModeActive) {
+      setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
+      addToast({ type: 'success', message: 'Demo şube bilgileri güncellendi.' });
     }
   };
 
@@ -789,6 +848,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentOrgId,
       currentOrg,
       logout,
+      loggingOut,
+      startDemoSession,
       dataLoading,
       refreshOrganizationData,
       

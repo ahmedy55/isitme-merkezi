@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { Branch } from '../data/mockData';
 import { BranchMode, BranchService } from '../services/BranchService';
 import { AuditService } from '../services/AuditService';
@@ -29,35 +29,38 @@ export function BranchProvider({
   currentUser?: any;
   currentOrgId?: string | null;
 }) {
-  const [activeBranch, setActiveBranchState] = useState<BranchMode>({ mode: 'all' });
+  const [activeBranch, setActiveBranchState] = useState<BranchMode>(() => currentUser?.membership?.branch_id
+    ? { mode: 'single', branchId: currentUser.membership.branch_id, slug: currentUser.membership.branch_id }
+    : { mode: 'all' });
   const [isLoadingBranch, setIsLoadingBranch] = useState<boolean>(false);
   const [isFallbackRedirected, setIsFallbackRedirected] = useState<boolean>(false);
   const [fallbackMessage, setFallbackMessage] = useState<string | null>(null);
 
   // Extract allowed branches from user metadata
-  const allowedBranches: string[] | null = currentUser?.membership?.roles?.includes('Firma Yöneticisi') ? null : (currentUser?.membership?.branch_id ? [currentUser.membership.branch_id] : []);
+  const allowedBranches: string[] | null = useMemo(() => currentUser?.membership?.roles?.includes('Firma Yöneticisi')
+    ? null
+    : currentUser?.membership?.branch_id ? [currentUser.membership.branch_id] : [], [currentUser]);
   const defaultBranchId: string | undefined = currentUser?.membership?.branch_id;
 
-  // Resolve initial active branch on load / URL query change
+  const scopeId = `${currentOrgId || 'no-org'}:${currentUser?.id || 'anonymous'}`;
+
+  // Resolve active branch whenever tenant data or browser history changes.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlSlug = urlParams.get('branch');
-
-    const result = BranchService.resolveActiveBranch(
-      urlSlug,
-      branchesList,
-      allowedBranches,
-      defaultBranchId
-    );
-
-    setActiveBranchState(result.branchContext);
-    if (result.isFallback && result.fallbackReason) {
-      setIsFallbackRedirected(true);
-      setFallbackMessage(result.fallbackReason);
-    }
-  }, [branchesList, currentUser]);
+    const resolve = () => {
+      const urlSlug = new URLSearchParams(window.location.search).get('branch');
+      const result = BranchService.resolveActiveBranch(urlSlug, branchesList, allowedBranches, defaultBranchId, scopeId);
+      setActiveBranchState(result.branchContext);
+      if (result.branchContext.mode === 'single') BranchService.persistBranchSlug(result.branchContext.branchId, scopeId);
+      else if (result.branchContext.mode === 'all') BranchService.persistBranchSlug('all', scopeId);
+      setIsFallbackRedirected(result.isFallback);
+      setFallbackMessage(result.isFallback ? result.fallbackReason || null : null);
+    };
+    resolve();
+    window.addEventListener('popstate', resolve);
+    return () => window.removeEventListener('popstate', resolve);
+  }, [branchesList, currentUser, currentOrgId, scopeId, allowedBranches, defaultBranchId]);
 
   const selectBranchBySlug = (slug: string) => {
     setIsLoadingBranch(true);
@@ -67,7 +70,7 @@ export function BranchProvider({
     if (slug === 'all') {
       const newMode: BranchMode = { mode: 'all' };
       setActiveBranchState(newMode);
-      BranchService.persistBranchSlug('all');
+      BranchService.persistBranchSlug('all', scopeId);
       updateUrlQuery('all');
 
       AuditService.logBranchChange(currentUser?.id, currentOrgId, prevSlug, 'all');
@@ -86,7 +89,7 @@ export function BranchProvider({
         branch: targetBranch
       };
       setActiveBranchState(newMode);
-      BranchService.persistBranchSlug(targetSlug);
+      BranchService.persistBranchSlug(targetBranch.id, scopeId);
       updateUrlQuery(targetSlug);
 
       AuditService.logBranchChange(currentUser?.id, currentOrgId, prevSlug, targetSlug);

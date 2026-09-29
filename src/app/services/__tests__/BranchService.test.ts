@@ -8,11 +8,29 @@ describe('BranchService Production Architecture', () => {
     expect(result.branchContext.mode).toBe('single');
     expect(BranchService.matchesBranch(undefined,undefined,result.branchContext)).toBe(false);
   });
+  it('single active branch owners resolve directly to that branch, even for all-branches URL state', () => {
+    const branch = { ...mockBranches[0], status: 'Aktif' as const };
+    const result = BranchService.resolveActiveBranch('all', [branch], null);
+    expect(result.branchContext.mode).toBe('single');
+    if (result.branchContext.mode === 'single') expect(result.branchContext.branchId).toBe(branch.id);
+  });
   it('single-branch view rejects unassigned data and fuzzy demo names', () => {
     const context={mode:'single' as const,branchId:'a',slug:'kadikoy'};
-    expect(BranchService.matchesBranch(undefined,undefined,context,0)).toBe(false);
+    expect(BranchService.matchesBranch(undefined,undefined,context)).toBe(false);
     expect(BranchService.matchesBranch('Kadıköy', 'b',context)).toBe(false);
     expect(BranchService.matchesBranch(undefined,'a',context)).toBe(true);
+    expect(BranchService.matchesBranch('Kadıköy', undefined, context)).toBe(false);
+    expect(BranchService.matchesBranch('Kadıköy', 'a', context)).toBe(true);
+  });
+  it('branch scope follows immutable IDs, not duplicate or renamed display names', () => {
+    const context = { mode: 'single' as const, branchId: 'br-1', slug: 'new-branch-name' };
+    expect(BranchService.matchesBranch('Former name', 'br-1', context)).toBe(true);
+    expect(BranchService.matchesBranch('New name', 'br-2', context)).toBe(false);
+    expect(BranchService.matchesBranch('New name', undefined, context)).toBe(false);
+  });
+  it('all-branch scope includes every authorized row, including rows queued for correction', () => {
+    expect(BranchService.matchesBranch(undefined, undefined, { mode: 'all' })).toBe(true);
+    expect(BranchService.matchesBranch('Kadıköy', 'br-2', { mode: 'all' })).toBe(true);
   });
   const mockBranches: Branch[] = [
     {

@@ -12,12 +12,13 @@ export default function ReportsPage() {
   const app = useApp();
   const { matches } = useBranchScope();
   const patientsList = useMemo(() => app.patientsList.filter(p => matches(p.branch, p.branchId)), [app.patientsList, matches]);
-  const patientIds = useMemo(() => new Set(patientsList.map(p => p.id)), [patientsList]);
-  const salesList = useMemo(() => app.salesList.filter(s => patientIds.has(s.patientId)), [app.salesList, patientIds]);
+  const patientIds = useMemo(() => new Set(patientsList.map(patient => patient.id)), [patientsList]);
+  const salesList = useMemo(() => app.salesList.filter(s => matches(undefined, s.branchId)), [app.salesList, matches]);
   const appointmentsList = useMemo(() => app.appointmentsList.filter(a => matches(a.branch, a.branchId)), [app.appointmentsList, matches]);
   const recallList = useMemo(() => app.recallList.filter(r => patientIds.has(r.patientId)), [app.recallList, patientIds]);
   const { addToast } = app;
-  const [selectedYear, setSelectedYear] = useState('2026');
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const availableYears = useMemo(() => Array.from(new Set([String(new Date().getFullYear()), ...salesList.map(sale => sale.date.slice(0, 4)).filter(year => /^\d{4}$/.test(year))])).sort((a, b) => Number(b) - Number(a)), [salesList]);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -178,9 +179,10 @@ export default function ReportsPage() {
     link.click();
     document.body.removeChild(link);
 
+    const exportedSalesCount = salesList.filter(sale => sale.date.startsWith(selectedYear)).length;
     addToast({
       type: 'success',
-      message: `${selectedYear} yılına ait ciro raporu (${salesList.length} kayıt) başarıyla bilgisayarınıza indirildi.`
+      message: `${selectedYear} yılına ait ciro raporu (${exportedSalesCount} kayıt) başarıyla bilgisayarınıza indirildi.`
     });
   };
 
@@ -198,10 +200,7 @@ export default function ReportsPage() {
             onChange={(e) => setSelectedYear(e.target.value)}
             style={{ width: 100, height: 38, padding: '0 10px' }}
           >
-            <option value="2026">2026</option>
-            <option value="2025">2025</option>
-            <option value="2024">2024</option>
-            <option value="2023">2023</option>
+            {availableYears.map(year => <option key={year} value={year}>{year}</option>)}
           </select>
           <button className="btn btn-secondary" onClick={handleDownloadReport}
             style={{ display: 'flex', alignItems: 'center', gap: 6, height: 38 }}>

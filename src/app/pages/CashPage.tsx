@@ -31,10 +31,9 @@ interface CashTransaction {
 
 export default function CashPage() {
   const app = useApp();
-  const { matches, activeBranchId } = useBranchScope();
+  const { matches, activeBranchId, activeBranchName, activeBranch } = useBranchScope();
   const patientsList = React.useMemo(() => app.patientsList.filter(p => matches(p.branch, p.branchId)), [app.patientsList, matches]);
-  const patientIds = React.useMemo(() => new Set(patientsList.map(p => p.id)), [patientsList]);
-  const salesList = React.useMemo(() => app.salesList.filter(s => patientIds.has(s.patientId)), [app.salesList, patientIds]);
+  const salesList = React.useMemo(() => app.salesList.filter(s => matches(undefined, s.branchId)), [app.salesList, matches]);
   const stockList = React.useMemo(() => app.stockList.filter(s => matches(s.branch, s.branchId)), [app.stockList, matches]);
   const { commissionRate, addSale, updateStockItem, addToast, currentOrgId } = app;
   const [filterStatus, setFilterStatus] = useState('Tümü');
@@ -44,7 +43,7 @@ export default function CashPage() {
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<SaleRecord | null>(null);
 
   // Kasa Genişletme State
-  const [accounts, setAccounts] = useState<CashAccount[]>([{id:'kas-1',name:'Ana Kasa',type:'Nakit',balance:0,branch:'Tüm Şubeler'}]);
+  const [accounts, setAccounts] = useState<CashAccount[]>([{id:'kas-1',name:'Ana Kasa',type:'Nakit',balance:0,branch:activeBranchName || (activeBranch.mode === 'all' ? 'Tüm Şubeler' : 'Şube')}]);
 
   const [transactions, setTransactions] = useState<CashTransaction[]>([]);
 
@@ -66,7 +65,7 @@ export default function CashPage() {
             branchId: t.branchId
           })).filter(t => matches(undefined, t.branchId));
           setTransactions(mapped);
-          setAccounts([{id:"kas-1",name:"Ana Kasa",type:"Nakit",branch:"Tüm Şubeler",balance:mapped.reduce((sum,t)=>sum+(t.type==="Giriş"?t.amount:-t.amount),0)}]);
+          setAccounts([{id:"kas-1",name:"Ana Kasa",type:"Nakit",branch:activeBranchName || (activeBranch.mode === 'all' ? "Tüm Şubeler" : "Şube"),balance:mapped.reduce((sum,t)=>sum+(t.type==="Giriş"?t.amount:-t.amount),0)}]);
         }
       }).catch(err => console.warn('[CashPage] dbFetchCashTransactions warning:', err.message));
     }
@@ -84,6 +83,8 @@ export default function CashPage() {
   const [txCategory, setTxCategory] = useState('Diğer');
   const [txAmount, setTxAmount] = useState<number>(0);
   const [txDescription, setTxDescription] = useState('');
+  const [txBranchId, setTxBranchId] = useState<string>(activeBranchId || (app.branchesList.filter(branch => branch.status === 'Aktif').length === 1 ? app.branchesList.find(branch => branch.status === 'Aktif')?.id : '') || '');
+  React.useEffect(() => { if (activeBranchId) setTxBranchId(activeBranchId); else if (app.branchesList.filter(branch => branch.status === 'Aktif').length === 1) setTxBranchId(app.branchesList.find(branch => branch.status === 'Aktif')?.id || ''); else setTxBranchId(''); }, [activeBranchId, app.branchesList]);
 
   const resetTxForm = () => {
     setTxAmount(0);
@@ -122,7 +123,8 @@ export default function CashPage() {
     const newSale: SaleRecord = {
       id: `s-${Date.now().toString().slice(-6)}`,
       patientId: matchedPatients[0].id,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date().toLocaleDateString('en-CA'),
+      branchId: matchedPatients[0].branchId,
       patientName: formData.patientName,
       items: [
         { name: matchingStockItem.name, quantity: Number(formData.quantity), price: Number(formData.itemPrice), type: matchingStockItem.category === 'Cihaz' ? 'Cihaz' : 'Aksesuar', stockItemId: matchingStockItem.id, barcode: matchingStockItem.barcode, serialNo: matchingStockItem.serialNo }
@@ -171,6 +173,8 @@ export default function CashPage() {
       addToast({ type: 'warning', message: 'Tutar 0\'dan büyük olmalıdır.' });
       return;
     }
+    const selectedBranchId = activeBranchId || txBranchId;
+    if (!selectedBranchId) { addToast({ type: 'error', message: 'Kasa işlemi için şube seçin.' }); return; }
     const targetAcc = accounts.find(a => a.id === txAccountId);
     if (!targetAcc) return;
 
@@ -188,7 +192,7 @@ export default function CashPage() {
       amount: txAmount,
       description: txDescription,
       createdBy: 'Dr. Elif Arslan'
-      ,branchId: activeBranchId
+      ,branchId: selectedBranchId
     };
 
 
@@ -202,7 +206,7 @@ export default function CashPage() {
       category: txCategory,
       amount: txAmount,
       description: txDescription,
-      branchId: activeBranchId,
+      branchId: selectedBranchId,
       idempotency_key: formIdempotencyKey
     }); } catch { addToast({type:"error",message:"Kasa işlemi kaydedilemedi."}); return; }
     setTransactions(prev => [newTx, ...prev]);
@@ -466,6 +470,7 @@ export default function CashPage() {
             </div>
             <form onSubmit={handleSaveTransaction}>
               <div className="card-body" style={{ padding: 20 }}>
+                {!activeBranchId && app.branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div className="form-group" style={{ marginBottom: 12 }}><label className="form-label">İşlem şubesi</label><select required className="form-input" value={txBranchId} onChange={event => setTxBranchId(event.target.value)}><option value="">Şube seçin</option>{app.branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div>}
                 <div className="form-group" style={{ marginBottom: 12 }}>
                   <label className="form-label">Kasa / Banka Hesabı</label>
                   <select className="form-input" value={txAccountId} onChange={(e) => setTxAccountId(e.target.value)}>

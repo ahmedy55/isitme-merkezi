@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 
 export default function LoginPage() {
-  const { setCurrentPage, addToast } = useApp();
+  const { setCurrentPage, addToast, demoModeActive, startDemoSession } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -280,6 +280,7 @@ export default function LoginPage() {
             ) : 'Giriş Yap'}
           </button>
         </form>
+        {demoModeActive && <button type="button" className="demo-login-btn" onClick={startDemoSession}>Demo olarak devam et</button>}
       </div>
 
       <style jsx global>{`
@@ -296,6 +297,12 @@ export default function LoginPage() {
         .login-btn:active:not(:disabled) {
           transform: translateY(0);
         }
+        .demo-login-btn {
+          width: 100%; margin-top: 12px; padding: 12px 16px; border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.18); background: transparent; color: #e5e7eb;
+          cursor: pointer; font: inherit; font-size: 0.88rem;
+        }
+        .demo-login-btn:hover { background: rgba(255,255,255,0.06); }
         @keyframes spin {
           to { transform: rotate(360deg); }
         }

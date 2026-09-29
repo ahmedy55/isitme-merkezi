@@ -68,8 +68,9 @@ export async function fetchBranchTransfers(): Promise<any[]> {
   const { data: branches } = await supabase.from('branches').select('id,name');
   const names = new Map((branches || []).map((b: any) => [b.id, b.name]));
   return (data || []).map((r: any) => ({
-    id: r.id, patientName: r.patient_name, fromBranch: names.get(r.source_branch_id) || '',
-    toBranch: names.get(r.target_branch_id) || '', date: r.created_at.slice(0, 10), approvedBy: 'Firma Yöneticisi', status: 'Tamamlandı',
+    id: r.id, patientName: r.patient_name, sourceBranchId: r.source_branch_id, targetBranchId: r.target_branch_id,
+    fromBranch: names.get(r.source_branch_id) || '', toBranch: names.get(r.target_branch_id) || '',
+    date: r.created_at.slice(0, 10), approvedBy: 'Firma Yöneticisi', status: 'Tamamlandı',
   }));
 }
 export async function transferPatient(patientId: string, targetBranchId: string, requestId: string): Promise<void> {

@@ -965,6 +965,43 @@ tbody tr:hover { background: var(--gray-25); }
 .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 
+.sgk-schedule-note { margin: 0 0 18px; padding: 13px 16px; border: 1px solid #bfdbfe; border-radius: var(--radius-md); background: #eff6ff; color: #1e3a8a; font-size: 0.86rem; line-height: 1.55; }
+.sgk-schedule-stats { margin-bottom: 18px; }
+.sgk-schedule-stat { padding: 18px 20px; }
+.sgk-schedule-stat p { color: var(--gray-600); font-size: 0.82rem; font-weight: 600; margin: 0 0 7px; }
+.sgk-schedule-stat p span { color: var(--gray-400); font-weight: 500; }
+.sgk-schedule-stat h2 { margin: 0; color: var(--gray-900); font-size: 1.55rem; }
+.sgk-invoice-form { padding: 20px; margin-bottom: 20px; }
+.sgk-invoice-form-heading h3, .sgk-invoice-list-heading h3 { margin: 0; color: var(--gray-900); font-size: 1rem; }
+.sgk-invoice-form-heading p, .sgk-invoice-list-heading p { margin: 4px 0 16px; color: var(--gray-500); font-size: 0.8rem; }
+.sgk-invoice-form .form-row { margin-top: 14px; }
+.sgk-expected-date { margin: 14px 0; color: var(--gray-600); font-size: 0.86rem; }
+.sgk-expected-date strong { color: var(--primary-700); }
+.sgk-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sgk-invoice-list { padding: 18px 20px; }
+.sgk-invoice-list-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; }
+.sgk-invoice-list-heading p { margin-bottom: 0; }
+.sgk-month-filter { min-width: 200px; display: grid; gap: 5px; color: var(--gray-600); font-size: 0.76rem; font-weight: 600; }
+.sgk-schedule-error { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 12px 0; padding: 12px 14px; border: 1px solid var(--danger-200); border-radius: var(--radius-md); background: var(--danger-50); color: var(--danger-700); }
+.sgk-empty-state { padding: 18px; text-align: center; color: var(--gray-500); }
+.profile-menu-item { display: block; width: 100%; border: 0; border-radius: 7px; padding: 10px 12px; background: transparent; text-align: left; color: var(--gray-800); font: inherit; font-size: 0.84rem; cursor: pointer; }
+.profile-menu-item:hover { background: var(--gray-50); }
+.sidebar-profile-trigger { display: flex; flex: 1; min-width: 0; align-items: center; gap: 10px; border: 0; padding: 0; background: transparent; text-align: left; cursor: pointer; }
+.sidebar-profile-trigger:hover .sidebar-user-name { color: white !important; }
+.profile-card { max-width: 720px; padding: 24px; }
+.profile-card-avatar { display: flex; width: 52px; height: 52px; align-items: center; justify-content: center; margin-bottom: 18px; border-radius: 50%; background: var(--primary-600); color: white; font-weight: 700; }
+.profile-details { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; margin: 0 0 22px; }
+.profile-details dt { margin-bottom: 4px; color: var(--gray-500); font-size: 0.76rem; }
+.profile-details dd { margin: 0; color: var(--gray-900); font-size: 0.9rem; font-weight: 600; overflow-wrap: anywhere; }
+
+@media (max-width: 767px) {
+  .sgk-invoice-form, .sgk-invoice-list { padding: 15px; }
+  .sgk-invoice-list-heading { align-items: stretch; flex-direction: column; gap: 10px; }
+  .sgk-month-filter { min-width: 0; }
+  .sgk-schedule-error { align-items: flex-start; flex-direction: column; }
+  .profile-details { grid-template-columns: 1fr; gap: 14px; }
+}
+
 /* ============================================================
    TABS
    ============================================================ */

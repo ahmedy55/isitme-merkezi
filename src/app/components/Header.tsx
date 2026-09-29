@@ -15,17 +15,26 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   'patient-detail': { title: 'Hasta Detay',           subtitle: 'Hasta bilgileri ve geçmişi' },
   appointments:     { title: 'Randevular',            subtitle: 'Takvim ve randevu yönetimi' },
   recall:           { title: 'Recall Otomasyonu',     subtitle: 'Yenileme ve hatırlatma fırsatları' },
-  sgk:              { title: 'SGK & Reçete',          subtitle: 'Medula entegrasyonu ve hak ediş takibi' },
+  sgk:              { title: 'SGK & Reçete',          subtitle: 'Hasta reçete ve hak ediş kayıtları' },
+  'sgk-receivables': { title: 'SGK Ödeme Takvimi',    subtitle: 'Dönem faturaları ve beklenen ödeme ayları' },
   stock:            { title: 'Stok & Aksesuar',       subtitle: 'Cihaz, pil ve aksesuar envanter yönetimi' },
   cash:             { title: 'Kasa & Tahsilat',       subtitle: 'Satış, tahsilat ve prim takibi' },
+  expenses:         { title: 'Kasa, Tahsilat & Masraflar', subtitle: 'Finansal hareketler ve masraflar' },
   service:          { title: 'Teknik Servis',         subtitle: 'Cihaz tamir, bakım ve servis takibi' },
   reports:          { title: 'Raporlama & Analitik',  subtitle: 'Performans ve finansal raporlar' },
   branches:         { title: 'Şubeler & Yetki',       subtitle: 'Çoklu şube ve rol yönetimi' },
   settings:         { title: 'Ayarlar',               subtitle: 'Sistem ve entegrasyon ayarları' },
+  assets:           { title: 'Demirbaşlar',           subtitle: 'Şube demirbaşları ve bakımları' },
+  suppliers:        { title: 'Tedarikçiler',          subtitle: 'Tedarikçi ve alış kayıtları' },
+  'activity-log':   { title: 'Aktivite Kaydı',        subtitle: 'Hasta ve şube aktiviteleri' },
+  'branch-activities': { title: 'Şube Aktiviteleri', subtitle: 'Şubeler arası hareketler' },
+  'audit-log':      { title: 'İşlem Kayıtları',      subtitle: 'Kullanıcı ve sistem işlem geçmişi' },
+  support:          { title: 'Destek',                subtitle: 'Destek talepleri ve yardım' },
+  profile:          { title: 'Profilim',              subtitle: 'Hesap ve erişim bilgileriniz' },
 };
 
 export default function Header() {
-  const { currentPage, toggleSidebar, patientsList: allPatients, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList, stockList: allStock, usersList } = useApp();
+  const { currentPage, toggleSidebar, patientsList: allPatients, setSelectedPatientId, setCurrentPage, currentUser, currentOrgId, branchesList, stockList: allStock, usersList, logout, loggingOut } = useApp();
   const { activeBranch, selectBranchBySlug, isLoadingBranch, allowedBranches } = useBranch();
   const { matches } = useBranchScope();
   const patientsList = React.useMemo(() => allPatients.filter(p => matches(p.branch, p.branchId)), [allPatients, matches]);
@@ -34,6 +43,7 @@ export default function Header() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Fix #8: Dinamik bildirimler — stok, recall, randevu durumundan hesaplanır
@@ -68,14 +78,18 @@ export default function Header() {
     // Hiç bildirim yoksa varsayılan
     if (notifs.length === 0) {
       notifs.push({ id: 1, title: 'Bildirim Yok', desc: 'Şu anda bekleyen bildiriminiz bulunmuyor.', time: '', page: 'dashboard' });
-      setHasUnreadNotifications(false);
     }
 
     return notifs;
   }, [stockList, patientsList]);
 
+  React.useEffect(() => {
+    setHasUnreadNotifications(dynamicNotifications.some(notification => notification.title !== 'Bildirim Yok'));
+  }, [dynamicNotifications]);
+
   const dropdownRef = React.useRef<HTMLDivElement | null>(null);
   const branchDropdownRef = React.useRef<HTMLDivElement | null>(null);
+  const profileDropdownRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -84,6 +98,9 @@ export default function Header() {
       }
       if (branchDropdownRef.current && !branchDropdownRef.current.contains(event.target as Node)) {
         setShowBranchDropdown(false);
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -95,10 +112,10 @@ export default function Header() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
-    
+    const phoneQuery = searchTerm.replace(/\D/g, '');
     const foundPatient = patientsList.find(p => 
       `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.tc.includes(searchTerm)
+      p.tc.includes(searchTerm) || (phoneQuery.length >= 3 && p.phone.replace(/\D/g, '').includes(phoneQuery))
     );
     
     if (foundPatient) {
@@ -146,7 +163,7 @@ export default function Header() {
           />
         </form>
         {/* Şube Seçici Dropdown */}
-        <div ref={branchDropdownRef} style={{ position: 'relative' }}>
+        {allowedBranches === null && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div ref={branchDropdownRef} style={{ position: 'relative' }}>
           <button
             type="button"
             onClick={() => setShowBranchDropdown(!showBranchDropdown)}
@@ -198,7 +215,7 @@ export default function Header() {
 
               <div style={{ maxHeight: 240, overflowY: 'auto' }}>
                 {/* 1. Tüm Şubeler (if permitted) */}
-                {(!allowedBranches || allowedBranches.length > 1) && (
+                {(
                   <button
                     type="button"
                     onClick={() => {
@@ -226,13 +243,9 @@ export default function Header() {
                 )}
 
                 {/* 2. Branches list */}
-                {branchesList.map(b => {
+                {branchesList.filter(branch => branch.status === 'Aktif').map(b => {
                   const slug = BranchService.generateSlug(b);
                   const isSelected = activeBranch.mode === 'single' && (activeBranch.branchId === b.id || activeBranch.slug === slug);
-                  const isPermitted = !allowedBranches || allowedBranches.includes(b.id);
-
-                  if (!isPermitted) return null;
-
                   return (
                     <button
                       key={b.id}
@@ -263,7 +276,7 @@ export default function Header() {
                 })}
               </div>
 
-              <div style={{ borderTop: '1px solid var(--gray-100)', padding: '6px 14px 2px', marginTop: 4 }}>
+              {currentUser?.membership?.roles?.includes('Firma Yöneticisi') && <div style={{ borderTop: '1px solid var(--gray-100)', padding: '6px 14px 2px', marginTop: 4 }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -282,10 +295,10 @@ export default function Header() {
                 >
                   ⚙️ Şube Yönetimi ➔
                 </button>
-              </div>
+              </div>}
             </div>
           )}
-        </div>
+        </div>}
 
         <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button 
@@ -355,33 +368,21 @@ export default function Header() {
         </div>
 
         {/* Kullanıcı Profili */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderLeft: '1px solid var(--gray-200)', paddingLeft: 12, marginLeft: 4 }}>
-          <div style={{ textAlign: 'right' }} className="hide-tablet">
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-800)', lineHeight: '1.2' }}>
-              {getDisplayName(currentUser, usersList)}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', lineHeight: '1.2' }}>
-              {getUserRole(currentUser, usersList)}
-            </div>
-          </div>
-          <div 
-            className="avatar avatar-sm" 
-            style={{ 
-              background: 'linear-gradient(135deg, var(--primary-500), var(--primary-600))', 
-              color: 'white', 
-              fontWeight: 600, 
-              fontSize: '0.8rem',
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: 'var(--shadow-xs)'
-            }}
-          >
-            {getUserInitials(getDisplayName(currentUser, usersList))}
-          </div>
+        <div ref={profileDropdownRef} style={{ position: 'relative', borderLeft: '1px solid var(--gray-200)', paddingLeft: 12, marginLeft: 4 }}>
+          <button type="button" onClick={() => setShowProfileMenu(open => !open)} aria-label="Kullanıcı menüsünü aç" aria-expanded={showProfileMenu}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 0, cursor: 'pointer', padding: 0, color: 'inherit' }}>
+            <span style={{ textAlign: 'right' }} className="hide-tablet">
+              <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: 'var(--gray-800)', lineHeight: '1.2' }}>{getDisplayName(currentUser, usersList)}</span>
+              <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--gray-500)', lineHeight: '1.2' }}>{getUserRole(currentUser, usersList)}</span>
+            </span>
+            <span className="avatar avatar-sm" style={{ background: 'linear-gradient(135deg, var(--primary-500), var(--primary-600))', color: 'white', fontWeight: 600, fontSize: '0.8rem', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-xs)' }}>
+              {getUserInitials(getDisplayName(currentUser, usersList))}
+            </span>
+          </button>
+          {showProfileMenu && <div role="menu" style={{ position: 'absolute', top: 44, right: 0, width: 210, background: 'var(--surface-white)', border: '1px solid var(--surface-border-light)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', zIndex: 1000, padding: 6 }}>
+            <button role="menuitem" type="button" className="profile-menu-item" onClick={() => { setCurrentPage('profile'); setShowProfileMenu(false); }}>Profilim</button>
+            <button role="menuitem" type="button" className="profile-menu-item" disabled={loggingOut} onClick={() => { setShowProfileMenu(false); void logout(); }}>{loggingOut ? 'Çıkış yapılıyor…' : 'Çıkış yap'}</button>
+          </div>}
         </div>
       </div>
     </header>

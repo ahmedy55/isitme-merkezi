@@ -4,7 +4,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import {
   IconDashboard, IconPatients, IconCalendar,
-  IconRecall, IconSettings,
+  IconRecall, IconSettings, IconUsers,
 } from './Icons';
 
 /** Mobil alt navigasyon — 5 ana öğe */
@@ -17,11 +17,15 @@ const bottomNavItems = [
 ];
 
 export default function BottomNav() {
-  const { currentPage, setCurrentPage } = useApp();
+  const { currentPage, setCurrentPage, currentUser } = useApp();
+  const isManager = currentUser?.membership?.roles?.includes('Firma Yöneticisi');
+  const items = [...bottomNavItems.slice(0, 4), isManager
+    ? bottomNavItems[4]
+    : { id: 'profile' as const, label: 'Profil', Icon: IconUsers }];
 
   return (
     <nav className="bottom-nav" role="navigation" aria-label="Alt navigasyon">
-      {bottomNavItems.map(({ id, label, Icon }) => (
+      {items.map(({ id, label, Icon }) => (
         <button
           key={id}
           className={`bottom-nav-item ${currentPage === id ? 'active' : ''}`}

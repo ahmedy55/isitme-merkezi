@@ -10,7 +10,7 @@ import DeviceIdentityFields from '../components/DeviceIdentityFields';
 import { IconPlus, IconUpload, IconEdit, IconStock, IconCash, IconWarning, IconHearing, IconSearch } from '../components/Icons';
 
 export default function StockPage() {
-  const { stockList, updateStockItem, addStockItem, deleteStockItem, patientsList, updatePatient, addToast, setCurrentPage } = useApp();
+  const { stockList, updateStockItem, addStockItem, deleteStockItem, patientsList, updatePatient, addToast, setCurrentPage, branchesList } = useApp();
   const { activeBranch } = useBranch();
   const [filterCategory, setFilterCategory] = useState('Tümü');
   const [search, setSearch] = useState('');
@@ -57,12 +57,17 @@ export default function StockPage() {
     productionDate: '',
     expiryDate: '',
     utsStatus: 'Bekliyor' as StockItem['utsStatus'],
-    branch: 'Merkez 1 - Kadıköy' as StockItem['branch'],
+    branch: activeBranch.mode === 'single' ? activeBranch.branchId : '' as StockItem['branch'],
     status: 'Stokta' as StockItem['status'],
     utsKurumNo: '954201',
     gln: '',
     mersisNo: ''
   });
+
+  React.useEffect(() => {
+    if (activeBranch.mode === 'single') setFormData(previous => ({ ...previous, branch: activeBranch.branchId }));
+    else if (activeBranch.mode === 'all') setFormData(previous => ({ ...previous, branch: '' }));
+  }, [activeBranch, branchesList]);
 
   const handleSaveNew = async () => {
     if (!formData.name) {
@@ -72,6 +77,9 @@ export default function StockPage() {
     if (formData.category === 'Cihaz' && (!formData.gtin.trim() || !formData.serialNo.trim() || Number(formData.quantity) > 1)) {
       addToast({ type: 'error', message: 'Her cihaz için barkod ve seri numarası girin; seri numaralı cihazı tek adet kaydedin.' }); return;
     }
+    const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : formData.branch;
+    const assignedBranchName = branchesList.find(branch => branch.id === assignedBranchId)?.name;
+    if (!assignedBranchId || !assignedBranchName) { addToast({ type: 'error', message: 'Stok kaydı için şube seçin.' }); return; }
     const newItem: StockItem = {
       id: `s-${Date.now().toString().slice(-6)}`,
       name: formData.name,
@@ -82,13 +90,13 @@ export default function StockPage() {
       price: Number(formData.price) || 0,
       purchasePrice: Number(formData.purchasePrice) || 0,
       sgkPrice: Number(formData.price) * 0.4,
-      warrantyExpiry: formData.expiryDate || '2028-07-10',
+      warrantyExpiry: formData.expiryDate || (() => { const date = new Date(); date.setFullYear(date.getFullYear() + 2); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; })(),
       location: 'Depo',
       serialNo: formData.serialNo.trim(),
       barcode: formData.gtin.trim(),
       utsStatus: formData.utsTrackType !== 'Takip Yok' ? 'Bekliyor' : 'Gerekli Değil',
-      branch: activeBranch.mode === 'single' ? activeBranch.branch?.name || formData.branch : formData.branch,
-      branchId: activeBranch.mode === 'single' ? activeBranch.branchId : undefined,
+      branch: assignedBranchName,
+      branchId: assignedBranchId,
       criticalLevel: Number(formData.criticalLevel) || 0,
       status: formData.status,
       utsKurumNo: formData.utsKurumNo || '954201',
@@ -118,7 +126,7 @@ export default function StockPage() {
       productionDate: '',
       expiryDate: '',
       utsStatus: 'Bekliyor',
-      branch: 'Merkez 1 - Kadıköy',
+      branch: activeBranch.mode === 'single' ? activeBranch.branchId : '',
       status: 'Stokta',
       utsKurumNo: '954201',
       gln: '',
@@ -135,8 +143,8 @@ export default function StockPage() {
   };
 
   // Fix #9: Şube filtresi BranchService.matchesBranch ile çalışıyor
-  const branchFilteredStock = stockList.filter((item, index) => 
-    BranchService.matchesBranch(item.branch, item.branchId, activeBranch, index)
+  const branchFilteredStock = stockList.filter(item =>
+    BranchService.matchesBranch(item.branch, item.branchId, activeBranch)
   );
 
   const debouncedSearch = useDebounce(search, 300);
@@ -155,32 +163,7 @@ export default function StockPage() {
   const utsDisiCount = branchFilteredStock.filter(s => s.utsStatus !== 'Bildirildi').length;
 
   const handleUtsNotification = (item: StockItem) => {
-    if (!item.assignedPatientId) return;
-
-    // 1. ÜTS durumunu bildirildi yap
-    const updatedItem = {
-      ...item,
-      utsStatus: 'Bildirildi' as const
-    };
-    updateStockItem(updatedItem);
-
-    // 2. Hastanın timeline'ına log ekle
-    const p = patientsList.find(pt => pt.id === item.assignedPatientId);
-    if (p) {
-      const updatedPatient = {
-        ...p,
-        timeline: [
-          { date: '10.07.2026', action: `Sağlık Bakanlığı ÜTS Bildirimi Başarılı. Cihaz: ${item.name}, Seri No: ${item.serialNo}`, icon: 'Check' },
-          ...(p.timeline || [])
-        ]
-      };
-      updatePatient(updatedPatient);
-    }
-
-    addToast({
-      type: 'success',
-      message: `${item.name} (${item.serialNo}) için ÜTS bildirim kaydı Sağlık Bakanlığı'na başarıyla iletildi.`
-    });
+    addToast({ type: 'warning', message: `${item.name} (${item.serialNo}) için ÜTS bağlantısı yapılandırılmamış; bildirim gönderilmedi ve kayıt değiştirilmedi.` });
   };
 
   return (
@@ -195,7 +178,7 @@ export default function StockPage() {
           <button
             type="button"
             className="btn"
-            onClick={() => setShowUtsImportModal(true)}
+            onClick={() => addToast({ type: 'warning', message: 'ÜTS sorgulama entegrasyonu yapılandırılmamış; dış sisteme istek gönderilmedi.' })}
             style={{
               background: '#fff',
               border: '1px solid var(--gray-300)',
@@ -215,7 +198,7 @@ export default function StockPage() {
               <rect x="14" y="14" width="7" height="7" />
               <rect x="3" y="14" width="7" height="7" />
             </svg>
-            <span>ÜTS'den Sorgula</span>
+            <span>ÜTS entegrasyonu yok</span>
           </button>
 
           {/* 2. Toplu Ekle */}
@@ -738,6 +721,7 @@ export default function StockPage() {
               {activeAddTab === 'info' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <DeviceIdentityFields value={{ barcode: formData.gtin, serialNo: formData.serialNo }} onChange={value => setFormData(prev => ({ ...prev, gtin: value.barcode || '', serialNo: value.serialNo || '', quantity: prev.category === 'Cihaz' ? 1 : prev.quantity }))} />
+                  {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <label className="form-group">Stok şubesi<select required className="form-select" value={formData.branch} onChange={event => setFormData(previous => ({ ...previous, branch: event.target.value }))}><option value="">Şube seçin</option>{branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
                   {/* Row 1: Ürün Adı & Kategori */}
                   <div className="form-row">
                     <div className="form-group">
@@ -1483,7 +1467,7 @@ export default function StockPage() {
                       <input
                         type="date"
                         className="form-input"
-                        defaultValue="2026-07-23"
+                        defaultValue={new Date().toISOString().slice(0, 10)}
                       />
                     </div>
                     <div className="form-group">
@@ -1491,7 +1475,7 @@ export default function StockPage() {
                       <input
                         type="date"
                         className="form-input"
-                        defaultValue="2026-09-30"
+                        defaultValue=""
                       />
                     </div>
                   </div>

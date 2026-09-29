@@ -32,6 +32,7 @@ const AssetsPage = dynamic(() => import('./pages/AssetsPage'), { loading: pageLo
 const SupportPage = dynamic(() => import('./pages/SupportPage'), { loading: pageLoading });
 const ActivityLogPage = dynamic(() => import('./pages/ActivityLogPage'), { loading: pageLoading });
 const BranchActivitiesPage = dynamic(() => import('./pages/BranchActivitiesPage'), { loading: pageLoading });
+const ProfilePage = dynamic(() => import('./pages/ProfilePage'), { loading: pageLoading });
 const LoginPage = dynamic(() => import('./pages/LoginPage'), { loading: pageLoading });
 const OrgSelectPage = dynamic(() => import('./pages/OrgSelectPage'), { loading: pageLoading });
 
@@ -42,7 +43,18 @@ function ToastIcon({ type }: { type: string }) {
 }
 
 function AppContent() {
-  const { currentPage, toasts, removeToast, currentUser, currentOrgId, dataLoading } = useApp();
+  const { currentPage, toasts, removeToast, currentUser, currentOrgId, dataLoading, demoModeActive, selectedPatientId, setSelectedPatientId, setCurrentPage } = useApp();
+  const { activeBranch } = useBranch();
+  const previousBranchScope = React.useRef<string | null>(null);
+  const branchScopeKey = activeBranch.mode === 'single' ? `single:${activeBranch.branchId}` : activeBranch.mode === 'region' ? `region:${activeBranch.regionId}` : 'all';
+
+  React.useEffect(() => {
+    if (previousBranchScope.current && previousBranchScope.current !== branchScopeKey) {
+      if (selectedPatientId) setSelectedPatientId(null);
+      if (currentPage === 'patient-detail') setCurrentPage('patients', true);
+    }
+    previousBranchScope.current = branchScopeKey;
+  }, [branchScopeKey, selectedPatientId, currentPage, setSelectedPatientId, setCurrentPage]);
 
   React.useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -70,7 +82,7 @@ function AppContent() {
   }
 
   const renderPage = () => {
-    if (!currentUser || !currentOrgId || dataLoading) return <p>Oturum ve firma verileri yükleniyor…</p>;
+    if ((!currentUser || (!currentOrgId && !demoModeActive)) || dataLoading) return <p>Oturum ve firma verileri yükleniyor…</p>;
     const roles: string[]=currentUser.membership?.roles || [];
     const manager=roles.includes('Firma Yöneticisi');
     const management=['branches','settings','suppliers','audit-log','branch-activities'];
@@ -98,6 +110,7 @@ function AppContent() {
       case 'support':           return <SupportPage />;
       case 'activity-log':      return <ActivityLogPage />;
       case 'branch-activities': return <BranchActivitiesPage />;
+      case 'profile':           return <ProfilePage />;
       default:                  return <DashboardPage />;
     }
   };
@@ -132,7 +145,7 @@ function AppContent() {
 
       <main className="main-content">
         <Header />
-        {renderPage()}
+        <div key={branchScopeKey}>{renderPage()}</div>
       </main>
 
       {/* Alt Navigasyon — Sadece Mobilde Görünür */}

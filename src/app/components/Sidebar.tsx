@@ -4,17 +4,21 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { IconLogo, IconClose, navIcons } from './Icons';
 import { getDisplayName, getUserRole, getUserInitials } from '../lib/userHelpers';
+import { useBranchScope } from '../hooks/useBranchScope';
 
 export default function Sidebar() {
-  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, appointmentsList, recallList, usersList } = useApp();
+  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen, currentUser, logout, loggingOut, appointmentsList, recallList, patientsList, usersList, branchesList } = useApp();
+  const { matches } = useBranchScope();
+  const [showUserMenu, setShowUserMenu] = React.useState(false);
 
   const pendingAppointmentsCount = React.useMemo(() => {
-    return (appointmentsList || []).filter(a => a.status === 'Bekliyor').length;
-  }, [appointmentsList]);
+    return (appointmentsList || []).filter(a => a.status === 'Bekliyor' && matches(a.branch, a.branchId)).length;
+  }, [appointmentsList, matches]);
 
   const pendingRecallCount = React.useMemo(() => {
-    return (recallList || []).filter(r => r.status === 'Bekliyor').length;
-  }, [recallList]);
+    const visiblePatientIds = new Set(patientsList.filter(patient => matches(patient.branch, patient.branchId)).map(patient => patient.id));
+    return (recallList || []).filter(r => r.status === 'Bekliyor' && visiblePatientIds.has(r.patientId)).length;
+  }, [recallList, patientsList, matches]);
 
   const activeSections = React.useMemo(() => {
     const userRoles: string[] = currentUser?.membership?.roles || [];
@@ -51,12 +55,12 @@ export default function Sidebar() {
           { id: 'audit-log'         as const, label: 'İşlem Kayıtları', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'settings'          as const, label: 'Ayarlar', badge: null, requiredRoles: ['Firma Yöneticisi'] },
           { id: 'support'           as const, label: 'Destek', badge: null },
-        ].filter(item => hasRole((item as any).requiredRoles)),
+        ].filter(item => (item.id !== 'branch-activities' || branchesList.filter(branch => branch.status === 'Aktif').length > 1) && hasRole((item as any).requiredRoles)),
       },
     ];
 
     return dynamicSections;
-  }, [pendingAppointmentsCount, pendingRecallCount, currentUser]);
+  }, [pendingAppointmentsCount, pendingRecallCount, currentUser, branchesList]);
 
   return (
     <>
@@ -130,8 +134,8 @@ export default function Sidebar() {
 
         {/* Kullanıcı */}
         <div className="sidebar-footer">
-          <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', position: 'relative' }}>
+            <button type="button" className="sidebar-profile-trigger" onClick={() => setShowUserMenu(open => !open)} aria-label="Kullanıcı menüsünü aç" aria-expanded={showUserMenu}>
               <div className="sidebar-user-avatar" style={{ background: 'var(--primary-600)', color: 'white', fontWeight: 600 }}>
                 {getUserInitials(getDisplayName(currentUser, usersList))}
               </div>
@@ -143,12 +147,18 @@ export default function Sidebar() {
                   {getUserRole(currentUser, usersList)}
                 </div>
               </div>
-            </div>
+            </button>
+
+            {showUserMenu && <div role="menu" style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 10, right: 10, background: 'var(--surface-white)', border: '1px solid var(--surface-border-light)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', zIndex: 1000, padding: 6 }}>
+              <button role="menuitem" type="button" className="profile-menu-item" onClick={() => { setCurrentPage('profile'); setSidebarOpen(false); setShowUserMenu(false); }}>Profilim</button>
+              <button role="menuitem" type="button" className="profile-menu-item" disabled={loggingOut} onClick={() => { setShowUserMenu(false); void logout(); }}>{loggingOut ? 'Çıkış yapılıyor…' : 'Çıkış yap'}</button>
+            </div>}
 
             {/* Çıkış Butonu */}
             {currentUser && (
               <button
-                onClick={logout}
+                onClick={() => void logout()}
+                disabled={loggingOut}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -163,7 +173,7 @@ export default function Sidebar() {
                   marginLeft: 'auto'
                 }}
                 className="sidebar-logout-btn"
-                title="Güvenli Çıkış"
+                title={loggingOut ? 'Çıkış yapılıyor…' : 'Güvenli Çıkış'}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

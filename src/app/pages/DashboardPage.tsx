@@ -22,11 +22,11 @@ import { StatCard } from '../components/StatCard';
 export default function DashboardPage() {
   const { 
     setCurrentPage, 
-    addToast, 
     appointmentsList, 
     patientsList, 
     stockList, 
     salesList, 
+    expensesList,
     recallList,
     updateAppointmentStatus,
     updateRecallItemStatus,
@@ -35,45 +35,44 @@ export default function DashboardPage() {
 
   const { activeBranch } = useBranch();
 
-  // Demo günü tarihi: 10.07.2026
-  const demoDateStr = '2026-07-10';
+  const today = new Date();
+  const todayDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   // Fix #9: Şube filtreleme BranchService.matchesBranch ile çalışıyor
-  const matchesBranch = React.useCallback((itemBranch?: string, itemBranchId?: string, fallbackIndex?: number) => {
-    return BranchService.matchesBranch(itemBranch, itemBranchId, activeBranch, fallbackIndex);
+  const matchesBranch = React.useCallback((itemBranch?: string, itemBranchId?: string) => {
+    return BranchService.matchesBranch(itemBranch, itemBranchId, activeBranch);
   }, [activeBranch]);
 
   const filteredPatients = React.useMemo(() => {
-    return patientsList.filter((p, index) => matchesBranch(p.branch, p.branchId, index));
+    return patientsList.filter(p => matchesBranch(p.branch, p.branchId));
   }, [patientsList, matchesBranch]);
 
   const filteredAppointments = React.useMemo(() => {
-    return appointmentsList.filter((a, index) => matchesBranch(a.branch, a.branchId, index));
+    return appointmentsList.filter(a => matchesBranch(a.branch, a.branchId));
   }, [appointmentsList, matchesBranch]);
 
   const filteredStock = React.useMemo(() => {
-    return stockList.filter((s, index) => matchesBranch(s.branch, undefined, index));
+    return stockList.filter(s => matchesBranch(s.branch, s.branchId));
   }, [stockList, matchesBranch]);
 
   const filteredSales = React.useMemo(() => {
     if (activeBranch.mode === 'single') {
-      const branchPatientIds = new Set(filteredPatients.map(p => p.id));
-      return salesList.filter(s => branchPatientIds.has(s.patientId));
+    return salesList.filter(s => s.branchId === activeBranch.branchId);
     }
     return salesList;
-  }, [salesList, activeBranch, filteredPatients]);
+  }, [salesList, activeBranch]);
 
   const filteredRecalls = React.useMemo(() => {
     if (activeBranch.mode === 'single') {
       const branchPatientIds = new Set(filteredPatients.map(p => p.id));
-      return recallList.filter((r, index) => 
-        matchesBranch((r as any).branch, (r as any).branchId, index) || (r.patientId && branchPatientIds.has(r.patientId))
-      );
+      return recallList.filter(r => (r as any).branchId
+        ? matchesBranch(undefined, (r as any).branchId)
+        : Boolean(r.patientId && branchPatientIds.has(r.patientId)));
     }
     return recallList;
   }, [recallList, activeBranch, filteredPatients, matchesBranch]);
 
-  const todayAppointments = filteredAppointments.filter(a => a.date === demoDateStr);
+  const todayAppointments = filteredAppointments.filter(a => a.date === todayDateStr);
   const pendingRecalls = filteredRecalls.filter(r => r.status === 'Bekliyor');
   const lowStockItems = filteredStock.filter(s => s.category === 'Pil' && s.quantity <= s.criticalLevel);
 
@@ -84,92 +83,114 @@ export default function DashboardPage() {
     : 0;
 
   // Randevuyu 'Geldi' olarak işaretleme fonksiyonu (Dinamik demo)
-  const handleAptArrived = (id: string, name: string) => {
+  const handleAptArrived = (id: string) => {
     updateAppointmentStatus(id, 'Geldi');
-    addToast({
-      type: 'success',
-      message: `${name} randevuya katıldı olarak işaretlendi.`
-    });
   };
 
-  const handleSendRecall = (id: string, name: string, reason: string) => {
+  const handleSendRecall = (id: string) => {
     updateRecallItemStatus(id, 'Gönderildi');
-    addToast({
-      type: 'success',
-      message: `${name} için ${reason} şablonu WhatsApp üzerinden gönderildi. Randevu bekleniyor.`
-    });
   };
 
   // Dinamik Şube Dağılım Kartları
   const branchCardsData = React.useMemo(() => {
-    return branchesList.map((branch, index) => {
-      const branchPatients = patientsList.filter((p, pIdx) => {
-        if (p.branchId && branch.id) return p.branchId === branch.id;
-        if (p.branch) return p.branch.toLowerCase().includes(branch.name.toLowerCase()) || branch.name.toLowerCase().includes(p.branch.toLowerCase());
-        return pIdx % branchesList.length === index;
-      });
-
-      const branchAppts = appointmentsList.filter((a, aIdx) => {
-        if (a.branchId && branch.id) return a.branchId === branch.id;
-        if (a.branch) return a.branch.toLowerCase().includes(branch.name.toLowerCase()) || branch.name.toLowerCase().includes(a.branch.toLowerCase());
-        return aIdx % branchesList.length === index;
-      });
+    return branchesList.filter(branch => branch.status === 'Aktif').map(branch => {
+      const branchPatients = patientsList.filter(p => p.branchId === branch.id);
+      const branchAppts = appointmentsList.filter(a => a.branchId === branch.id);
 
       const confirmedAppts = branchAppts.filter(a => a.status === 'Geldi' || a.status === 'Hatırlatıldı');
-      const confirmationRate = branchAppts.length > 0 ? Math.round((confirmedAppts.length / branchAppts.length) * 100) : (index === 0 ? 92 : 88);
+      const confirmationRate = branchAppts.length > 0 ? Math.round((confirmedAppts.length / branchAppts.length) * 100) : null;
 
-      const branchPatientIds = new Set(branchPatients.map(p => p.id));
-      const branchSales = salesList.filter(s => branchPatientIds.has(s.patientId));
-      const totalRevenue = branchSales.reduce((acc, s) => acc + (s.total || 0), 0) || (index === 0 ? 128400 : 94200);
+      const branchSales = salesList.filter(s => s.branchId === branch.id);
+      const totalRevenue = branchSales.reduce((acc, s) => acc + (s.total || 0), 0);
 
       return {
         id: branch.id,
         name: branch.name,
         revenue: totalRevenue,
-        growth: index === 0 ? '↑ %14 MoM' : '↑ %8 MoM',
-        patientCount: branchPatients.length || (index === 0 ? 42 : 28),
+        patientCount: branchPatients.length,
         confirmRate: confirmationRate,
-        badgeText: index === 0 ? '⭐ En İyi Performans' : '↑ %8 Artış',
-        badgeBg: '#f0fdf4',
-        badgeColor: '#16a34a',
-        badgeBorder: '#bbf7d0'
       };
     });
   }, [branchesList, patientsList, appointmentsList, salesList]);
 
+  const visibleBranchCards = activeBranch.mode === 'all' && branchCardsData.length > 1 ? branchCardsData : [];
+
+  const unassignedCounts = React.useMemo(() => ({
+    patients: patientsList.filter(row => !row.branchId).length,
+    appointments: appointmentsList.filter(row => !row.branchId).length,
+    stock: stockList.filter(row => !row.branchId).length,
+    sales: salesList.filter(row => !row.branchId).length,
+    expenses: expensesList.filter(row => !row.branchId && row.branch !== 'Genel').length,
+  }), [patientsList, appointmentsList, stockList, salesList, expensesList]);
+
+  const unassignedRows = React.useMemo(() => [
+    { label: 'Hastalar', page: 'patients' as const, rows: patientsList.filter(row => !row.branchId).map(row => `${row.firstName} ${row.lastName} · ${row.id}`) },
+    { label: 'Randevular', page: 'appointments' as const, rows: appointmentsList.filter(row => !row.branchId).map(row => `${row.patientName} · ${row.date} · ${row.id}`) },
+    { label: 'Stok', page: 'stock' as const, rows: stockList.filter(row => !row.branchId).map(row => `${row.name} · ${row.serialNo || row.barcode || row.id}`) },
+    { label: 'Satışlar', page: 'cash' as const, rows: salesList.filter(row => !row.branchId).map(row => `${row.patientName} · ${row.date} · ${row.id}`) },
+    { label: 'Giderler', page: 'expenses' as const, rows: expensesList.filter(row => !row.branchId && row.branch !== 'Genel').map(row => `${row.description} · ${row.date} · ${row.id}`) },
+  ], [patientsList, appointmentsList, stockList, salesList, expensesList]);
+
   return (
     <div className="page">
-      {/* Çoklu Şube Yönetici KPI & Dağılım Kartları (Yalnızca Tüm Şubeler Modunda) */}
-      {activeBranch.mode === 'all' && branchesList.length > 0 && (
+      {/* Multi-branch consolidated comparison; single-branch keeps the business overview below. */}
+      {visibleBranchCards.length > 0 && (
         <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--gray-900)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              🏢 Konsolide Şube Performansı & Dağılım Analitiği
+              🏢 {activeBranch.mode === 'all' ? 'Şubelere Göre Performans' : 'Şube Özeti'}
             </h3>
             <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)', fontWeight: 500 }}>
-              {branchesList.length} Aktif Şube Verisi Birleştirildi
+              {visibleBranchCards.length} aktif şube
             </span>
           </div>
 
           {/* Şubelere Göre Karşılaştırma Kartları Grid (Dinamik) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-            {branchCardsData.map((b) => (
+            {visibleBranchCards.map((b) => (
               <div key={b.id} style={{ background: '#fff', border: '1px solid var(--gray-200)', borderRadius: 12, padding: '16px 18px', boxShadow: 'var(--shadow-xs)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                   <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--gray-900)' }}>📍 {b.name}</span>
-                  <span style={{ fontSize: '0.7rem', fontWeight: 700, background: b.badgeBg, color: b.badgeColor, padding: '2px 8px', borderRadius: 12, border: `1px solid ${b.badgeBorder}` }}>
-                    {b.badgeText}
-                  </span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--gray-500)' }}>Tüm dönem</span>
                 </div>
                 <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--gray-900)', marginBottom: 4 }}>
-                  ₺{b.revenue.toLocaleString('tr-TR')} <span style={{ fontSize: '0.76rem', color: '#16a34a', fontWeight: 600 }}>{b.growth}</span>
+                  ₺{b.revenue.toLocaleString('tr-TR')}
                 </div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--gray-500)', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{b.patientCount} Kayıtlı Hasta</span>
-                  <span>%{b.confirmRate} Randevu Teyit</span>
+                  <span>{b.confirmRate === null ? 'Randevu verisi yok' : `%${b.confirmRate} randevu teyit`}</span>
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {Object.values(unassignedCounts).some(count => count > 0) && activeBranch.mode === 'all' && (
+        <div className="card" role="status" style={{ marginBottom: 18, borderColor: 'var(--warning-300)' }}>
+          <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <strong>Şube bilgisi eksik kayıtlar</strong>
+              <div style={{ color: 'var(--gray-600)', fontSize: '0.85rem', marginTop: 4 }}>
+                Bu kayıtlar şube cirosu ve karşılaştırmalarına tahmini olarak dağıtılmıyor. Düzeltilmeden şube raporlarında yer almaz.
+              </div>
+              <div style={{ color: 'var(--gray-600)', fontSize: '0.8rem', marginTop: 6 }}>
+                {unassignedCounts.patients} hasta · {unassignedCounts.appointments} randevu · {unassignedCounts.stock} stok · {unassignedCounts.sales} satış · {unassignedCounts.expenses} gider
+              </div>
+            </div>
+            <button className="btn btn-secondary" onClick={() => setCurrentPage('patients')}>Kayıtları incele</button>
+            <details style={{ flexBasis: '100%' }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--primary-700)', fontWeight: 600 }}>Eksik şube bilgili kayıt listesi</summary>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginTop: 12 }}>
+                {unassignedRows.filter(group => group.rows.length > 0).map(group => <div key={group.label}>
+                  <button className="btn btn-sm btn-ghost" onClick={() => setCurrentPage(group.page)}>{group.label} ({group.rows.length})</button>
+                  <ul style={{ margin: '6px 0', paddingLeft: 20, color: 'var(--gray-700)', fontSize: '0.78rem' }}>
+                    {group.rows.slice(0, 10).map(row => <li key={row}>{row}</li>)}
+                    {group.rows.length > 10 && <li>… ve {group.rows.length - 10} kayıt daha</li>}
+                  </ul>
+                </div>)}
+              </div>
+            </details>
           </div>
         </div>
       )}
@@ -180,24 +201,18 @@ export default function DashboardPage() {
           title="Toplam Hasta"
           value={filteredPatients.length}
           icon={<IconPatients size={22} strokeWidth={1.6} />}
-          badgeText="Bu Ay +2"
-          badgeType="success"
           onClick={() => setCurrentPage('patients')}
         />
         <StatCard
           title="Bugünkü Randevular"
           value={todayAppointments.length}
           icon={<IconCalendar size={22} strokeWidth={1.6} />}
-          badgeText="Takvime Git"
-          badgeType="info"
           onClick={() => setCurrentPage('appointments')}
         />
         <StatCard
-          title="Toplam Ciro"
+          title="Tüm Dönem Satış Cirosu"
           value={formatCurrency(totalRevenue)}
           icon={<IconCash size={22} strokeWidth={1.6} />}
-          badgeText="Hedef %85"
-          badgeType="success"
           onClick={() => setCurrentPage('cash')}
         />
         <StatCard
@@ -243,7 +258,7 @@ export default function DashboardPage() {
                       {apt.status}
                     </span>
                     {apt.status !== 'Geldi' && apt.status !== 'İptal' && (
-                      <button className="btn btn-sm btn-primary" onClick={() => handleAptArrived(apt.id, apt.patientName)}>
+                      <button className="btn btn-sm btn-primary" onClick={() => handleAptArrived(apt.id)}>
                         Geldi
                       </button>
                     )}
@@ -288,8 +303,8 @@ export default function DashboardPage() {
                       <div className="recall-reason" style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{item.reason} · <span style={{ fontWeight: 600, color: 'var(--accent-600)' }}>{formatCurrency(item.estimatedRevenue)}</span></div>
                     </div>
                   </div>
-                  {item.status === 'Bekliyor' ? (
-                    <button className="btn btn-sm btn-primary" onClick={() => handleSendRecall(item.id, item.patientName, item.reason)}>Gönder</button>
+                    {item.status === 'Bekliyor' ? (
+                    <button className="btn btn-sm btn-primary" onClick={() => handleSendRecall(item.id)}>Gönderildi işaretle</button>
                   ) : (
                     <span className={`badge badge-${item.status === 'Randevu Alındı' ? 'success' : 'info'}`}>
                       {item.status}
@@ -368,16 +383,6 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            {/* Basit progress bar grafik */}
-            <div style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--gray-600)', marginBottom: 4 }}>
-                <span>Aylık Ciro Hedefi</span>
-                <span>%85</span>
-              </div>
-              <div className="progress-bar" style={{ height: 10 }}>
-                <div className="progress-fill primary" style={{ width: '85%' }} />
-              </div>
-            </div>
           </div>
         </div>
       </div>

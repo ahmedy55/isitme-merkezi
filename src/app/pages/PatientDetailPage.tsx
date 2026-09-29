@@ -17,6 +17,8 @@ import { useBranchScope } from '../hooks/useBranchScope';
 import { saveServiceTicket } from '../repositories/ServiceTicketRepository';
 
 const FREQUENCIES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
+const dateInputOffset = (days = 0) => { const value = new Date(); value.setDate(value.getDate() + days); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; };
+const todayDotted = () => new Intl.DateTimeFormat('tr-TR').format(new Date());
 
 export default function PatientDetailPage() {
   const { matches } = useBranchScope();
@@ -52,7 +54,7 @@ export default function PatientDetailPage() {
     deviceName: '',
     serialNo: '',
     problem: '',
-    estimatedDate: '2026-07-15',
+    estimatedDate: dateInputOffset(5),
     notes: '',
     accessories: [] as string[],
     complaints: [] as string[]
@@ -120,15 +122,15 @@ export default function PatientDetailPage() {
     branch: Appointment['branch'];
     notes: string;
   }>({
-    date: '2026-07-11',
+    date: dateInputOffset(1),
     time: '11:00',
     type: 'Kontrol',
     audiologist: 'Dr. Elif Arslan',
-    branch: 'Merkez 1 - Kadıköy',
+    branch: '',
     notes: ''
   });
 
-  const patient = patientsList.find(p => p.id === selectedPatientId);
+  const patient = patientsList.find(p => p.id === selectedPatientId && matches(p.branch, p.branchId));
 
   const [audioLeft, setAudioLeft] = useState<number[]>([]);
   const [audioRight, setAudioRight] = useState<number[]>([]);
@@ -230,7 +232,8 @@ export default function PatientDetailPage() {
   }
 
   const handleStartSale = async (deviceName: string, price: number, stockId: string) => {
-    const matchedStockItem=stockList.find(s=>s.id===stockId && s.name===deviceName && s.quantity>0);
+    if (!patient.branchId) { addToast({ type: 'error', message: 'Satış için önce hastanın işlem şubesini düzeltin.' }); return; }
+    const matchedStockItem=stockList.find(s=>s.id===stockId && s.name===deviceName && s.quantity>0 && s.branchId===patient.branchId);
     if(!matchedStockItem){addToast({type:'error',message:'Bu cihaz için stok kaydı seçilmelidir.'});return;}
     if(matchedStockItem.category==='Cihaz' && (!matchedStockItem.barcode || !matchedStockItem.serialNo)) { addToast({type:'error',message:'Cihazın barkod ve seri numarası stokta kayıtlı olmalıdır.'});return; }
     const sgkAmount=Math.min(price,patient.sgkStatus==='Yenileme Hakkı Var'?6200:0);
@@ -238,7 +241,7 @@ export default function PatientDetailPage() {
       await addSale({id:crypto.randomUUID(),idempotencyKey:crypto.randomUUID(),patientId:patient.id,
         patientName:patient.firstName+' '+patient.lastName,date:new Date().toISOString().split('T')[0],
         items:[{name:matchedStockItem.name,quantity:1,price,type:matchedStockItem.category==='Cihaz'?'Cihaz':'Aksesuar',stockItemId:matchedStockItem.id,barcode:matchedStockItem.barcode,serialNo:matchedStockItem.serialNo}],total:price,
-        sgkAmount,patientAmount:price-sgkAmount,paymentMethod:'Kredi Kartı',status:'Tahsil Edildi'},matchedStockItem.id);
+        sgkAmount,patientAmount:price-sgkAmount,paymentMethod:'Kredi Kartı',status:'Tahsil Edildi',branchId:patient.branchId},matchedStockItem.id);
     } catch { return; }
   };
 
@@ -270,7 +273,7 @@ export default function PatientDetailPage() {
       source: editFormData.source,
       notes: editFormData.notes,
       timeline: [
-        { date: '11.07.2026', action: 'Hasta kartı bilgileri güncellendi.', icon: 'Edit' },
+        { date: todayDotted(), action: 'Hasta kartı bilgileri güncellendi.', icon: 'Edit' },
         ...(patient.timeline || [])
       ]
     };
@@ -304,7 +307,7 @@ export default function PatientDetailPage() {
       ...patient,
       timeline: [
         {
-          date: '11.07.2026',
+          date: todayDotted(),
           action: `Teknik Servis Kabulü Yapıldı: ${serviceFormData.deviceName} (${serviceFormData.serialNo || 'SN Belirtilmedi'}). Alınan aksesuarlar: ${serviceFormData.accessories.join(', ') || 'Yok'}. Şikayetler: ${serviceFormData.complaints.join(', ') || 'Belirtilmedi'}`,
           icon: 'Service'
         },
@@ -318,7 +321,7 @@ export default function PatientDetailPage() {
       deviceName: '',
       serialNo: '',
       problem: '',
-      estimatedDate: '2026-07-15',
+      estimatedDate: dateInputOffset(5),
       notes: '',
       accessories: [],
       complaints: []
@@ -336,7 +339,8 @@ export default function PatientDetailPage() {
       time: aptFormData.time,
       type: aptFormData.type,
       audiologist: aptFormData.audiologist,
-      branch: aptFormData.branch,
+      branch: patient.branch || aptFormData.branch,
+      branchId: patient.branchId,
       status: 'Bekliyor' as const,
       notes: aptFormData.notes
     };
@@ -345,20 +349,19 @@ export default function PatientDetailPage() {
     const updated = {
       ...patient,
       timeline: [
-        { date: '11.07.2026', action: `Yeni Randevu Oluşturuldu (${aptFormData.type} - Saat: ${aptFormData.time}).`, icon: 'Calendar' },
+        { date: todayDotted(), action: `Yeni Randevu Oluşturuldu (${aptFormData.type} - Saat: ${aptFormData.time}).`, icon: 'Calendar' },
         ...(patient.timeline || [])
       ]
     };
     updatePatient(updated);
     
     setShowQuickAptModal(false);
-    addToast({ type: 'success', message: 'Randevu başarıyla oluşturuldu ve hasta takvimine eklendi.' });
     setAptFormData({
-      date: '2026-07-11',
+      date: dateInputOffset(1),
       time: '11:00',
       type: 'Kontrol',
       audiologist: 'Dr. Elif Arslan',
-      branch: 'Merkez 1 - Kadıköy',
+      branch: patient.branch || '',
       notes: ''
     });
   };
@@ -557,7 +560,7 @@ export default function PatientDetailPage() {
                                ...patient,
                                source: val as Patient['source'],
                                timeline: [
-                                 { date: '10.07.2026', action: `Hasta kaynağı "${val}" olarak güncellendi.`, icon: 'Edit' },
+                                 { date: todayDotted(), action: `Hasta kaynağı "${val}" olarak güncellendi.`, icon: 'Edit' },
                                  ...(patient.timeline || [])
                                ]
                              };
@@ -584,7 +587,7 @@ export default function PatientDetailPage() {
                                ...patient,
                                salesStage: val as Patient['salesStage'],
                                timeline: [
-                                 { date: '10.07.2026', action: `Satış süreci "${val}" aşamasına taşındı.`, icon: 'Check' },
+                                 { date: todayDotted(), action: `Satış süreci "${val}" aşamasına taşındı.`, icon: 'Check' },
                                  ...(patient.timeline || [])
                                ]
                              };
@@ -616,7 +619,7 @@ export default function PatientDetailPage() {
                                  ...patient,
                                  doctorName: val,
                                  timeline: [
-                                   { date: '10.07.2026', action: `Muayene doktoru "${val}" olarak eklendi.`, icon: 'Edit' },
+                                   { date: todayDotted(), action: `Muayene doktoru "${val}" olarak eklendi.`, icon: 'Edit' },
                                    ...(patient.timeline || [])
                                  ]
                                };
@@ -638,7 +641,7 @@ export default function PatientDetailPage() {
                                ...patient,
                                prescriptionStatus: val as Patient['prescriptionStatus'],
                                timeline: [
-                                 { date: '10.07.2026', action: `Reçete durumu "${val}" olarak güncellendi.`, icon: 'Check' },
+                                 { date: todayDotted(), action: `Reçete durumu "${val}" olarak güncellendi.`, icon: 'Check' },
                                  ...(patient.timeline || [])
                                ]
                              };
@@ -666,7 +669,7 @@ export default function PatientDetailPage() {
                                ...patient,
                                nextAction: val,
                                timeline: [
-                                 { date: '10.07.2026', action: `Gelecek aksiyon güncellendi: "${val}"`, icon: 'Calendar' },
+                                 { date: todayDotted(), action: `Gelecek aksiyon güncellendi: "${val}"`, icon: 'Calendar' },
                                  ...(patient.timeline || [])
                                ]
                              };
@@ -723,7 +726,7 @@ export default function PatientDetailPage() {
                           const updated = {
                             ...patient,
                             timeline: [
-                              { date: '11.07.2026', action: val, icon: 'Message' },
+                              { date: todayDotted(), action: val, icon: 'Message' },
                               ...(patient.timeline || [])
                             ]
                           };
@@ -742,7 +745,7 @@ export default function PatientDetailPage() {
                           const updated = {
                             ...patient,
                             timeline: [
-                              { date: '11.07.2026', action: val, icon: 'Message' },
+                              { date: todayDotted(), action: val, icon: 'Message' },
                               ...(patient.timeline || [])
                             ]
                           };
@@ -1131,7 +1134,7 @@ export default function PatientDetailPage() {
                               </span>
                             </div>
                           </div>
-                        <DevicePicker items={stockList.filter(s => s.name === brand.name && s.quantity > 0 && matches(s.branch, s.branchId) && (!patient.branchId || s.branchId === patient.branchId))} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
+                        <DevicePicker items={stockList.filter(s => s.name === brand.name && s.quantity > 0 && matches(s.branch, s.branchId) && Boolean(patient.branchId) && s.branchId === patient.branchId)} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
                           <button className="btn btn-sm btn-primary" disabled={!stockList.some(s => s.id === saleStockId && s.name === brand.name)} onClick={() => handleStartSale(brand.name, brand.price, saleStockId)}>
                             Satışı Başlat
                           </button>
@@ -1159,7 +1162,7 @@ export default function PatientDetailPage() {
           let passedDays = 0;
           if (lastPurchaseDate) {
             const purchase = new Date(lastPurchaseDate);
-            const today = new Date('2026-07-10'); // Sistem tarihi simülasyonu
+            const today = new Date();
             const diff = today.getTime() - purchase.getTime();
             passedDays = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
           }
@@ -1822,8 +1825,8 @@ export default function PatientDetailPage() {
       {showQuickAptModal && (
         <NewAppointmentModal
           onClose={() => setShowQuickAptModal(false)}
-          onSave={(newApt) => {
-            addAppointment(newApt);
+          onSave={async (newApt) => {
+            await addAppointment(newApt);
             setShowQuickAptModal(false);
             addToast({ type: 'success', message: `${patient.firstName} ${patient.lastName} için randevu oluşturuldu.` });
           }}
@@ -1840,7 +1843,7 @@ export default function PatientDetailPage() {
               <button className="modal-close" onClick={() => setShowServiceModal(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <DevicePicker items={stockList.filter(s => s.quantity > 0 && (!patient.branchId || s.branchId === patient.branchId))} value={serviceStockId} onChange={item => { setServiceStockId(item.id); setServiceBarcode(item.barcode || ''); setServiceFormData(prev => ({ ...prev, deviceName: item.name, serialNo: item.serialNo })); }} />
+              <DevicePicker items={stockList.filter(s => s.quantity > 0 && Boolean(patient.branchId) && s.branchId === patient.branchId)} value={serviceStockId} onChange={item => { setServiceStockId(item.id); setServiceBarcode(item.barcode || ''); setServiceFormData(prev => ({ ...prev, deviceName: item.name, serialNo: item.serialNo })); }} />
               <DeviceIdentityFields value={{ barcode: serviceBarcode, serialNo: serviceFormData.serialNo }} onChange={next => { setServiceBarcode(next.barcode || ''); setServiceFormData(prev => ({ ...prev, serialNo: next.serialNo || '' })); }} />
               <div className="form-row">
                 <div className="form-group">

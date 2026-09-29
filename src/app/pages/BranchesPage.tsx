@@ -7,9 +7,8 @@ import { Branch, SystemUser, UserRole } from '../data/mockData';
 
 export default function BranchesPage() {
   const { 
-    stockList, 
-    updateStockItem, 
     addToast, 
+    setCurrentPage,
     branchesList, 
     addBranch, 
     usersList, 
@@ -20,7 +19,6 @@ export default function BranchesPage() {
 
   // Branch states
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
-  const [transferCompleted, setTransferCompleted] = useState(false);
   const [branchForm, setBranchForm] = useState({ name: '', address: '', phone: '' });
 
   // Users Filter States
@@ -55,7 +53,7 @@ export default function BranchesPage() {
     setFormEmail('');
     setFormPhone('');
     setFormRoles([]);
-    setFormBranch(branchesList[0]?.name || '');
+    setFormBranch(branchesList[0]?.id || '');
     setFormPassword('');
     setFormStatus('Aktif');
     setErrors({});
@@ -70,7 +68,7 @@ export default function BranchesPage() {
     setFormEmail(user.email);
     setFormPhone(user.phone);
     setFormRoles(user.roles);
-    setFormBranch(user.branch);
+    setFormBranch(user.branchId || branchesList.find(branch => branch.name === user.branch)?.id || (user.branch === 'Tüm Şubeler' ? 'Tüm Şubeler' : ''));
     setFormStatus(user.status);
     setErrors({});
     setShowUserModal(true);
@@ -94,7 +92,7 @@ export default function BranchesPage() {
       newErrors.email = 'Geçersiz e-posta formatı';
     }
     if (!isEditingUser && formPassword.length<12) newErrors.password='Şifre en az 12 karakter olmalıdır';
-    if (!formBranch || (formBranch==='Tüm Şubeler' && !formRoles.includes('Firma Yöneticisi'))) newErrors.branch='Tek bir şube seçin';
+    if (!formBranch || (formBranch === 'Tüm Şubeler' && !formRoles.includes('Firma Yöneticisi')) || (formBranch !== 'Tüm Şubeler' && !branchesList.some(branch => branch.id === formBranch))) newErrors.branch='Tek bir şube seçin';
     if (!formPhone.trim()) newErrors.phone = 'Telefon zorunludur';
     if (formRoles.length === 0) newErrors.roles = 'En az bir rol seçilmelidir';
 
@@ -114,7 +112,8 @@ export default function BranchesPage() {
         email: formEmail,
         phone: formPhone,
         roles: formRoles,
-        branch: formBranch,
+        branch: formBranch === 'Tüm Şubeler' ? formBranch : branchesList.find(branch => branch.id === formBranch)?.name || '',
+        branchId: formBranch === 'Tüm Şubeler' ? undefined : formBranch,
         status: formStatus,
         createdAt: usersList.find(u => u.id === editingUserId)?.createdAt || new Date().toISOString().split('T')[0]
       };
@@ -129,7 +128,8 @@ export default function BranchesPage() {
         email: formEmail,
         phone: formPhone,
         roles: formRoles,
-        branch: formBranch,
+        branch: formBranch === 'Tüm Şubeler' ? formBranch : branchesList.find(branch => branch.id === formBranch)?.name || '',
+        branchId: formBranch === 'Tüm Şubeler' ? undefined : formBranch,
         status: formStatus,
         createdAt: new Date().toISOString().split('T')[0],
         avatar: (formFirstName[0] + formLastName[0]).toUpperCase()
@@ -157,28 +157,6 @@ export default function BranchesPage() {
       type: 'info',
       message: `Kullanıcı durumu '${updated.status}' olarak güncellendi.`
     });
-  };
-
-  // Branch operations
-  const handleConfirmTransfer = () => {
-    const matchedDevice = stockList.find(s => s.branch === 'Merkez 2 - Beşiktaş' && s.category === 'Cihaz');
-    if (matchedDevice) {
-      const updated = {
-        ...matchedDevice,
-        branch: 'Merkez 1 - Kadıköy' as const
-      };
-      updateStockItem(updated);
-      addToast({
-        type: 'success',
-        message: `${matchedDevice.name} (${matchedDevice.serialNo}) başarıyla Beşiktaş şubesinden Kadıköy şubesine transfer edildi.`
-      });
-      setTransferCompleted(true);
-    } else {
-      addToast({
-        type: 'info',
-        message: 'Transfer edilecek uygun cihaz bulunamadı.'
-      });
-    }
   };
 
   const handleSaveBranch = () => {
@@ -236,7 +214,7 @@ export default function BranchesPage() {
       user.phone.includes(searchTerm);
 
     const matchesRole = roleFilter === 'All' || user.roles.includes(roleFilter as UserRole);
-    const matchesBranch = branchFilter === 'All' || user.branch === branchFilter;
+    const matchesBranch = branchFilter === 'All' || (branchFilter === 'Tüm Şubeler' ? user.branch === 'Tüm Şubeler' : user.branchId === branchFilter);
     const matchesStatus = statusFilter === 'All' || user.status === statusFilter;
 
     return matchesSearch && matchesRole && matchesBranch && matchesStatus;
@@ -261,43 +239,17 @@ export default function BranchesPage() {
         </div>
       </div>
 
-      {/* Akıllı Stok Transfer Önerisi Banner'ı */}
-      <div className="card" style={{
-        marginBottom: 24,
-        background: 'linear-gradient(to right, var(--primary-50), white)',
-        border: '1px solid var(--primary-200)',
-        padding: '16px 20px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 16
-      }}>
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <h4 style={{ color: 'var(--primary-700)', fontWeight: 700, margin: '0 0 4px 0', fontSize: '0.95rem' }}>
-            Akıllı Şubeler Arası Stok Transfer Önerisi
-          </h4>
-          <p style={{ color: 'var(--gray-600)', fontSize: '0.84rem', margin: 0 }}>
-            Kadıköy şubesinde cihaz stoğu kritik düzeye düştü. Beşiktaş şubesinde ihtiyaç fazlası 1 adet cihaz tespit edildi. Transfer öneriliyor.
-          </p>
+      {branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div className="card" style={{ marginBottom: 24 }}>
+        <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div><strong>Şubeler arası işlemler</strong><p style={{ margin: '4px 0 0', color: 'var(--gray-600)', fontSize: '0.84rem' }}>Hasta transfer geçmişi ve şube karşılaştırmalarını açın.</p></div>
+          <button className="btn btn-secondary" onClick={() => setCurrentPage('branch-activities')}>Şube aktivitelerine git</button>
         </div>
-        <div>
-          {transferCompleted ? (
-            <span className="badge badge-success" style={{ padding: '8px 12px', fontSize: '0.82rem', fontWeight: 600 }}>
-              Transfer Başarıyla Tamamlandı
-            </span>
-          ) : (
-            <button className="btn btn-primary" onClick={handleConfirmTransfer} style={{ fontSize: '0.84rem' }}>
-              Transferi Onayla ve Stokları Güncelle
-            </button>
-          )}
-        </div>
-      </div>
+      </div>}
 
       {/* Branches Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
         {branchesList.map((branch) => {
-          const staffCount = usersList.filter(u => u.branch === branch.name || u.branch === 'Tüm Şubeler').length;
+          const staffCount = usersList.filter(u => u.branchId === branch.id).length;
           return (
             <div key={branch.id} className="card">
               <div className="card-body">
@@ -387,8 +339,8 @@ export default function BranchesPage() {
             <div style={{ minWidth: 140 }}>
               <select className="form-input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ margin: 0 }}>
                 <option value="All">Tüm Şubeler</option>
-                <option value="Tüm Şubeler">Tüm Şubeler (Genel)</option>
-                {branchesList.map(branch=><option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                <option value="Tüm Şubeler">Tüm Şubeler (Firma geneli personel)</option>
+                {branchesList.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}
               </select>
             </div>
 
@@ -641,7 +593,7 @@ export default function BranchesPage() {
                       value={formBranch}
                       onChange={(e) => setFormBranch(e.target.value as any)}
                     >
-                      {branchesList.map(branch=><option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                      {branchesList.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}
                       <option value="Tüm Şubeler">Tüm Şubeler (Genel)</option>
                     </select>
                   </div>

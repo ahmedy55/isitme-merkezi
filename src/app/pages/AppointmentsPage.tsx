@@ -7,7 +7,6 @@ import { BranchService } from '../services/BranchService';
 import { getAvatarColor } from '../data/mockData';
 import { IconPlus, IconSGK, IconCalendar, IconCheck, IconClose } from '../components/Icons';
 
-const branches = ['Merkez 1 - Kadıköy', 'Merkez 2 - Beşiktaş'];
 const audiologists = ['Dr. Elif Arslan', 'Dr. Can Yılmaz'];
 const statusColors: Record<string, string> = {
   'Bekliyor': 'warning',
@@ -19,11 +18,11 @@ const statusColors: Record<string, string> = {
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 export default function AppointmentsPage() {
-  const { appointmentsList: rawAppointmentsList, patientsList, addAppointment, updateAppointmentStatus, addToast } = useApp();
+  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointmentStatus, addToast } = useApp();
   const { activeBranch } = useBranch();
 
   const appointmentsList = React.useMemo(() => {
-    return rawAppointmentsList.filter((a, i) => BranchService.matchesBranch(a.branch, a.branchId, activeBranch, i));
+    return rawAppointmentsList.filter(a => BranchService.matchesBranch(a.branch, a.branchId, activeBranch));
   }, [rawAppointmentsList, activeBranch]);
   
   const stats = React.useMemo(() => {
@@ -36,27 +35,30 @@ export default function AppointmentsPage() {
 
   const [view, setView] = useState<'list' | 'calendar'>('list');
   const [filterAudiologist, setFilterAudiologist] = useState('Tümü');
-  const [filterBranch, setFilterBranch] = useState('Tüm Şubeler');
+  const [filterBranch, setFilterBranch] = useState('All');
   const [filterDate, setFilterDate] = useState('');
   const [statusWidgetFilter, setStatusWidgetFilter] = useState<'all' | 'planlandi' | 'tamamlanan' | 'iptal'>('all');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 9));
+  const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const [formData, setFormData] = useState({
     patientName: '',
-    date: '2026-07-10',
+    date: new Date().toLocaleDateString('en-CA'),
     time: '10:00',
     type: 'İşitme Testi',
     audiologist: 'Dr. Elif Arslan',
-    branch: 'Merkez 1 - Kadıköy',
+    branch: activeBranch.mode === 'single' ? activeBranch.branchId : '',
     notes: ''
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.patientName) {
       alert('Lütfen hasta adı girin.');
       return;
     }
+    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : formData.branch;
+    const assignedBranch = branchesList.find(branch => branch.id === branchId);
+    if (!branchId || !assignedBranch) { addToast({ type: 'error', message: 'Randevu için şube seçin.' }); return; }
     const newApt = {
       id: `apt-${Date.now().toString().slice(-6)}`,
       patientId: 'p-unknown',
@@ -65,27 +67,27 @@ export default function AppointmentsPage() {
       time: formData.time,
       type: formData.type as any,
       audiologist: formData.audiologist,
-      branch: formData.branch as any,
+      branch: assignedBranch.name as any,
+      branchId,
       status: 'Bekliyor' as const,
       notes: formData.notes
     };
-    addAppointment(newApt);
+    try { await addAppointment(newApt); } catch { return; }
     setShowAddModal(false);
     setFormData({
       patientName: '',
-      date: '2026-07-10',
+      date: new Date().toLocaleDateString('en-CA'),
       time: '10:00',
       type: 'İşitme Testi',
       audiologist: 'Dr. Elif Arslan',
-      branch: 'Merkez 1 - Kadıköy',
+      branch: activeBranch.mode === 'single' ? activeBranch.branchId : '',
       notes: ''
     });
   };
 
   const filtered = appointmentsList.filter(a => {
     const matchAudiologist = filterAudiologist === 'Tümü' || a.audiologist === filterAudiologist;
-    const matchBranch = filterBranch === 'Tüm Şubeler' || 
-      (a.branch && (a.branch.toLowerCase().includes(filterBranch.toLowerCase()) || filterBranch.toLowerCase().includes(a.branch.toLowerCase())));
+    const matchBranch = filterBranch === 'All' || a.branchId === filterBranch;
     const matchDate = !filterDate || a.date === filterDate;
     let matchWidget = true;
     if (statusWidgetFilter === 'planlandi') {
@@ -265,7 +267,7 @@ export default function AppointmentsPage() {
       {/* Filters */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div className="form-group" style={{ margin: 0, flex: '1 1 200px' }}>
+          {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div className="form-group" style={{ margin: 0, flex: '1 1 200px' }}>
             <select
               className="form-select"
               value={filterAudiologist}
@@ -275,7 +277,7 @@ export default function AppointmentsPage() {
               <option value="Tümü">Tüm Doktorlar</option>
               {audiologists.map(a => <option key={a} value={a}>{a}</option>)}
             </select>
-          </div>
+          </div>}
           <div className="form-group" style={{ margin: 0, flex: '1 1 200px' }}>
             <select 
               className="form-select" 
@@ -283,8 +285,8 @@ export default function AppointmentsPage() {
               onChange={(e) => setFilterBranch(e.target.value)}
               style={{ width: '100%' }}
             >
-              <option value="Tüm Şubeler">Tüm Şubeler</option>
-              {branches.map(b => <option key={b} value={b}>{b}</option>)}
+              <option value="All">Tüm Şubeler</option>
+              {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
             </select>
           </div>
           <div className="form-group" style={{ margin: 0, flex: '1 1 180px', display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -316,12 +318,12 @@ export default function AppointmentsPage() {
               </button>
             )}
           </div>
-          {(filterAudiologist !== 'Tümü' || filterBranch !== 'Tüm Şubeler' || filterDate || statusWidgetFilter !== 'all') && (
+          {(filterAudiologist !== 'Tümü' || filterBranch !== 'All' || filterDate || statusWidgetFilter !== 'all') && (
             <button
               className="btn btn-sm btn-secondary"
               onClick={() => {
                 setFilterAudiologist('Tümü');
-                setFilterBranch('Tüm Şubeler');
+                setFilterBranch('All');
                 setFilterDate('');
                 setStatusWidgetFilter('all');
               }}
@@ -489,7 +491,8 @@ export default function AppointmentsPage() {
                   <div key={day} className="calendar-header-cell">{day}</div>
                 ))}
                 {cells.map((cell, idx) => {
-                  const isToday = cell.isCurrentMonth && cell.dateNum === 9 && currentDate.getMonth() === 6 && currentYear === 2026;
+                  const now = new Date();
+                  const isToday = cell.isCurrentMonth && cell.dateNum === now.getDate() && currentDate.getMonth() === now.getMonth() && currentYear === now.getFullYear();
                   const isSelected = Boolean(filterDate && cell.fullDate === filterDate);
                   const dayAppointments = cell.isCurrentMonth
                     ? filtered.filter(a => a.date === cell.fullDate)
@@ -540,8 +543,8 @@ export default function AppointmentsPage() {
       {showAddModal && (
         <NewAppointmentModal
           onClose={() => setShowAddModal(false)}
-          onSave={(newApt) => {
-            addAppointment(newApt);
+          onSave={async (newApt) => {
+            await addAppointment(newApt);
             setShowAddModal(false);
           }}
           patientsList={patientsList}
@@ -562,7 +565,7 @@ export function NewAppointmentModal({
   addToast
 }: {
   onClose: () => void;
-  onSave: (apt: any) => void;
+  onSave: (apt: any) => void | Promise<void>;
   patientsList: any[];
   addToast?: any;
 }) {
@@ -575,10 +578,10 @@ export function NewAppointmentModal({
   const [newPatientPhone, setNewPatientPhone] = useState('');
 
   // Date & Time State
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 6, 22, 9, 0));
+  const [selectedDate, setSelectedDate] = useState<Date>(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0); });
   const [showPicker, setShowPicker] = useState(false);
-  const [pickerMonth, setPickerMonth] = useState(6); // July (0-indexed)
-  const [pickerYear, setPickerYear] = useState(2026);
+  const [pickerMonth, setPickerMonth] = useState(() => new Date().getMonth());
+  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
 
   // Appointment Type State
   const [aptType, setAptType] = useState('Muayene');
@@ -586,7 +589,9 @@ export function NewAppointmentModal({
 
   // Audiologist & Branch
   const [audiologist, setAudiologist] = useState('Dr. Elif Arslan');
-  const [branch, setBranch] = useState('Merkez 1 - Kadıköy');
+  const { branchesList } = useApp();
+  const { activeBranch } = useBranch();
+  const [branch, setBranch] = useState(activeBranch.mode === 'single' ? activeBranch.branchId : '');
 
   // Notes
   const [notes, setNotes] = useState('');
@@ -680,7 +685,7 @@ export function NewAppointmentModal({
     setReminders(reminders.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     let patientNameFinal = '';
     let patientIdFinal = 'p-unknown';
@@ -710,6 +715,11 @@ export function NewAppointmentModal({
     const minStr = selectedDate.getMinutes().toString().padStart(2, '0');
     const timeStr = `${hourStr}:${minStr}`;
 
+    const linkedPatient = patientsList.find(patient => patient.id === patientIdFinal);
+    if (linkedPatient && !linkedPatient.branchId) { addToast?.({ type: 'error', message: 'Bu hastanın şube bilgisi eksik. Önce hasta kaydını düzeltin.' }); return; }
+    const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : linkedPatient?.branchId || branch;
+    const assignedBranch = branchesList.find(item => item.id === assignedBranchId);
+    if (!assignedBranchId || !assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için şube seçin.' }); return; }
     const newApt = {
       id: `apt-${Date.now().toString().slice(-6)}`,
       patientId: patientIdFinal,
@@ -718,7 +728,8 @@ export function NewAppointmentModal({
       time: timeStr,
       type: aptType as any,
       audiologist,
-      branch: branch as any,
+      branch: assignedBranch.name as any,
+      branchId: assignedBranchId,
       status: 'Bekliyor' as const,
       notes: notes,
       followupPlan: createFollowupPlan,
@@ -728,7 +739,8 @@ export function NewAppointmentModal({
       sendWhatsappOnCreate
     };
 
-    onSave(newApt);
+    try { await onSave(newApt); }
+    catch { /* Keep the form open when persistence fails. */ }
   };
 
   return (
@@ -1088,6 +1100,8 @@ export function NewAppointmentModal({
             </div>
 
           </div>
+
+          {activeBranch.mode === 'all' && branchesList.filter(item => item.status === 'Aktif').length > 1 && <label className="form-group">Kayıt şubesi<select className="form-select" value={patientsList.find(patient => patient.id === selectedPatient?.id)?.branchId || branch} disabled={Boolean(selectedPatient)} onChange={event => setBranch(event.target.value)}><option value="">Şube seçin</option>{branchesList.filter(item => item.status === 'Aktif').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
 
           {/* Notlar */}
           <div>

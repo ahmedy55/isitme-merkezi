@@ -12,6 +12,8 @@ interface TransferRecord {
   patientName: string;
   fromBranch: string;
   toBranch: string;
+  sourceBranchId?: string;
+  targetBranchId?: string;
   date: string;
   approvedBy: string;
   status: 'Tamamlandı' | 'Beklemede';
@@ -19,32 +21,33 @@ interface TransferRecord {
 
 export default function BranchActivitiesPage() {
   const { addToast, branchesList: allBranches, usersList, salesList, appointmentsList, patientsList, currentOrgId, refreshOrganizationData } = useApp();
-  const { matches } = useBranchScope();
+  const { matches, activeBranch } = useBranchScope();
   const branchesList = React.useMemo(() => allBranches.filter(branch => matches(branch.name, branch.id)), [allBranches, matches]);
+  const visiblePatients = React.useMemo(() => patientsList.filter(patient => matches(patient.branch, patient.branchId)), [patientsList, matches]);
 
   // Branch Performance Analysis
   // Calculate dynamic data per branch from AppContext
-  const getBranchStats = (branchName: string) => {
+  const getBranchStats = (branchId: string) => {
     // Staff count
-    const branch = allBranches.find(item => item.name === branchName);
-    const staff = usersList.filter(u => u.branchId === branch?.id || u.branch === branchName || u.branch === 'Tüm Şubeler').length;
+    const branch = allBranches.find(item => item.id === branchId);
+    const staff = usersList.filter(u => u.branchId === branch?.id).length;
     // Sales count and revenue
-    const branchPatientIds = new Set(patientsList.filter(patient => patient.branchId === branch?.id || patient.branch === branchName).map(patient => patient.id));
-    const branchSales = salesList.filter(sale => branchPatientIds.has(sale.patientId));
+    const branchSales = salesList.filter(sale => sale.branchId === branch?.id);
     const revenue = branchSales.reduce((acc, curr) => acc + curr.total, 0);
     const salesCount = branchSales.length;
 
     // Appointments count
-    const appointments = appointmentsList.filter(a => a.branchId === branch?.id || a.branch === branchName).length;
+    const appointments = appointmentsList.filter(a => a.branchId === branch?.id).length;
 
     return { staff, revenue, salesCount, appointments };
   };
 
   // Simulated transfers history
-  const [transfers, setTransfers] = useState<TransferRecord[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
+  const [transfers, setTransfers] = useState<TransferRecord[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && process.env.NEXT_PUBLIC_DEMO_BRANCH_COUNT !== '1' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
     { id: 'trf-1', patientName: 'Ahmet Yılmaz', fromBranch: 'Merkez 2 - Beşiktaş', toBranch: 'Merkez 1 - Kadıköy', date: '2026-07-20', approvedBy: 'Dr. Elif Arslan', status: 'Tamamlandı' },
     { id: 'trf-2', patientName: 'Saniye Öztürk', fromBranch: 'Merkez 1 - Kadıköy', toBranch: 'Merkez 2 - Beşiktaş', date: '2026-07-15', approvedBy: 'Sek. Zeynep Acar', status: 'Tamamlandı' }
   ] : []));
+  const visibleTransfers = React.useMemo(() => activeBranch.mode !== 'single' ? transfers : transfers.filter(transfer => transfer.sourceBranchId === activeBranch.branchId || transfer.targetBranchId === activeBranch.branchId), [transfers, activeBranch]);
   useEffect(() => {
     let cancelled = false;
     if (currentOrgId) {
@@ -62,7 +65,7 @@ export default function BranchActivitiesPage() {
 
   const handleCreateTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
-    const patient = patientsList.find(p => p.id === formPatientId);
+    const patient = visiblePatients.find(p => p.id === formPatientId);
     const target = allBranches.find(b => b.id === formToBranchId);
     if (!patient || !patient.branchId || !target || patient.branchId === target.id || savingTransfer) { addToast({type:'error',message:'Kayıtlı hasta ve farklı, aktif hedef şube seçin.'}); return; }
     if (!currentOrgId) { addToast({type:'error',message:'Aktif firma gerekli.'}); return; }
@@ -76,6 +79,8 @@ export default function BranchActivitiesPage() {
       patientName: patient.firstName + ' ' + patient.lastName,
       fromBranch: allBranches.find(b => b.id === patient.branchId)?.name || '',
       toBranch: target.name,
+      sourceBranchId: patient.branchId,
+      targetBranchId: target.id,
       date: new Date().toISOString().split('T')[0],
       approvedBy: 'Dr. Elif Arslan',
       status: 'Tamamlandı'
@@ -104,7 +109,7 @@ export default function BranchActivitiesPage() {
       {/* Grid of branches performance */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginBottom: 24 }}>
         {branchesList.map((branch) => {
-          const stats = getBranchStats(branch.name);
+          const stats = getBranchStats(branch.id);
           return (
             <div className="card" key={branch.id} style={{ borderTop: '4px solid var(--primary-500)' }}>
               <div className="card-header" style={{ borderBottom: '1px solid var(--surface-border-light)' }}>
@@ -124,7 +129,7 @@ export default function BranchActivitiesPage() {
                   <div>
                     <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)' }}>Hasta Sayısı</span>
                     <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--gray-900)', marginTop: 2 }}>
-                      {branch.patientsCount} hasta
+                  {patientsList.filter(patient => patient.branchId === branch.id).length} hasta
                     </div>
                   </div>
                   <div>
@@ -158,7 +163,7 @@ export default function BranchActivitiesPage() {
                 <label className="form-label">Hasta Adı Soyadı</label>
                 <select className="form-input" value={formPatientId} onChange={e => { setFormPatientId(e.target.value); setFormToBranchId(''); }} required>
                   <option value="">Hasta seçin</option>
-                  {patientsList.filter(p => p.branchId).map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} · {allBranches.find(b => b.id === p.branchId)?.name}</option>)}
+                  {visiblePatients.filter(p => p.branchId).map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} · {allBranches.find(b => b.id === p.branchId)?.name}</option>)}
                 </select>
               </div>
 
@@ -167,11 +172,11 @@ export default function BranchActivitiesPage() {
                   <label className="form-label">Mevcut Şubesi</label>
                   <select
                     className="form-input"
-                    value={allBranches.find(b => b.id === patientsList.find(p => p.id === formPatientId)?.branchId)?.name || ''}
+                    value={allBranches.find(b => b.id === visiblePatients.find(p => p.id === formPatientId)?.branchId)?.name || ''}
                     disabled
                   >
                     <option value="">Hasta seçin</option>
-                    {allBranches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                    {allBranches.filter(b => b.status === 'Aktif').map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
                   </select>
                 </div>
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
@@ -182,7 +187,7 @@ export default function BranchActivitiesPage() {
                     onChange={(e) => setFormToBranchId(e.target.value)}
                   >
                     <option value="">Hedef şube seçin</option>
-                    {allBranches.filter(b => b.id !== patientsList.find(p => p.id === formPatientId)?.branchId && b.status !== 'Pasif' && String(b.status) !== 'inactive').map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    {allBranches.filter(b => b.id !== visiblePatients.find(p => p.id === formPatientId)?.branchId && b.status === 'Aktif').map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -200,16 +205,16 @@ export default function BranchActivitiesPage() {
             <span className="card-title">📋 Şube Transfer Günlüğü</span>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
-            {transfers.length === 0 ? (
+            {visibleTransfers.length === 0 ? (
               <div style={{ padding: 30, textAlign: 'center', color: 'var(--gray-400)' }}>
                 Kayıtlı transfer işlemi bulunmamaktadır.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {transfers.map((trf, i) => (
+                {visibleTransfers.map((trf, i) => (
                   <div key={trf.id} style={{
                     padding: '12px 16px',
-                    borderBottom: i < transfers.length - 1 ? '1px solid var(--surface-border-light)' : 'none',
+                    borderBottom: i < visibleTransfers.length - 1 ? '1px solid var(--surface-border-light)' : 'none',
                     fontSize: '0.86rem'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>

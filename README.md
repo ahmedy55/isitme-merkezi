@@ -61,6 +61,9 @@ npm run dev
 ```
 Uygulama `http://localhost:3000` adresinde çalışacaktır.
 
+### Demo Ortamı
+Demo girişi yalnızca Supabase bağlantısı tanımlanmamış demo ortamında açılır. `.env.local` içinde `NEXT_PUBLIC_DEMO_MODE=true` ayarlayın. Tek şubeli demo için ayrıca `NEXT_PUBLIC_DEMO_BRANCH_COUNT=1` tanımlayın; bu ayar verilmezse iki şubeli örnek veri kullanılır. Bu değişkenleri Supabase bağlantısı olan üretim ortamında demo erişimi açmak için kullanmayın.
+
 ---
 
 ## 🧪 Test ve Derleme Komutları

@@ -88,9 +88,11 @@ export const dbUpdatePatient = async (id: string, patient: any) => {
       .from('patients')
       .update(await writePayload('patients',payload))
       .eq('id', id)
-      .select();
+      .select()
+      .maybeSingle();
     if (error) throw error;
-    const result = toCamel<any>(data?.[0]);
+    if (!data) throw new DatabaseError('Hasta kaydedilemedi veya erişim yetkisi yok.');
+    const result = toCamel<any>(data);
     if (result) result.tc = plaintextTc || '';
     return result;
   }, 'dbUpdatePatient');
@@ -152,9 +154,11 @@ export const dbUpdateAppointmentStatus = async (id: string, status: string) => {
       .from('appointments')
       .update({ status })
       .eq('id', id)
-      .select();
+      .select()
+      .maybeSingle();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    if (!data) throw new DatabaseError('Randevu kaydedilemedi veya şubeye erişim yetkisi yok.');
+    return toCamel(data);
   }, 'dbUpdateAppointmentStatus');
 };
 
@@ -341,9 +345,11 @@ export const dbUpdateRecallStatus = async (id: string, status: string) => {
       .from('recall_items')
       .update({ status, last_contact: new Date().toISOString().split('T')[0] })
       .eq('id', id)
-      .select();
+      .select()
+      .maybeSingle();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    if (!data) throw new DatabaseError('Hatırlatma kaydedilemedi veya şubeye erişim yetkisi yok.');
+    return toCamel(data);
   }, 'dbUpdateRecallStatus');
 };
 
@@ -395,9 +401,11 @@ export const dbUpdateSupplier = async (id: string, supplier: any) => {
       .from('suppliers')
       .update(await writePayload('suppliers',payload))
       .eq('id', id)
-      .select();
+      .select()
+      .maybeSingle();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    if (!data) throw new DatabaseError('Tedarikçi kaydedilemedi veya erişim yetkisi yok.');
+    return toCamel(data);
   }, 'dbUpdateSupplier');
 };
 
@@ -540,9 +548,11 @@ export const dbUpdateBranch = async (id: string, branch: any) => {
       .from('branches')
       .update(await writePayload('branches',payload))
       .eq('id', id)
-      .select();
+      .select()
+      .maybeSingle();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    if (!data) throw new DatabaseError('Şube kaydedilemedi veya erişim yetkisi yok.');
+    return toCamel(data);
   }, 'dbUpdateBranch');
 };
 

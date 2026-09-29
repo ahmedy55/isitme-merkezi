@@ -8,8 +8,9 @@ import { IconSearch, IconPlus, IconEdit, IconDelete, IconFilter, IconCheck, Icon
 
 export default function ExpensesPage() {
   const { expensesList: allExpenses, addExpense, updateExpense, deleteExpense, addToast, branchesList } = useApp();
-  const { matches, activeBranchName, activeBranchId, activeBranch } = useBranchScope();
-  const expensesList = React.useMemo(() => allExpenses.filter(e => e.branch === 'Genel' || matches(e.branch, e.branchId)), [allExpenses, matches]);
+  const { matches, activeBranchId, activeBranch } = useBranchScope();
+  const oneBranchCompany = branchesList.filter(branch => branch.status === 'Aktif').length === 1;
+  const expensesList = React.useMemo(() => allExpenses.filter(e => matches(e.branch, e.branchId) || ((activeBranch.mode === 'all' || oneBranchCompany) && e.branch === 'Genel' && !e.branchId)), [allExpenses, matches, activeBranch.mode, oneBranchCompany]);
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,7 +50,7 @@ export default function ExpensesPage() {
     setFormDescription('');
     setFormAmount(0);
     setFormPaymentMethod('Havale');
-    setFormBranch(activeBranchName || branchesList[0]?.name || '');
+    setFormBranch(activeBranchId || '');
     setFormCreatedBy('Dr. Elif Arslan');
     setFormReceiptNo('');
     setFormNotes('');
@@ -66,7 +67,7 @@ export default function ExpensesPage() {
     setFormDescription(expense.description);
     setFormAmount(expense.amount);
     setFormPaymentMethod(expense.paymentMethod);
-    setFormBranch(expense.branch);
+    setFormBranch(expense.branch === 'Genel' && !expense.branchId ? 'Genel' : expense.branchId || '');
     setFormCreatedBy(expense.createdBy);
     setFormReceiptNo(expense.receiptNo || '');
     setFormNotes(expense.notes || '');
@@ -89,7 +90,8 @@ export default function ExpensesPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
-    if (!expenseBranchId(formBranch)) { addToast({ type: 'error', message: 'Gider için bir şube seçin.' }); return; }
+    const canUseGeneralExpense = formBranch === 'Genel' && (activeBranch.mode === 'all' || oneBranchCompany);
+    if (!expenseBranchId(formBranch) && !canUseGeneralExpense) { addToast({ type: 'error', message: 'Gider için bir şube seçin.' }); return; }
     if (saving) return;
     setSaving(true);
     try {
@@ -101,7 +103,7 @@ export default function ExpensesPage() {
         description: formDescription,
         amount: formAmount,
         paymentMethod: formPaymentMethod,
-        branch: formBranch,
+        branch: expenseBranchName(formBranch),
         branchId: expenseBranchId(formBranch),
         createdBy: formCreatedBy,
         receiptNo: formReceiptNo || undefined,
@@ -116,7 +118,7 @@ export default function ExpensesPage() {
         description: formDescription,
         amount: formAmount,
         paymentMethod: formPaymentMethod,
-        branch: formBranch,
+        branch: expenseBranchName(formBranch),
         branchId: expenseBranchId(formBranch),
         createdBy: formCreatedBy,
         receiptNo: formReceiptNo || undefined,
@@ -131,9 +133,14 @@ export default function ExpensesPage() {
   };
 
   const expenseBranchId = (branchName: string) => {
+    if (branchName === 'Genel' && (activeBranch.mode === 'all' || oneBranchCompany)) return undefined;
     if (activeBranch.mode === 'single') return activeBranchId;
-    return branchesList.find(branch => branch.name === branchName)?.id;
+    return branchesList.find(branch => branch.id === branchName)?.id;
   };
+
+  const expenseBranchName = (branchId: string) => branchId === 'Genel'
+    ? 'Genel'
+    : branchesList.find(branch => branch.id === expenseBranchId(branchId))?.name || '';
 
   const handleDelete = async (id: string) => {
     if (confirm('Bu masraf kaydını silmek istediğinize emin misiniz?')) {
@@ -153,7 +160,7 @@ export default function ExpensesPage() {
       e.createdBy.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesCategory = categoryFilter === 'All' || e.category === categoryFilter;
-    const matchesBranch = branchFilter === 'All' || e.branch === branchFilter;
+    const matchesBranch = branchFilter === 'All' || (branchFilter === 'Genel' ? e.branch === 'Genel' && !e.branchId : e.branchId === branchFilter);
     const matchesPayment = paymentFilter === 'All' || e.paymentMethod === paymentFilter;
 
     return matchesSearch && matchesCategory && matchesBranch && matchesPayment;
@@ -272,14 +279,13 @@ export default function ExpensesPage() {
               </select>
             </div>
 
-            <div style={{ minWidth: 150 }}>
+            {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div style={{ minWidth: 150 }}>
               <select className="form-input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ margin: 0 }}>
                 <option value="All">Tüm Şubeler</option>
-                <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
-                <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
+                {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                 <option value="Genel">Genel (Tüm Şirket)</option>
               </select>
-            </div>
+            </div>}
 
             <div style={{ minWidth: 150 }}>
               <select className="form-input" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} style={{ margin: 0 }}>
@@ -472,18 +478,19 @@ export default function ExpensesPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                  {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div className="form-group" style={{ flex: 1, margin: 0 }}>
                     <label className="form-label">Şube / Bölüm</label>
                     <select
                       className="form-input"
                       value={formBranch}
                       onChange={(e) => setFormBranch(e.target.value)}
-                      disabled={activeBranch.mode === 'single'}
                     >
                       {!formBranch && <option value="">Şube seçin</option>}
-                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                      {activeBranch.mode === 'all' && <option value="Genel">Genel (Firma ortak gideri)</option>}
                     </select>
                   </div>
+                  }
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>
                     <label className="form-label">Evrak / Fiş No</label>
                     <input

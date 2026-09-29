@@ -111,6 +111,11 @@ export default function AssetsPage() {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [branchFilter, setBranchFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  useEffect(() => {
+    if (!currentOrgId && process.env.NEXT_PUBLIC_DEMO_BRANCH_COUNT === '1' && branchesList.length === 1) {
+      setAssets(previous => previous.map(asset => ({ ...asset, branch: branchesList[0].name, branchId: branchesList[0].id })));
+    }
+  }, [currentOrgId, branchesList]);
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -136,7 +141,7 @@ export default function AssetsPage() {
     setFormName('');
     setFormCategory('Ofis Ekipmanı');
     setFormSerialNo('');
-    setFormBranch(activeBranch.mode === 'single' ? activeBranch.branch?.name || '' : branchesList[0]?.name || '');
+    setFormBranch(activeBranch.mode === 'single' ? activeBranch.branchId : '');
     setFormPurchaseDate(new Date().toISOString().split('T')[0]);
     setFormCost(0);
     setFormWarrantyExpiry('');
@@ -153,7 +158,7 @@ export default function AssetsPage() {
     setFormName(asset.name);
     setFormCategory(asset.category);
     setFormSerialNo(asset.serialNo);
-    setFormBranch(asset.branch);
+    setFormBranch(asset.branchId || '');
     setFormPurchaseDate(asset.purchaseDate);
     setFormCost(asset.cost);
     setFormWarrantyExpiry(asset.warrantyExpiry);
@@ -171,12 +176,13 @@ export default function AssetsPage() {
       return;
     }
 
-    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : branchesList.find(b => b.name === formBranch)?.id;
-    if (currentOrgId && !branchId) { addToast({type:'error',message:'Demirbaş için şube seçin.'}); return; }
+    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : formBranch;
+    const branchName = branchesList.find(branch => branch.id === branchId)?.name || '';
+    if (!branchId) { addToast({type:'error',message:'Demirbaş için şube seçin.'}); return; }
     if (isEditing && editingAssetId) {
       const updated: Asset = {
         ...(assets.find(a => a.id === editingAssetId) as Asset), id: editingAssetId,
-        name: formName, category: formCategory, serialNo: formSerialNo, branch: formBranch, branchId,
+        name: formName, category: formCategory, serialNo: formSerialNo, branch: branchName, branchId,
         purchaseDate: formPurchaseDate, cost: formCost, warrantyExpiry: formWarrantyExpiry,
         lastMaintenance: formLastMaintenance, maintenanceIntervalMonths: formInterval,
         status: formStatus, notes: formNotes,
@@ -189,7 +195,7 @@ export default function AssetsPage() {
             name: formName,
             category: formCategory,
             serialNo: formSerialNo,
-            branch: formBranch,
+            branch: branchName,
             branchId,
             purchaseDate: formPurchaseDate,
             cost: formCost,
@@ -209,7 +215,7 @@ export default function AssetsPage() {
         name: formName,
         category: formCategory,
         serialNo: formSerialNo,
-        branch: formBranch,
+        branch: branchName,
         branchId,
         purchaseDate: formPurchaseDate,
         cost: formCost,
@@ -254,8 +260,8 @@ export default function AssetsPage() {
   };
 
   // Branch Filtered Assets
-  const branchFilteredAssets = assets.filter((a, index) => 
-    BranchService.matchesBranch(a.branch, a.branchId, activeBranch, index)
+  const branchFilteredAssets = assets.filter(a =>
+    BranchService.matchesBranch(a.branch, a.branchId, activeBranch)
   );
 
   // Filter Logic
@@ -265,7 +271,7 @@ export default function AssetsPage() {
       a.serialNo.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesCategory = categoryFilter === 'All' || a.category === categoryFilter;
-    const matchesLocalBranch = branchFilter === 'All' || a.branch === branchFilter;
+    const matchesLocalBranch = branchFilter === 'All' || a.branchId === branchFilter;
     const matchesStatus = statusFilter === 'All' || a.status === statusFilter;
 
     return matchesSearch && matchesCategory && matchesLocalBranch && matchesStatus;
@@ -353,14 +359,13 @@ export default function AssetsPage() {
               </select>
             </div>
 
-            <div style={{ minWidth: 150 }}>
+            {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div style={{ minWidth: 150 }}>
               <select className="form-input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ margin: 0 }}>
                 <option value="All">Tüm Şubeler</option>
-                <option value="Merkez 1 - Kadıköy">Merkez 1 - Kadıköy</option>
-                <option value="Merkez 2 - Beşiktaş">Merkez 2 - Beşiktaş</option>
+                {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                 <option value="Genel">Genel</option>
               </select>
-            </div>
+            </div>}
 
             <div style={{ minWidth: 130 }}>
               <select className="form-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ margin: 0 }}>
@@ -538,11 +543,13 @@ export default function AssetsPage() {
 
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Bulunduğu Şube</label>
-                    <select className="form-input" value={activeBranch.mode === 'single' ? activeBranch.branch?.name || '' : formBranch} onChange={(e) => setFormBranch(e.target.value)} disabled={activeBranch.mode === 'single'}>
-                      <option value="">Şube seçin</option>
-                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
-                    </select>
+                    {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <>
+                      <label className="form-label">Bulunduğu Şube</label>
+                      <select className="form-input" value={formBranch} onChange={(e) => setFormBranch(e.target.value)}>
+                        <option value="">Şube seçin</option>
+                        {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                      </select>
+                    </>}
                   </div>
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>
                     <label className="form-label">Satın Alma Maliyeti (TL)</label>

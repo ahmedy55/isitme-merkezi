@@ -42,7 +42,8 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading, branchesList } = useApp();
+  const { activeBranch } = useBranch();
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
@@ -57,6 +58,8 @@ export default function PatientsPage() {
   const [filterEndDate, setFilterEndDate] = useState('');
   
   const [showAddModal, setShowAddModal] = useState(false);
+  const [formBranchId, setFormBranchId] = useState('');
+  const [bulkBranchId, setBulkBranchId] = useState('');
   const [showBulkAddModal, setShowBulkAddModal] = useState(false);
   const [bulkStep, setBulkStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedBulkFile, setSelectedBulkFile] = useState<File | null>(null);
@@ -201,13 +204,19 @@ export default function PatientsPage() {
     photoUrl: ''
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.tc.trim() || !formData.phone.trim() || !formData.address.trim()) {
       addToast({ type: 'warning', message: 'Lütfen zorunlu alanları (* işaretli: Ad, Soyad, TC Kimlik No, Telefon, Adres) doldurunuz.' });
       return;
     }
     if (!formData.consentGiven) {
       addToast({ type: 'warning', message: '⚠️ DİKKAT: Kişisel Sağlık Verilerinin İşlenmesine İlişkin KVKK Açık Rıza Onayı verilmeden hasta kaydı oluşturulamaz.' });
+      return;
+    }
+    const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : formBranchId;
+    const assignedBranch = branchesList.find(branch => branch.id === assignedBranchId);
+    if (!assignedBranchId || !assignedBranch) {
+      addToast({ type: 'error', message: 'Hasta kaydı için şube seçin.' });
       return;
     }
     const newPatient: Patient = {
@@ -218,7 +227,7 @@ export default function PatientsPage() {
       phone: formData.phone,
       gender: formData.gender,
       birthDate: formData.birthDate,
-      email: formData.email || `${formData.firstName.toLowerCase()}@example.com`,
+      email: formData.email,
       address: formData.address,
       photoUrl: formData.photoUrl,
       hearingLoss: formData.hearingLoss,
@@ -236,12 +245,16 @@ export default function PatientsPage() {
       notes: formData.notes,
       consentGiven: formData.consentGiven,
       consentDate: formData.consentGiven ? new Date().toISOString() : undefined,
+      branch: assignedBranch.name,
+      branchId: assignedBranch.id,
       timeline: [
-        { date: '11.07.2026', action: 'Hasta kaydı ve KVKK rızası oluşturuldu.', icon: 'Plus' }
+        { date: new Intl.DateTimeFormat('tr-TR').format(new Date()), action: 'Hasta kaydı ve KVKK rızası oluşturuldu.', icon: 'Plus' }
       ]
     };
-    addPatient(newPatient);
+    try { await addPatient(newPatient); }
+    catch { return; }
     setShowAddModal(false);
+    setFormBranchId(activeBranch.mode === 'single' ? activeBranch.branchId : '');
     // Reset form
     setFormData({
       tc: '',
@@ -282,13 +295,16 @@ export default function PatientsPage() {
     };
   }, [patientsList]);
 
-  const handleBulkSave = () => {
+  const handleBulkSave = async () => {
     if (!bulkInputText.trim()) {
       alert('Lütfen eklenecek hasta verilerini girin.');
       return;
     }
+    const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : bulkBranchId;
+    const assignedBranch = branchesList.find(branch => branch.id === assignedBranchId);
+    if (!assignedBranch) { addToast({ type: 'error', message: 'Toplu aktarım için şube seçin.' }); return; }
     const lines = bulkInputText.split('\n');
-    let addedCount = 0;
+    const newPatients: Patient[] = [];
     
     lines.forEach((line) => {
       if (!line.trim()) return;
@@ -302,7 +318,7 @@ export default function PatientsPage() {
         
         if (firstName && lastName) {
           const newPat: Patient = {
-            id: `p-${Date.now().toString().slice(-6)}-${addedCount}`,
+            id: `p-${crypto.randomUUID()}`,
             firstName,
             lastName,
             tc,
@@ -310,26 +326,29 @@ export default function PatientsPage() {
             address,
             gender: 'Erkek',
             birthDate: '1985-05-15',
-            email: `${firstName.toLowerCase()}@example.com`,
+            email: '',
             hearingLoss: 'Hafif',
             hearingLossSide: 'Sol',
             sgkStatus: 'Aktif',
             patientStatus: 'Potansiyel',
             sgkInsuranceStatus: 'Belirtilmemiş',
             source: 'Tavsiye',
+            branch: assignedBranch.name,
+            branchId: assignedBranch.id,
             lastVisit: new Date().toISOString().split('T')[0],
             createdAt: new Date().toISOString().split('T')[0],
             timeline: [
-              { date: '11.07.2026', action: 'Toplu aktarımla hasta kaydı oluşturuldu.', icon: 'Plus' }
+              { date: new Intl.DateTimeFormat('tr-TR').format(new Date()), action: 'Toplu aktarımla hasta kaydı oluşturuldu.', icon: 'Plus' }
             ]
           };
-          addPatient(newPat);
-          addedCount++;
+          newPatients.push(newPat);
         }
       }
     });
     
-    addToast({ type: 'success', message: `${addedCount} hasta başarıyla toplu olarak eklendi.` });
+    try { await Promise.all(newPatients.map(patient => addPatient(patient))); }
+    catch { return; }
+    addToast({ type: 'success', message: `${newPatients.length} hasta başarıyla toplu olarak eklendi.` });
     setShowBulkAddModal(false);
     setBulkInputText('');
   };
@@ -348,11 +367,9 @@ export default function PatientsPage() {
     }
   };
 
-  const { activeBranch } = useBranch();
-
   const branchFilteredPatients = useMemo(() => {
-    return patientsList.filter((p, i) => 
-      BranchService.matchesBranch(p.branch, p.branchId, activeBranch, i)
+    return patientsList.filter(p =>
+      BranchService.matchesBranch(p.branch, p.branchId, activeBranch)
     );
   }, [patientsList, activeBranch]);
 
@@ -530,7 +547,7 @@ export default function PatientsPage() {
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
               🔄 Geçmiş Aktar
             </button>
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}
+            <button className="btn btn-primary" onClick={() => { setFormBranchId(activeBranch.mode === 'single' ? activeBranch.branchId : ''); setShowAddModal(true); }}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
               <IconPlus size={15} strokeWidth={2} /> Yeni Hasta Ekle
             </button>
@@ -732,6 +749,14 @@ export default function PatientsPage() {
                   />
                 </div>
               </div>
+
+              {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div className="form-group">
+                <label className="form-label">Kayıt şubesi</label>
+                <select className="form-input" required value={formBranchId} onChange={event => setFormBranchId(event.target.value)}>
+                  <option value="">Şube seçin</option>
+                  {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                </select>
+              </div>}
 
               <div className="form-row">
                 <div className="form-group">
@@ -1220,6 +1245,7 @@ export default function PatientsPage() {
               {/* STEP 3: DOĞRULAMA */}
               {bulkStep === 3 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {activeBranch.mode === 'all' && <label className="form-group">Kayıt şubesi<select className="form-select" required value={bulkBranchId} onChange={event => setBulkBranchId(event.target.value)}><option value="">Şube seçin</option>{branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
                   <div style={{
                     background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
                     padding: 16, display: 'flex', alignItems: 'center', gap: 12
@@ -1230,13 +1256,13 @@ export default function PatientsPage() {
                         Dosya Başarıyla Analiz Edildi
                       </div>
                       <div style={{ fontSize: '0.82rem', color: '#166534', marginTop: 2 }}>
-                        <strong>{parsedBulkRows.length > 0 ? parsedBulkRows.length : 3} geçerli hasta kaydı</strong> tespit edildi. 0 hatalı satır.
+                        <strong>{parsedBulkRows.length} hasta satırı</strong> bulundu. Kayıt öncesinde zorunlu alanlar doğrulanacak.
                       </div>
                     </div>
                   </div>
 
                   <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
-                    İçe Aktarılacak Hasta Verisi Önizlemesi ({parsedBulkRows.length > 0 ? parsedBulkRows.length : 3} Satır):
+                    İçe Aktarılacak Hasta Verisi Önizlemesi ({parsedBulkRows.length} Satır):
                   </div>
 
                   <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', maxHeight: 220 }}>
@@ -1263,22 +1289,7 @@ export default function PatientsPage() {
                               <td style={{ padding: '8px 12px' }}>{row['Nasıl Duydunuz'] || '—'}</td>
                             </tr>
                           ))
-                        ) : (
-                          [
-                            { name: 'Ahmet Yılmaz', tc: '12345678901', phone: '05321234567', gender: 'Erkek', status: 'Potansiyel', ref: 'Doktor tavsiyesi' },
-                            { name: 'Fatma Demir', tc: '98765432109', phone: '05339876543', gender: 'Kadın', status: 'Müşteri', ref: 'İnternet' },
-                            { name: 'Mehmet Kaya', tc: '11122233344', phone: '05551112233', gender: 'Erkek', status: 'Potansiyel', ref: 'Walk-in' },
-                          ].map((row, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.name}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.tc}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.phone}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.gender}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.status}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.ref}</td>
-                            </tr>
-                          ))
-                        )}
+                        ) : <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center' }}>Dosyada aktarılabilir hasta satırı bulunamadı.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -1357,45 +1368,34 @@ export default function PatientsPage() {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={() => {
+                    onClick={async () => {
+                      const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : bulkBranchId;
+                      const assignedBranch = branchesList.find(branch => branch.id === assignedBranchId);
+                      if (!assignedBranch || !parsedBulkRows.length) { addToast({ type: 'error', message: 'Aktarım için veri içeren dosya ve şube seçin.' }); return; }
+                      const validRows = parsedBulkRows.filter((row: any) => row['Ad'] && row['Soyad'] && (row['TC Kimlik No'] || row['TC']) && row['Telefon']);
+                      if (!validRows.length || validRows.length !== parsedBulkRows.length) { addToast({ type: 'error', message: 'Her satırda ad, soyad, TC kimlik numarası ve telefon bulunmalıdır. Dosya kaydedilmedi.' }); return; }
                       setIsBulkImporting(true);
-                      setTimeout(() => {
-                        if (parsedBulkRows.length > 0) {
-                          parsedBulkRows.forEach((row: any, idx: number) => {
-                            if (row['Ad'] && row['Soyad']) {
-                              addPatient({
-                                id: `p-bulk-${Date.now()}-${idx}`,
-                                firstName: String(row['Ad']),
-                                lastName: String(row['Soyad']),
-                                tc: String(row['TC Kimlik No'] || row['TC'] || `1111${idx}`),
-                                phone: String(row['Telefon'] || '05550000000'),
-                                gender: (row['Cinsiyet'] as any) || 'Erkek',
-                                birthDate: String(row['Doğum Tarihi'] || '1990-01-01'),
-                                email: `${String(row['Ad']).toLowerCase()}@example.com`,
-                                address: String(row['Adres'] || 'Merkez'),
-                                hearingLoss: 'Hafif',
-                                hearingLossSide: 'Her İki Kulak',
-                                sgkStatus: 'Aktif',
-                                notes: row['Notlar'] || 'Toplu Hasta Ekleme',
-                                emergencyContactName: row['Yakın Adı'] || undefined,
-                                emergencyContactPhone: row['Yakın Telefon'] || undefined,
-                                prescriptionNo: row['Reçete No'] || undefined,
-                                reportNo: row['Rapor No'] || undefined,
-                                patientStatus: (row['Durum'] as any) || 'Potansiyel',
-                                source: (row['Nasıl Duydunuz'] as any) || 'Tavsiye',
-                                timeline: [
-                                  { date: '22.07.2026', action: 'Excel ile toplu hasta kaydı oluşturuldu.', icon: 'Plus' }
-                                ]
-                              });
-                            }
-                          });
-                        }
-                        setIsBulkImporting(false);
+                      try {
+                        await Promise.all(validRows.map((row: any) => addPatient({
+                          id: `p-bulk-${crypto.randomUUID()}`,
+                          firstName: String(row['Ad']).trim(), lastName: String(row['Soyad']).trim(),
+                          tc: String(row['TC Kimlik No'] || row['TC']).trim(), phone: String(row['Telefon']).trim(),
+                          gender: (row['Cinsiyet'] as any) || 'Erkek', birthDate: String(row['Doğum Tarihi'] || ''),
+                          email: String(row['E-posta'] || ''), address: String(row['Adres'] || ''),
+                          hearingLoss: 'Hafif', hearingLossSide: 'Her İki Kulak', sgkStatus: 'Aktif',
+                          notes: row['Notlar'] || 'Toplu Hasta Ekleme',
+                          emergencyContactName: row['Yakın Adı'] || undefined, emergencyContactPhone: row['Yakın Telefon'] || undefined,
+                          prescriptionNo: row['Reçete No'] || undefined, reportNo: row['Rapor No'] || undefined,
+                          patientStatus: (row['Durum'] as any) || 'Potansiyel', source: (row['Nasıl Duydunuz'] as any) || 'Tavsiye',
+                          branch: assignedBranch.name, branchId: assignedBranch.id,
+                          timeline: [{ date: new Intl.DateTimeFormat('tr-TR').format(new Date()), action: 'Excel ile toplu hasta kaydı oluşturuldu.', icon: 'Plus' }]
+                        })));
                         setBulkStep(4);
-                        addToast({ type: 'success', message: 'Toplu hastalar başarıyla veritabanına eklendi.' });
-                      }, 1000);
+                        addToast({ type: 'success', message: `${validRows.length} hasta kaydı veritabanına eklendi.` });
+                      } catch { /* Persistence layer reports the error; do not advance to success. */ }
+                      finally { setIsBulkImporting(false); }
                     }}
-                    disabled={isBulkImporting}
+                    disabled={isBulkImporting || !parsedBulkRows.length}
                     style={{ background: '#2563eb', padding: '8px 22px' }}
                   >
                     {isBulkImporting ? 'Aktarılıyor...' : '🚀 İçe Aktarımı Başlat'}
@@ -1634,6 +1634,7 @@ export default function PatientsPage() {
               {/* STEP 3: DOĞRULAMA */}
               {importStep === 3 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {activeBranch.mode === 'all' && <label className="form-group">Hasta şubesi<select className="form-select" required value={bulkBranchId} onChange={event => setBulkBranchId(event.target.value)}><option value="">Şube seçin</option>{branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
                   <div style={{
                     background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
                     padding: 16, display: 'flex', alignItems: 'center', gap: 12
@@ -1644,7 +1645,7 @@ export default function PatientsPage() {
                         Dosya Başarıyla Analiz Edildi
                       </div>
                       <div style={{ fontSize: '0.82rem', color: '#166534', marginTop: 2 }}>
-                        <strong>{parsedImportRows.length > 0 ? parsedImportRows.length : 2} geçerli kayıt</strong> tespit edildi. 0 hatalı satır.
+                        <strong>{parsedImportRows.length} kayıt satırı</strong> bulundu. Aktarım öncesi zorunlu alanlar doğrulanacak.
                       </div>
                     </div>
                   </div>
@@ -1677,21 +1678,7 @@ export default function PatientsPage() {
                               <td style={{ padding: '8px 12px' }}>{row['İşlem Tarihi'] || row['Tarih'] || '—'}</td>
                             </tr>
                           ))
-                        ) : (
-                          [
-                            { name: 'Ali Yılmaz', tc: '11111111111', phone: '05321112233', type: 'Verme', dev: 'Signia Pure 312', date: '01.03.2024' },
-                            { name: 'Ayşe Demir', tc: '22222222222', phone: '05334445566', type: 'Verme', dev: 'Phonak Audeo', date: '15.08.2025' },
-                          ].map((row, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.name}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.tc}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.phone}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.type}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.dev}</td>
-                              <td style={{ padding: '8px 12px' }}>{row.date}</td>
-                            </tr>
-                          ))
-                        )}
+                        ) : <tr><td colSpan={6} style={{ padding: 16, textAlign: 'center' }}>Dosyada aktarılabilir geçmiş kayıt bulunamadı.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -1711,7 +1698,7 @@ export default function PatientsPage() {
                     İçe Aktarım Başarıyla Tamamlandı!
                   </div>
                   <div style={{ fontSize: '0.88rem', color: '#475569', maxWidth: 420, lineHeight: 1.5 }}>
-                    Excel dosyasındaki <strong>{parsedImportRows.length > 0 ? parsedImportRows.length : 2} adet geçmiş kayıt ve hasta bilgisi</strong> veritabanına aktarıldı ve listeniz güncellendi.
+                    Excel dosyasındaki <strong>{parsedImportRows.length} geçmiş kayıt ve hasta bilgisi</strong> veritabanına aktarıldı ve listeniz güncellendi.
                   </div>
                 </div>
               )}
@@ -1770,40 +1757,32 @@ export default function PatientsPage() {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={() => {
+                    onClick={async () => {
+                      const assignedBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : bulkBranchId;
+                      const assignedBranch = branchesList.find(branch => branch.id === assignedBranchId);
+                      if (!assignedBranch || !parsedImportRows.length) { addToast({ type: 'error', message: 'Aktarım için veri içeren dosya ve şube seçin.' }); return; }
+                      const validRows = parsedImportRows.filter((row: any) => row['Ad'] && row['Soyad'] && (row['TC Kimlik No'] || row['TC']) && row['Telefon']);
+                      if (!validRows.length || validRows.length !== parsedImportRows.length) { addToast({ type: 'error', message: 'Her satırda ad, soyad, TC kimlik numarası ve telefon bulunmalıdır. Dosya kaydedilmedi.' }); return; }
                       setIsImporting(true);
-                      setTimeout(() => {
-                        if (parsedImportRows.length > 0) {
-                          parsedImportRows.forEach((row: any, idx: number) => {
-                            if (row['Ad'] && row['Soyad']) {
-                              addPatient({
-                                id: `p-imp-${Date.now()}-${idx}`,
-                                firstName: String(row['Ad']),
-                                lastName: String(row['Soyad']),
-                                tc: String(row['TC Kimlik No'] || row['TC'] || `1111${idx}`),
-                                phone: String(row['Telefon'] || '05550000000'),
-                                gender: (row['Cinsiyet'] as any) || 'Erkek',
-                                birthDate: String(row['Doğum Tarihi'] || '1990-01-01'),
-                                email: `${String(row['Ad']).toLowerCase()}@example.com`,
-                                address: String(row['Adres'] || 'Merkez'),
-                                hearingLoss: 'Orta',
-                                hearingLossSide: 'Her İki Kulak',
-                                sgkStatus: 'Aktif',
-                                currentDevice: row['Cihaz (Marka/Model)'] || row['Cihaz'] || undefined,
-                                notes: row['Hareket Notu'] || row['Notlar'] || 'Excel İçe Aktarım',
-                                timeline: [
-                                  { date: String(row['İşlem Tarihi'] || '22.07.2026'), action: `Excel ile geçmiş hareket aktarıldı: ${row['Cihaz (Marka/Model)'] || row['Hareket Tipi'] || 'Cihaz Teslim'}`, icon: 'Device' }
-                                ]
-                              });
-                            }
-                          });
-                        }
-                        setIsImporting(false);
+                      try {
+                        await Promise.all(validRows.map((row: any) => addPatient({
+                          id: `p-imp-${crypto.randomUUID()}`,
+                          firstName: String(row['Ad']).trim(), lastName: String(row['Soyad']).trim(),
+                          tc: String(row['TC Kimlik No'] || row['TC']).trim(), phone: String(row['Telefon']).trim(),
+                          gender: (row['Cinsiyet'] as any) || 'Erkek', birthDate: String(row['Doğum Tarihi'] || ''),
+                          email: String(row['E-posta'] || ''), address: String(row['Adres'] || ''),
+                          hearingLoss: 'Orta', hearingLossSide: 'Her İki Kulak', sgkStatus: 'Aktif',
+                          currentDevice: row['Cihaz (Marka/Model)'] || row['Cihaz'] || undefined,
+                          notes: row['Hareket Notu'] || row['Notlar'] || 'Excel İçe Aktarım',
+                          branch: assignedBranch.name, branchId: assignedBranch.id,
+                          timeline: [{ date: String(row['İşlem Tarihi'] || row['Tarih'] || new Intl.DateTimeFormat('tr-TR').format(new Date())), action: `Excel ile geçmiş hareket aktarıldı: ${row['Cihaz (Marka/Model)'] || row['Hareket Tipi'] || 'Cihaz Teslim'}`, icon: 'Device' }]
+                        })));
                         setImportStep(4);
-                        addToast({ type: 'success', message: 'Geçmiş kayıtlar başarıyla veritabanına aktarıldı.' });
-                      }, 1000);
+                        addToast({ type: 'success', message: `${validRows.length} geçmiş kayıt ve hasta verisi kaydedildi.` });
+                      } catch { /* Persistence layer reports the error; do not advance to success. */ }
+                      finally { setIsImporting(false); }
                     }}
-                    disabled={isImporting}
+                    disabled={isImporting || !parsedImportRows.length}
                     style={{ background: '#2563eb', padding: '8px 22px' }}
                   >
                     {isImporting ? 'Aktarılıyor...' : '🚀 İçe Aktarımı Başlat'}

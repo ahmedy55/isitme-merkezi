@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { recallItems, getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
+import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
 import { IconMessage, IconPhone, IconSmartRecall, IconCheck, IconWarning, IconCash, IconPlus, IconArrowRight, IconClose } from '../components/Icons';
 
 interface RecallStep {
@@ -113,12 +113,11 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 
 export default function RecallPage() {
-  const { addToast, addAppointment, setCurrentPage, setSelectedPatientId, setActiveDetailTab } = useApp();
+  const { addToast } = useApp();
   const { activeBranch } = useBranch();
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [selectedChain, setSelectedChain] = useState<EnhancedRecallItem | null>(null);
   const [recallChains, setRecallChains] = useState<EnhancedRecallItem[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? enhancedRecallData : []));
-  const [showFastAppointmentModal, setShowFastAppointmentModal] = useState<EnhancedRecallItem | null>(null);
 
   // Olasılığa göre ağırlıklı gelir hesabı
   // Yüksek: %80, Orta: %50, Düşük: %20
@@ -129,8 +128,8 @@ export default function RecallPage() {
   };
 
   const branchFilteredChains = React.useMemo(() => {
-    return recallChains.filter((r, idx) => 
-      BranchService.matchesBranch((r as any).branch, (r as any).branchId, activeBranch, idx)
+    return recallChains.filter(r =>
+      BranchService.matchesBranch((r as any).branch, (r as any).branchId, activeBranch)
     );
   }, [recallChains, activeBranch]);
 
@@ -146,11 +145,16 @@ export default function RecallPage() {
   const weightedRevenue = branchFilteredChains.reduce((sum, r) => sum + (r.estimatedRevenue * getProbabilityWeight(r.probability)), 0);
 
   const handleTriggerRecallAction = (chain: EnhancedRecallItem) => {
+    const step = chain.steps.find(item => item.stepNumber === chain.currentStep);
+    if (!step || step.channel !== 'Arama') {
+      addToast({ type: 'warning', message: 'WhatsApp/SMS gönderim entegrasyonu bağlı değil; hiçbir mesaj gönderilmedi ve adım değiştirilmedi.' });
+      return;
+    }
     const updatedChains = recallChains.map(c => {
       if (c.id === chain.id) {
         const nextSteps = c.steps.map(s => {
           if (s.stepNumber === c.currentStep) {
-            return { ...s, status: 'Tamamlandı' as const, date: '2026-07-10' };
+            return { ...s, status: 'Tamamlandı' as const, date: new Date().toISOString().slice(0, 10) };
           }
           return s;
         });
@@ -165,14 +169,7 @@ export default function RecallPage() {
     setRecallChains(updatedChains);
     setSelectedChain(null);
 
-    addToast({
-      type: 'success',
-      message: `${chain.patientName} için WhatsApp hatırlatma mesajı başarıyla gönderildi!`
-    });
-
-    setTimeout(() => {
-      setShowFastAppointmentModal(chain);
-    }, 800);
+    addToast({ type: 'success', message: `${chain.patientName} için telefonla arama adımı tamamlandı olarak işaretlendi. Otomatik mesaj gönderilmedi.` });
   };
 
   return (
@@ -183,7 +180,7 @@ export default function RecallPage() {
           <p>Çok kanallı otomatik geri kazanım ve pil abonelik takibi</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={() => addToast({ type: 'success', message: 'Tüm bekleyen hatırlatma zinciri otomatik olarak tetiklendi.' })}
+          <button className="btn btn-secondary" onClick={() => addToast({ type: 'warning', message: 'Otomatik WhatsApp/SMS gönderimi etkin değil; hiçbir mesaj gönderilmedi.' })}
             style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconSmartRecall size={16} strokeWidth={1.8} /> Otomatik Zinciri Başlat
           </button>
@@ -206,9 +203,9 @@ export default function RecallPage() {
             <IconMessage size={20} strokeWidth={1.6} />
           </div>
           <div className="stat-content">
-            <div className="stat-label">Toplam İletişim Gönderimi</div>
-            <div className="stat-value">14 Gönderim</div>
-            <span className="stat-change up" style={{ fontSize: '0.72rem' }}>Başarı Oranı: %72</span>
+            <div className="stat-label">Tamamlanan İletişim Adımı</div>
+            <div className="stat-value">{branchFilteredChains.reduce((total, chain) => total + chain.steps.filter(step => step.status === 'Tamamlandı').length, 0)}</div>
+            <span className="stat-change" style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Gönderim başarı oranı ölçülmüyor</span>
           </div>
         </div>
         <div className="stat-card" style={{ background: 'var(--accent-50)', color: 'var(--accent-700)' }}>
@@ -429,7 +426,9 @@ export default function RecallPage() {
                         )}
                         {isCurrent && (
                           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                            <button className="btn btn-sm btn-primary" onClick={() => handleTriggerRecallAction(selectedChain)}>Hemen Gönder</button>
+                            <button className="btn btn-sm btn-primary" onClick={() => handleTriggerRecallAction(selectedChain)}>
+                              {step.channel === 'Arama' ? 'Arama yapıldı olarak işaretle' : `${step.channel} gönderimi kullanılamıyor`}
+                            </button>
                             <button className="btn btn-sm btn-secondary" onClick={() => {
                               setSelectedChain(null);
                               addToast({ type: 'info', message: 'Hatırlatma görevi 2 gün süreyle ertelendi.' });
@@ -449,62 +448,6 @@ export default function RecallPage() {
         </div>
       )}
 
-      {/* Hızlı Randevu Simülasyon Modalı */}
-      {showFastAppointmentModal && (
-        <div className="modal-overlay" onClick={() => setShowFastAppointmentModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500 }}>
-            <div className="modal-header">
-              <span className="modal-title">Hatırlatma Sonrası Hızlı Randevu</span>
-              <button className="modal-close" onClick={() => setShowFastAppointmentModal(null)}>✕</button>
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <p style={{ fontSize: '0.84rem', color: 'var(--gray-600)' }}>
-                <strong>{showFastAppointmentModal.patientName}</strong> hatırlatma mesajına yanıt verdi ve randevu talep ediyor. Hızlıca randevu kaydı oluşturabilirsiniz:
-              </p>
-              <div className="form-group">
-                <label className="form-label">Randevu Nedeni</label>
-                <input className="form-input" defaultValue={showFastAppointmentModal.reason === 'SGK Yenileme' ? 'SGK Cihaz Yenileme Kontrolü' : 'Cihaz Kontrolü & Ayar'} />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Tarih</label>
-                  <input className="form-input" type="date" defaultValue="2026-07-11" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Saat</label>
-                  <input className="form-input" type="time" defaultValue="14:00" />
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowFastAppointmentModal(null)}>Daha Sonra</button>
-              <button className="btn btn-primary" onClick={() => {
-                const newAppoint = {
-                  id: `ap-${Date.now()}`,
-                  patientId: showFastAppointmentModal.id === 'r1' ? 'p1' : 'p2',
-                  patientName: showFastAppointmentModal.patientName,
-                  date: '2026-07-11',
-                  time: '14:00',
-                  type: (showFastAppointmentModal.reason === 'SGK Yenileme' ? 'SGK Yenileme' : 'Kontrol') as any,
-                  status: 'Bekliyor' as const,
-                  audiologist: 'Dr. Elif Arslan',
-                  branch: 'Merkez 1 - Kadıköy',
-                  notes: 'Recall otomasyonu üzerinden randevu talebi.'
-                };
-                addAppointment(newAppoint);
-                setShowFastAppointmentModal(null);
-                addToast({
-                  type: 'success',
-                  message: `${showFastAppointmentModal.patientName} için randevu oluşturuldu! Randevular sayfasına yönlendiriliyorsunuz.`
-                });
-                setTimeout(() => {
-                  setCurrentPage('appointments');
-                }, 1500);
-              }}>Randevuyu Onayla</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

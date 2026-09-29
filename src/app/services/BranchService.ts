@@ -8,6 +8,10 @@ export type BranchMode =
 export class BranchService {
   private static STORAGE_KEY = 'isitme_active_branch_slug';
 
+  private static storageKey(scopeId?: string): string {
+    return `${this.STORAGE_KEY}:${scopeId || 'default'}`;
+  }
+
   /**
    * Helper to convert a branch name/ID into an immutable URL slug with full Unicode & Turkish support
    */
@@ -55,8 +59,13 @@ export class BranchService {
     urlSlug: string | null,
     branchesList: Branch[],
     allowedBranchIds: string[] | null, // null means all allowed (admin)
-    defaultBranchId?: string
+    defaultBranchId?: string,
+    scopeId?: string
   ): { branchContext: BranchMode; isFallback: boolean; fallbackReason?: string } {
+    const activeBranches = branchesList.filter(branch => branch.status === 'Aktif');
+    const allBranchesContext = (): BranchMode => activeBranches.length === 1
+      ? this.toSingleBranchContext(activeBranches[0])
+      : { mode: 'all' };
     const isAllowed = (bId: string) => {
       if (!allowedBranchIds) return true;
       return allowedBranchIds.includes(bId);
@@ -76,7 +85,7 @@ export class BranchService {
     if (urlSlug) {
       if (urlSlug === 'all') {
         if (allowedBranchIds === null) {
-          return { branchContext: { mode: 'all' }, isFallback: false };
+          return { branchContext: allBranchesContext(), isFallback: false };
         }
       }
 
@@ -101,10 +110,10 @@ export class BranchService {
     // 2. Try localStorage (Safely guarded against Private Mode / Storage limits)
     if (typeof window !== 'undefined') {
       try {
-        const savedSlug = localStorage.getItem(this.STORAGE_KEY);
+        const savedSlug = localStorage.getItem(this.storageKey(scopeId));
         if (savedSlug) {
           if (savedSlug === 'all' && (allowedBranchIds === null)) {
-            return { branchContext: { mode: 'all' }, isFallback: false };
+            return { branchContext: allBranchesContext(), isFallback: false };
           }
           const matched = bySlugMap.get(savedSlug) || byIdMap.get(savedSlug);
           if (matched && isAllowed(matched.id)) {
@@ -132,6 +141,7 @@ export class BranchService {
     allowedBranchIds: string[] | null,
     defaultBranchId?: string
   ): BranchMode {
+    const activeBranches = branchesList.filter(branch => branch.status === 'Aktif');
     const isAllowed = (bId: string) => {
       if (!allowedBranchIds) return true;
       return allowedBranchIds.includes(bId);
@@ -146,7 +156,7 @@ export class BranchService {
     }
 
     if (allowedBranchIds === null) {
-      return { mode: 'all' };
+      return activeBranches.length === 1 ? this.toSingleBranchContext(activeBranches[0]) : { mode: 'all' };
     }
 
     if (allowedBranchIds.length > 0) {
@@ -160,12 +170,13 @@ export class BranchService {
   }
 
   /**
-   * Persist slug to localStorage safely
+   * Persist the immutable branch ID (or `all`) safely. Slugs may change when a
+   * branch is renamed; resolveActiveBranch remains backward-compatible with old slugs.
    */
-  static persistBranchSlug(slug: string): void {
+  static persistBranchSlug(slug: string, scopeId?: string): void {
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(this.STORAGE_KEY, slug);
+        localStorage.setItem(this.storageKey(scopeId), slug);
       } catch (err) {
         console.warn('[BranchService] Unable to persist branch slug to localStorage:', err);
       }
@@ -176,15 +187,15 @@ export class BranchService {
    * Robust helper to check if an entity belongs to active branch
    */
   static matchesBranch(
-    itemBranch?: string,
+    _itemBranch?: string,
     itemBranchId?: string,
-    activeBranch?: BranchMode,
-    fallbackIndex?: number
+    activeBranch?: BranchMode
   ): boolean {
     if (!activeBranch) return false;
     if (activeBranch.mode === 'all') return true;
     if (activeBranch.mode !== 'single' || !activeBranch.branchId) return false;
-    if (itemBranchId) return itemBranchId === activeBranch.branchId;
-    return Boolean(itemBranch && activeBranch.branch?.name && itemBranch === activeBranch.branch.name);
+    // Names are mutable/display-only. Rows without a stable branch_id belong in
+    // the data-correction queue, never in a guessed branch scope.
+    return Boolean(itemBranchId && itemBranchId === activeBranch.branchId);
   }
 }

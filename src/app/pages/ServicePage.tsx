@@ -141,6 +141,12 @@ const statusConfig: Record<string, { color: string; icon: string }> = {
   'Teslim Edildi': { color: 'neutral', icon: '📤' },
 };
 
+const dateISOOffset = (days = 0) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
 export default function ServicePage() {
   const { addToast, completeServiceTicket, currentOrgId, stockList, branchesList, patientsList: allPatients } = useApp();
   const { matches, activeBranchId } = useBranchScope();
@@ -171,6 +177,7 @@ export default function ServicePage() {
   };
 
   const [newRecordForm, setNewRecordForm] = useState({
+    patientId: '',
     patientName: '',
     unregisteredPatient: false,
     unregisteredPhone: '',
@@ -191,8 +198,8 @@ export default function ServicePage() {
     extraDescription: '',
     warrantyRepair: true,
     warrantyEndDate: '',
-    receivedDate: '2026-07-22',
-    estimatedDate: '2026-07-27',
+    receivedDate: dateISOOffset(),
+    estimatedDate: dateISOOffset(5),
     serviceTarget: 'Hedef',
     serviceTargetName: '',
     deliveredBy: '',
@@ -206,7 +213,7 @@ export default function ServicePage() {
   const [isMoldDropdownOpen, setIsMoldDropdownOpen] = useState(false);
 
   const [showReminderModal, setShowReminderModal] = useState(false);
-  const [reminderDate, setReminderDate] = useState('2026-07-25');
+  const [reminderDate, setReminderDate] = useState(dateISOOffset(3));
   const [reminderNote, setReminderNote] = useState('');
 
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -256,7 +263,7 @@ export default function ServicePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const patientsListMock = patientsList.map(p=>({name:p.firstName+' '+p.lastName,tc:p.tc,device:p.currentDevice || '',serial:''}));
+  const patientsListMock = patientsList.map(p=>({id:p.id,branchId:p.branchId,name:p.firstName+' '+p.lastName,tc:p.tc,device:p.currentDevice || '',serial:''}));
 
   const moldOptions = [
     'Prob',
@@ -293,14 +300,15 @@ export default function ServicePage() {
       alert('Lütfen hasta ve cihaz adı girin.');
       return;
     }
-    const patient = patientsList.filter(p => `${p.firstName} ${p.lastName}` === newRecordForm.patientName);
-    if (!newRecordForm.unregisteredPatient && patient.length !== 1) { addToast({ type: 'error', message: 'Tek bir kayıtlı hasta seçin.' }); return; }
+    const patient = patientsList.filter(p => p.id === newRecordForm.patientId);
+    if (!newRecordForm.unregisteredPatient && patient.length !== 1) { addToast({ type: 'error', message: 'Listeden kayıtlı hastayı seçin.' }); return; }
+    const assignedBranchId = newRecordForm.unregisteredPatient ? activeBranchId || serviceBranchId : patient[0]?.branchId;
+    if (!assignedBranchId) { addToast({ type: 'error', message: 'Servis kaydı için geçerli şube bilgisi gerekli.' }); return; }
+    if (!newRecordForm.externalDevice && (!deviceId || !stockList.some(item => item.id === deviceId && item.branchId === assignedBranchId))) { addToast({ type: 'error', message: 'Seçilen cihaz servis kaydının şubesindeki stokta bulunmalı.' }); return; }
     const newRec: ServiceRecord = {
       id: recordId,
       patientId: newRecordForm.unregisteredPatient ? undefined : patient[0]?.id,
-      branchId: newRecordForm.unregisteredPatient
-        ? activeBranchId || serviceBranchId
-        : patient[0]?.branchId || activeBranchId || serviceBranchId,
+      branchId: assignedBranchId,
       stockItemId: newRecordForm.externalDevice ? undefined : deviceId || undefined,
       barcode,
       patientName: newRecordForm.patientName,
@@ -325,6 +333,7 @@ export default function ServicePage() {
     setDeviceId(''); setBarcode(''); setRecordId(crypto.randomUUID()); setServiceBranchId('');
     setShowAddModal(false);
     setNewRecordForm({
+      patientId: '',
       patientName: '',
       unregisteredPatient: false,
       unregisteredPhone: '',
@@ -345,8 +354,8 @@ export default function ServicePage() {
       extraDescription: '',
       warrantyRepair: true,
       warrantyEndDate: '',
-      receivedDate: '2026-07-22',
-      estimatedDate: '2026-07-27',
+      receivedDate: dateISOOffset(),
+      estimatedDate: dateISOOffset(5),
       serviceTarget: 'Hedef',
       serviceTargetName: '',
       deliveredBy: '',
@@ -1203,7 +1212,7 @@ export default function ServicePage() {
                         onFocus={() => setIsPatientDropdownOpen(true)}
                         onChange={(e) => {
                           setPatientSearchText(e.target.value);
-                          setNewRecordForm({ ...newRecordForm, patientName: e.target.value });
+                          setNewRecordForm({ ...newRecordForm, patientId: '', patientName: e.target.value });
                           setIsPatientDropdownOpen(true);
                         }}
                       />
@@ -1224,6 +1233,7 @@ export default function ServicePage() {
                               onClick={() => {
                                 setNewRecordForm({
                                   ...newRecordForm,
+                                  patientId: p.id,
                                   patientName: p.name,
                                   deviceName: p.device || '',
                                   serialNo: p.serial || ''
@@ -1249,7 +1259,7 @@ export default function ServicePage() {
               </div>
 
               {/* 2. CİHAZ SECTION */}
-              <DevicePicker items={stockList.filter(s => matches(s.branch, s.branchId))} value={deviceId} onChange={item => { setDeviceId(item.id); setBarcode(item.barcode || ''); setNewRecordForm(prev => ({ ...prev, deviceName: item.name, serialNo: item.serialNo, externalDevice: false })); }} />
+              <DevicePicker items={stockList.filter(s => matches(s.branch, s.branchId) && s.branchId === (newRecordForm.unregisteredPatient ? activeBranchId || serviceBranchId : patientsList.find(patient => patient.id === newRecordForm.patientId)?.branchId))} value={deviceId} onChange={item => { setDeviceId(item.id); setBarcode(item.barcode || ''); setNewRecordForm(prev => ({ ...prev, deviceName: item.name, serialNo: item.serialNo, externalDevice: false })); }} />
               <DeviceIdentityFields value={{ barcode, serialNo: newRecordForm.serialNo }} onChange={value => { setBarcode(value.barcode || ''); setNewRecordForm(prev => ({ ...prev, serialNo: value.serialNo || '' })); }} />
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
