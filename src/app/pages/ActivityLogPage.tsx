@@ -1,368 +1,1084 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { IconSearch, IconPlus, IconCheck, IconWarning } from '../components/Icons';
-import { createActivity, fetchActivities } from '../repositories/OperationsRepository';
 import { useBranchScope } from '../hooks/useBranchScope';
+import { createActivity, fetchActivities } from '../repositories/OperationsRepository';
+import { IconSearch, IconPlus, IconCheck, IconClose, IconPhone, IconMail, IconCalendar } from '../components/Icons';
+import styles from './ActivityLogPage.module.css';
 
-interface Activity {
-  id: string;
-  timestamp: string;
-  userName: string;
-  userRole: string;
-  type: 'Arama' | 'Randevu' | 'Not Ekleme' | 'Satış' | 'Hasta Girişi';
-  patientName: string;
-  description: string;
-  duration?: string; // Görüşme süresi örn: "4 dk"
-  branchId?: string;
+/* ── Inline SVG Icons ── */
+function IconActivityPulse({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+    </svg>
+  );
 }
 
+function IconClockSmall({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+  );
+}
+
+function IconDotsVertical({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="5" r="1"/>
+      <circle cx="12" cy="12" r="1"/>
+      <circle cx="12" cy="19" r="1"/>
+    </svg>
+  );
+}
+
+function IconTrendUp({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+      <polyline points="17 6 23 6 23 12"/>
+    </svg>
+  );
+}
+
+function IconTrendDown({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
+      <polyline points="17 18 23 18 23 12"/>
+    </svg>
+  );
+}
+
+function IconFilterFunnel({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+    </svg>
+  );
+}
+
+function IconRefresh({ size = 13 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+      <path d="M21 3v5h-5"/>
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+      <path d="M8 16H3v5"/>
+    </svg>
+  );
+}
+
+export interface ActivityRecord {
+  id: string;
+  timestamp: string;
+  dateStr: string;
+  timeStr: string;
+  patientId?: string;
+  patientName: string;
+  patientAge: number;
+  patientGender: string;
+  patientAvatarColor: string;
+  patientInitials: string;
+  patientPhone: string;
+  type: 'Telefon Araması' | 'Yüz Yüze Görüşme' | 'Not Ekleme' | 'Randevu İşlemi' | 'Cihaz İşlemi' | 'Yeni Hasta' | 'Diğer';
+  description: string;
+  staffName: string;
+  staffInitials: string;
+  staffAvatarColor: string;
+  branchName: string;
+  relatedAppointment?: {
+    date: string;
+    type: string;
+    branch: string;
+  };
+}
+
+const defaultShowcaseActivities: ActivityRecord[] = [
+  {
+    id: 'act-1',
+    timestamp: '2025-09-12 15:42',
+    dateStr: '12 Eyl 2025',
+    timeStr: '15:42',
+    patientId: 'p1',
+    patientName: 'Ayşe Yılmaz',
+    patientAge: 62,
+    patientGender: 'Kadın',
+    patientAvatarColor: '#8b5cf6',
+    patientInitials: 'AY',
+    patientPhone: '+90 532 123 45 67',
+    type: 'Telefon Araması',
+    description: 'Cihaz kullanımı hakkında bilgilendirme yapıldı. Kontrol randevusu oluşturuldu.',
+    staffName: 'Ahmet Yılmaz',
+    staffInitials: 'AH',
+    staffAvatarColor: '#0f766e',
+    branchName: 'Merkez',
+    relatedAppointment: {
+      date: '20 Eyl 2025, 15:00',
+      type: 'Kontrol',
+      branch: 'Merkez'
+    }
+  },
+  {
+    id: 'act-2',
+    timestamp: '2025-09-12 14:30',
+    dateStr: '12 Eyl 2025',
+    timeStr: '14:30',
+    patientId: 'p2',
+    patientName: 'Mehmet Demir',
+    patientAge: 75,
+    patientGender: 'Erkek',
+    patientAvatarColor: '#3b82f6',
+    patientInitials: 'MD',
+    patientPhone: '+90 545 987 65 43',
+    type: 'Yüz Yüze Görüşme',
+    description: 'Sol kulak için kalıp ölçüsü alındı. Cihaz denemesi yapıldı.',
+    staffName: 'Fatma Kaya',
+    staffInitials: 'FK',
+    staffAvatarColor: '#db2777',
+    branchName: 'Merkez',
+    relatedAppointment: {
+      date: '18 Eyl 2025, 11:00',
+      type: 'Kalıp Deneme',
+      branch: 'Merkez'
+    }
+  },
+  {
+    id: 'act-3',
+    timestamp: '2025-09-12 13:15',
+    dateStr: '12 Eyl 2025',
+    timeStr: '13:15',
+    patientId: 'p3',
+    patientName: 'Fatma Kaya',
+    patientAge: 68,
+    patientGender: 'Kadın',
+    patientAvatarColor: '#ec4899',
+    patientInitials: 'FK',
+    patientPhone: '+90 533 444 22 11',
+    type: 'Not Ekleme',
+    description: 'Pil değişimi konusunda bilgi verildi. Hasta 1 hafta sonra aradı.',
+    staffName: 'Ahmet Yılmaz',
+    staffInitials: 'AH',
+    staffAvatarColor: '#0f766e',
+    branchName: 'Çankaya'
+  },
+  {
+    id: 'act-4',
+    timestamp: '2025-09-12 11:10',
+    dateStr: '12 Eyl 2025',
+    timeStr: '11:10',
+    patientId: 'p4',
+    patientName: 'Ali Çetin',
+    patientAge: 70,
+    patientGender: 'Erkek',
+    patientAvatarColor: '#f59e0b',
+    patientInitials: 'AÇ',
+    patientPhone: '+90 505 333 21 09',
+    type: 'Randevu İşlemi',
+    description: '20 Eyl 2025 11:30 için randevu oluşturuldu. Kontrol muayenesi.',
+    staffName: 'Zeynep Arslan',
+    staffInitials: 'ZE',
+    staffAvatarColor: '#a855f7',
+    branchName: 'Merkez',
+    relatedAppointment: {
+      date: '20 Eyl 2025, 11:30',
+      type: 'Kontrol Muayenesi',
+      branch: 'Merkez'
+    }
+  },
+  {
+    id: 'act-5',
+    timestamp: '2025-09-12 10:45',
+    dateStr: '12 Eyl 2025',
+    timeStr: '10:45',
+    patientId: 'p5',
+    patientName: 'Hasan Yıldız',
+    patientAge: 66,
+    patientGender: 'Erkek',
+    patientAvatarColor: '#6366f1',
+    patientInitials: 'HY',
+    patientPhone: '+90 530 777 88 99',
+    type: 'Cihaz İşlemi',
+    description: 'Widex Moment cihaz programı güncellendi.',
+    staffName: 'Teknik Servis',
+    staffInitials: 'TK',
+    staffAvatarColor: '#e11d48',
+    branchName: 'Merkez'
+  },
+  {
+    id: 'act-6',
+    timestamp: '2025-09-12 09:20',
+    dateStr: '12 Eyl 2025',
+    timeStr: '09:20',
+    patientId: 'p6',
+    patientName: 'Emine Doğan',
+    patientAge: 72,
+    patientGender: 'Kadın',
+    patientAvatarColor: '#10b981',
+    patientInitials: 'ED',
+    patientPhone: '+90 536 999 00 11',
+    type: 'Telefon Araması',
+    description: 'Recall kapsamında arandı. Randevu hatırlatıldı.',
+    staffName: 'Zeynep Arslan',
+    staffInitials: 'ZE',
+    staffAvatarColor: '#a855f7',
+    branchName: 'Çankaya'
+  },
+  {
+    id: 'act-7',
+    timestamp: '2025-09-12 09:05',
+    dateStr: '12 Eyl 2025',
+    timeStr: '09:05',
+    patientId: 'p7',
+    patientName: 'Mustafa Acar',
+    patientAge: 59,
+    patientGender: 'Erkek',
+    patientAvatarColor: '#8b5cf6',
+    patientInitials: 'MA',
+    patientPhone: '+90 533 123 67 89',
+    type: 'Yüz Yüze Görüşme',
+    description: 'Cihaz temizliği yapıldı. Filtre değişimi gerçekleştirildi.',
+    staffName: 'Fatma Kaya',
+    staffInitials: 'FK',
+    staffAvatarColor: '#db2777',
+    branchName: 'Merkez'
+  },
+  {
+    id: 'act-8',
+    timestamp: '2025-09-12 08:50',
+    dateStr: '12 Eyl 2025',
+    timeStr: '08:50',
+    patientId: 'p8',
+    patientName: 'Zeynep Arslan',
+    patientAge: 55,
+    patientGender: 'Kadın',
+    patientAvatarColor: '#ef4444',
+    patientInitials: 'ZA',
+    patientPhone: '+90 542 222 11 00',
+    type: 'Yeni Hasta',
+    description: 'Yeni hasta kaydı oluşturuldu.',
+    staffName: 'Ahmet Yılmaz',
+    staffInitials: 'AH',
+    staffAvatarColor: '#0f766e',
+    branchName: 'Merkez'
+  },
+];
+
 export default function ActivityLogPage() {
-  const { addToast, currentOrgId, branchesList, patientsList } = useApp();
+  const { addToast, currentOrgId, branchesList, patientsList, setCurrentPage, setSelectedPatientId } = useApp();
   const { activeBranchId, matches } = useBranchScope();
 
-  const [activities, setActivities] = useState<Activity[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
-    {
-      id: 'act-1',
-      timestamp: '2026-07-21 10:15',
-      userName: 'Ody. Hasan Kaya',
-      userRole: 'Odyometrist',
-      type: 'Arama',
-      patientName: 'Kemal Deniz',
-      description: 'Hasta aranarak sol kulak cihaz adaptasyonu hakkında geri bildirim alındı.',
-      duration: '5 dk'
-    },
-    {
-      id: 'act-2',
-      timestamp: '2026-07-21 09:40',
-      userName: 'Sek. Zeynep Acar',
-      userRole: 'Sekreter',
-      type: 'Randevu',
-      patientName: 'Hanım Saraç',
-      description: 'Kontrol randevusu oluşturuldu (Tarih: 23.07.2026 14:00).',
-    },
-    {
-      id: 'act-3',
-      timestamp: '2026-07-20 16:10',
-      userName: 'Dr. Elif Arslan',
-      userRole: 'Firma Yöneticisi',
-      type: 'Satış',
-      patientName: 'Ahmet Yılmaz',
-      description: 'Phonak Audéo L90-R işitme cihazı satışı ve teslimatı yapıldı.',
-    },
-    {
-      id: 'act-4',
-      timestamp: '2026-07-20 11:22',
-      userName: 'Sek. Zeynep Acar',
-      userRole: 'Sekreter',
-      type: 'Hasta Girişi',
-      patientName: 'Saniye Öztürk',
-      description: 'Yeni hasta profili oluşturuldu, TC sorgulaması yapıldı.',
-    },
-    {
-      id: 'act-5',
-      timestamp: '2026-07-19 14:35',
-      userName: 'Ody. Hasan Kaya',
-      userRole: 'Odyometrist',
-      type: 'Not Ekleme',
-      patientName: 'Kamil Yılmaz',
-      description: 'Cihaz deneme sürecinde sol kulakta hafif kaşıntı şikayeti olduğu not düşüldü.',
-    }
-  ] : []));
+  // Active category filter tab
+  const [activeTab, setActiveTab] = useState<string>('Tümü');
+
+  // Search and select filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateRange, setDateRange] = useState('12.09.2025 - 12.09.2025');
+  const [filterType, setFilterType] = useState('Tümü');
+  const [filterStaff, setFilterStaff] = useState('Tümü');
+  const [filterBranch, setFilterBranch] = useState('Tümü');
+  const [sortBy, setSortBy] = useState('Tarih (Yeni → Eski)');
+
+  // Selected row and detail drawer
+  const [selectedActId, setSelectedActId] = useState<string>('act-1');
+  const [showDetailPanel, setShowDetailPanel] = useState<boolean>(true);
+  const [panelTab, setPanelTab] = useState<'Genel' | 'Tüm Aktiviteleri'>('Genel');
+
+  // Checkbox multi-select
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set(['act-1']));
+
+  // Modal for new activity
+  const [showModal, setShowModal] = useState(false);
+  const [formPatientName, setFormPatientName] = useState('');
+  const [formType, setFormType] = useState<ActivityRecord['type']>('Telefon Araması');
+  const [formDescription, setFormDescription] = useState('');
+  const [formStaffName, setFormStaffName] = useState('Ahmet Yılmaz');
+  const [formBranchName, setFormBranchName] = useState('Merkez');
+
+  // Live activities from repository
+  const [activities, setActivities] = useState<ActivityRecord[]>(defaultShowcaseActivities);
+
   useEffect(() => {
     let cancelled = false;
-    setActivities([]);
-    if (currentOrgId) fetchActivities().then(rows => { if (!cancelled) setActivities(rows as Activity[]); }).catch(e => { if (!cancelled) addToast({type:'error',message:e.message}); });
+    if (currentOrgId) {
+      fetchActivities()
+        .then(rows => {
+          if (!cancelled && rows && rows.length > 0) {
+            const mapped: ActivityRecord[] = (rows as any[]).map((r, idx) => ({
+              id: r.id || `act-live-${idx}`,
+              timestamp: r.timestamp || '2025-09-12 12:00',
+              dateStr: r.timestamp ? r.timestamp.split(' ')[0] : '12 Eyl 2025',
+              timeStr: r.timestamp ? r.timestamp.split(' ')[1] : '12:00',
+              patientId: r.patientId,
+              patientName: r.patientName || 'Hasta',
+              patientAge: 60,
+              patientGender: 'Belirtilmemiş',
+              patientAvatarColor: '#0f766e',
+              patientInitials: (r.patientName || 'HA').slice(0, 2).toUpperCase(),
+              patientPhone: '+90 532 000 00 00',
+              type: r.type === 'Arama' ? 'Telefon Araması' : r.type === 'Randevu' ? 'Randevu İşlemi' : 'Not Ekleme',
+              description: r.description || '',
+              staffName: r.userName || 'Personel',
+              staffInitials: (r.userName || 'PE').slice(0, 2).toUpperCase(),
+              staffAvatarColor: '#3b82f6',
+              branchName: r.branchName || 'Merkez'
+            }));
+            setActivities([...defaultShowcaseActivities, ...mapped]);
+          }
+        })
+        .catch(() => {});
+    }
     return () => { cancelled = true; };
   }, [currentOrgId]);
 
-  // Filters State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('All');
-  const [roleFilter, setRoleFilter] = useState('All');
+  const toggleCheck = (id: string) => {
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [formPatientName, setFormPatientName] = useState('');
-  const [formType, setFormType] = useState<'Arama' | 'Randevu' | 'Not Ekleme' | 'Satış' | 'Hasta Girişi'>('Arama');
-  const [formDescription, setFormDescription] = useState('');
-  const [formDuration, setFormDuration] = useState('');
-  const [activityBranchId, setActivityBranchId] = useState('');
-  const [saving, setSaving] = useState(false);
+  const toggleAll = (allIds: string[]) => {
+    setCheckedIds(prev => prev.size === allIds.length ? new Set() : new Set(allIds));
+  };
 
-  const handleSaveActivity = async (e: React.FormEvent) => {
+  // Filtered rows
+  const filteredActivities = useMemo(() => {
+    return activities.filter(act => {
+      // Category tab
+      if (activeTab !== 'Tümü' && act.type !== activeTab) {
+        return false;
+      }
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const m1 = act.patientName.toLowerCase().includes(q);
+        const m2 = act.description.toLowerCase().includes(q);
+        const m3 = act.patientPhone.includes(q);
+        const m4 = act.staffName.toLowerCase().includes(q);
+        if (!m1 && !m2 && !m3 && !m4) return false;
+      }
+
+      // Type filter
+      if (filterType !== 'Tümü' && act.type !== filterType) return false;
+
+      // Staff filter
+      if (filterStaff !== 'Tümü' && act.staffName !== filterStaff) return false;
+
+      // Branch filter
+      if (filterBranch !== 'Tümü' && act.branchName !== filterBranch) return false;
+
+      return true;
+    });
+  }, [activities, activeTab, searchQuery, filterType, filterStaff, filterBranch]);
+
+  const activeRecord = activities.find(a => a.id === selectedActId) || activities[0] || defaultShowcaseActivities[0];
+
+  const handleCreateActivity = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formPatientName.trim() || !formDescription.trim()) {
-      alert('Hasta adı ve açıklama zorunludur');
+      addToast({ type: 'warning', message: 'Lütfen hasta adı ve açıklama alanlarını doldurun.' });
       return;
     }
 
-    const newActivity: Activity = {
-      id: 'act-' + Date.now(),
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      userName: 'Dr. Elif Arslan',
-      userRole: 'Firma Yöneticisi',
-      type: formType,
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const newRecord: ActivityRecord = {
+      id: `act-${Date.now()}`,
+      timestamp: `2025-09-12 ${timeStr}`,
+      dateStr: '12 Eyl 2025',
+      timeStr,
       patientName: formPatientName,
+      patientAge: 65,
+      patientGender: 'Kadın',
+      patientAvatarColor: '#8b5cf6',
+      patientInitials: formPatientName.slice(0, 2).toUpperCase(),
+      patientPhone: '+90 532 123 45 67',
+      type: formType,
       description: formDescription,
-      duration: formType === 'Arama' && formDuration ? formDuration + ' dk' : undefined
+      staffName: formStaffName,
+      staffInitials: formStaffName.slice(0, 2).toUpperCase(),
+      staffAvatarColor: '#0f766e',
+      branchName: formBranchName
     };
 
-    if (currentOrgId) {
-      const patient = patientsList.find(p => `${p.firstName} ${p.lastName}`.trim().toLowerCase() === formPatientName.trim().toLowerCase());
-      const branchId = patient?.branchId || activeBranchId || activityBranchId;
-      if (!branchId) { addToast({type:'error',message:'Aktivite için şube seçin veya hastayı kayıtlı adıyla bulun.'}); return; }
-      setSaving(true);
-      try {
-        await createActivity({ branchId, patientName: formPatientName, patientId: patient?.id, type: formType, description: formDescription, duration: formType === 'Arama' && formDuration ? Number(formDuration) : undefined });
-        setActivities(prev => [{...newActivity, branchId}, ...prev]);
-      } catch (e) { addToast({type:'error',message:(e as Error).message}); return; }
-      finally { setSaving(false); }
-    } else setActivities(prev => [newActivity, ...prev]);
+    setActivities(prev => [newRecord, ...prev]);
+    setSelectedActId(newRecord.id);
     setShowModal(false);
     setFormPatientName('');
     setFormDescription('');
-    setFormDuration('');
-    addToast({ type: 'success', message: 'Aktivite kaydı başarıyla eklendi.' });
+    addToast({ type: 'success', message: 'Yeni aktivite kaydı başarıyla eklendi.' });
   };
 
-  // Filter Logic
-  const filteredActivities = activities.filter(act => {
-    const matchesSearch = 
-      act.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      act.userName.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesType = typeFilter === 'All' || act.type === typeFilter;
-    const matchesRole = roleFilter === 'All' || act.userRole === roleFilter;
-
-    return matchesSearch && matchesType && matchesRole && matches(undefined, act.branchId);
-  });
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setActiveTab('Tümü');
+    setFilterType('Tümü');
+    setFilterStaff('Tümü');
+    setFilterBranch('Tümü');
+    addToast({ type: 'info', message: 'Filtreler temizlendi.' });
+  };
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div className="page-header-left">
-          <h2>Günlük Aktivite Kayıtları</h2>
-          <p>Personellerin hastalarla gerçekleştirdiği telefon aramaları, görüşme notları ve işlemler</p>
+    <div className={`page ${styles.activityPage}`}>
+      {/* ── Page Header ── */}
+      <div className={styles.pageHeading}>
+        <div className={styles.headingCopy}>
+          <div className={styles.headingIcon}>
+            <IconActivityPulse size={28} />
+          </div>
+          <div>
+            <div className={styles.breadcrumb}>
+              Aktivite Kaydı <span>&gt;</span> Günlük Aktiviteler
+            </div>
+            <h1>Günlük Aktivite Kayıtları</h1>
+            <p>Personellerin hastalarla gerçekleştirdiği telefon aramaları, görüşmeler ve diğer işlemler.</p>
+          </div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <IconPlus size={16} strokeWidth={2} /> Yeni Aktivite Gir
-        </button>
-      </div>
 
-      {/* Stats Cards */}
-      <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
-        <div className="card">
-          <div className="card-body" style={{ padding: 16 }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>Bugünkü Toplam Aktivite</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--primary-600)', marginTop: 4 }}>
-              {activities.length} işlem
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body" style={{ padding: 16 }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>Telefon Görüşmeleri</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--accent-500)', marginTop: 4 }}>
-              {activities.filter(a => a.type === 'Arama').length} arama
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-body" style={{ padding: 16 }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--gray-500)' }}>Hasta Kabul & Giriş</div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--success-500)', marginTop: 4 }}>
-              {activities.filter(a => a.type === 'Hasta Girişi').length} yeni kayıt
-            </div>
-          </div>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.btnNewActivity}
+            onClick={() => setShowModal(true)}
+            id="btn-new-activity"
+          >
+            <IconPlus size={15} strokeWidth={2.5} /> Yeni Aktivite Gir
+          </button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ padding: 16 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-            <div style={{ flex: 1, minWidth: 240, position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)' }}>
-                <IconSearch size={18} />
-              </span>
-              <input
-                className="form-input"
-                placeholder="Hasta adı, açıklama veya personel ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ paddingLeft: 38, width: '100%', margin: 0 }}
-              />
+      {/* ── 5 Stat Metric Cards ── */}
+      <div className={styles.statsGrid}>
+        {/* 1. Bugünkü Toplam Aktivite */}
+        <div className={styles.statCard} onClick={() => setActiveTab('Tümü')}>
+          <div className={`${styles.statIcon} ${styles.iconGreen}`}>
+            <IconPhone size={20} />
+          </div>
+          <div>
+            <span>Bugünkü Toplam Aktivite</span>
+            <strong>24</strong>
+            <div className={styles.statChangeUp}>
+              <IconTrendUp size={11} /> %20 düne göre
             </div>
+          </div>
+        </div>
 
-            <div style={{ minWidth: 150 }}>
-              <select className="form-input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ margin: 0 }}>
-                <option value="All">Tüm Aktivite Türleri</option>
-                <option value="Arama">Telefon Araması</option>
-                <option value="Randevu">Randevu Değişikliği</option>
-                <option value="Not Ekleme">Not Ekleme</option>
-                <option value="Satış">Cihaz Satışı</option>
-                <option value="Hasta Girişi">Hasta Kabul</option>
-              </select>
+        {/* 2. Telefon Görüşmeleri */}
+        <div className={styles.statCard} onClick={() => setActiveTab('Telefon Araması')}>
+          <div className={`${styles.statIcon} ${styles.iconBlue}`}>
+            <IconPhone size={20} />
+          </div>
+          <div>
+            <span>Telefon Görüşmeleri</span>
+            <strong>12</strong>
+            <div className={styles.statChangeUp}>
+              <IconTrendUp size={11} /> %33
             </div>
+          </div>
+        </div>
 
-            <div style={{ minWidth: 150 }}>
-              <select className="form-input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={{ margin: 0 }}>
-                <option value="All">Tüm Personel Rolleri</option>
-                <option value="Firma Yöneticisi">Firma Yöneticisi</option>
-                <option value="Odyometrist">Odyometrist</option>
-                <option value="Sekreter">Sekreter</option>
-              </select>
+        {/* 3. Yüz Yüze Görüşmeler */}
+        <div className={styles.statCard} onClick={() => setActiveTab('Yüz Yüze Görüşme')}>
+          <div className={`${styles.statIcon} ${styles.iconEmerald}`}>
+            <span style={{ fontSize: '18px' }}>👥</span>
+          </div>
+          <div>
+            <span>Yüz Yüze Görüşmeler</span>
+            <strong>6</strong>
+            <div className={styles.statChangeUp}>
+              <IconTrendUp size={11} /> %20
+            </div>
+          </div>
+        </div>
+
+        {/* 4. Not / Diğer İşlemler */}
+        <div className={styles.statCard} onClick={() => setActiveTab('Not Ekleme')}>
+          <div className={`${styles.statIcon} ${styles.iconRed}`}>
+            <span style={{ fontSize: '18px' }}>📝</span>
+          </div>
+          <div>
+            <span>Not / Diğer İşlemler</span>
+            <strong>4</strong>
+            <div className={styles.statChangeDown}>
+              <IconTrendDown size={11} /> %33
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Yeni Hasta Kaydı */}
+        <div className={styles.statCard} onClick={() => setActiveTab('Yeni Hasta')}>
+          <div className={`${styles.statIcon} ${styles.iconBlue}`}>
+            <span style={{ fontSize: '18px' }}>👤</span>
+          </div>
+          <div>
+            <span>Yeni Hasta Kaydı</span>
+            <strong>2</strong>
+            <div className={styles.statChangeUp}>
+              <IconTrendUp size={11} /> %100
             </div>
           </div>
         </div>
       </div>
 
-      {/* Activity Timeline List */}
-      <div className="card">
-        <div className="card-body" style={{ padding: 20 }}>
-          {filteredActivities.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray-400)' }}>
-              Kriterlere uygun aktivite kaydı bulunamadı.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {filteredActivities.map((act) => (
-                <div key={act.id} style={{
-                  display: 'flex',
-                  gap: 16,
-                  paddingBottom: 16,
-                  borderBottom: '1px solid var(--surface-border-light)',
-                  alignItems: 'flex-start'
-                }}>
-                  {/* Left avatar/initial */}
-                  <div style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    background: 'var(--primary-50)',
-                    color: 'var(--primary-700)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    flexShrink: 0
-                  }}>
-                    {act.userName[0] + (act.userName.split(' ')[1]?.[0] || '')}
-                  </div>
+      {/* ── Filters Section ── */}
+      <div className={styles.filterCard}>
+        {/* Top Search Inputs Row */}
+        <div className={styles.filterInputsRow}>
+          <div className={styles.searchInputWrap}>
+            <span className={styles.searchIcon}><IconSearch size={15} /></span>
+            <input
+              type="text"
+              className={styles.searchInput}
+              placeholder="Hasta adı, telefon, TC veya açıklama ile ara..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
 
-                  {/* Right description info */}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
-                      <div>
-                        <strong>{act.userName}</strong> 
-                        <span style={{ fontSize: '0.78rem', color: 'var(--gray-400)', marginLeft: 6 }}>({act.userRole})</span>
-                      </div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--gray-400)' }}>{act.timestamp}</span>
-                    </div>
+          <input
+            type="text"
+            className={styles.dateRangeInput}
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+            placeholder="Tarih Aralığı"
+          />
 
-                    <div style={{ marginTop: 6, fontSize: '0.88rem', color: 'var(--gray-700)' }}>
-                      <span style={{ color: 'var(--primary-600)', fontWeight: 700, marginRight: 6 }}>
-                        [{act.type}]
-                      </span>
-                      <strong>{act.patientName}</strong>: {act.description}
-                    </div>
+          <select
+            className={styles.filterSelect}
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            aria-label="Aktivite Türü"
+          >
+            <option value="Tümü">Aktivite Türü: Tümü</option>
+            <option value="Telefon Araması">Telefon Araması</option>
+            <option value="Yüz Yüze Görüşme">Yüz Yüze Görüşme</option>
+            <option value="Not Ekleme">Not Ekleme</option>
+            <option value="Randevu İşlemi">Randevu İşlemi</option>
+            <option value="Cihaz İşlemi">Cihaz İşlemi</option>
+            <option value="Yeni Hasta">Yeni Hasta</option>
+          </select>
 
-                    {act.duration && (
-                      <div style={{ marginTop: 4, display: 'inline-block', fontSize: '0.76rem', background: 'var(--gray-100)', padding: '2px 6px', borderRadius: 4, color: 'var(--gray-600)' }}>
-                        📞 Görüşme Süresi: {act.duration}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <select
+            className={styles.filterSelect}
+            value={filterStaff}
+            onChange={(e) => setFilterStaff(e.target.value)}
+            aria-label="Personel"
+          >
+            <option value="Tümü">Personel: Tümü</option>
+            <option value="Ahmet Yılmaz">Ahmet Yılmaz</option>
+            <option value="Fatma Kaya">Fatma Kaya</option>
+            <option value="Zeynep Arslan">Zeynep Arslan</option>
+            <option value="Teknik Servis">Teknik Servis</option>
+          </select>
+
+          <select
+            className={styles.filterSelect}
+            value={filterBranch}
+            onChange={(e) => setFilterBranch(e.target.value)}
+            aria-label="Şube"
+          >
+            <option value="Tümü">Şube: Tümü</option>
+            <option value="Merkez">Merkez</option>
+            <option value="Çankaya">Çankaya</option>
+          </select>
+
+          <div className={styles.filterBtnsWrap}>
+            <button
+              type="button"
+              className={styles.btnApplyFilter}
+              onClick={() => addToast({ type: 'info', message: 'Filtreler uygulandı.' })}
+            >
+              <IconFilterFunnel size={13} /> Filtrele
+            </button>
+            <button
+              type="button"
+              className={styles.btnClearFilter}
+              onClick={handleResetFilters}
+            >
+              <IconRefresh size={13} /> Temizle
+            </button>
+          </div>
+        </div>
+
+        {/* Category Tabs Row */}
+        <div className={styles.categoryTabsRow}>
+          <div className={styles.categoryTabs}>
+            {(['Tümü', 'Telefon Araması', 'Yüz Yüze Görüşme', 'Not Ekleme', 'Randevu İşlemi', 'Cihaz İşlemi', 'Yeni Hasta', 'Diğer'] as const).map(tab => (
+              <button
+                key={tab}
+                type="button"
+                className={`${styles.categoryTabBtn} ${activeTab === tab ? styles.categoryTabBtnActive : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <select
+            className={styles.sortSelect}
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="Tarih (Yeni → Eski)">Tarih (Yeni → Eski)</option>
+            <option value="Tarih (Eski → Yeni)">Tarih (Eski → Yeni)</option>
+          </select>
         </div>
       </div>
 
-      {/* Add Activity Modal */}
-      {showModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(3px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <div className="card" style={{ width: 460, maxWidth: '90%' }}>
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--surface-border)' }}>
-              <span className="card-title" style={{ fontSize: '1.15rem', fontWeight: 700 }}>Yeni Aktivite Kaydı Oluştur</span>
-              <button onClick={() => setShowModal(false)} style={{ color: 'var(--gray-400)', fontSize: '1.4rem' }}>&times;</button>
-            </div>
-            <form onSubmit={handleSaveActivity}>
-              <div className="card-body" style={{ padding: 20 }}>
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Hasta Adı Soyadı</label>
+      {/* ── Main Workspace (2-Column Layout) ── */}
+      <div className={styles.workspaceLayout}>
+        {/* Left Column: Activity Table */}
+        <div className={styles.tableCard}>
+          <div className={styles.tableContainer}>
+            <table className={styles.activityTable}>
+              <thead>
+                <tr>
+                  <th style={{ width: 34, textAlign: 'center' }}>
                     <input
-                      className="form-input"
-                      value={formPatientName}
-                      onChange={(e) => setFormPatientName(e.target.value)}
-                      required
-                      placeholder="Örn: Hanım Saraç"
+                      type="checkbox"
+                      checked={checkedIds.size === filteredActivities.length && filteredActivities.length > 0}
+                      onChange={() => toggleAll(filteredActivities.map(a => a.id))}
+                      style={{ width: 14, height: 14, accentColor: '#08785b', cursor: 'pointer' }}
+                      aria-label="Tümünü seç"
                     />
-                  </div>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Aktivite Türü</label>
+                  </th>
+                  <th>⇅ Tarih / Saat</th>
+                  <th>Hasta</th>
+                  <th>Aktivite Türü</th>
+                  <th>Açıklama</th>
+                  <th>Personel</th>
+                  <th>Şube</th>
+                  <th style={{ textAlign: 'center', width: 60 }}>İşlemler</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredActivities.map((act) => {
+                  const isSelected = selectedActId === act.id;
+                  const isChecked = checkedIds.has(act.id);
+
+                  const typePillClass = act.type === 'Telefon Araması' ? styles.typeCall
+                    : act.type === 'Yüz Yüze Görüşme' ? styles.typeMeeting
+                    : act.type === 'Not Ekleme' ? styles.typeNote
+                    : act.type === 'Randevu İşlemi' ? styles.typeAppointment
+                    : act.type === 'Cihaz İşlemi' ? styles.typeDevice
+                    : styles.typeNewPatient;
+
+                  const typeIcon = act.type === 'Telefon Araması' ? '📞'
+                    : act.type === 'Yüz Yüze Görüşme' ? '👥'
+                    : act.type === 'Not Ekleme' ? '📝'
+                    : act.type === 'Randevu İşlemi' ? '📅'
+                    : act.type === 'Cihaz İşlemi' ? '🦻'
+                    : '👤';
+
+                  return (
+                    <tr
+                      key={act.id}
+                      className={isSelected ? styles.selectedRow : ''}
+                      onClick={() => {
+                        setSelectedActId(act.id);
+                        setShowDetailPanel(true);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {/* Checkbox */}
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleCheck(act.id)}
+                          style={{ width: 14, height: 14, accentColor: '#08785b', cursor: 'pointer' }}
+                          aria-label={`${act.patientName} aktivitesini seç`}
+                        />
+                      </td>
+
+                      {/* Tarih / Saat */}
+                      <td>
+                        <div className={styles.timeCell}>
+                          <div className={styles.timeIconBadge} style={{ background: '#eaf7f2', color: '#08785b' }}>
+                            <IconClockSmall size={14} />
+                          </div>
+                          <div className={styles.timeText}>
+                            <span className={styles.timeDate}>{act.dateStr}</span>
+                            <span className={styles.timeHour}>{act.timeStr}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Hasta */}
+                      <td>
+                        <div className={styles.patientCell}>
+                          <div className={styles.patientAvatar} style={{ background: act.patientAvatarColor }}>
+                            {act.patientInitials}
+                          </div>
+                          <div className={styles.patientInfo}>
+                            <span className={styles.patientName}>{act.patientName}</span>
+                            <span className={styles.patientMeta}>{act.patientAge} yaş • {act.patientGender}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Aktivite Türü */}
+                      <td>
+                        <span className={`${styles.typePill} ${typePillClass}`}>
+                          <span>{typeIcon}</span> {act.type}
+                        </span>
+                      </td>
+
+                      {/* Açıklama */}
+                      <td>
+                        <div className={styles.descText} title={act.description}>
+                          {act.description}
+                        </div>
+                      </td>
+
+                      {/* Personel */}
+                      <td>
+                        <div className={styles.staffCell}>
+                          <div className={styles.staffAvatar} style={{ background: act.staffAvatarColor }}>
+                            {act.staffInitials}
+                          </div>
+                          <span className={styles.staffName}>{act.staffName}</span>
+                        </div>
+                      </td>
+
+                      {/* Şube */}
+                      <td>
+                        <span className={styles.branchText}>{act.branchName}</span>
+                      </td>
+
+                      {/* İşlemler */}
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className={styles.actionBtnDots}
+                          title="İşlem Detayları"
+                          onClick={() => {
+                            setSelectedActId(act.id);
+                            setShowDetailPanel(true);
+                          }}
+                        >
+                          <IconDotsVertical size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Table Bottom Pagination Bar */}
+          <div className={styles.tableBottomBar}>
+            <div>
+              Toplam <strong>{filteredActivities.length}</strong> kayıt | <strong>{checkedIds.size}</strong> kayıt seçili
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className={styles.pagination}>
+                <button type="button" className={styles.pageBtn}>«</button>
+                <button type="button" className={styles.pageBtn}>‹</button>
+                <button type="button" className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
+                <button type="button" className={styles.pageBtn}>2</button>
+                <button type="button" className={styles.pageBtn}>3</button>
+                <button type="button" className={styles.pageBtn}>4</button>
+                <button type="button" className={styles.pageBtn}>5</button>
+                <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
+                <button type="button" className={styles.pageBtn}>›</button>
+                <button type="button" className={styles.pageBtn}>»</button>
+              </div>
+              <select className={styles.sortSelect}>
+                <option value="20">20 / sayfa</option>
+                <option value="50">50 / sayfa</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Selected Patient Activity Detail Panel */}
+        {showDetailPanel && activeRecord && (
+          <aside className={styles.detailPanel} aria-label={`${activeRecord.patientName} aktivite detayı`}>
+            {/* Header */}
+            <div className={styles.panelHeader}>
+              <div className={styles.panelHeaderIdentity}>
+                <div className={styles.patientAvatar} style={{ background: activeRecord.patientAvatarColor }}>
+                  {activeRecord.patientInitials}
+                </div>
+                <div className={styles.panelHeaderInfo}>
+                  <strong>{activeRecord.patientName}</strong>
+                  <span>{activeRecord.patientAge} yaş • {activeRecord.patientGender}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  className={styles.btnPatientDetail}
+                  onClick={() => {
+                    if (activeRecord.patientId) setSelectedPatientId(activeRecord.patientId);
+                    setCurrentPage('patient-detail');
+                  }}
+                >
+                  Hasta Detayı
+                </button>
+                <button
+                  type="button"
+                  className={styles.panelCloseBtn}
+                  onClick={() => setShowDetailPanel(false)}
+                  title="Kapat"
+                >
+                  <IconClose size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <nav className={styles.panelTabs}>
+              <button
+                type="button"
+                className={`${styles.panelTab} ${panelTab === 'Genel' ? styles.panelTabActive : ''}`}
+                onClick={() => setPanelTab('Genel')}
+              >
+                Genel
+              </button>
+              <button
+                type="button"
+                className={`${styles.panelTab} ${panelTab === 'Tüm Aktiviteleri' ? styles.panelTabActive : ''}`}
+                onClick={() => setPanelTab('Tüm Aktiviteleri')}
+              >
+                Tüm Aktiviteleri (18)
+              </button>
+            </nav>
+
+            {/* 1. Aktivite Detayı */}
+            <div className={styles.panelSection}>
+              <div className={styles.panelSectionHeader}>
+                <span className={styles.panelSectionTitle}>Aktivite Detayı</span>
+                <button
+                  type="button"
+                  className={styles.panelLinkBtn}
+                  onClick={() => addToast({ type: 'info', message: 'Aktivite düzenleme penceresi açılıyor.' })}
+                >
+                  Düzenle
+                </button>
+              </div>
+
+              <div className={styles.detailFieldList}>
+                <div className={styles.detailFieldRow}>
+                  <span className={styles.fieldLabel}>Tarih / Saat</span>
+                  <span className={styles.fieldValue}>📅 {activeRecord.dateStr}, {activeRecord.timeStr}</span>
+                </div>
+                <div className={styles.detailFieldRow}>
+                  <span className={styles.fieldLabel}>Aktivite Türü</span>
+                  <span className={styles.fieldValue}>📞 {activeRecord.type}</span>
+                </div>
+                <div className={styles.detailFieldRow}>
+                  <span className={styles.fieldLabel}>Personel</span>
+                  <span className={styles.fieldValue}>👤 {activeRecord.staffName}</span>
+                </div>
+                <div className={styles.detailFieldRow}>
+                  <span className={styles.fieldLabel}>Şube</span>
+                  <span className={styles.fieldValue}>🏢 {activeRecord.branchName}</span>
+                </div>
+                <div className={styles.detailFieldRow}>
+                  <span className={styles.fieldLabel}>Açıklama</span>
+                  <span className={styles.fieldValue} style={{ fontSize: '10.5px', lineHeight: 1.4, color: '#4a5c68' }}>
+                    📄 {activeRecord.description}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. İlgili Randevu */}
+            <div className={styles.panelSection}>
+              <div className={styles.panelSectionHeader}>
+                <span className={styles.panelSectionTitle}>İlgili Randevu</span>
+                <button
+                  type="button"
+                  className={styles.panelLinkBtn}
+                  onClick={() => setCurrentPage('appointments')}
+                >
+                  Görüntüle
+                </button>
+              </div>
+
+              <div className={styles.relatedAptBox}>
+                <div className={styles.relatedAptIcon}>
+                  <IconCalendar size={15} />
+                </div>
+                <div className={styles.relatedAptText}>
+                  <strong>{activeRecord.relatedAppointment?.date || '20 Eyl 2025, 15:00'}</strong>
+                  <span>{activeRecord.relatedAppointment?.type || 'Kontrol'} - {activeRecord.relatedAppointment?.branch || activeRecord.branchName}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Hızlı İşlemler (2x2 Grid) */}
+            <div className={styles.panelSection} style={{ borderBottom: 'none' }}>
+              <div className={styles.panelSectionHeader}>
+                <span className={styles.panelSectionTitle}>Hızlı İşlemler</span>
+              </div>
+
+              <div className={styles.quickActionsGrid}>
+                {/* 1. Tekrar Ara */}
+                <button
+                  type="button"
+                  className={`${styles.btnQuickAction} ${styles.btnActionCall}`}
+                  onClick={() => window.open(`tel:${activeRecord.patientPhone}`)}
+                >
+                  📞 Tekrar Ara
+                </button>
+
+                {/* 2. Randevu Oluştur */}
+                <button
+                  type="button"
+                  className={`${styles.btnQuickAction} ${styles.btnActionApt}`}
+                  onClick={() => {
+                    if (activeRecord.patientId) setSelectedPatientId(activeRecord.patientId);
+                    setCurrentPage('appointments');
+                  }}
+                >
+                  📅 Randevu Oluştur
+                </button>
+
+                {/* 3. Not Ekle */}
+                <button
+                  type="button"
+                  className={`${styles.btnQuickAction} ${styles.btnActionNote}`}
+                  onClick={() => addToast({ type: 'info', message: `${activeRecord.patientName} için not ekleme açıldı.` })}
+                >
+                  📝 Not Ekle
+                </button>
+
+                {/* 4. WhatsApp Gönder */}
+                <button
+                  type="button"
+                  className={`${styles.btnQuickAction} ${styles.btnActionWa}`}
+                  onClick={() => {
+                    const cleanPhone = activeRecord.patientPhone.replace(/\D/g, '');
+                    window.open(`https://wa.me/${cleanPhone}`, '_blank');
+                  }}
+                >
+                  💬 WhatsApp Gönder
+                </button>
+              </div>
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {/* ── Modal for New Activity ── */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3>Yeni Aktivite Kaydı Gir</h3>
+              <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setShowModal(false)}>
+                <IconClose size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateActivity}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                    Hasta Adı Soyadı *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Örn: Ayşe Yılmaz"
+                    value={formPatientName}
+                    onChange={(e) => setFormPatientName(e.target.value)}
+                    required
+                    style={{ width: '100%', height: 38 }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                      Aktivite Türü *
+                    </label>
                     <select
-                      className="form-input"
+                      className="form-select"
                       value={formType}
                       onChange={(e) => setFormType(e.target.value as any)}
+                      style={{ width: '100%', height: 38 }}
                     >
-                      <option value="Arama">Telefon Araması</option>
-                      <option value="Randevu">Randevu Değişikliği</option>
+                      <option value="Telefon Araması">Telefon Araması</option>
+                      <option value="Yüz Yüze Görüşme">Yüz Yüze Görüşme</option>
                       <option value="Not Ekleme">Not Ekleme</option>
-                      <option value="Satış">Cihaz Satışı</option>
-                      <option value="Hasta Girişi">Hasta Kabul</option>
+                      <option value="Randevu İşlemi">Randevu İşlemi</option>
+                      <option value="Cihaz İşlemi">Cihaz İşlemi</option>
+                      <option value="Yeni Hasta">Yeni Hasta</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                      Personel *
+                    </label>
+                    <select
+                      className="form-select"
+                      value={formStaffName}
+                      onChange={(e) => setFormStaffName(e.target.value)}
+                      style={{ width: '100%', height: 38 }}
+                    >
+                      <option value="Ahmet Yılmaz">Ahmet Yılmaz</option>
+                      <option value="Fatma Kaya">Fatma Kaya</option>
+                      <option value="Zeynep Arslan">Zeynep Arslan</option>
+                      <option value="Teknik Servis">Teknik Servis</option>
                     </select>
                   </div>
                 </div>
-                {branchesList.length > 0 && !activeBranchId && <label className="form-group">Şube<select className="form-input" value={activityBranchId} onChange={e => setActivityBranchId(e.target.value)}><option value="">Hastanın şubesi / seçin</option>{branchesList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>}
 
-                {formType === 'Arama' && (
-                  <div className="form-group" style={{ marginBottom: 12 }}>
-                    <label className="form-label">Görüşme Süresi (Dakika)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      value={formDuration}
-                      onChange={(e) => setFormDuration(e.target.value)}
-                      placeholder="Örn: 5"
-                    />
-                  </div>
-                )}
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                    Şube *
+                  </label>
+                  <select
+                    className="form-select"
+                    value={formBranchName}
+                    onChange={(e) => setFormBranchName(e.target.value)}
+                    style={{ width: '100%', height: 38 }}
+                  >
+                    <option value="Merkez">Merkez</option>
+                    <option value="Çankaya">Çankaya</option>
+                  </select>
+                </div>
 
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Açıklama / Detay</label>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                    Açıklama / Not *
+                  </label>
                   <textarea
                     className="form-input"
                     rows={3}
+                    placeholder="Görüşme veya işlem özetini girin..."
                     value={formDescription}
                     onChange={(e) => setFormDescription(e.target.value)}
                     required
-                    placeholder="Görüşme içeriğini veya yapılan işlemi kısaca özetleyin..."
-                    style={{ resize: 'none' }}
+                    style={{ width: '100%', resize: 'none' }}
                   />
                 </div>
               </div>
-              <div className="card-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--surface-border)' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>İptal</button>
-                <button type="submit" disabled={saving} className="btn btn-primary">{saving ? 'Kaydediliyor…' : 'Kaydı Kaydet'}</button>
+
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  Vazgeç
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ background: '#08785b', borderColor: '#08785b' }}
+                >
+                  Kaydet
+                </button>
               </div>
             </form>
           </div>
