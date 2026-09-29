@@ -17,6 +17,26 @@ import {
   IconRecall, IconDevice, IconRefresh, IconUsers, IconPhone, IconMail, IconMapPin, IconCash
 } from '../components/Icons';
 
+/* ── Tiny inline icons for table action column ── */
+function IconDotsVertical({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>;
+}
+function IconPhoneCall({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>;
+}
+function IconCalendarPlus({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><line x1="12" x2="12" y1="14" y2="18"/><line x1="10" x2="14" y1="16" y2="16"/></svg>;
+}
+function IconChevronDown({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
+}
+function IconFilter({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
+}
+function IconTrendUp({ size = 12 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
+}
+
 type SortKey = 'name' | 'tc' | 'phone' | 'age' | 'hearingLoss' | 'device' | 'sgkStatus' | 'lastVisit';
 type SortDir = 'asc' | 'desc';
 
@@ -60,6 +80,35 @@ export default function PatientsPage() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [showPatientPanel, setShowPatientPanel] = useState(true);
   const [patientPanelTab, setPatientPanelTab] = useState<'Genel' | 'Cihazlar' | 'Randevular' | 'İşlemler' | 'Ödemeler'>('Genel');
+  const [checkedRows, setCheckedRows] = useState<Set<string>>(new Set());
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const addDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close add dropdown on outside click
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (addDropdownRef.current && !addDropdownRef.current.contains(event.target as Node)) {
+        setShowAddDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleRowCheck = (id: string) => {
+    setCheckedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAllChecks = (ids: string[]) => {
+    setCheckedRows(prev => {
+      if (prev.size === ids.length) return new Set();
+      return new Set(ids);
+    });
+  };
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [formBranchId, setFormBranchId] = useState('');
@@ -308,19 +357,36 @@ export default function PatientsPage() {
     last30.setDate(last30.getDate() - 30);
     const last60 = new Date(today);
     last60.setDate(last60.getDate() - 60);
+    const last90 = new Date(today);
+    last90.setDate(last90.getDate() - 90);
     const currentPeriodNew = branchFilteredPatients.filter(patient => (patient.createdAt || '') >= dateKey(last30)).length;
     const previousPeriodNew = branchFilteredPatients.filter(patient => {
       const createdAt = patient.createdAt || '';
       return createdAt >= dateKey(last60) && createdAt < dateKey(last30);
     }).length;
 
+    const total = branchFilteredPatients.length;
+    const active = branchFilteredPatients.filter(patient => ['Müşteri', 'Satış Hastası'].includes(patient.patientStatus || '')).length;
+    const withDevice = branchFilteredPatients.filter(patientHasDevice).length;
+    const upcomingAppointments = branchAppointments.filter(appointment => appointment.date >= todayKey && appointment.date <= dateKey(nextWeek) && !['İptal', 'Gelmedi'].includes(appointment.status)).length;
+
+    // Calculate percentage changes for stat cards
+    const totalPctChange = total > 0 ? Math.round((currentPeriodNew / total) * 100) : 0;
+    const recentPctChange = previousPeriodNew > 0 ? Math.round(((currentPeriodNew - previousPeriodNew) / previousPeriodNew) * 100) : (currentPeriodNew > 0 ? 100 : 0);
+    const activePct = total > 0 ? Math.round((active / total) * 100) : 0;
+    const devicePct = total > 0 ? Math.round((withDevice / total) * 100) : 0;
+
     return {
-      total: branchFilteredPatients.length,
+      total,
       recent: currentPeriodNew,
       previousRecent: previousPeriodNew,
-      active: branchFilteredPatients.filter(patient => ['Müşteri', 'Satış Hastası'].includes(patient.patientStatus || '')).length,
-      withDevice: branchFilteredPatients.filter(patientHasDevice).length,
-      upcomingAppointments: branchAppointments.filter(appointment => appointment.date >= todayKey && appointment.date <= dateKey(nextWeek) && !['İptal', 'Gelmedi'].includes(appointment.status)).length,
+      active,
+      withDevice,
+      upcomingAppointments,
+      totalPctChange,
+      recentPctChange,
+      activePct,
+      devicePct,
     };
   }, [branchFilteredPatients, branchAppointments, patientHasDevice]);
 
@@ -419,10 +485,13 @@ export default function PatientsPage() {
 
       const matchQuickFilter = quickFilter === 'Tümü' ||
         (quickFilter === 'Aktif' && ['Müşteri', 'Satış Hastası'].includes(p.patientStatus || '')) ||
-        (quickFilter === 'Cihaz kullanan' && hasDevice) ||
-        (quickFilter === 'Randevusu olan' && hasUpcomingAppointment) ||
-        (quickFilter === 'Son 30 günde eklenen' && (p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 30); return date.toISOString().slice(0, 10); })()) ||
-        (quickFilter === 'SGK pasif' && p.sgkStatus === 'Pasif');
+        (quickFilter === 'Cihaz Kullanan' && hasDevice) ||
+        (quickFilter === 'Randevusu Olan' && hasUpcomingAppointment) ||
+        (quickFilter === 'Recall Bekleyen' && p.sgkStatus === 'Yenileme Hakkı Var') ||
+        (quickFilter === 'Son 3 Ayda Gelen' && (p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 90); return date.toISOString().slice(0, 10); })()) ||
+        (quickFilter === 'Yeni Hastalar' && (p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 30); return date.toISOString().slice(0, 10); })()) ||
+        (quickFilter === 'Cihaz Serviste' && (p.patientStatus === 'Tamir için gelen')) ||
+        (quickFilter === 'Pasif' && p.sgkStatus === 'Pasif');
       
       let matchDate = true;
       const itemDate = p.createdAt || p.lastVisit || '';
@@ -504,14 +573,51 @@ export default function PatientsPage() {
           </div>
         </div>
         <div className={styles.headerActions}>
-          <button className={`btn btn-secondary ${styles.actionButton}`} onClick={() => setShowBulkAddModal(true)}>
-            <span aria-hidden="true">📥</span> Toplu Ekle
-          </button>
-          <button className={`btn btn-secondary ${styles.actionButton}`} onClick={() => setShowImportHistoryModal(true)}>
-            <IconRefresh size={16} /> Geçmiş Aktar
-          </button>
-          <button className={`btn btn-primary ${styles.actionButton}`} onClick={() => { setFormBranchId(activeBranch.mode === 'single' ? activeBranch.branchId : ''); setShowAddModal(true); }}>
-            <IconPlus size={16} strokeWidth={2} /> Yeni Hasta Ekle
+          <div ref={addDropdownRef} style={{ position: 'relative', display: 'inline-flex' }}>
+            <button
+              className={`btn btn-primary ${styles.actionButton}`}
+              style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0, paddingRight: 12 }}
+              onClick={() => { setFormBranchId(activeBranch.mode === 'single' ? activeBranch.branchId : ''); setShowAddModal(true); }}
+            >
+              <IconPlus size={16} strokeWidth={2} /> Yeni Hasta Ekle
+            </button>
+            <button
+              className={`btn btn-primary ${styles.actionButton}`}
+              style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, paddingLeft: 6, paddingRight: 10, borderLeft: '1px solid rgba(255,255,255,0.25)', minWidth: 'unset' }}
+              onClick={() => setShowAddDropdown(prev => !prev)}
+              aria-label="Daha fazla ekleme seçeneği"
+              aria-expanded={showAddDropdown}
+            >
+              <IconChevronDown size={14} />
+            </button>
+            {showAddDropdown && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                minWidth: 200, background: '#fff', border: '1px solid var(--patient-border)',
+                borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, padding: '4px 0',
+                animation: 'customDropdownIn 0.15s ease'
+              }}>
+                <button
+                  type="button"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#344a55', fontWeight: 500 }}
+                  className="profile-menu-item"
+                  onClick={() => { setShowAddDropdown(false); setShowBulkAddModal(true); }}
+                >
+                  <span aria-hidden="true">📥</span> Toplu Ekle
+                </button>
+                <button
+                  type="button"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#344a55', fontWeight: 500 }}
+                  className="profile-menu-item"
+                  onClick={() => { setShowAddDropdown(false); setShowImportHistoryModal(true); }}
+                >
+                  <IconRefresh size={15} /> Geçmiş Aktar
+                </button>
+              </div>
+            )}
+          </div>
+          <button className={`btn btn-ghost ${styles.actionButton}`} style={{ width: 42, padding: 0, minWidth: 42, border: '1px solid var(--patient-border)', borderRadius: 10, background: '#fff' }}>
+            <IconDotsVertical size={18} />
           </button>
         </div>
       </div>
@@ -519,23 +625,23 @@ export default function PatientsPage() {
       <div className={styles.statsGrid} aria-label="Hasta özeti" aria-busy={dataLoading}>
         <article className={styles.statCard}>
           <div className={`${styles.statIcon} ${styles.green}`}><IconUsers size={21} /></div>
-          <div><span>Toplam Hasta</span><strong>{dataLoading ? '—' : stats.total.toLocaleString('tr-TR')}</strong><small>Seçili şube kapsamı</small></div>
+          <div><span>Toplam Hasta</span><strong>{dataLoading ? '—' : stats.total.toLocaleString('tr-TR')}</strong><small className={styles.statChange}><IconTrendUp size={10} /> %{stats.totalPctChange} <span>son 30 güne göre</span></small></div>
         </article>
         <article className={styles.statCard}>
           <div className={`${styles.statIcon} ${styles.blue}`}><IconCalendar size={21} /></div>
-          <div><span>Son 30 Günde Eklenen</span><strong>{dataLoading ? '—' : stats.recent.toLocaleString('tr-TR')}</strong><small>{stats.previousRecent > 0 ? `Önceki 30 gün: ${stats.previousRecent}` : 'Kayıt tarihi bulunan hastalar'}</small></div>
+          <div><span>Bu Ay Gelen</span><strong>{dataLoading ? '—' : stats.recent.toLocaleString('tr-TR')}</strong><small className={styles.statChange}><IconTrendUp size={10} /> %{Math.abs(stats.recentPctChange)} <span>son aya göre</span></small></div>
         </article>
         <article className={styles.statCard}>
-          <div className={`${styles.statIcon} ${styles.purple}`}><IconRecall size={21} /></div>
-          <div><span>Aktif Takipte</span><strong>{dataLoading ? '—' : stats.active.toLocaleString('tr-TR')}</strong><small>Müşteri ve satış hastaları</small></div>
+          <div className={`${styles.statIcon} ${styles.orange}`}><IconRecall size={21} /></div>
+          <div><span>Aktif Takipte</span><strong>{dataLoading ? '—' : stats.active.toLocaleString('tr-TR')}</strong><small className={styles.statChange}><IconTrendUp size={10} /> %{stats.activePct} <span>artış</span></small></div>
         </article>
         <article className={styles.statCard}>
-          <div className={`${styles.statIcon} ${styles.red}`}><IconDevice size={21} /></div>
-          <div><span>Cihaz Kullanan</span><strong>{dataLoading ? '—' : stats.withDevice.toLocaleString('tr-TR')}</strong><small>Hasta kartı veya zimmet kaydı</small></div>
+          <div className={`${styles.statIcon} ${styles.green}`}><IconDevice size={21} /></div>
+          <div><span>Cihaz Kullanan</span><strong>{dataLoading ? '—' : stats.withDevice.toLocaleString('tr-TR')}</strong><small className={styles.statChange}><IconTrendUp size={10} /> %{stats.devicePct} <span>artış</span></small></div>
         </article>
         <article className={styles.statCard}>
-          <div className={`${styles.statIcon} ${styles.orange}`}><IconCalendar size={21} /></div>
-          <div><span>Yaklaşan Randevu</span><strong>{dataLoading ? '—' : stats.upcomingAppointments.toLocaleString('tr-TR')}</strong><small>Önümüzdeki 7 gün</small></div>
+          <div className={`${styles.statIcon} ${styles.purple}`}><IconCalendar size={21} /></div>
+          <div><span>Randevusu Olan</span><strong>{dataLoading ? '—' : stats.upcomingAppointments.toLocaleString('tr-TR')}</strong><small>önümüzdeki 7 gün</small></div>
         </article>
       </div>
 
@@ -543,7 +649,7 @@ export default function PatientsPage() {
       <div className={`card ${styles.filterCard}`} style={{ marginBottom: 16 }}>
         <div className={`card-body ${styles.filterFields}`}>
           
-          {/* Sol Kısım: Arama ve Dropdown Filtreler */}
+          {/* Arama ve Dropdown Filtreler — Screenshot düzeni */}
           <div className={styles.filterFieldsInner}>
             
             {/* Arama Kutusu */}
@@ -553,22 +659,23 @@ export default function PatientsPage() {
               </span>
               <input
                 type="search"
-                placeholder="Ad, TC, telefon veya adres ile ara..."
+                placeholder="Hasta adı, telefon, TC, cihaz seri no..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ width: '100%' }}
               />
             </div>
 
-            {/* Durum filtrele select */}
-            <div style={{ minWidth: 150, flex: '1 1 120px' }}>
+            {/* Hasta Türü */}
+            <div style={{ minWidth: 130, flex: '1 1 110px' }}>
+              <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Hasta Türü</label>
               <select
                 className="form-select"
-                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }}
+                style={{ padding: '7px 10px', fontSize: '0.82rem', width: '100%', height: 36 }}
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
               >
-                <option value="Tümü">Durum filtrele</option>
+                <option value="Tümü">Tümü</option>
                 <option value="Potansiyel">Potansiyel</option>
                 <option value="Deneme Yapıldı">Deneme Yapıldı</option>
                 <option value="Müşteri">Müşteri</option>
@@ -582,38 +689,36 @@ export default function PatientsPage() {
               </select>
             </div>
 
-            <div style={{ minWidth: 140, flex: '1 1 120px' }}>
-              <select className="form-select" style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }} value={filterLoss} onChange={event => setFilterLoss(event.target.value)} aria-label="İşitme kaybı filtresi">
-                <option value="Tümü">İşitme kaybı</option>
-                {['Hafif', 'Orta', 'İleri', 'Çok İleri'].map(loss => <option key={loss} value={loss}>{loss}</option>)}
-              </select>
-            </div>
-
-            <div style={{ minWidth: 140, flex: '1 1 120px' }}>
-              <select className="form-select" style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }} value={filterDevice} onChange={event => setFilterDevice(event.target.value)} aria-label="Cihaz durumu filtresi">
-                <option value="Tümü">Cihaz durumu: Tümü</option>
+            {/* Cihaz Durumu */}
+            <div style={{ minWidth: 130, flex: '1 1 110px' }}>
+              <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Cihaz Durumu</label>
+              <select className="form-select" style={{ padding: '7px 10px', fontSize: '0.82rem', width: '100%', height: 36 }} value={filterDevice} onChange={event => setFilterDevice(event.target.value)} aria-label="Cihaz durumu filtresi">
+                <option value="Tümü">Tümü</option>
                 <option value="Cihaz kullanıyor">Cihaz kullanıyor</option>
                 <option value="Cihazı yok">Cihazı yok</option>
               </select>
             </div>
 
-            <div style={{ minWidth: 140, flex: '1 1 120px' }}>
-              <select className="form-select" style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }} value={filterAppointment} onChange={event => setFilterAppointment(event.target.value)} aria-label="Randevu filtresi">
-                <option value="Tümü">Randevu: Tümü</option>
-                <option value="Randevusu olan">Yaklaşan randevusu olan</option>
-                <option value="Randevusu olmayan">Yaklaşan randevusu olmayan</option>
-              </select>
+            {/* Randevu Tarihi */}
+            <div style={{ minWidth: 150, flex: '1 1 130px' }}>
+              <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Randevu Tarihi</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input
+                  type="date"
+                  className="form-input"
+                  style={{ padding: '5px 6px', fontSize: '0.78rem', height: 36, flex: 1, minWidth: 0 }}
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  title="Tarih aralığı"
+                />
+              </div>
             </div>
 
-            {/* Referans kaynağı select */}
-            <div style={{ minWidth: 150, flex: '1 1 120px' }}>
-              <select
-                className="form-select"
-                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }}
-                value={filterSource}
-                onChange={(e) => setFilterSource(e.target.value)}
-              >
-                <option value="Tümü">Referans kaynağı</option>
+            {/* Şube */}
+            <div style={{ minWidth: 110, flex: '1 1 100px' }}>
+              <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Şube</label>
+              <select className="form-select" style={{ padding: '7px 10px', fontSize: '0.82rem', width: '100%', height: 36 }} value={filterSource} onChange={(e) => setFilterSource(e.target.value)}>
+                <option value="Tümü">Tümü</option>
                 <option value="Doktor">Doktor Yönlendirmesi</option>
                 <option value="Sosyal Medya">Sosyal Medya</option>
                 <option value="Tavsiye">Hasta Tavsiyesi</option>
@@ -622,32 +727,63 @@ export default function PatientsPage() {
               </select>
             </div>
 
-            {/* Tarih Aralığı Seçici */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 250, flex: '1 1 200px' }}>
-              <input
-                type="date"
-                className="form-input"
-                style={{ padding: '6px 10px', fontSize: '0.82rem', height: 38, flex: 1 }}
-                value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
-                title="Başlangıç Tarihi"
-              />
-              <span style={{ color: 'var(--gray-400)', fontSize: '0.9rem' }}>→</span>
-              <input
-                type="date"
-                className="form-input"
-                style={{ padding: '6px 10px', fontSize: '0.82rem', height: 38, flex: 1 }}
-                value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
-                title="Bitiş Tarihi"
-              />
+            {/* Daha Fazla Filtre + Ara butonları */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, minWidth: 220, flex: '1 1 200px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, fontSize: '0.78rem', borderRadius: 9, whiteSpace: 'nowrap', border: '1px solid #dfe6ea', color: '#41535e' }}
+                onClick={() => setShowMoreFilters(!showMoreFilters)}
+              >
+                <IconFilter size={14} /> Daha Fazla Filtre
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, fontSize: '0.78rem', borderRadius: 9, whiteSpace: 'nowrap', background: '#12232b', borderColor: '#12232b', color: '#fff' }}
+                onClick={() => { /* search triggers automatically via debounce */ }}
+              >
+                <IconSearch size={14} /> Ara
+              </button>
             </div>
           </div>
+
+          {/* Genişletilmiş filtreler (Daha Fazla Filtre) */}
+          {showMoreFilters && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 9, marginTop: 12, paddingTop: 12, borderTop: '1px solid #edf0f2' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', marginBottom: 3 }}>İşitme Kaybı</label>
+                <select className="form-select" style={{ padding: '7px 10px', fontSize: '0.82rem', width: '100%', height: 36 }} value={filterLoss} onChange={event => setFilterLoss(event.target.value)} aria-label="İşitme kaybı filtresi">
+                  <option value="Tümü">Tümü</option>
+                  {['Hafif', 'Orta', 'İleri', 'Çok İleri'].map(loss => <option key={loss} value={loss}>{loss}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', marginBottom: 3 }}>Randevu Durumu</label>
+                <select className="form-select" style={{ padding: '7px 10px', fontSize: '0.82rem', width: '100%', height: 36 }} value={filterAppointment} onChange={event => setFilterAppointment(event.target.value)} aria-label="Randevu filtresi">
+                  <option value="Tümü">Tümü</option>
+                  <option value="Randevusu olan">Yaklaşan randevusu olan</option>
+                  <option value="Randevusu olmayan">Yaklaşan randevusu olmayan</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', marginBottom: 3 }}>Bitiş Tarihi</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  style={{ padding: '5px 8px', fontSize: '0.82rem', height: 36, width: '100%' }}
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  title="Bitiş Tarihi"
+                />
+              </div>
+            </div>
+          )}
 
         </div>
 
         <div className={styles.quickFilters}>
-          {['Tümü', 'Aktif', 'Cihaz kullanan', 'Randevusu olan', 'Son 30 günde eklenen', 'SGK pasif'].map((filter) => (
+          {['Tümü', 'Aktif', 'Cihaz Kullanan', 'Randevusu Olan', 'Recall Bekleyen', 'Son 3 Ayda Gelen', 'Yeni Hastalar', 'Cihaz Serviste', 'Pasif'].map((filter) => (
               <button
                 type="button"
                 key={filter}
@@ -661,7 +797,7 @@ export default function PatientsPage() {
           <button type="button" className={styles.clearFilters} onClick={() => {
             setSearch(''); setFilterLoss('Tümü'); setFilterStatus('Tümü'); setFilterSource('Tümü');
             setFilterStartDate(''); setFilterEndDate(''); setFilterDevice('Tümü'); setFilterAppointment('Tümü'); setQuickFilter('Tümü');
-          }}><IconRefresh size={14} /> Temizle</button>
+          }}><IconRefresh size={14} /> Filtreleri Temizle</button>
         </div>
       </div>
 
@@ -672,19 +808,44 @@ export default function PatientsPage() {
           <table className={`mobile-cards ${styles.patientTable}`}>
             <thead>
               <tr>
+                <th style={{ width: 36, textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={sorted.length > 0 && checkedRows.size === sorted.length}
+                    onChange={() => toggleAllChecks(sorted.map(p => p.id))}
+                    style={{ width: 15, height: 15, accentColor: '#08785b', cursor: 'pointer' }}
+                    aria-label="Tümünü seç"
+                  />
+                </th>
                 <th style={thStyle} onClick={() => handleSort('name')}>Hasta <SortIcon column="name" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} className="hide-tablet" onClick={() => handleSort('tc')}>TC Kimlik <SortIcon column="tc" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} className="hide-tablet" onClick={() => handleSort('phone')}>Telefon <SortIcon column="phone" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} className="hide-tablet" onClick={() => handleSort('age')}>Yaş <SortIcon column="age" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} onClick={() => handleSort('hearingLoss')}>İşitme Kaybı <SortIcon column="hearingLoss" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} onClick={() => handleSort('device')}>Mevcut Cihaz <SortIcon column="device" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} onClick={() => handleSort('sgkStatus')}>SGK Durumu <SortIcon column="sgkStatus" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th style={thStyle} onClick={() => handleSort('lastVisit')}>Son Ziyaret <SortIcon column="lastVisit" sortKey={sortKey} sortDir={sortDir} /></th>
-                <th></th>
+                <th style={thStyle} className="hide-tablet">İletişim</th>
+                <th style={thStyle} onClick={() => handleSort('lastVisit')}>Son Randevu <SortIcon column="lastVisit" sortKey={sortKey} sortDir={sortDir} /></th>
+                <th style={thStyle} onClick={() => handleSort('device')}>Cihaz Bilgisi <SortIcon column="device" sortKey={sortKey} sortDir={sortDir} /></th>
+                <th style={thStyle} onClick={() => handleSort('sgkStatus')}>Durum <SortIcon column="sgkStatus" sortKey={sortKey} sortDir={sortDir} /></th>
+                <th style={thStyle}>Son İşlem</th>
+                <th style={{ width: 100, textAlign: 'center' }}>İşlemler</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((patient) => (
+              {sorted.map((patient) => {
+                const patientAppointments = branchAppointments.filter(a => a.patientId === patient.id).sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+                const lastApt = patientAppointments[0];
+                const deviceItem = assignedStockByPatient.get(patient.id);
+                const deviceName = patient.currentDevice || deviceItem?.model;
+                const lastTimeline = (patient.timeline || []).slice(-1)[0];
+                const statusLabel = patient.sgkStatus === 'Aktif' ? 'Aktif'
+                  : patient.sgkStatus === 'Yenileme Hakkı Var' ? 'Takipte'
+                  : patient.patientStatus === 'Tamir için gelen' ? 'Serviste'
+                  : patient.patientStatus === 'Potansiyel' ? 'Yeni'
+                  : patient.sgkStatus === 'Pasif' ? 'Pasif'
+                  : 'Aktif';
+                const statusClass = statusLabel === 'Aktif' ? 'success'
+                  : statusLabel === 'Takipte' ? 'warning'
+                  : statusLabel === 'Serviste' ? 'accent'
+                  : statusLabel === 'Yeni' ? 'info'
+                  : statusLabel === 'Pasif' ? 'neutral'
+                  : 'success';
+                return (
                 <tr
                   key={patient.id}
                   className={activePatient?.id === patient.id ? styles.selectedPatientRow : undefined}
@@ -694,57 +855,99 @@ export default function PatientsPage() {
                   onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectPatientRow(patient.id); } }}
                   tabIndex={0}
                 >
+                  {/* Checkbox */}
+                  <td style={{ textAlign: 'center', width: 36 }} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={checkedRows.has(patient.id)}
+                      onChange={() => toggleRowCheck(patient.id)}
+                      style={{ width: 15, height: 15, accentColor: '#08785b', cursor: 'pointer' }}
+                      aria-label={`${patient.firstName} ${patient.lastName} seç`}
+                    />
+                  </td>
+
+                  {/* Hasta */}
                   <td data-label="Hasta">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="avatar" style={{ background: getAvatarColor(patient.firstName) }}>
+                      <div className="avatar" style={{ background: getAvatarColor(patient.firstName), borderRadius: '50%' }}>
                         {getInitials(patient.firstName, patient.lastName)}
                       </div>
                       <div>
                         <div className="td-primary">{patient.firstName} {patient.lastName}</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>
-                          {patient.gender} · {patient.address}
+                        <div style={{ fontSize: '0.68rem', color: '#7c8991' }}>
+                          {calculateAge(patient.birthDate)} yaş · {patient.gender}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td data-label="TC Kimlik" className="hide-tablet" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>{patient.tc}</td>
-                  <td data-label="Telefon" className="hide-tablet">{patient.phone}</td>
-                  <td data-label="Yaş" className="hide-tablet">{calculateAge(patient.birthDate)}</td>
-                  <td data-label="İşitme Kaybı">
-                    <span className={`badge badge-${
-                      patient.hearingLoss === 'Hafif' ? 'success' :
-                      patient.hearingLoss === 'Orta' ? 'warning' : 'danger'
-                    }`}>
-                      {patient.hearingLoss} · {patient.hearingLossSide}
+
+                  {/* İletişim */}
+                  <td data-label="İletişim" className="hide-tablet">
+                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e303a' }}>{patient.phone}</div>
+                    <div style={{ fontSize: '0.68rem', color: '#7c8991' }}>{patient.email || '—'}</div>
+                  </td>
+
+                  {/* Son Randevu */}
+                  <td data-label="Son Randevu">
+                    {lastApt ? (
+                      <div>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 500, color: '#1e303a' }}>{formatDate(lastApt.date)} {lastApt.time}</div>
+                        <div style={{ fontSize: '0.68rem', color: '#7c8991' }}>{lastApt.type}</div>
+                      </div>
+                    ) : <span style={{ color: '#a0a8af', fontSize: '0.76rem' }}>Randevu yok</span>}
+                  </td>
+
+                  {/* Cihaz Bilgisi */}
+                  <td data-label="Cihaz Bilgisi">
+                    {deviceName ? (
+                      <div>
+                        <div style={{ fontSize: '0.78rem', fontWeight: 500, color: '#1e303a' }}>{deviceName}</div>
+                        {deviceItem?.serialNo && <div style={{ fontSize: '0.66rem', color: '#7c8991' }}>SN: {deviceItem.serialNo}</div>}
+                        {deviceItem?.barcode && (
+                          <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                            <span className="badge badge-info" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>Sol</span>
+                            <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '1px 5px' }}>Sağ</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : <span style={{ color: '#a0a8af', fontSize: '0.76rem' }}>—</span>}
+                  </td>
+
+                  {/* Durum */}
+                  <td data-label="Durum">
+                    <span className={`badge badge-${statusClass}`} style={{ borderRadius: 20, padding: '3px 10px', fontSize: '0.68rem' }}>
+                      <span className={`badge-dot ${statusClass}`} style={{ marginRight: 4 }} />
+                      {statusLabel}
                     </span>
                   </td>
-                  <td data-label="Cihaz">
-                    {patient.currentDevice || assignedStockByPatient.get(patient.id)?.model || <span style={{ color: 'var(--gray-400)' }}>—</span>}
-                    {assignedStockByPatient.get(patient.id)?.serialNo && <div style={{ marginTop: 3, color: 'var(--gray-500)', fontSize: '0.68rem' }}>SN: {assignedStockByPatient.get(patient.id)?.serialNo}</div>}
-                    {assignedStockByPatient.get(patient.id)?.barcode && <div style={{ color: 'var(--gray-500)', fontSize: '0.68rem' }}>Barkod: {assignedStockByPatient.get(patient.id)?.barcode}</div>}
+
+                  {/* Son İşlem */}
+                  <td data-label="Son İşlem">
+                    {lastTimeline ? (
+                      <div>
+                        <div style={{ fontSize: '0.76rem', color: '#344a55' }}>{lastTimeline.action?.slice(0, 30)}{(lastTimeline.action?.length || 0) > 30 ? '...' : ''}</div>
+                        <div style={{ fontSize: '0.66rem', color: '#a0a8af' }}>{lastTimeline.date || ''}</div>
+                      </div>
+                    ) : <span style={{ color: '#a0a8af', fontSize: '0.76rem' }}>—</span>}
                   </td>
-                  <td data-label="SGK Durumu">
-                    <span className={`badge badge-${
-                      patient.sgkStatus === 'Aktif' ? 'success' :
-                      patient.sgkStatus === 'Yenileme Hakkı Var' ? 'warning' : 'neutral'
-                    }`}>
-                      <span className={`badge-dot ${
-                        patient.sgkStatus === 'Aktif' ? 'success' :
-                        patient.sgkStatus === 'Yenileme Hakkı Var' ? 'warning' : ''
-                      }`} />
-                      {patient.sgkStatus}
-                    </span>
-                  </td>
-                  <td data-label="Son Ziyaret">{formatDate(patient.lastVisit || '')}</td>
-                  <td data-label="">
-                    <button className="btn btn-sm btn-ghost"
-                      style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                      onClick={(e) => { e.stopPropagation(); handlePatientClick(patient.id); }}>
-                      Detay <IconArrowRight size={13} strokeWidth={1.8} />
-                    </button>
+
+                  {/* İşlemler — action icons */}
+                  <td data-label="İşlemler" style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                      <button type="button" className="btn btn-ghost btn-sm btn-icon" title="Detay" style={{ padding: 4 }} onClick={() => handlePatientClick(patient.id)}>
+                        <IconDotsVertical size={15} />
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-sm btn-icon" title="Ara" style={{ padding: 4 }} onClick={() => { if (patient.phone) window.open(`tel:${patient.phone}`); }}>
+                        <IconPhoneCall size={15} />
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-sm btn-icon" title="Randevu" style={{ padding: 4 }} onClick={() => { setSelectedPatientId(patient.id); setCurrentPage('appointments'); }}>
+                        <IconCalendarPlus size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -782,10 +985,75 @@ export default function PatientsPage() {
                 <a className={styles.contactRow} href={`tel:${activePatient.phone}`}><IconPhone size={16} /><span>{activePatient.phone || 'Telefon bilgisi yok'}</span></a>
                 <div className={styles.contactRow}><IconMail size={16} /><span>{activePatient.email || 'E-posta bilgisi yok'}</span></div>
                 <div className={styles.contactRow}><IconMapPin size={16} /><span>{activePatient.address || 'Adres bilgisi yok'}</span></div>
-                <div className={styles.patientFacts}>
-                  <div><span>İşitme kaybı</span><strong>{activePatient.hearingLoss} · {activePatient.hearingLossSide}</strong></div>
-                  <div><span>SGK durumu</span><strong>{activePatient.sgkStatus || 'Belirtilmemiş'}</strong></div>
-                  <div><span>Son ziyaret</span><strong>{activePatient.lastVisit ? formatDate(activePatient.lastVisit) : 'Kayıt yok'}</strong></div>
+
+                {/* Cihaz Bilgileri */}
+                <div style={{ marginTop: 16 }}>
+                  <div className={styles.panelSectionHeading}><strong>Cihaz Bilgileri</strong><button type="button" onClick={() => handlePatientClick(activePatient.id)}>Tümünü Gör</button></div>
+                  {(activePatient.currentDevice || assignedStockByPatient.get(activePatient.id)) ? (
+                    <div className={styles.infoCard}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <strong>{activePatient.currentDevice || assignedStockByPatient.get(activePatient.id)?.model}</strong>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <span className="badge badge-info" style={{ fontSize: '0.58rem', padding: '1px 5px', borderRadius: 10 }}>Sol</span>
+                          <span className="badge badge-success" style={{ fontSize: '0.58rem', padding: '1px 5px', borderRadius: 10 }}>Aktif</span>
+                        </div>
+                      </div>
+                      {assignedStockByPatient.get(activePatient.id)?.serialNo && <span>SN: {assignedStockByPatient.get(activePatient.id)?.serialNo}</span>}
+                    </div>
+                  ) : <p className={styles.panelEmpty} style={{ margin: '8px 0' }}>Kayıtlı cihaz yok</p>}
+                </div>
+
+                {/* Son Randevu */}
+                <div style={{ marginTop: 14 }}>
+                  <div className={styles.panelSectionHeading}><strong>Son Randevu</strong><button type="button" onClick={() => { setSelectedPatientId(activePatient.id); setCurrentPage('appointments'); }}>Tüm Randevular</button></div>
+                  {activePatientAppointments.length > 0 ? (() => {
+                    const latestApt = activePatientAppointments[activePatientAppointments.length - 1];
+                    return (
+                      <div className={styles.infoCard}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <IconCalendar size={14} />
+                          <strong>{formatDate(latestApt.date)}, {latestApt.time}</strong>
+                        </div>
+                        <span>{latestApt.type} · {latestApt.branch || 'Merkez Şube'}</span>
+                        <button
+                          type="button"
+                          className={styles.primaryPanelAction}
+                          style={{ marginTop: 6, minHeight: 32, fontSize: '0.72rem', borderRadius: 8, background: '#e8f6f0', color: '#08785b' }}
+                          onClick={() => { setSelectedPatientId(activePatient.id); setCurrentPage('appointments'); }}
+                        >
+                          <IconCalendar size={13} /> Randevu Oluştur
+                        </button>
+                      </div>
+                    );
+                  })() : (
+                    <div className={styles.infoCard}>
+                      <span>Kayıtlı randevu yok</span>
+                      <button
+                        type="button"
+                        className={styles.primaryPanelAction}
+                        style={{ marginTop: 4, minHeight: 32, fontSize: '0.72rem', borderRadius: 8, background: '#e8f6f0', color: '#08785b' }}
+                        onClick={() => { setSelectedPatientId(activePatient.id); setCurrentPage('appointments'); }}
+                      >
+                        <IconCalendar size={13} /> Randevu Oluştur
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Son İşlemler */}
+                <div style={{ marginTop: 14 }}>
+                  <div className={styles.panelSectionHeading}><strong>Son İşlemler</strong><button type="button" onClick={() => handlePatientClick(activePatient.id)}>Tümünü Gör</button></div>
+                  {(activePatient.timeline || []).length > 0 ? (
+                    (activePatient.timeline || []).slice(-3).reverse().map((item, idx) => (
+                      <div key={idx} className={styles.listItem} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#08785b', flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <strong>{item.action}</strong>
+                          <span>{item.date}</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : <p className={styles.panelEmpty} style={{ margin: '8px 0' }}>Kayıtlı işlem yok</p>}
                 </div>
               </>
             )}
@@ -832,6 +1100,11 @@ export default function PatientsPage() {
           </div>
         </aside>
       )}
+      </div>
+
+      {/* Bottom bar — Toplam hasta sayısı */}
+      <div className={styles.bottomBar}>
+        <span>Toplam <strong>{filtered.length.toLocaleString('tr-TR')}</strong> hasta</span>
       </div>
 
 
