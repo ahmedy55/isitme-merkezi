@@ -1,21 +1,26 @@
-# İnceleme teslimi — üretime hazırlık
+# Güvenlik ve üretime hazırlık notları
 
-Bu kopya güvenlik düzeltmeleri içerir; canlı veritabanına uygulanmış değildir. Ayrıntılı Türkçe rapor, teslimin `INCELEME_RAPORU.md` dosyasındadır.
+Bu belge depo kodunu ve migration dosyalarını özetler; canlı Supabase/Vercel ayarlarının veya migration geçmişinin doğrulandığı anlamına gelmez. Canlıya geçişten önce staging ortamında API, RLS, rol, eşzamanlı işlem ve uçtan uca testler ayrıca yapılmalıdır.
 
-1. Node 22 ile `npm ci`, `npm test`, `npm run typecheck`, `npm run lint`, `npm run build` çalıştırın.
-2. `.env.example` dosyasını `.env.local` olarak kopyalayın; yalnızca kendi staging projenizin değerlerini girin. Service-role anahtarını NEXT_PUBLIC değişkenine koymayın.
-3. Yeni veritabanında migration 001–010 sırasıyla uygulanır. 002'ye eklenen iki branch sütunu, orijinal 003'ün temiz kurulum hatasını düzeltir.
-4. Mevcut veritabanında eski migration'ları tekrar çalıştırmayın. Önce `supabase/preflight.sql` ile şemayı karşılaştırın; uyumlu bir staging kopyasında 007–010'u sırayla değerlendirin. 007, katalogdaki bilinen tabloların politikalarını yeniler. Özelleştirilmiş canlı politikalar önce kaydedilmelidir.
-5. Eski null şube kayıtları otomatik bir şubeye atanmaz. Doğru atama iş sahibi tarafından yapılmalıdır. `NOT VALID` kısıtlar yeni yazmalarda çalışır; eski ihlaller giderildikten sonra `validate-after-repair.sql` çıktısındaki doğrulamaları uygulayın.
-6. `audit-tests` paketini `audipro` klasörüyle aynı düzeye çıkarın, o klasörde `npm ci` ve `npm test` çalıştırın. Test, PGlite PostgreSQL motorunda yapay iki firma oluşturur; canlı Supabase'e bağlanmaz.
-7. Gerçek Supabase staging üzerinde PostgREST ilişkilerini, Auth cookie/JWT yenilemesini, eşzamanlı istekleri ve bütün rol ekranlarını ayrıca doğrulayın.
+## Mevcut uygulama sınırları
 
-Firma yöneticisi kendi firmasını yönetir. Şube çalışanlarında boş şube erişim vermez. Üyelik ve lisans durumu veritabanından kontrol edilir; JWT alanları tek başına yetki kaynağı değildir. Eski `admin` ve `firma_yoneticisi` üyelik rolleri migration'da `Firma Yöneticisi` olarak normalleştirilir.
+- Uygulama Next.js/React istemci arayüzü, ortak React context'leri, Supabase veri yardımcıları/repository'leri ve SQL migration/RPC katmanlarından oluşur. Veri erişimi her yerde repository katmanından geçmez.
+- `supabase/migrations/001–019` içinde tenant/şube RLS politikaları ve satış (`complete_sale`), stok düzeltme (`adjust_stock_item`) ve hasta şubesi transferi (`transfer_patient_branch`) gibi atomik işlemler tanımlıdır. Migration dosyalarının depoda bulunması bunların canlı projede uygulandığını kanıtlamaz.
+- `014_server_side_patient_tc_encryption.sql`, Supabase Vault'ta tutulan anahtarla `pgcrypto` üzerinden AES-256 PGP şifreleme ve yetkili `decrypt_patient_tcs` RPC'si kurar. Önceki XOR/Base64 açıklamaları güncel migration'ı yansıtmıyordu. Canlı ortamda anahtarın, uzantıların ve migration'ın durumunu doğrulayın.
+- Servis kayıtları `ServiceTicketRepository`, demirbaş/aktivite/şube transferi `OperationsRepository` ve SGK dönem faturaları ilgili Supabase tablo/RPC akışlarını kullanır. Yine de tüm eylemlerin ve rollerin canlı ortamda çalıştığı buradan doğrulanamaz.
+- Destek talepleri şu anda yalnızca sayfa belleğinde tutulur; sunucuya gönderilmez.
+- Medula, ÜTS, e-fatura ve WhatsApp için gerçek dış servis bağlantısı uygulanmış değildir. Entegrasyon testleri artık başarı simüle etmez; işlemler açıkça gönderilmedi/bağlı değil olarak sonuçlanır. Ayarlar ekranı gizli parola ve API anahtarlarını yeni kayıt olarak kaydetmez; yalnızca gizli olmayan bazı tercihler saklanabilir. Eski sürümlerde saklanmış olabilecek `medula_password` veya `whatsapp_api_key` değerleri mevcut veritabanında kalmış olabilir; canlı projede envanter çıkarıp anahtarları döndürmeden/temizlemeden önce yedek ve veri sahibi onayı alın.
+- Tedarikçi alış faturası canlı firma için atomik backend işlemi olmadan kaydedilmez.
 
-Yeni kullanıcı için en az 12 karakterlik ilk giriş şifresi ve çalışan rolleri için geçerli şube gerekir. Oluşturma akışı e-posta göndermez. Şifre güvenli kanaldan kullanıcıya verilmelidir. Var olan başka Auth hesabı e-posta ile sahiplenilmez.
+## Canlıya geçiş öncesi zorunlu kontroller
 
-Firma/üye provisioning SQL işlemleri atomiktir; Auth API ayrı sistemdir. Kesin SQL hatasında yeni Auth hesabı temizlenir. Ağ sonucu belirsizse hesap silinmez; üyelik/organizasyon kontrol edilerek mutabakat yapılmalıdır.
+1. Staging kopyasında `supabase/preflight.sql` çalıştırın; migration geçmişini ve şema farklarını incelemeden eski migration'ları canlı veritabanında yeniden çalıştırmayın.
+2. Firma A/B oturumlarıyla tüm tenant tablolarında doğrudan API/RLS IDOR testleri yapın. Her rol için sayfa, RPC, dışa aktarma ve yazma yetkisini doğrulayın.
+3. İki eşzamanlı oturumla son stok adedinin satışı, idempotency anahtarı ve kısmi hata/yeniden deneme senaryolarını deneyin.
+4. Hasta TC çözme RPC'sini, şube sınırlarını, audit kayıtlarını ve Supabase Vault anahtar erişimini staging'de sınayın.
+5. Medula/ÜTS/e-fatura/mesajlaşma kullanılacaksa gerçek sağlayıcı, secret yönetimi, timeout, tekrar deneme ve idempotency sözleşmeleri tamamlanmadan bu entegrasyonları canlı işlem olarak sunmayın.
+6. Test süiti, typecheck, lint ve production build'i CI'da çalıştırın; sonrasında gerçek Supabase staging ve tarayıcı E2E testlerini tamamlayın.
 
-Kalan sınırlar: servis, demirbaş, aktivite, şube transferi ve SGK alacağı ekranlarının tüm eylemleri kalıcı backend'e bağlı değildir; banner ile işaretlenmiştir. SGK/ÜTS/e-fatura/WhatsApp gerçek sağlayıcı entegrasyonları uygulanmamıştır. `ENC:` TC saklama formatı XOR/Base64'tür, kriptografik şifreleme değildir. Bu format mevcut kayıtlarla uyum için korunmuştur. Ayrı sunucu anahtarı ve kontrollü veri dönüşümü gerekir.
+## Yerel kontroller
 
-Şube silmek yerine pasifleştirme tercih edilmelidir; tenant FK'leri kayıt bağlantılarını koparan silmeleri engeller. İncelenmiş bir şubeler arası transfer işlemi tamamlanana kadar operasyonel kaydın branch_id alanı değiştirilemez.
+`npm test`, `npm run typecheck`, `npm run lint` ve `npm run build` komutları kullanılabilir. Birim testlerin geçmesi canlı Supabase politikalarını, üretim verisini veya dış servisleri doğrulamaz.

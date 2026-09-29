@@ -82,14 +82,16 @@ export default function SettingsPage() {
   };
 
   const saveSettingsToDb = async (payload: Record<string, any>, label: string) => {
+    if (!currentOrgId || !isConfigured) {
+      addToast({ type: 'error', message: `${label} kaydedilemedi: Aktif firma veritabanı bağlantısı yok.` });
+      return;
+    }
     setSaving(true);
     try {
-      if (currentOrgId && isConfigured) {
-        const { error } = await supabase.from('organization_settings').upsert({
-          organization_id: currentOrgId, ...payload, updated_at: new Date().toISOString()
-        }, { onConflict: 'organization_id' });
-        if (error) throw error;
-      }
+      const { error } = await supabase.from('organization_settings').upsert({
+        organization_id: currentOrgId, ...payload, updated_at: new Date().toISOString()
+      }, { onConflict: 'organization_id' });
+      if (error) throw error;
       addToast({ type: 'success', message: `${label} başarıyla kaydedildi.` });
     } catch (err: any) {
       addToast({ type: 'error', message: `${label} kaydedilemedi: ${err.message}` });
@@ -150,23 +152,21 @@ export default function SettingsPage() {
   };
 
   const handleSaveMedula = () => saveSettingsToDb({
-    medula_facility_code: medulaSettings.facilityCode,
-    medula_username: medulaSettings.username,
-    medula_password: medulaSettings.password
-  }, 'Medula (SGK) entegrasyon ayarları');
+    medula_facility_code: medulaSettings.facilityCode
+  }, 'Medula tesis kodu');
 
   const handleSaveUts = () => saveSettingsToDb({
     uts_kurum_no: utsSettings.firmCode
   }, 'ÜTS entegrasyon ayarları');
 
   const handleSaveFatura = () => saveSettingsToDb({
-    efatura_enabled: true,
     efatura_provider: faturaSettings.provider
-  }, 'E-Fatura / E-Arşiv ayarları');
+  }, 'E-Fatura sağlayıcı tercihi');
 
-  const handleSaveWhatsapp = () => saveSettingsToDb({
-    whatsapp_api_key: whatsappSettings.apiToken
-  }, 'WhatsApp & SMS ayarları');
+  const handleSaveWhatsapp = () => addToast({
+    type: 'info',
+    message: 'WhatsApp bağlantısı henüz uygulanmadı. API anahtarı kaydedilmedi ve mesaj gönderilmedi.'
+  });
 
   const handleSaveNotifications = () => saveSettingsToDb({
     notification_settings: JSON.stringify(notifSettings)
@@ -236,7 +236,7 @@ export default function SettingsPage() {
         {['medula', 'uts', 'fatura', 'whatsapp'].includes(activeSection) && (
           <div className={styles.connectionNotice} role="status">
             <IconInfo size={17} />
-            <span>Bu servis bağlantısı henüz uygulanmış değil. Bağlantı testi gerçek servise çağrı yapmaz; bu ekrandaki bazı alanlar henüz veritabanına kaydedilmiyor.</span>
+            <span>Bu servis bağlantısı henüz uygulanmadı. Test düğmeleri dış servise bağlanmaz. Gizli parola ve API anahtarları kaydedilmez; yalnızca firma kodu veya sağlayıcı tercihi gibi gizli olmayan bilgiler saklanabilir.</span>
           </div>
         )}
           
