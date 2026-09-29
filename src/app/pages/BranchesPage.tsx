@@ -10,6 +10,7 @@ export default function BranchesPage() {
     addToast, 
     setCurrentPage,
     branchesList, 
+    patientsList,
     addBranch, 
     usersList, 
     addUser, 
@@ -270,7 +271,7 @@ export default function BranchesPage() {
                   </div>
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--gray-500)' }}>Toplam Hasta</div>
-                    <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{branch.patientsCount}</div>
+                    <div style={{ fontWeight: 700, fontSize: '1.2rem' }}>{patientsList.filter(patient => patient.branchId === branch.id || (!patient.branchId && patient.branch === branch.name)).length}</div>
                   </div>
                 </div>
               </div>

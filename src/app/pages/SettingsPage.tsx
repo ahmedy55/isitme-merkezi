@@ -18,11 +18,11 @@ export default function SettingsPage() {
 
   // Controlled form state for Firma Bilgileri
   const [firmSettings, setFirmSettings] = useState({
-    firmName: 'AudioPro İşitme Merkezi',
-    taxNo: '1234567890',
-    phone: '0216 555 00 00',
-    email: 'info@audiopro.com',
-    address: 'Caferağa Mah. Moda Cad. No:42, Kadıköy / İstanbul'
+    firmName: '',
+    taxNo: '',
+    phone: '',
+    email: '',
+    address: ''
   });
 
   const [medulaSettings, setMedulaSettings] = useState({
@@ -105,7 +105,6 @@ export default function SettingsPage() {
     address: firmSettings.address
   }, 'Firma bilgileri');
 
-  const [lastBackupDate, setLastBackupDate] = useState<string>('01.08.2026, 03:00');
   const [testingService, setTestingService] = useState<string | null>(null);
 
   const handleTestMedula = async () => {
@@ -375,11 +374,11 @@ export default function SettingsPage() {
                     <IconDatabase size={15} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 500, color: '#22281F' }}>Günlük otomatik yedekleme</div>
-                    <div style={{ fontSize: 11, color: '#8A8776' }}>Son yedek: 09.07.2026, 03:00</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500, color: '#22281F' }}>Veritabanı yedekleme durumu</div>
+                    <div style={{ fontSize: 11, color: '#8A8776' }}>Durum ve tarih Supabase panelinden kontrol edilir.</div>
                   </div>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, background: '#E1F0E8', color: '#0F5C43', padding: '3px 10px', borderRadius: 20 }}>Aktif</span>
+                <span style={{ fontSize: 11, fontWeight: 600, background: '#F0EDE4', color: '#6B685E', padding: '3px 10px', borderRadius: 20 }}>Doğrulanmadı</span>
               </div>
             </>
           )}
@@ -825,11 +824,11 @@ export default function SettingsPage() {
                     <IconDatabase size={15} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 500, color: '#22281F' }}>Günlük otomatik yedekleme</div>
-                    <div style={{ fontSize: 11, color: '#8A8776' }}>Son yedek: 09.07.2026, 03:00</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500, color: '#22281F' }}>Veritabanı yedekleme durumu</div>
+                    <div style={{ fontSize: 11, color: '#8A8776' }}>Durum ve tarih Supabase panelinden kontrol edilir.</div>
                   </div>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, background: '#E1F0E8', color: '#0F5C43', padding: '3px 10px', borderRadius: 20 }}>Aktif</span>
+                <span style={{ fontSize: 11, fontWeight: 600, background: '#F0EDE4', color: '#6B685E', padding: '3px 10px', borderRadius: 20 }}>Doğrulanmadı</span>
               </div>
             </>
           )}

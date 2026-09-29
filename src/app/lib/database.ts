@@ -580,9 +580,13 @@ export const dbUpdateBranch = async (id: string, branch: any) => {
 // ═══════════════════════════════════════════════
 export const dbFetchMemberships = async (): Promise<SystemUser[]> => {
   return executeDbQuery(async () => {
+    const orgId = await getActiveOrgId();
+    if (!orgId) return [];
+
     const { data, error } = await supabase
       .from('memberships')
       .select('*, branches(name)')
+      .eq('organization_id', orgId)
       .order('joined_at', { ascending: false });
 
     if (error) throw error;

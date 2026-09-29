@@ -154,6 +154,7 @@ export default function Sidebar() {
 
             {showUserMenu && <div role="menu" style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 10, right: 10, background: 'var(--surface-white)', border: '1px solid var(--surface-border-light)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)', zIndex: 1000, padding: 6 }}>
               <button role="menuitem" type="button" className="profile-menu-item" onClick={() => { setCurrentPage('profile'); setSidebarOpen(false); setShowUserMenu(false); }}>Profilim</button>
+              {currentUser?.membership?.roles?.includes('Firma Yöneticisi') && <button role="menuitem" type="button" className="profile-menu-item" onClick={() => { setCurrentPage('org-select'); setSidebarOpen(false); setShowUserMenu(false); }}>Klinik değiştir</button>}
               <button role="menuitem" type="button" className="profile-menu-item" disabled={loggingOut} onClick={() => { setShowUserMenu(false); void logout(); }}>{loggingOut ? 'Çıkış yapılıyor…' : 'Çıkış yap'}</button>
             </div>}
 

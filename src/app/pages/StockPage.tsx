@@ -176,7 +176,7 @@ export default function StockPage() {
       <div className="page-header">
         <div className="page-header-left">
           <h2>Stok & Aksesuar Yönetimi</h2>
-          <p>{stockList.length} ürün kayıtlı</p>
+          <p>{branchFilteredStock.length} ürün kayıtlı</p>
         </div>
         <div className="page-header-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {/* 1. ÜTS'den Sorgula */}
@@ -272,7 +272,7 @@ export default function StockPage() {
           </div>
           <div className="stat-content">
             <div className="stat-label">Toplam Ürün</div>
-            <div className="stat-value">{stockList.length}</div>
+            <div className="stat-value">{branchFilteredStock.length}</div>
           </div>
         </div>
         <div className="stat-card">
