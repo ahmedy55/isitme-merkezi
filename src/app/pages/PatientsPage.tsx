@@ -1,18 +1,21 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import CustomSelect from '../components/CustomSelect';
 import { useDebounce } from '../hooks/useDebounce';
 import ExcelJS from 'exceljs';
-import { ResponsivePie } from '@nivo/pie';
+import styles from './PatientsPage.module.css';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
   type Patient,
 } from '../data/mockData';
-import { IconPlus, IconSearch, IconArrowRight, IconClose, IconPatients, IconCalendar } from '../components/Icons';
+import {
+  IconPlus, IconSearch, IconArrowRight, IconClose, IconPatients, IconCalendar,
+  IconRecall, IconDevice, IconRefresh, IconUsers
+} from '../components/Icons';
 
 type SortKey = 'name' | 'tc' | 'phone' | 'age' | 'hearingLoss' | 'device' | 'sgkStatus' | 'lastVisit';
 type SortDir = 'asc' | 'desc';
@@ -42,13 +45,8 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading, branchesList } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading, branchesList, appointmentsList, stockList } = useApp();
   const { activeBranch } = useBranch();
-  const [mounted, setMounted] = useState(false);
-  
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const [search, setSearch] = useState('');
   const [filterLoss, setFilterLoss] = useState('Tümü');
@@ -56,6 +54,9 @@ export default function PatientsPage() {
   const [filterSource, setFilterSource] = useState('Tümü');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterDevice, setFilterDevice] = useState('Tümü');
+  const [filterAppointment, setFilterAppointment] = useState('Tümü');
+  const [quickFilter, setQuickFilter] = useState('Tümü');
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [formBranchId, setFormBranchId] = useState('');
@@ -279,21 +280,46 @@ export default function PatientsPage() {
     });
   };
 
+  const branchFilteredPatients = useMemo(() => patientsList.filter(patient =>
+    BranchService.matchesBranch(patient.branch, patient.branchId, activeBranch)
+  ), [patientsList, activeBranch]);
+
+  const branchAppointments = useMemo(() => appointmentsList.filter(appointment =>
+    BranchService.matchesBranch(appointment.branch, appointment.branchId, activeBranch)
+  ), [appointmentsList, activeBranch]);
+
+  const assignedStockByPatient = useMemo(() => new Map(
+    stockList.filter(item => item.assignedPatientId).map(item => [item.assignedPatientId as string, item])
+  ), [stockList]);
+
+  const patientHasDevice = useCallback((patient: Patient) => Boolean(patient.currentDevice || assignedStockByPatient.has(patient.id)), [assignedStockByPatient]);
+
   const stats = useMemo(() => {
-    const getCount = (status: string) => patientsList.filter(p => (p.patientStatus || 'Potansiyel') === status).length;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const todayKey = dateKey(today);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const last30 = new Date(today);
+    last30.setDate(last30.getDate() - 30);
+    const last60 = new Date(today);
+    last60.setDate(last60.getDate() - 60);
+    const currentPeriodNew = branchFilteredPatients.filter(patient => (patient.createdAt || '') >= dateKey(last30)).length;
+    const previousPeriodNew = branchFilteredPatients.filter(patient => {
+      const createdAt = patient.createdAt || '';
+      return createdAt >= dateKey(last60) && createdAt < dateKey(last30);
+    }).length;
+
     return {
-      potansiyel: getCount('Potansiyel'),
-      deneme: getCount('Deneme Yapıldı'),
-      musteri: getCount('Müşteri'),
-      satinAlmayanlar: getCount('Satın Almayanlar'),
-      genel: getCount('Genel'),
-      tamir: getCount('Tamir için gelen'),
-      kalip: getCount('Kalıp Hastası'),
-      pil: getCount('Pil Hastası'),
-      satis: getCount('Satış Hastası'),
-      eski: getCount('Eski Hasta'),
+      total: branchFilteredPatients.length,
+      recent: currentPeriodNew,
+      previousRecent: previousPeriodNew,
+      active: branchFilteredPatients.filter(patient => ['Müşteri', 'Satış Hastası'].includes(patient.patientStatus || '')).length,
+      withDevice: branchFilteredPatients.filter(patientHasDevice).length,
+      upcomingAppointments: branchAppointments.filter(appointment => appointment.date >= todayKey && appointment.date <= dateKey(nextWeek) && !['İptal', 'Gelmedi'].includes(appointment.status)).length,
     };
-  }, [patientsList]);
+  }, [branchFilteredPatients, branchAppointments, patientHasDevice]);
 
   const handleBulkSave = async () => {
     if (!bulkInputText.trim()) {
@@ -367,12 +393,6 @@ export default function PatientsPage() {
     }
   };
 
-  const branchFilteredPatients = useMemo(() => {
-    return patientsList.filter(p =>
-      BranchService.matchesBranch(p.branch, p.branchId, activeBranch)
-    );
-  }, [patientsList, activeBranch]);
-
   const debouncedSearch = useDebounce(search, 300);
 
   const filtered = useMemo(() => {
@@ -383,11 +403,23 @@ export default function PatientsPage() {
         `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchLower) ||
         p.tc.includes(searchLower) ||
         p.phone.includes(searchLower) ||
-        (p.address || '').toLowerCase().includes(searchLower);
+        (p.address || '').toLowerCase().includes(searchLower) ||
+        stockList.some(item => item.assignedPatientId === p.id && `${item.serialNo} ${item.barcode || ''}`.toLowerCase().includes(searchLower));
         
       const matchLoss = filterLoss === 'Tümü' || p.hearingLoss === filterLoss;
       const matchStatus = filterStatus === 'Tümü' || (p.patientStatus || 'Potansiyel') === filterStatus;
       const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
+      const hasDevice = patientHasDevice(p);
+      const matchDevice = filterDevice === 'Tümü' || (filterDevice === 'Cihaz kullanıyor' ? hasDevice : !hasDevice);
+      const hasUpcomingAppointment = branchAppointments.some(appointment => appointment.patientId === p.id && appointment.date >= new Date().toISOString().slice(0, 10) && !['İptal', 'Gelmedi'].includes(appointment.status));
+      const matchAppointment = filterAppointment === 'Tümü' || (filterAppointment === 'Randevusu olan' ? hasUpcomingAppointment : !hasUpcomingAppointment);
+
+      const matchQuickFilter = quickFilter === 'Tümü' ||
+        (quickFilter === 'Aktif' && ['Müşteri', 'Satış Hastası'].includes(p.patientStatus || '')) ||
+        (quickFilter === 'Cihaz kullanan' && hasDevice) ||
+        (quickFilter === 'Randevusu olan' && hasUpcomingAppointment) ||
+        (quickFilter === 'Son 30 günde eklenen' && (p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 30); return date.toISOString().slice(0, 10); })()) ||
+        (quickFilter === 'SGK pasif' && p.sgkStatus === 'Pasif');
       
       let matchDate = true;
       const itemDate = p.createdAt || p.lastVisit || '';
@@ -400,9 +432,9 @@ export default function PatientsPage() {
         }
       }
       
-      return matchSearch && matchLoss && matchStatus && matchSource && matchDate;
+      return matchSearch && matchLoss && matchStatus && matchSource && matchDevice && matchAppointment && matchQuickFilter && matchDate;
     });
-  }, [branchFilteredPatients, debouncedSearch, filterLoss, filterStatus, filterSource, filterStartDate, filterEndDate]);
+  }, [branchFilteredPatients, branchAppointments, stockList, patientHasDevice, debouncedSearch, filterLoss, filterStatus, filterSource, filterDevice, filterAppointment, quickFilter, filterStartDate, filterEndDate]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
@@ -447,20 +479,58 @@ export default function PatientsPage() {
   const thStyle: React.CSSProperties = { cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' };
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div className="page-header-left">
-          <h2>Hasta Yönetimi</h2>
-          <p>Kayıtlı hastaların listesi, filtreleme ve CRM yönetimi</p>
+    <div className={`page ${styles.patientsPage}`}>
+      <div className={styles.pageHeading}>
+        <div className={styles.headingCopy}>
+          <div className={styles.headingIcon}><IconPatients size={25} /></div>
+          <div>
+            <div className={styles.breadcrumb}>Hastalar <span>›</span> Hasta Yönetimi</div>
+            <h1>Hasta Yönetimi</h1>
+            <p>Tüm hastalarınızı görüntüleyin, randevu, cihaz, işlem ve ödeme bilgilerini yönetin.</p>
+          </div>
+        </div>
+        <div className={styles.headerActions}>
+          <button className={`btn btn-secondary ${styles.actionButton}`} onClick={() => setShowBulkAddModal(true)}>
+            <span aria-hidden="true">📥</span> Toplu Ekle
+          </button>
+          <button className={`btn btn-secondary ${styles.actionButton}`} onClick={() => setShowImportHistoryModal(true)}>
+            <IconRefresh size={16} /> Geçmiş Aktar
+          </button>
+          <button className={`btn btn-primary ${styles.actionButton}`} onClick={() => { setFormBranchId(activeBranch.mode === 'single' ? activeBranch.branchId : ''); setShowAddModal(true); }}>
+            <IconPlus size={16} strokeWidth={2} /> Yeni Hasta Ekle
+          </button>
         </div>
       </div>
 
+      <div className={styles.statsGrid} aria-label="Hasta özeti" aria-busy={dataLoading}>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.green}`}><IconUsers size={21} /></div>
+          <div><span>Toplam Hasta</span><strong>{dataLoading ? '—' : stats.total.toLocaleString('tr-TR')}</strong><small>Seçili şube kapsamı</small></div>
+        </article>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.blue}`}><IconCalendar size={21} /></div>
+          <div><span>Son 30 Günde Eklenen</span><strong>{dataLoading ? '—' : stats.recent.toLocaleString('tr-TR')}</strong><small>{stats.previousRecent > 0 ? `Önceki 30 gün: ${stats.previousRecent}` : 'Kayıt tarihi bulunan hastalar'}</small></div>
+        </article>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.purple}`}><IconRecall size={21} /></div>
+          <div><span>Aktif Takipte</span><strong>{dataLoading ? '—' : stats.active.toLocaleString('tr-TR')}</strong><small>Müşteri ve satış hastaları</small></div>
+        </article>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.red}`}><IconDevice size={21} /></div>
+          <div><span>Cihaz Kullanan</span><strong>{dataLoading ? '—' : stats.withDevice.toLocaleString('tr-TR')}</strong><small>Hasta kartı veya zimmet kaydı</small></div>
+        </article>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.orange}`}><IconCalendar size={21} /></div>
+          <div><span>Yaklaşan Randevu</span><strong>{dataLoading ? '—' : stats.upcomingAppointments.toLocaleString('tr-TR')}</strong><small>Önümüzdeki 7 gün</small></div>
+        </article>
+      </div>
+
       {/* Filtreleme ve Aksiyon Paneli */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <div className={`card ${styles.filterCard}`} style={{ marginBottom: 16 }}>
+        <div className={`card-body ${styles.filterFields}`}>
           
           {/* Sol Kısım: Arama ve Dropdown Filtreler */}
-          <div style={{ display: 'flex', gap: 12, flex: 1, minWidth: 320, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className={styles.filterFieldsInner}>
             
             {/* Arama Kutusu */}
             <div className="header-search" style={{ flex: '1.2 1 200px' }}>
@@ -495,6 +565,29 @@ export default function PatientsPage() {
                 <option value="Pil Hastası">Pil Hastası</option>
                 <option value="Satış Hastası">Satış Hastası</option>
                 <option value="Eski Hasta">Eski Hasta</option>
+              </select>
+            </div>
+
+            <div style={{ minWidth: 140, flex: '1 1 120px' }}>
+              <select className="form-select" style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }} value={filterLoss} onChange={event => setFilterLoss(event.target.value)} aria-label="İşitme kaybı filtresi">
+                <option value="Tümü">İşitme kaybı</option>
+                {['Hafif', 'Orta', 'İleri', 'Çok İleri'].map(loss => <option key={loss} value={loss}>{loss}</option>)}
+              </select>
+            </div>
+
+            <div style={{ minWidth: 140, flex: '1 1 120px' }}>
+              <select className="form-select" style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }} value={filterDevice} onChange={event => setFilterDevice(event.target.value)} aria-label="Cihaz durumu filtresi">
+                <option value="Tümü">Cihaz durumu: Tümü</option>
+                <option value="Cihaz kullanıyor">Cihaz kullanıyor</option>
+                <option value="Cihazı yok">Cihazı yok</option>
+              </select>
+            </div>
+
+            <div style={{ minWidth: 140, flex: '1 1 120px' }}>
+              <select className="form-select" style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', height: 38 }} value={filterAppointment} onChange={event => setFilterAppointment(event.target.value)} aria-label="Randevu filtresi">
+                <option value="Tümü">Randevu: Tümü</option>
+                <option value="Randevusu olan">Yaklaşan randevusu olan</option>
+                <option value="Randevusu olmayan">Yaklaşan randevusu olmayan</option>
               </select>
             </div>
 
@@ -537,45 +630,31 @@ export default function PatientsPage() {
             </div>
           </div>
 
-          {/* Sağ Kısım: Aksiyon Butonları (Toplu Ekle, Geçmiş Aktar, Yeni Hasta Ekle) */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: 'auto', justifySelf: 'end' }}>
-            <button className="btn btn-secondary" onClick={() => setShowBulkAddModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
-              📥 Toplu Ekle
-            </button>
-            <button className="btn btn-secondary" onClick={() => setShowImportHistoryModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
-              🔄 Geçmiş Aktar
-            </button>
-            <button className="btn btn-primary" onClick={() => { setFormBranchId(activeBranch.mode === 'single' ? activeBranch.branchId : ''); setShowAddModal(true); }}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', height: 38 }}>
-              <IconPlus size={15} strokeWidth={2} /> Yeni Hasta Ekle
-            </button>
-          </div>
         </div>
 
-        {/* İşitme Kaybı Tabs (Mevcut yapı, kartın alt sınırında ince bir çizgi ile) */}
-        <div style={{ padding: '0px 20px 14px', borderTop: '1px solid var(--surface-border-light)', display: 'flex', alignItems: 'center', gap: 12, paddingTop: 14 }}>
-          <span style={{ fontSize: '0.78rem', color: 'var(--gray-500)', fontWeight: 600 }}>İşitme Kaybı:</span>
-          <div className="tabs" style={{ marginBottom: 0 }}>
-            {['Tümü', 'Hafif', 'Orta', 'İleri', 'Çok İleri'].map((loss) => (
+        <div className={styles.quickFilters}>
+          {['Tümü', 'Aktif', 'Cihaz kullanan', 'Randevusu olan', 'Son 30 günde eklenen', 'SGK pasif'].map((filter) => (
               <button
-                key={loss}
-                className={`tab ${filterLoss === loss ? 'active' : ''}`}
-                onClick={() => setFilterLoss(loss)}
-                style={{ padding: '4px 12px', fontSize: '0.8rem' }}
+                type="button"
+                key={filter}
+                className={`${styles.quickFilter} ${quickFilter === filter ? styles.quickFilterActive : ''}`}
+                aria-pressed={quickFilter === filter}
+                onClick={() => setQuickFilter(filter)}
               >
-                {loss}
+                {filter}
               </button>
-            ))}
-          </div>
+          ))}
+          <button type="button" className={styles.clearFilters} onClick={() => {
+            setSearch(''); setFilterLoss('Tümü'); setFilterStatus('Tümü'); setFilterSource('Tümü');
+            setFilterStartDate(''); setFilterEndDate(''); setFilterDevice('Tümü'); setFilterAppointment('Tümü'); setQuickFilter('Tümü');
+          }}><IconRefresh size={14} /> Temizle</button>
         </div>
       </div>
 
       {/* Patient Table */}
-      <div className="card">
+      <div className={`card ${styles.tableCard}`}>
         <div className="table-container">
-          <table className="mobile-cards">
+          <table className={`mobile-cards ${styles.patientTable}`}>
             <thead>
               <tr>
                 <th style={thStyle} onClick={() => handleSort('name')}>Hasta <SortIcon column="name" sortKey={sortKey} sortDir={sortDir} /></th>
@@ -620,7 +699,11 @@ export default function PatientsPage() {
                       {patient.hearingLoss} · {patient.hearingLossSide}
                     </span>
                   </td>
-                  <td data-label="Cihaz">{patient.currentDevice || <span style={{ color: 'var(--gray-400)' }}>—</span>}</td>
+                  <td data-label="Cihaz">
+                    {patient.currentDevice || assignedStockByPatient.get(patient.id)?.model || <span style={{ color: 'var(--gray-400)' }}>—</span>}
+                    {assignedStockByPatient.get(patient.id)?.serialNo && <div style={{ marginTop: 3, color: 'var(--gray-500)', fontSize: '0.68rem' }}>SN: {assignedStockByPatient.get(patient.id)?.serialNo}</div>}
+                    {assignedStockByPatient.get(patient.id)?.barcode && <div style={{ color: 'var(--gray-500)', fontSize: '0.68rem' }}>Barkod: {assignedStockByPatient.get(patient.id)?.barcode}</div>}
+                  </td>
                   <td data-label="SGK Durumu">
                     <span className={`badge badge-${
                       patient.sgkStatus === 'Aktif' ? 'success' :
