@@ -1,245 +1,99 @@
 'use client';
 
-import React, { useState } from 'react';
-import { getAvatarColor, formatDate, formatCurrency } from '../data/mockData';
-import { IconMessage, IconPhone, IconSmartRecall, IconCheck, IconWarning, IconCash, IconPlus, IconArrowRight, IconClose } from '../components/Icons';
-
-interface RecallStep {
-  stepNumber: number;
-  channel: 'WhatsApp' | 'SMS' | 'Arama' | 'Mektup';
-  status: 'Tamamlandı' | 'Bekliyor' | 'Atlandı';
-  date: string | null;
-  messagePreview?: string;
-}
-
-interface EnhancedRecallItem {
-  id: string;
-  patientName: string;
-  reason: string;
-  dueDate: string;
-  currentStep: number;
-  steps: RecallStep[];
-  estimatedRevenue: number;
-  probability: string;
-}
-
-const enhancedRecallData: EnhancedRecallItem[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
-  {
-    id: 'r1',
-    patientName: 'Ayşe Yılmaz',
-    reason: 'SGK Yenileme',
-    dueDate: '2026-06-20',
-    currentStep: 1,
-    steps: [
-      { stepNumber: 1, channel: 'WhatsApp', status: 'Bekliyor', date: null, messagePreview: 'Merhaba Ayşe Hanım, SGK işitme cihazı yenileme hakkınız açılmıştır. Ücretsiz kontrol randevusu oluşturmak ister misiniz?' },
-      { stepNumber: 2, channel: 'SMS', status: 'Bekliyor', date: null, messagePreview: 'Değerli hastamız Ayşe Yılmaz, SGK hakkınızla yeni cihaz almak için şubemize davetlisiniz.' },
-      { stepNumber: 3, channel: 'Arama', status: 'Bekliyor', date: null },
-    ],
-    estimatedRevenue: 75000,
-    probability: 'Yüksek Olasılık'
-  },
-  {
-    id: 'r2',
-    patientName: 'Ali Demir',
-    reason: 'SGK Yenileme',
-    dueDate: '2026-03-05',
-    currentStep: 3,
-    steps: [
-      { stepNumber: 1, channel: 'WhatsApp', status: 'Tamamlandı', date: '2026-07-01', messagePreview: 'Merhaba Ali Bey, SGK hakkınız açılmıştır...' },
-      { stepNumber: 2, channel: 'SMS', status: 'Tamamlandı', date: '2026-07-04', messagePreview: 'Değerli hastamız Ali Demir...' },
-      { stepNumber: 3, channel: 'Arama', status: 'Tamamlandı', date: '2026-07-08' },
-    ],
-    estimatedRevenue: 75000,
-    probability: 'Yüksek Olasılık'
-  },
-  {
-    id: 'r3',
-    patientName: 'Hasan Çelik',
-    reason: 'Pil Siparişi',
-    dueDate: '2026-07-15',
-    currentStep: 2,
-    steps: [
-      { stepNumber: 1, channel: 'WhatsApp', status: 'Tamamlandı', date: '2026-07-05', messagePreview: 'Merhaba Hasan Bey, pil sipariş süreniz yaklaşmaktadır...' },
-      { stepNumber: 2, channel: 'SMS', status: 'Bekliyor', date: null, messagePreview: 'Hasan Bey, pilleriniz şubemize ulaşmıştır. Gelip teslim alabilirsiniz.' },
-    ],
-    estimatedRevenue: 1200,
-    probability: 'Yüksek Olasılık'
-  },
-  {
-    id: 'r4',
-    patientName: 'Fatma Özkan',
-    reason: 'Yıllık Kontrol',
-    dueDate: '2026-08-01',
-    currentStep: 1,
-    steps: [
-      { stepNumber: 1, channel: 'WhatsApp', status: 'Bekliyor', date: null, messagePreview: 'Merhaba Fatma Hanım, yıllık işitme kontrol zamanınız gelmiştir.' },
-      { stepNumber: 2, channel: 'SMS', status: 'Bekliyor', date: null },
-      { stepNumber: 3, channel: 'Arama', status: 'Bekliyor', date: null },
-    ],
-    estimatedRevenue: 3500,
-    probability: 'Orta Olasılık'
-  },
-  {
-    id: 'r5',
-    patientName: 'Mehmet Kaya',
-    reason: 'Cihaz Denedi Almadı',
-    dueDate: '2026-07-28',
-    currentStep: 2,
-    steps: [
-      { stepNumber: 1, channel: 'WhatsApp', status: 'Tamamlandı', date: '2026-07-07', messagePreview: 'Merhaba Mehmet Bey, yıllık işitme cihazı kontrolünüz yaklaşmaktadır.' },
-      { stepNumber: 2, channel: 'SMS', status: 'Bekliyor', date: null, messagePreview: 'Mehmet Bey, yarınki kontrol randevunuzu onaylıyor musunuz?' },
-      { stepNumber: 3, channel: 'Arama', status: 'Bekliyor', date: null },
-    ],
-    estimatedRevenue: 85000,
-    probability: 'Orta Olasılık'
-  },
-  {
-    id: 'r6',
-    patientName: 'Mehmet Kaya',
-    reason: 'Pil Siparişi',
-    dueDate: '2026-07-21',
-    currentStep: 1,
-    steps: [
-      { stepNumber: 1, channel: 'WhatsApp', status: 'Bekliyor', date: null, messagePreview: 'Merhaba Mehmet Bey, pillerinizin tahmini bitiş tarihi yaklaşmaktadır.' },
-      { stepNumber: 2, channel: 'SMS', status: 'Bekliyor', date: null },
-    ],
-    estimatedRevenue: 1200,
-    probability: 'Yüksek Olasılık'
-  }
-] : []);
-
+import React, { useMemo, useState } from 'react';
+import { RecallItem } from '../data/mockData';
+import { formatDate } from '../data/mockData';
+import { IconCalendar, IconCheck, IconWarning } from '../components/Icons';
 import { useApp } from '../context/AppContext';
-import { useBranch } from '../context/BranchContext';
-import { BranchService } from '../services/BranchService';
+import { useBranchScope } from '../hooks/useBranchScope';
+
+const statusFilters = ['Tümü', 'Bekliyor', 'Gönderildi', 'Randevu Alındı', 'Tamamlandı'] as const;
+type StatusFilter = typeof statusFilters[number];
+
+const statusBadgeClass: Record<RecallItem['status'], string> = {
+  'Bekliyor': 'warning',
+  'Gönderildi': 'info',
+  'Randevu Alındı': 'success',
+  'Tamamlandı': 'neutral',
+};
 
 export default function RecallPage() {
-  const { addToast } = useApp();
-  const { activeBranch } = useBranch();
-  const [filterStatus, setFilterStatus] = useState('Tümü');
-  const [selectedChain, setSelectedChain] = useState<EnhancedRecallItem | null>(null);
-  const [recallChains, setRecallChains] = useState<EnhancedRecallItem[]>((process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? enhancedRecallData : []));
+  const { recallList, patientsList, updateRecallItemStatus, dataLoading, currentOrgId } = useApp();
+  const { matches } = useBranchScope();
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('Tümü');
 
-  // Olasılığa göre ağırlıklı gelir hesabı
-  // Yüksek: %80, Orta: %50, Düşük: %20
-  const getProbabilityWeight = (prob: string) => {
-    if (prob === 'Yüksek Olasılık') return 0.8;
-    if (prob === 'Orta Olasılık') return 0.5;
-    return 0.2;
-  };
-
-  const branchFilteredChains = React.useMemo(() => {
-    return recallChains.filter(r =>
-      BranchService.matchesBranch((r as any).branch, (r as any).branchId, activeBranch)
+  // Recall rows belong to patients, so use the same branch visibility rule as the sidebar badge.
+  const visibleRecallItems = useMemo(() => {
+    const visiblePatientIds = new Set(
+      patientsList.filter(patient => matches(patient.branch, patient.branchId)).map(patient => patient.id),
     );
-  }, [recallChains, activeBranch]);
+    return recallList.filter(item => visiblePatientIds.has(item.patientId));
+  }, [recallList, patientsList, matches]);
 
-  const filtered = branchFilteredChains.filter(r => {
-    if (filterStatus === 'Tümü') return true;
-    if (filterStatus === 'Bekleyenler') return r.steps.some(s => s.status === 'Bekliyor');
-    if (filterStatus === 'Pil Yenileme') return r.reason === 'Pil Siparişi';
-    if (filterStatus === 'Tamamlanan Adımlar') return r.steps.some(s => s.status === 'Tamamlandı');
-    return true;
-  });
+  const filteredRecallItems = useMemo(() => (
+    filterStatus === 'Tümü'
+      ? visibleRecallItems
+      : visibleRecallItems.filter(item => item.status === filterStatus)
+  ), [visibleRecallItems, filterStatus]);
 
-  const totalFirsat = branchFilteredChains.reduce((sum, r) => sum + r.estimatedRevenue, 0);
-  const weightedRevenue = branchFilteredChains.reduce((sum, r) => sum + (r.estimatedRevenue * getProbabilityWeight(r.probability)), 0);
-
-  const handleTriggerRecallAction = (chain: EnhancedRecallItem) => {
-    const step = chain.steps.find(item => item.stepNumber === chain.currentStep);
-    if (!step || step.channel !== 'Arama') {
-      addToast({ type: 'warning', message: 'WhatsApp/SMS gönderim entegrasyonu bağlı değil; hiçbir mesaj gönderilmedi ve adım değiştirilmedi.' });
-      return;
-    }
-    const updatedChains = recallChains.map(c => {
-      if (c.id === chain.id) {
-        const nextSteps = c.steps.map(s => {
-          if (s.stepNumber === c.currentStep) {
-            return { ...s, status: 'Tamamlandı' as const, date: new Date().toISOString().slice(0, 10) };
-          }
-          return s;
-        });
-        return {
-          ...c,
-          currentStep: Math.min(c.steps.length, c.currentStep + 1),
-          steps: nextSteps
-        };
-      }
-      return c;
-    });
-    setRecallChains(updatedChains);
-    setSelectedChain(null);
-
-    addToast({ type: 'success', message: `${chain.patientName} için telefonla arama adımı tamamlandı olarak işaretlendi. Otomatik mesaj gönderilmedi.` });
-  };
+  const pendingCount = visibleRecallItems.filter(item => item.status === 'Bekliyor').length;
+  const appointmentCount = visibleRecallItems.filter(item => item.status === 'Randevu Alındı').length;
+  const today = new Date().toLocaleDateString('en-CA');
+  const overdueCount = visibleRecallItems.filter(item => item.status === 'Bekliyor' && item.dueDate < today).length;
 
   return (
     <div className="page">
       <div className="page-header">
         <div className="page-header-left">
-          <h2>Akıllı Hatırlatma Zinciri</h2>
-          <p>Çok kanallı otomatik geri kazanım ve pil abonelik takibi</p>
-        </div>
-        <div className="page-header-actions">
-          <button className="btn btn-secondary" onClick={() => addToast({ type: 'warning', message: 'Otomatik WhatsApp/SMS gönderimi etkin değil; hiçbir mesaj gönderilmedi.' })}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <IconSmartRecall size={16} strokeWidth={1.8} /> Otomatik Zinciri Başlat
-          </button>
+          <h2>Recall / Hatırlatmalar</h2>
+          <p>Hasta kayıtlarına bağlı hatırlatma ve takip durumları</p>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-icon primary">
-            <IconSmartRecall size={20} strokeWidth={1.6} />
-          </div>
+          <div className="stat-icon warning"><IconCalendar size={20} /></div>
           <div className="stat-content">
-            <div className="stat-label">Aktif Hatırlatma Zinciri</div>
-            <div className="stat-value">{recallChains.length} Fırsat</div>
+            <div className="stat-label">Bekleyen Hatırlatma</div>
+            <div className="stat-value">{pendingCount}</div>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon info">
-            <IconMessage size={20} strokeWidth={1.6} />
-          </div>
+          <div className="stat-icon danger"><IconWarning size={20} /></div>
           <div className="stat-content">
-            <div className="stat-label">Tamamlanan İletişim Adımı</div>
-            <div className="stat-value">{branchFilteredChains.reduce((total, chain) => total + chain.steps.filter(step => step.status === 'Tamamlandı').length, 0)}</div>
-            <span className="stat-change" style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Gönderim başarı oranı ölçülmüyor</span>
+            <div className="stat-label">Tarihi Geçen</div>
+            <div className="stat-value">{overdueCount}</div>
           </div>
         </div>
-        <div className="stat-card" style={{ background: 'var(--accent-50)', color: 'var(--accent-700)' }}>
-          <div className="stat-icon warning" style={{ background: 'white' }}>
-            <IconCash size={20} strokeWidth={1.6} />
-          </div>
+        <div className="stat-card">
+          <div className="stat-icon success"><IconCheck size={20} /></div>
           <div className="stat-content">
-            <div className="stat-label">Toplam Gelir Fırsatı</div>
-            <div className="stat-value">{formatCurrency(totalFirsat)}</div>
-            <span className="stat-change warning" style={{ fontSize: '0.72rem' }}>Beklemede</span>
+            <div className="stat-label">Randevuya Dönüşen</div>
+            <div className="stat-value">{appointmentCount}</div>
           </div>
         </div>
-        <div className="stat-card" style={{ background: 'var(--primary-50)', color: 'var(--primary-700)' }}>
-          <div className="stat-icon success" style={{ background: 'white' }}>
-            <IconCash size={20} strokeWidth={1.6} />
-          </div>
+        <div className="stat-card">
+          <div className="stat-icon primary"><IconCalendar size={20} /></div>
           <div className="stat-content">
-            <div className="stat-label">Beklenen Net Gelir (Ağırlıklı)</div>
-            <div className="stat-value">{formatCurrency(weightedRevenue)}</div>
-            <span className="stat-change success" style={{ fontSize: '0.72rem' }}>Olasılık Çarpanlı</span>
+            <div className="stat-label">Toplam Kayıt</div>
+            <div className="stat-value">{visibleRecallItems.length}</div>
           </div>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-body" style={{ display: 'flex', gap: 12 }}>
-          <div className="tabs">
-            {['Tümü', 'Bekleyenler', 'Pil Yenileme', 'Tamamlanan Adımlar'].map(s => (
+        <div className="card-body">
+          <div className="tabs" role="tablist" aria-label="Hatırlatma durumuna göre filtrele">
+            {statusFilters.map(status => (
               <button
-                key={s}
-                className={`tab ${filterStatus === s ? 'active' : ''}`}
-                onClick={() => setFilterStatus(s)}
+                key={status}
+                type="button"
+                role="tab"
+                aria-selected={filterStatus === status}
+                className={`tab ${filterStatus === status ? 'active' : ''}`}
+                onClick={() => setFilterStatus(status)}
               >
-                {s}
+                {status}
               </button>
             ))}
           </div>
@@ -253,201 +107,58 @@ export default function RecallPage() {
               <tr>
                 <th>Hasta</th>
                 <th>Sebep</th>
-                <th>Güven / Olasılık</th>
-                <th>Fırsat Değeri</th>
-                <th>İletişim Adımları / İlerleme</th>
+                <th>Hatırlatma Tarihi</th>
+                <th>Son İletişim</th>
+                <th>Durum</th>
                 <th>İşlem</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(item => {
-                return (
-                  <tr key={item.id}>
-                    <td data-label="Hasta">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div className="avatar" style={{ background: getAvatarColor(item.patientName), width: 32, height: 32, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700 }}>
-                          {item.patientName.split(' ').map(n => n[0]).join('')}
-                        </div>
-                        <span className="td-primary">{item.patientName}</span>
-                      </div>
-                    </td>
-                    <td data-label="Sebep">
-                      <span className={`badge badge-${
-                        item.reason === 'SGK Yenileme' ? 'success' :
-                        item.reason === 'Pil Siparişi' ? 'warning' : 'info'
-                      }`}>{item.reason}</span>
-                    </td>
-                    <td data-label="Güven / Olasılık">
-                      <span className={`badge badge-${
-                        item.probability === 'Yüksek Olasılık' ? 'success' :
-                        item.probability === 'Orta Olasılık' ? 'warning' : 'neutral'
-                      }`}>{item.probability}</span>
-                    </td>
-                    <td data-label="Fırsat Değeri" style={{ fontWeight: 700, color: 'var(--accent-600)' }}>
-                      {formatCurrency(item.estimatedRevenue)}
-                    </td>
-                    <td data-label="İlerleme">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        {item.steps.map((step, idx) => {
-                          const isDone = step.status === 'Tamamlandı';
-                          const isCurrent = item.currentStep === step.stepNumber;
-                          return (
-                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span
-                                className={`badge badge-${isDone ? 'success' : isCurrent ? 'warning' : 'neutral'}`}
-                                style={{
-                                  fontSize: '0.72rem',
-                                  padding: '4px 8px',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  border: isCurrent ? '1.5px solid var(--warning-500)' : 'none'
-                                }}
-                                title={step.messagePreview || step.channel}
-                              >
-                                {step.channel === 'WhatsApp' ? (
-                                  <IconMessage size={12} strokeWidth={2} />
-                                ) : step.channel === 'SMS' ? (
-                                  <IconMessage size={12} strokeWidth={2} />
-                                ) : (
-                                  <IconPhone size={12} strokeWidth={2} />
-                                )}
-                                {step.stepNumber}. Adım
-                              </span>
-                              {idx < item.steps.length - 1 && <span style={{ color: 'var(--gray-300)' }}>➔</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </td>
-                    <td data-label="İşlem">
-                      <button className="btn btn-sm btn-secondary"
-                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                        onClick={() => setSelectedChain(item)}>
-                        Zincir Detayı <IconArrowRight size={13} strokeWidth={1.8} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredRecallItems.map(item => (
+                <tr key={item.id}>
+                  <td data-label="Hasta" className="td-primary">{item.patientName}</td>
+                  <td data-label="Sebep">{item.reason}</td>
+                  <td data-label="Hatırlatma Tarihi">{formatDate(item.dueDate)}</td>
+                  <td data-label="Son İletişim">{item.lastContact ? formatDate(item.lastContact) : '—'}</td>
+                  <td data-label="Durum">
+                    <span className={`badge badge-${statusBadgeClass[item.status]}`}>{item.status}</span>
+                  </td>
+                  <td data-label="İşlem">
+                    <select
+                      className="form-control"
+                      aria-label={`${item.patientName} hatırlatma durumu`}
+                      value={item.status}
+                      onChange={event => updateRecallItemStatus(item.id, event.target.value as RecallItem['status'])}
+                      style={{ minWidth: 160 }}
+                    >
+                      <option value="Bekliyor">Bekliyor</option>
+                      <option value="Gönderildi">Gönderildi</option>
+                      <option value="Randevu Alındı">Randevu Alındı</option>
+                      <option value="Tamamlandı">Tamamlandı</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+
+          {!dataLoading && filteredRecallItems.length === 0 && (
+            <div className="empty-state" style={{ padding: '48px 20px', textAlign: 'center' }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                {visibleRecallItems.length === 0
+                  ? 'Bu kapsamda kayıtlı hatırlatma yok.'
+                  : 'Bu filtrede hatırlatma bulunamadı.'}
+              </div>
+              <div style={{ color: 'var(--gray-500)', fontSize: '0.9rem' }}>
+                {currentOrgId
+                  ? 'Gösterilen kayıtlar hasta ve şube verilerinizden alınır.'
+                  : 'Demo verileri yalnızca demo ortamında gösterilir.'}
+              </div>
+            </div>
+          )}
+          {dataLoading && <div className="empty-state" style={{ padding: '32px 20px', textAlign: 'center' }}>Hatırlatmalar yükleniyor…</div>}
         </div>
       </div>
-
-      {/* Chain Detail Modal */}
-      {selectedChain && (
-        <div className="modal-overlay" onClick={() => setSelectedChain(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
-            <div className="modal-header">
-              <span className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <IconSmartRecall size={18} strokeWidth={1.8} />
-                Otomasyon Zincir Detayı — {selectedChain.patientName}
-              </span>
-              <button className="modal-close" onClick={() => setSelectedChain(null)} aria-label="Kapat">
-                <IconClose size={16} strokeWidth={2} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div style={{ marginBottom: 20 }}>
-                <span className="badge badge-info">{selectedChain.reason}</span>
-                <span style={{ marginLeft: 8, fontSize: '0.82rem', color: 'var(--gray-500)' }}>
-                  Hedef Tarih: {formatDate(selectedChain.dueDate)}
-                </span>
-              </div>
-
-              {/* Timeline layout */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', paddingLeft: 20 }}>
-                {/* Timeline connector line */}
-                <div style={{
-                  position: 'absolute',
-                  left: 30,
-                  top: 20,
-                  bottom: 20,
-                  width: 2,
-                  backgroundColor: 'var(--gray-200)',
-                  zIndex: 0
-                }} />
-
-                {selectedChain.steps.map((step, idx) => {
-                  const isDone = step.status === 'Tamamlandı';
-                  const isCurrent = selectedChain.currentStep === step.stepNumber;
-                  return (
-                    <div key={idx} style={{ display: 'flex', gap: 16, zIndex: 1, position: 'relative' }}>
-                      {/* Circle indicator */}
-                      <div style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: '50%',
-                        backgroundColor: isDone ? 'var(--success-500)' : isCurrent ? 'var(--warning-500)' : 'var(--gray-300)',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                        fontSize: '0.78rem'
-                      }}>
-                        {step.stepNumber}
-                      </div>
-
-                      {/* Content Card */}
-                      <div style={{
-                        flex: 1,
-                        padding: 12,
-                        borderRadius: 'var(--radius-lg)',
-                        border: `1px solid ${isCurrent ? 'var(--warning-200)' : 'var(--gray-200)'}`,
-                        backgroundColor: isCurrent ? 'var(--warning-50)' : 'white'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>
-                            {step.channel} Adımı
-                          </span>
-                          <span className={`badge badge-${isDone ? 'success' : isCurrent ? 'warning' : 'neutral'}`} style={{ fontSize: '0.7rem' }}>
-                            {isDone ? 'Tamamlandı' : isCurrent ? 'Sıradaki / Bekliyor' : 'Kilitli'}
-                          </span>
-                        </div>
-                        {step.date && (
-                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 6 }}>
-                            Tarih: {formatDate(step.date)}
-                          </div>
-                        )}
-                        {step.messagePreview && (
-                          <div style={{
-                            padding: 8,
-                            background: 'var(--gray-50)',
-                            borderRadius: 'var(--radius-md)',
-                            fontSize: '0.82rem',
-                            color: 'var(--gray-600)',
-                            fontStyle: 'italic',
-                            marginTop: 6
-                          }}>
-                            &quot;{step.messagePreview}&quot;
-                          </div>
-                        )}
-                        {isCurrent && (
-                          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                            <button className="btn btn-sm btn-primary" onClick={() => handleTriggerRecallAction(selectedChain)}>
-                              {step.channel === 'Arama' ? 'Arama yapıldı olarak işaretle' : `${step.channel} gönderimi kullanılamıyor`}
-                            </button>
-                            <button className="btn btn-sm btn-secondary" onClick={() => {
-                              setSelectedChain(null);
-                              addToast({ type: 'info', message: 'Hatırlatma görevi 2 gün süreyle ertelendi.' });
-                            }}>2 Gün Ertele</button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setSelectedChain(null)}>Kapat</button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

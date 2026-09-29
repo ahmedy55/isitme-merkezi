@@ -12,7 +12,10 @@ export default function Sidebar() {
   const [showUserMenu, setShowUserMenu] = React.useState(false);
 
   const pendingAppointmentsCount = React.useMemo(() => {
-    return (appointmentsList || []).filter(a => a.status === 'Bekliyor' && matches(a.branch, a.branchId)).length;
+    // Keep the navigation badge in sync with the "Planlandı" metric on the appointments page.
+    return (appointmentsList || []).filter(a =>
+      (a.status === 'Bekliyor' || a.status === 'Hatırlatıldı') && matches(a.branch, a.branchId)
+    ).length;
   }, [appointmentsList, matches]);
 
   const pendingRecallCount = React.useMemo(() => {
