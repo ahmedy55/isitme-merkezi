@@ -1,0 +1,935 @@
+.appointmentsPage {
+  --app-ink: #13232c;
+  --app-muted: #657681;
+  --app-green: #08785b;
+  --app-green-hover: #06694f;
+  --app-border: #e4eaee;
+  color: var(--app-ink);
+}
+
+/* ── Page Header ── */
+.pageHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.headingCopy {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 260px;
+}
+
+.headingIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  color: var(--app-green);
+  background: #e5f4ef;
+}
+
+.breadcrumb {
+  margin-bottom: 4px;
+  color: #75848e;
+  font-size: 11px;
+}
+
+.breadcrumb span {
+  padding: 0 5px;
+  color: #9aa7ae;
+}
+
+.headingCopy h1 {
+  margin: 0;
+  color: #12232b;
+  font-size: clamp(22px, 2.2vw, 28px);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.headingCopy p {
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.headerActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 15px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  white-space: nowrap;
+  background: #ffffff;
+  border: 1px solid #dfe6ea;
+  color: #384e5b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.actionButton:hover {
+  background: #f8fafb;
+  border-color: #cbd5e1;
+}
+
+.btnAddAppointment {
+  background: var(--app-green) !important;
+  border-color: var(--app-green) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(8, 120, 91, 0.2);
+}
+
+.btnAddAppointment:hover {
+  background: var(--app-green-hover) !important;
+  border-color: var(--app-green-hover) !important;
+}
+
+/* ── 5 Stat Metric Cards ── */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.statCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 86px;
+  padding: 13px 15px;
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(20 43 54 / 3%);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.statCard:hover {
+  border-color: #b5d5ca;
+  box-shadow: 0 4px 14px rgb(20 43 54 / 6%);
+  transform: translateY(-1px);
+}
+
+.statCardActive {
+  border-color: var(--app-green) !important;
+  box-shadow: 0 0 0 2px rgba(8, 120, 91, 0.15) !important;
+}
+
+.statIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.iconGreen { color: #0b8463; background: #eaf7f2; }
+.iconBlue { color: #1769d2; background: #e8f3fe; }
+.iconOrange { color: #c46b0b; background: #fef4ea; }
+.iconEmerald { color: #0b8463; background: #eaf7f2; }
+.iconRed { color: #df4c4c; background: #feebee; }
+
+.statCard > div:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.statCard span {
+  overflow: hidden;
+  color: #637480;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statCard strong {
+  margin-top: 2px;
+  color: #13232c;
+  font-size: 23px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.statCard small {
+  overflow: hidden;
+  margin-top: 3px;
+  color: #7c8991;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statChangeUp {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  color: #0b8463;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.statChangeDown {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  color: #df4c4c;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ── Filter & View Bar ── */
+.filterCard {
+  border: 1px solid var(--app-border) !important;
+  border-radius: 13px !important;
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgb(20 43 54 / 3%);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.filterBarInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.viewModePills {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f7;
+  padding: 3px;
+  border-radius: 10px;
+  gap: 2px;
+}
+
+.viewModeBtn {
+  border: none;
+  background: transparent;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #51636d;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viewModeBtn:hover {
+  color: #13232c;
+}
+
+.viewModeBtnActive {
+  background: #ffffff;
+  color: var(--app-green);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.filterControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filterSelect,
+.filterDateInput {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #dfe6ea;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #283b45;
+  font-size: 12px;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.filterSelect:focus,
+.filterDateInput:focus {
+  border-color: #8acbb6;
+  box-shadow: 0 0 0 3px rgba(8, 120, 91, 0.1);
+}
+
+.btnFilterApply {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #dfe6ea;
+  border-radius: 9px;
+  background: #f8fafb;
+  color: #384e5b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnFilterApply:hover {
+  background: #f0f7f4;
+  border-color: #8acbb6;
+  color: var(--app-green);
+}
+
+/* ── Workspace 2-Column Layout ── */
+.workspaceLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 306px;
+  align-items: start;
+  gap: 16px;
+}
+
+/* ── Left Column: Timeline Schedule ── */
+.timelineCard {
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(20 43 54 / 3%);
+  padding: 16px 20px;
+}
+
+.timelineHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.timelineNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.timelineNavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #dfe6ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #51636d;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.timelineNavBtn:hover {
+  background: #f4f7f8;
+  color: #13232c;
+  border-color: #cbd5e1;
+}
+
+.timelineDateLabel {
+  font-size: 15px;
+  font-weight: 700;
+  color: #13232c;
+  margin-right: 4px;
+}
+
+.btnToday {
+  padding: 4px 12px;
+  border: 1px solid #c2e2d6;
+  border-radius: 20px;
+  background: #eaf7f2;
+  color: var(--app-green);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnToday:hover {
+  background: #d8f1e7;
+}
+
+.timelineDayFilter {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #dfe6ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4a5c68;
+  font-size: 11.5px;
+  font-weight: 500;
+  outline: none;
+}
+
+/* Schedule Slot Row */
+.slotList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.slotRow {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  align-items: center;
+  gap: 14px;
+}
+
+.slotHourLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c8991;
+  text-align: right;
+  font-family: inherit;
+}
+
+.slotItemCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid #edf1f4;
+  border-radius: 11px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(18, 38, 50, 0.02);
+  transition: all 0.15s ease;
+}
+
+.slotItemCard:hover {
+  border-color: #d1dde3;
+  box-shadow: 0 3px 8px rgba(18, 38, 50, 0.04);
+}
+
+.slotItemLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.slotTimeRange {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: #8fa0aa;
+  font-weight: 500;
+  min-width: 72px;
+}
+
+.slotAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.slotPatientName {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #172a34;
+  white-space: nowrap;
+  min-width: 110px;
+}
+
+.slotTypeBadge {
+  font-size: 11.5px;
+  color: #556772;
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.slotDuration {
+  font-size: 11px;
+  color: #8fa0aa;
+  white-space: nowrap;
+  min-width: 45px;
+}
+
+.slotPhone {
+  font-size: 11.5px;
+  color: #4a5c68;
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+.slotDevice {
+  font-size: 11.5px;
+  color: #556772;
+  white-space: nowrap;
+  min-width: 100px;
+}
+
+.slotStatusPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 11px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.statusGeldi {
+  background: #e6f7ef;
+  color: #0b8463;
+}
+
+.statusBekliyor {
+  background: #fef4e6;
+  color: #d97706;
+}
+
+.statusTamamlandi {
+  background: #e6f7ef;
+  color: #0b8463;
+}
+
+.statusOnay {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.statusIptal {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+/* Table / Slot Action Buttons */
+.slotActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.slotActionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #dfe6ea;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4a5c68;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.slotActionBtn:hover {
+  background: #f0f7f4;
+  border-color: #8acbb6;
+  color: var(--app-green);
+  box-shadow: 0 1px 4px rgba(8, 120, 91, 0.12);
+}
+
+/* Break Slot (Öğle Arası) */
+.breakSlotCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px dashed #dbe2e6;
+  border-radius: 11px;
+  background: #fbfcfd;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.breakTimeRange {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  color: #8fa0aa;
+  min-width: 72px;
+}
+
+/* ── Right Column: Widgets ── */
+.sideWidgets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Widget 1: Mini Calendar */
+.miniCalendarCard {
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(20 43 54 / 3%);
+  padding: 16px;
+}
+
+.miniCalendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.miniCalendarHeader strong {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #172a34;
+}
+
+.miniCalendarNav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.miniCalendarNavBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.miniCalendarNavBtn:hover {
+  background: #f1f5f9;
+  color: #172a34;
+}
+
+.miniCalendarDaysRow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #7c8991;
+  margin-bottom: 6px;
+}
+
+.miniCalendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.miniDayCell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.miniDayCell:hover {
+  background: #f1f5f9;
+}
+
+.miniDayOtherMonth {
+  color: #cbd5e1;
+}
+
+.miniDaySelected {
+  background: #08785b !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+.miniDayDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  margin-top: 2px;
+}
+
+.miniCalendarLegend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 9px;
+  color: #64748b;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legendDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Widget 2: Bugünün Özeti */
+.summaryWidgetCard {
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(20 43 54 / 3%);
+  padding: 16px;
+}
+
+.widgetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.widgetHeaderTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #172a34;
+}
+
+.widgetHeaderLink {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.widgetHeaderLink:hover {
+  text-decoration: underline;
+}
+
+.summaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.summaryIconBadge {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.summaryRow strong {
+  min-width: 22px;
+  color: #13232c;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.summaryRow span {
+  color: #51636d;
+}
+
+/* Widget 3: Yaklaşan Randevular */
+.upcomingWidgetCard {
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(20 43 54 / 3%);
+  padding: 16px;
+}
+
+.upcomingList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upcomingItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upcomingAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.upcomingInfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.upcomingName {
+  font-size: 12px;
+  font-weight: 700;
+  color: #172a34;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upcomingTime {
+  font-size: 10.5px;
+  color: #7c8991;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Action Dropdown Popup */
+.actionDropdown {
+  position: fixed;
+  z-index: 99999;
+  min-width: 190px;
+  background: #ffffff;
+  border: 1px solid #e1e7eb;
+  border-radius: 11px;
+  box-shadow: 0 10px 25px -4px rgba(18, 38, 50, 0.14), 0 4px 10px -2px rgba(18, 38, 50, 0.08);
+  padding: 5px;
+  animation: fadeInMenu 0.12s ease-out;
+}
+
+@keyframes fadeInMenu {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.actionDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #384e5b;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.actionDropdownItem:hover {
+  background: #f1f7f5;
+  color: var(--app-green);
+}
+
+.actionDropdownItem svg {
+  flex-shrink: 0;
+  color: #64748b;
+}
+
+.actionDropdownItem:hover svg {
+  color: var(--app-green);
+}
+
+.actionItemDanger {
+  color: #dc2626 !important;
+}
+
+.actionItemDanger:hover {
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+}
+
+.actionDropdownDivider {
+  height: 1px;
+  background: #edf1f4;
+  margin: 4px 0;
+}
+
+/* ── Responsive Breakpoints ── */
+@media (max-width: 1100px) {
+  .workspaceLayout {
+    grid-template-columns: 1fr;
+  }
+  .sideWidgets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .statsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .statsGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .slotRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .slotHourLabel {
+    text-align: left;
+  }
+  .slotItemCard {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .slotItemLeft {
+    flex-wrap: wrap;
+  }
+}
