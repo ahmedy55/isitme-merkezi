@@ -1,0 +1,770 @@
+/* DashboardPage.module.css */
+.dashboard {
+  --dash-primary: #08785b;
+  --dash-primary-hover: #06694f;
+  --dash-primary-light: #e5f4ef;
+  --dash-ink: #111827;
+  --dash-muted: #6b7280;
+  --dash-border: #e5e7eb;
+  --dash-card-bg: #ffffff;
+  width: 100%;
+  color: var(--dash-ink);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+/* ── Top Header ── */
+.welcomeHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.welcomeLeft h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.welcomeSubtitle {
+  font-size: 13px;
+  color: var(--dash-muted);
+  margin: 5px 0 0 0;
+}
+
+.welcomeRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.dateRangeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #ffffff;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+}
+
+.dateRangeBtn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.timePills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.timePill {
+  border: none;
+  background: transparent;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.timePill:hover {
+  color: #111827;
+}
+
+.timePillActive {
+  background: #13232c !important;
+  color: #ffffff !important;
+}
+
+/* ── 5 Stat Cards in Row ── */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1280px) {
+  .statsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.statCard {
+  background: #ffffff;
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+}
+
+.statIconWrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.iconBgGreen {
+  background: #e6f7f2;
+  color: #08785b;
+}
+
+.iconBgRed {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.iconBgBlue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.iconBgPurple {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.statBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.statLabel {
+  font-size: 11.5px;
+  color: var(--dash-muted);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.statValue {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.15;
+  margin-bottom: 4px;
+}
+
+.statTrend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.trendGreen {
+  color: #08785b;
+  font-weight: 600;
+}
+
+.trendRed {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.trendSub {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* ── Middle Row: 3 Charts ── */
+.chartsRow {
+  display: grid;
+  grid-template-columns: 1.8fr 1.1fr 1.1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1200px) {
+  .chartsRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cardBox {
+  background: #ffffff;
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.cardBoxHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.cardBoxTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.cardBoxIcon {
+  color: #08785b;
+  display: flex;
+  align-items: center;
+}
+
+.miniSelect {
+  padding: 4px 22px 4px 8px;
+  background: #ffffff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 7px center;
+  border: 1px solid var(--dash-border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4b5563;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+}
+
+/* Bar Chart */
+.barChartWrap {
+  position: relative;
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-top: 25px;
+}
+
+.barChartSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.tooltipBubble {
+  position: absolute;
+  top: 0;
+  left: 69%;
+  transform: translateX(-50%);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 4px 8px;
+  text-align: center;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tooltipBubble::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px 5px 0;
+  border-style: solid;
+  border-color: #ffffff transparent;
+  display: block;
+  width: 0;
+}
+
+.tooltipMonth {
+  font-size: 9.5px;
+  color: #6b7280;
+  line-height: 1.1;
+}
+
+.tooltipValue {
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.2;
+}
+
+/* Donut Chart Layout */
+.donutFlexWrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  height: 100%;
+}
+
+.donutSvgWrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.donutCenterText {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+
+.donutBigVal {
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+  line-height: 1;
+}
+
+.donutSubVal {
+  font-size: 9px;
+  color: #6b7280;
+  margin-top: 3px;
+  font-weight: 500;
+  max-width: 65px;
+  line-height: 1.1;
+}
+
+.legendList {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  gap: 6px;
+}
+
+.legendLeft {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #374151;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legendRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.legendCount {
+  font-weight: 700;
+  color: #111827;
+}
+
+.legendPercent {
+  color: #9ca3af;
+  min-width: 24px;
+  text-align: right;
+}
+
+/* ── Lower Middle Row: 2 Cards ── */
+.midRow {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1024px) {
+  .midRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.linkAll {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #08785b;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.linkAll:hover {
+  text-decoration: underline;
+}
+
+/* Table Style in Dashboard */
+.dashTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12px;
+}
+
+.dashTable thead th {
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid #f3f4f6;
+  white-space: nowrap;
+}
+
+.dashTable tbody td {
+  padding: 10px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #374151;
+  font-size: 11.5px;
+}
+
+.dashTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.dashTable tfoot td {
+  padding: 11px 10px;
+  border-top: 1.5px solid #e5e7eb;
+  font-weight: 700;
+  color: #111827;
+  font-size: 12px;
+}
+
+.branchCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.branchIconBox {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Appointments List in Dashboard */
+.apptList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.apptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #f3f4f6;
+  transition: background-color 0.12s ease;
+  gap: 8px;
+}
+
+.apptRow:hover {
+  background: #f9fafb;
+}
+
+.apptTime {
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  min-width: 44px;
+}
+
+.apptPatient {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #111827;
+  font-size: 12px;
+  flex: 1;
+}
+
+.apptBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2.5px 8px;
+  border-radius: 9999px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.badgeWaiting {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.badgeArrived {
+  background: #e6f7f2;
+  color: #08785b;
+}
+
+.badgePlanned {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.badgeNeutral {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.apptMeta {
+  font-size: 11px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btnAllAppts {
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnAllAppts:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+/* ── Bottom Row: 2 Cards (Teknik Servis & Son İşlemler) ── */
+.bottomRow {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .bottomRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.serviceStatusGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+  .serviceStatusGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.serviceMiniCard {
+  border-radius: 10px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 5px;
+}
+
+.serviceVal {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.serviceLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.servCardRed {
+  background: #fff1f2;
+  border: 1px solid #ffe4e6;
+  color: #e11d48;
+}
+
+.servCardYellow {
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  color: #d97706;
+}
+
+.servCardBlue {
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  color: #2563eb;
+}
+
+.servCardGreen {
+  background: #e6f7f2;
+  border: 1px solid #a7f3d0;
+  color: #08785b;
+}
+
+/* Action Icons in Son İşlemler */
+.actionItemCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: #1f2937;
+  white-space: nowrap;
+}
+
+/* ── Date Range Modal ── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.modalContent {
+  background: #ffffff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  animation: modalFadeIn 0.15s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modalHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--dash-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modalTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.modalBody {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modalFooter {
+  padding: 14px 20px;
+  border-top: 1px solid var(--dash-border);
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.btnSecondary {
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+
+.btnSecondary:hover {
+  background: #f3f4f6;
+}
