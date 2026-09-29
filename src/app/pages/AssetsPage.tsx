@@ -6,6 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { IconSearch, IconPlus, IconEdit, IconDelete, IconCheck, IconWarning, IconRefresh } from '../components/Icons';
 import { archiveAsset, AssetRecord, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
+import { getNextMaintenanceDate } from '../lib/assetMaintenance';
 import { useEffect } from 'react';
 
 interface Asset {
@@ -281,9 +282,8 @@ export default function AssetsPage() {
   const totalValue = branchFilteredAssets.filter(a => a.status !== 'Hek/Iskarta').reduce((sum, a) => sum + a.cost, 0);
   const maintenanceAlertsCount = branchFilteredAssets.filter(a => {
     if (a.status !== 'Aktif') return false;
-    const lastDate = new Date(a.lastMaintenance);
-    const nextDate = new Date(lastDate.setMonth(lastDate.getMonth() + a.maintenanceIntervalMonths));
-    return nextDate.getTime() < new Date().getTime();
+    const nextDate = getNextMaintenanceDate(a.lastMaintenance, a.maintenanceIntervalMonths);
+    return nextDate !== null && nextDate.getTime() < new Date().getTime();
   }).length;
 
   return (
@@ -405,9 +405,8 @@ export default function AssetsPage() {
                 </tr>
               ) : (
                 filteredAssets.map((asset) => {
-                  const lastDate = new Date(asset.lastMaintenance);
-                  const nextDate = new Date(lastDate.setMonth(lastDate.getMonth() + asset.maintenanceIntervalMonths));
-                  const isMaintenanceOverdue = asset.status === 'Aktif' && nextDate.getTime() < new Date().getTime();
+                  const nextDate = getNextMaintenanceDate(asset.lastMaintenance, asset.maintenanceIntervalMonths);
+                  const isMaintenanceOverdue = asset.status === 'Aktif' && nextDate !== null && nextDate.getTime() < new Date().getTime();
 
                   return (
                     <tr key={asset.id} style={{ borderBottom: '1px solid var(--surface-border-light)' }}>
@@ -428,9 +427,9 @@ export default function AssetsPage() {
                         <div style={{ color: 'var(--gray-400)' }}>Garanti: {asset.warrantyExpiry}</div>
                       </td>
                       <td style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--gray-700)' }}>
-                        <div>Bakım: {asset.lastMaintenance}</div>
+                        <div>Bakım: {asset.lastMaintenance || 'Takip edilmedi'}</div>
                         <div style={{ fontWeight: isMaintenanceOverdue ? 700 : 500, color: isMaintenanceOverdue ? 'var(--danger-600)' : 'var(--gray-400)' }}>
-                          Sonraki: {nextDate.toISOString().split('T')[0]} {isMaintenanceOverdue && '⚠️'}
+                          Sonraki: {nextDate ? nextDate.toISOString().split('T')[0] : '—'} {isMaintenanceOverdue && '⚠️'}
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--gray-800)' }}>
