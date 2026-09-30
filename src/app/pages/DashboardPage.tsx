@@ -10,7 +10,7 @@ export default function DashboardPage() {
   const { setCurrentPage, addToast, salesList, appointmentsList, patientsList, branchesList } = useApp();
   const { matches } = useBranchScope();
 
-  const [activeTimeRange, setActiveTimeRange] = useState<'Bugün' | 'Bu Hafta' | 'Bu Ay' | 'Bu Yıl'>('Bu Ay');
+  const [activeTimeRange, setActiveTimeRange] = useState<'Bugün' | 'Bu Hafta' | 'Bu Ay' | 'Bu Yıl' | 'Özel'>('Bu Ay');
   const today = new Date();
   const formatDate = (date: Date) => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Istanbul' }).format(date);
   const [dateRangeText, setDateRangeText] = useState(() => {
@@ -18,6 +18,9 @@ export default function DashboardPage() {
     return `${formatDate(start)} - ${formatDate(today)}`;
   });
   const [showDateModal, setShowDateModal] = useState(false);
+  const toDateInput = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const [customStartDate, setCustomStartDate] = useState(() => toDateInput(new Date(today.getFullYear(), today.getMonth(), 1)));
+  const [customEndDate, setCustomEndDate] = useState(() => toDateInput(today));
   const [dashboardChartMetric, setDashboardChartMetric] = useState<'Ciro' | 'Adet'>('Ciro');
   const [appointmentChartPeriod, setAppointmentChartPeriod] = useState<'Bu Ay' | 'Bu Hafta'>('Bu Ay');
   const [patientChartPeriod, setPatientChartPeriod] = useState<'Bu Ay' | 'Bu Hafta'>('Bu Ay');
@@ -71,13 +74,35 @@ export default function DashboardPage() {
     addToast({ type: 'info', message: `Zaman aralığı: ${range} seçildi` });
   };
 
+  const applyCustomRange = () => {
+    const start = new Date(`${customStartDate}T00:00:00`);
+    const end = new Date(`${customEndDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      addToast({ type: 'warning', message: 'Lütfen başlangıç ve bitiş tarihlerini seçin.' });
+      return;
+    }
+    if (start > end) {
+      addToast({ type: 'warning', message: 'Başlangıç tarihi bitiş tarihinden sonra olamaz.' });
+      return;
+    }
+    setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
+    setActiveTimeRange('Özel');
+    setShowDateModal(false);
+    addToast({ type: 'success', message: `Dashboard ${formatDate(start)} - ${formatDate(end)} aralığına göre güncellendi.` });
+  };
+
   const monthLabels = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
   const reportYear = new Date().getFullYear();
-  const monthlyValues = monthLabels.map((_, month) => rangeSales
-    .filter(sale => sale.date.startsWith(`${reportYear}-${String(month + 1).padStart(2, '0')}`))
+  const chartMonths = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(selectedRange.end.getFullYear(), selectedRange.end.getMonth() - (11 - index), 1);
+    return { year: date.getFullYear(), month: date.getMonth(), label: monthLabels[date.getMonth()] };
+  });
+  const monthlyValues = chartMonths.map(({ year, month }) => rangeSales
+    .filter(sale => sale.date.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`)
     .reduce((sum, sale) => sum + (dashboardChartMetric === 'Ciro' ? sale.total : sale.items.reduce((qty, item) => qty + item.quantity, 0)), 0));
   const monthlyMax = Math.max(...monthlyValues, 1);
-  const monthlyData = monthLabels.map((month, index) => ({ month, value: monthlyValues[index], height: monthlyValues[index] / monthlyMax * 108, isCurrent: index === today.getMonth() }));
+  const monthlyData = chartMonths.map((item, index) => ({ month: item.label, value: monthlyValues[index], height: monthlyValues[index] / monthlyMax * 108, isCurrent: index === 11 }));
+  const chartEndMonthIndex = 11;
 
   // Helper to calculate SVG donut slice offsets
   // Circumference for r=38 is 2 * PI * 38 = 238.76
@@ -131,7 +156,11 @@ export default function DashboardPage() {
           <button 
             type="button" 
             className={styles.dateRangeBtn}
-            onClick={() => setShowDateModal(true)}
+            onClick={() => {
+              setCustomStartDate(toDateInput(selectedRange.start));
+              setCustomEndDate(toDateInput(selectedRange.end));
+              setShowDateModal(true);
+            }}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -279,8 +308,8 @@ export default function DashboardPage() {
           <div className={styles.barChartWrap}>
             {/* Tooltip Bubble */}
             <div className={styles.tooltipBubble}>
-              <div className={styles.tooltipMonth}>{monthLabels[today.getMonth()]} {reportYear}</div>
-              <div className={styles.tooltipValue}>{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyValues[today.getMonth()]) : `${monthlyValues[today.getMonth()]} adet`}</div>
+              <div className={styles.tooltipMonth}>{chartMonths[chartEndMonthIndex].label} {chartMonths[chartEndMonthIndex].year}</div>
+              <div className={styles.tooltipValue}>{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyValues[chartEndMonthIndex]) : `${monthlyValues[chartEndMonthIndex]} adet`}</div>
             </div>
 
             <svg className={styles.barChartSvg} viewBox="0 0 460 140" preserveAspectRatio="none">
@@ -711,6 +740,7 @@ export default function DashboardPage() {
                         else start.setFullYear(2000, 0, 1);
                       }
                       setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
+                      setActiveTimeRange(rangeOption === 'Bugün' ? 'Bugün' : rangeOption.startsWith('Bu Ay') ? 'Bu Ay' : rangeOption.startsWith('Bu Yıl') ? 'Bu Yıl' : 'Özel');
                       setShowDateModal(false);
                       addToast({ type: 'info', message: `Tarih aralığı güncellendi: ${rangeOption}` });
                     }}
@@ -718,6 +748,19 @@ export default function DashboardPage() {
                     {rangeOption}
                   </button>
                 ))}
+              </div>
+              <div className={styles.customDateSection}>
+                <h4>Manuel tarih aralığı</h4>
+                <div className={styles.customDateGrid}>
+                  <label className={styles.customDateField}>
+                    <span>Başlangıç tarihi</span>
+                    <input className={styles.customDateInput} type="date" value={customStartDate} onChange={event => setCustomStartDate(event.target.value)} />
+                  </label>
+                  <label className={styles.customDateField}>
+                    <span>Bitiş tarihi</span>
+                    <input className={styles.customDateInput} type="date" value={customEndDate} onChange={event => setCustomEndDate(event.target.value)} />
+                  </label>
+                </div>
               </div>
             </div>
             <div className={styles.modalFooter}>
@@ -727,6 +770,9 @@ export default function DashboardPage() {
                 onClick={() => setShowDateModal(false)}
               >
                 Kapat
+              </button>
+              <button type="button" className={styles.btnPrimary} onClick={applyCustomRange}>
+                Tarih Aralığını Uygula
               </button>
             </div>
           </div>

@@ -749,6 +749,51 @@
   gap: 12px;
 }
 
+.customDateSection {
+  border-top: 1px solid var(--dash-border);
+  padding-top: 14px;
+}
+
+.customDateSection h4 {
+  margin: 0 0 10px;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.customDateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.customDateField {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.customDateInput {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 9px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+}
+
+.customDateInput:focus {
+  outline: 2px solid rgba(8, 120, 91, .18);
+  border-color: #08785b;
+}
+
 .modalFooter {
   padding: 14px 20px;
   border-top: 1px solid var(--dash-border);
@@ -756,6 +801,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .btnSecondary {
@@ -771,4 +817,25 @@
 
 .btnSecondary:hover {
   background: #f3f4f6;
+}
+
+.btnPrimary {
+  padding: 8px 14px;
+  border: 1px solid #08785b;
+  border-radius: 8px;
+  background: #08785b;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btnPrimary:hover {
+  background: #06664d;
+}
+
+@media (max-width: 520px) {
+  .customDateGrid {
+    grid-template-columns: 1fr;
+  }
 }
