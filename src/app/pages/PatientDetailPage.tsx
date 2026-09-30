@@ -268,8 +268,8 @@ export default function PatientDetailPage() {
       if (listError) throw listError;
       setAudiogramFiles((data || []).filter(item => item.id).map(item => ({ name: item.name, created_at: item.created_at })));
       addToast({ type: 'success', message: 'Dosya hasta dosyasına özel ve güvenli olarak yüklendi. Noah XML verileri henüz otomatik ayrıştırılmıyor.' });
-    } catch (error) {
-      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Dosya yüklenemedi.' });
+    } catch {
+      addToast({ type: 'error', message: 'Dosya yüklenemedi. Lütfen tekrar deneyin.' });
     } finally {
       setIsUploadingAudiogram(false);
     }
@@ -387,7 +387,7 @@ export default function PatientDetailPage() {
       p_request: crypto.randomUUID(),
     });
     if (error) {
-      addToast({ type: 'error', message: error.message || 'Cihaz denemeye verilemedi.' });
+      addToast({ type: 'error', message: 'Cihaz denemeye verilemedi. Lütfen tekrar deneyin.' });
       return;
     }
     await refreshOrganizationData();
@@ -399,7 +399,7 @@ export default function PatientDetailPage() {
   const handleReturnDeviceTrial = async (trialId: string) => {
     const { error } = await supabase.rpc('return_device_trial', { p_trial: trialId });
     if (error) {
-      addToast({ type: 'error', message: error.message || 'Deneme cihazı iade alınamadı.' });
+      addToast({ type: 'error', message: 'Deneme cihazı iade alınamadı. Lütfen tekrar deneyin.' });
       return;
     }
     await refreshOrganizationData();

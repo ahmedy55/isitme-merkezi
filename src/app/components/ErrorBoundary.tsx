@@ -23,8 +23,8 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[React ErrorBoundary Caught Exception]:', error, errorInfo);
+  public componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
+    console.error('Arayüz hatası yakalandı.');
   }
 
   public render() {
@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
             Bir Hata Oluştu (Error Caught)
           </h3>
           <p style={{ color: 'var(--danger-700)', fontSize: '0.9rem', marginBottom: 16 }}>
-            {this.state.error?.message || 'Arayüz yüklenirken bir beklenmeyen hata meydana geldi.'}
+            Arayüz yüklenirken beklenmeyen bir hata oluştu.
           </p>
           <button
             className="btn btn-primary"

@@ -41,15 +41,15 @@ class EventBusService {
    * Publish a domain event to all registered listeners asynchronously
    */
   async publish<T = any>(event: DomainEvent<T>): Promise<void> {
-    console.log(`[EventBus] Publishing event: ${event.type}`, event.payload);
+    // Event payloads can contain patient, device, or financial data. Never log them.
     const set = this.handlers.get(event.type);
     if (!set || set.size === 0) return;
 
     for (const handler of Array.from(set)) {
       try {
         await handler(event);
-      } catch (err) {
-        console.error(`[EventBus Error] Exception handling event ${event.type}:`, err);
+      } catch {
+        console.error(`[EventBus Error] Exception handling event ${event.type}`);
       }
     }
   }

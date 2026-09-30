@@ -127,8 +127,8 @@ export class BranchService {
             };
           }
         }
-      } catch (err) {
-        console.warn('[BranchService] localStorage access restricted:', err);
+      } catch {
+        console.warn('[BranchService] localStorage access restricted.');
       }
     }
 
@@ -181,8 +181,8 @@ export class BranchService {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(this.storageKey(scopeId), slug);
-      } catch (err) {
-        console.warn('[BranchService] Unable to persist branch slug to localStorage:', err);
+      } catch {
+        console.warn('[BranchService] Unable to persist branch selection.');
       }
     }
   }

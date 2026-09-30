@@ -76,8 +76,8 @@ export default function SettingsPage() {
           } catch { /* ignore */ }
         }
       }
-    } catch (err: any) {
-      console.warn('[SettingsPage] load error:', err.message);
+    } catch {
+      console.warn('[SettingsPage] Settings could not be loaded.');
     }
   };
 
@@ -93,8 +93,8 @@ export default function SettingsPage() {
       }, { onConflict: 'organization_id' });
       if (error) throw error;
       addToast({ type: 'success', message: `${label} başarıyla kaydedildi.` });
-    } catch (err: any) {
-      addToast({ type: 'error', message: `${label} kaydedilemedi: ${err.message}` });
+    } catch {
+      addToast({ type: 'error', message: `${label} kaydedilemedi. Lütfen tekrar deneyin.` });
     } finally {
       setSaving(false);
     }

@@ -26,9 +26,9 @@ export const executeDbQuery = async <T>(queryFn: () => Promise<T>, queryName: st
     }
     return result;
   } catch (error: any) {
-    logger.error(`[DatabaseError in ${queryName}]: ${error.message || 'Bilinmeyen veritabanı hatası'}`, error, 'Database');
+    logger.error(`[DatabaseError in ${queryName}]`, undefined, 'Database');
     if (error instanceof DatabaseError) throw error;
-    throw new DatabaseError(`Veritabanı işlem hatası (${queryName}): ${error.message || 'Bilinmeyen hata'}`, error);
+    throw new DatabaseError(`Veritabanı işlem hatası (${queryName}).`);
   }
 };
 

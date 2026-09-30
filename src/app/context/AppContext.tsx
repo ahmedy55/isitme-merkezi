@@ -281,8 +281,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setBranchesList(branches);
       setAuditLogList(auditLogs);
       setUsersList(users);
-    } catch (err: any) {
-      console.error('Veriler Supabase\'den çekilirken hata oluştu:', err);
+    } catch {
+      console.error('Klinik verileri yüklenemedi.');
       addToast({ type: 'error', message: 'Klinik verileri veritabanından çekilemedi.' });
     } finally {
       if (generation === dataGeneration.current) setDataLoading(false);

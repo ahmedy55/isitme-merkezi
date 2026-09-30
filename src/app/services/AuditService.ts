@@ -33,11 +33,9 @@ export class AuditService {
     try {
       if (payload.organizationId) {
         await supabase.from('audit_log').insert([logEntry]);
-      } else {
-        console.log('[AuditLog]', logEntry);
       }
-    } catch (err) {
-      console.warn('[AuditLog Exception]', err);
+    } catch {
+      // Audit failures must not leak payloads or database errors into browser logs.
     }
   }
 

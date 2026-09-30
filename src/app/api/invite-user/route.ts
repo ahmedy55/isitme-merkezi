@@ -41,11 +41,11 @@ export async function POST(request: NextRequest) {
     });
     if(provisionError || !membership){
       if (!provisionError?.code || !/^(22|23|P0)/.test(provisionError.code)) {
-        console.error('Provisioning reconciliation required',uid);
+        console.error('Provisioning reconciliation required');
         return NextResponse.json({error:'İşlem sonucu belirsiz; tekrar denemeden yönetici üyelik kaydını kontrol etmelidir.'},{status:503});
       }
       const {error:cleanupError}=await admin.auth.admin.deleteUser(uid);
-      if(cleanupError) console.error('Unlinked Auth account requires cleanup',uid);
+      if(cleanupError) console.error('Unlinked Auth account requires cleanup');
       return NextResponse.json({error:'Üyelik oluşturulamadı; firma limitini ve şube atamasını kontrol edin.'},{status:409});
     }
     return NextResponse.json({success:true,user:{id:membership.id,userId:uid,firstName,lastName,email,phone,roles,branchId,branch:branchId || 'Tüm Şubeler',status:'Aktif',createdAt:membership.joined_at.split('T')[0]}});

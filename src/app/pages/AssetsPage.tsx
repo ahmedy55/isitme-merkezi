@@ -447,7 +447,7 @@ export default function AssetsPage() {
     let savedRecord = record;
     if (currentOrgId) {
       try { savedRecord = await saveAsset(record); }
-      catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş kaydedilemedi.' }); return; }
+      catch { addToast({ type: 'error', message: 'Demirbaş kaydedilemedi. Lütfen tekrar deneyin.' }); return; }
     }
     const newAsset: DisplayAsset = {
       id: savedRecord.id,
@@ -478,7 +478,7 @@ export default function AssetsPage() {
   const handleDeleteAsset = async (id: string) => {
     if (currentOrgId) {
       try { await archiveAsset(id); }
-      catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş arşivlenemedi.' }); return; }
+      catch { addToast({ type: 'error', message: 'Demirbaş arşivlenemedi. Lütfen tekrar deneyin.' }); return; }
     }
     setAssetList(prev => prev.filter(x => x.id !== id));
     if (activeItem?.id === id) setActiveItem(null);
@@ -1391,7 +1391,7 @@ export default function AssetsPage() {
                   let saved = record;
                   if (currentOrgId) {
                     try { saved = await saveAsset(record); }
-                    catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş güncellenemedi.' }); return; }
+                    catch { addToast({ type: 'error', message: 'Demirbaş güncellenemedi. Lütfen tekrar deneyin.' }); return; }
                   }
                   const updated: DisplayAsset = { ...activeItem, branchId: saved.branchId, purchaseDate: formatDate(saved.purchaseDate), warrantyExpiry: formatDate(saved.warrantyExpiry), lastCalibrationDate: formatDate(saved.lastMaintenance), nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—' };
                   setAssetList(prev => prev.map(item => item.id === updated.id ? updated : item));

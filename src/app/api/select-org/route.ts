@@ -80,8 +80,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, orgId });
 
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Sunucu hatası';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    // Keep internal database/auth errors out of the public response.
+    console.error('Organization selection failed');
+    return NextResponse.json({ error: 'İşlem tamamlanamadı. Lütfen tekrar deneyin.' }, { status: 500 });
   }
 }

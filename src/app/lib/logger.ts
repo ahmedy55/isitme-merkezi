@@ -31,7 +31,8 @@ export class Logger {
       data,
       timestamp: new Date().toISOString()
     };
-    console.log(this.formatLog(payload), data || '');
+    // Structured data is deliberately omitted: it may contain health or identity data.
+    if (!this.isProduction) console.log(this.formatLog(payload));
   }
 
   static warn(message: string, context?: string, durationMs?: number): void {
@@ -52,7 +53,8 @@ export class Logger {
       context,
       timestamp: new Date().toISOString()
     };
-    console.error(this.formatLog(payload), error || '');
+    // Error objects may include request/response bodies with personal data.
+    console.error(this.formatLog(payload));
   }
 
   static debug(message: string, context?: string, data?: Record<string, unknown>): void {

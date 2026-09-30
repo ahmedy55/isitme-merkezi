@@ -163,8 +163,8 @@ export default function ReportsPage() {
   useEffect(() => {
     let active = true;
     if (!currentOrgId) { setServiceRecords([]); return; }
-    fetchServiceTickets(currentOrgId).then(records => { if (active) setServiceRecords(records); }).catch(error => {
-      console.error('Rapor servis kayıtları yüklenemedi:', error);
+    fetchServiceTickets(currentOrgId).then(records => { if (active) setServiceRecords(records); }).catch(() => {
+      console.error('Rapor servis kayıtları yüklenemedi.');
       if (active) addToast({ type: 'error', message: 'Teknik servis rapor verileri yüklenemedi.' });
     });
     return () => { active = false; };
@@ -311,8 +311,8 @@ export default function ReportsPage() {
       URL.revokeObjectURL(url);
       addToast({ type: 'success', message: `${extension.toUpperCase()} raporu indirildi.` });
       setShowExportModal(false);
-    } catch (error) {
-      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Rapor dışa aktarılamadı.' });
+    } catch {
+      addToast({ type: 'error', message: 'Rapor dışa aktarılamadı. Lütfen tekrar deneyin.' });
     }
   };
 

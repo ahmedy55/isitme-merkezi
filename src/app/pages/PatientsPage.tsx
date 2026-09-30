@@ -214,8 +214,8 @@ export default function PatientsPage() {
       });
 
       setParsedBulkRows(jsonRows);
-    } catch (err) {
-      console.error('Excel parsing error:', err);
+    } catch {
+      console.error('Hasta Excel dosyası okunamadı.');
     }
   };
 
@@ -263,8 +263,8 @@ export default function PatientsPage() {
       });
 
       setParsedImportRows(jsonRows);
-    } catch (err) {
-      console.error('Excel parsing error:', err);
+    } catch {
+      console.error('Hasta geçmiş dosyası okunamadı.');
     }
   };
 

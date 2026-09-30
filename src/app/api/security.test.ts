@@ -24,6 +24,7 @@ describe('select-org authority boundary',()=>{
  it('rejects branchless employee',async()=>{mock.from.mockReturnValue(result({roles:['Sekreter'],branch_id:null}));expect((await selectOrg(req({orgId:org}))).status).toBe(403);});
  it('refreshes org, branch and roles together',async()=>{expect((await selectOrg(req({orgId:org}))).status).toBe(200);expect(mock.updateUserById).toHaveBeenCalledWith('actor',{app_metadata:{organization_id:org,branch_id:branch,roles:['Firma Yöneticisi']}});});
  it('denies suspended tenant',async()=>{mock.from.mockImplementation(t=>result(t==='memberships'?{roles:['Firma Yöneticisi'],branch_id:branch}:{subscription_status:'suspended'}));expect((await selectOrg(req({orgId:org}))).status).toBe(403);});
+ it('does not expose internal database errors to callers',async()=>{const spy=vi.spyOn(console,'error').mockImplementation(()=>undefined);mock.from.mockImplementation(()=>{throw new Error('sensitive database diagnostic');});const response=await selectOrg(req({orgId:org}));expect(response.status).toBe(500);expect(await response.json()).toEqual({error:'İşlem tamamlanamadı. Lütfen tekrar deneyin.'});expect(spy).toHaveBeenCalledWith('Organization selection failed');});
 });
 describe('invite-user tenant boundary',()=>{
  it('rejects unsupported role before Auth mutation',async()=>{expect((await invite(req({...body,roles:['superadmin']}))).status).toBe(400);expect(mock.createUser).not.toHaveBeenCalled();});

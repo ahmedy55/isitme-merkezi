@@ -177,8 +177,8 @@ export default function BranchActivitiesPage() {
     setTransfers([]);
     fetchBranchTransfers().then(rows => {
       if (active) setTransfers(rows.map((row: any) => ({ id: row.id, date: row.date, patientName: row.patientName, fromBranch: row.fromBranch, toBranch: row.toBranch, transferredBy: row.transferredBy, status: 'Tamamlandı', transferType: row.transferType, notes: row.notes })));
-    }).catch(error => {
-      console.error('Şube transfer geçmişi yüklenemedi:', error);
+    }).catch(() => {
+      console.error('Şube transfer geçmişi yüklenemedi.');
       if (active) addToast({ type: 'error', message: 'Şube transfer geçmişi yüklenemedi.' });
     });
     return () => { active = false; };
@@ -207,8 +207,8 @@ export default function BranchActivitiesPage() {
         await refreshOrganizationData();
         const rows = await fetchBranchTransfers();
         setTransfers(rows.map((row: any) => ({ id: row.id, date: row.date, patientName: row.patientName, fromBranch: row.fromBranch, toBranch: row.toBranch, transferredBy: row.transferredBy, status: 'Tamamlandı', transferType: 'Diğer', notes: row.notes })));
-      } catch (error) {
-        addToast({ type: 'error', message: error instanceof Error ? error.message : 'Hasta şube transferi yapılamadı.' });
+      } catch {
+        addToast({ type: 'error', message: 'Hasta şube transferi yapılamadı. Lütfen tekrar deneyin.' });
         return false;
       }
     } else {
