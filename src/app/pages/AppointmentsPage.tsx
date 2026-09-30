@@ -1271,6 +1271,29 @@ export function NewAppointmentModal({
   const [showPicker, setShowPicker] = useState(false);
   const [pickerMonth, setPickerMonth] = useState(() => new Date().getMonth());
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+  const [serverNow, setServerNow] = useState(() => new Date());
+  const hasAdjustedAppointmentDate = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/system-time', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() as Promise<{ now: string }> : Promise.reject())
+      .then(({ now }) => {
+        if (cancelled || !now) return;
+        const current = new Date(now);
+        setServerNow(current);
+        if (!hasAdjustedAppointmentDate.current) {
+          const nextSlot = getNextAppointmentSlot(current);
+          setSelectedDate(nextSlot);
+          setPickerMonth(nextSlot.getMonth());
+          setPickerYear(nextSlot.getFullYear());
+        }
+      })
+      .catch(() => {
+        // Keep the browser clock as a fallback if server time is unavailable.
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // Appointment Type State
   const [aptType, setAptType] = useState('Muayene');
@@ -1336,16 +1359,16 @@ export function NewAppointmentModal({
   const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
   const prevMonthDays = new Date(pickerYear, pickerMonth, 0).getDate();
 
-  const calendarDays = [];
+  const calendarDays: { num: number; monthOffset: -1 | 0 | 1 }[] = [];
   for (let i = startDayOfWeek - 1; i >= 0; i--) {
-    calendarDays.push({ num: prevMonthDays - i, isCurrent: false });
+    calendarDays.push({ num: prevMonthDays - i, monthOffset: -1 });
   }
   for (let i = 1; i <= daysInMonth; i++) {
-    calendarDays.push({ num: i, isCurrent: true });
+    calendarDays.push({ num: i, monthOffset: 0 });
   }
   const remainingCells = (calendarDays.length <= 35 ? 35 : 42) - calendarDays.length;
   for (let i = 1; i <= remainingCells; i++) {
-    calendarDays.push({ num: i, isCurrent: false });
+    calendarDays.push({ num: i, monthOffset: 1 });
   }
 
   const formatDisplayDateTime = (d: Date) => {
@@ -1639,13 +1662,21 @@ export function NewAppointmentModal({
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button type="button" onClick={() => setPickerYear(pickerYear - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>«</button>
-                          <button type="button" onClick={() => setPickerMonth(pickerMonth === 0 ? 11 : pickerMonth - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>‹</button>
+                          <button type="button" onClick={() => {
+                            const previousMonth = new Date(pickerYear, pickerMonth - 1, 1);
+                            setPickerMonth(previousMonth.getMonth());
+                            setPickerYear(previousMonth.getFullYear());
+                          }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>‹</button>
                         </div>
                         <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0f172a' }}>
                           {monthShortNames[pickerMonth]} {pickerYear}
                         </span>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button type="button" onClick={() => setPickerMonth(pickerMonth === 11 ? 0 : pickerMonth + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>›</button>
+                          <button type="button" onClick={() => {
+                            const nextMonth = new Date(pickerYear, pickerMonth + 1, 1);
+                            setPickerMonth(nextMonth.getMonth());
+                            setPickerYear(nextMonth.getFullYear());
+                          }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>›</button>
                           <button type="button" onClick={() => setPickerYear(pickerYear + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#64748b' }}>»</button>
                         </div>
                       </div>
@@ -1658,32 +1689,33 @@ export function NewAppointmentModal({
                       {/* Calendar Days */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center' }}>
                         {calendarDays.map((cell, idx) => {
-                          const isSelected = cell.isCurrent && selectedDate.getDate() === cell.num && selectedDate.getMonth() === pickerMonth && selectedDate.getFullYear() === pickerYear;
-                          const cellDate = new Date(pickerYear, pickerMonth, cell.num);
-                          const todayStart = new Date();
-                          todayStart.setHours(0, 0, 0, 0);
-                          const isPastDay = !cell.isCurrent || cellDate < todayStart;
+                          const cellDate = new Date(pickerYear, pickerMonth + cell.monthOffset, cell.num, 12);
+                          const selectedDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 12);
+                          const todayStart = getIstanbulDate(serverNow);
+                          const isSelected = cellDate.getTime() === selectedDay.getTime();
+                          const isPastDay = cellDate < todayStart;
+                          const isOtherMonth = cell.monthOffset !== 0;
                           return (
                             <button
                               type="button"
                               key={idx}
                               disabled={isPastDay}
                               onClick={() => {
-                                const newD = new Date(selectedDate);
-                                newD.setFullYear(pickerYear);
-                                newD.setMonth(pickerMonth);
-                                newD.setDate(cell.num);
+                                hasAdjustedAppointmentDate.current = true;
+                                const newD = new Date(pickerYear, pickerMonth + cell.monthOffset, cell.num, selectedDate.getHours(), selectedDate.getMinutes());
                                 setSelectedDate(newD);
+                                setPickerMonth(newD.getMonth());
+                                setPickerYear(newD.getFullYear());
                               }}
                               style={{
                                 padding: '5px 0', fontSize: '0.8rem', borderRadius: 6,
                                 cursor: isPastDay ? 'not-allowed' : 'pointer',
-                                color: isPastDay ? '#cbd5e1' : isSelected ? '#ffffff' : '#334155',
+                                color: isPastDay ? '#cbd5e1' : isSelected ? '#ffffff' : isOtherMonth ? '#94a3b8' : '#334155',
                                 background: isSelected ? '#3b82f6' : isPastDay ? '#f8fafc' : 'transparent',
                                 border: 0, fontWeight: isSelected ? 700 : 400,
                                 opacity: isPastDay ? 0.55 : 1
                               }}
-                              aria-label={`${cell.num} ${monthShortNames[pickerMonth]}${isPastDay ? ', geçmiş tarih, seçilemez' : ''}`}
+                              aria-label={`${cell.num} ${monthShortNames[(pickerMonth + cell.monthOffset + 12) % 12]}${isPastDay ? ', geçmiş tarih, seçilemez' : ''}`}
                             >
                               {cell.num}
                             </button>
@@ -1694,33 +1726,35 @@ export function NewAppointmentModal({
 
                     {/* Right: Time picker */}
                     <div style={{ width: 75, borderLeft: '1px solid #f1f5f9', paddingLeft: 8, display: 'flex', flexDirection: 'column', height: 180, overflowY: 'auto' }}>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Saat · geçmiş saatler kapalı</div>
-                      {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'].map((timeStr) => {
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Saat</div>
+                      {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00']
+                        .filter(timeStr => {
+                          const [h, m] = timeStr.split(':').map(Number);
+                          const optionDate = new Date(selectedDate);
+                          optionDate.setHours(h, m, 0, 0);
+                          return optionDate > serverNow;
+                        })
+                        .map((timeStr) => {
                         const [h, m] = timeStr.split(':').map(Number);
                         const isTimeSelected = selectedDate.getHours() === h && selectedDate.getMinutes() === m;
-                        const optionDate = new Date(selectedDate);
-                        optionDate.setHours(h, m, 0, 0);
-                        const isTimePast = optionDate <= new Date();
                         return (
                           <button
                             key={timeStr}
                             type="button"
-                            disabled={isTimePast}
                             onClick={() => {
+                              hasAdjustedAppointmentDate.current = true;
                               const newD = new Date(selectedDate);
                               newD.setHours(h);
                               newD.setMinutes(m);
                               setSelectedDate(newD);
                             }}
                             style={{
-                              padding: '4px 6px', fontSize: '0.78rem', borderRadius: 4, cursor: isTimePast ? 'not-allowed' : 'pointer',
+                              padding: '4px 6px', fontSize: '0.78rem', borderRadius: 4, cursor: 'pointer',
                               border: 0, textAlign: 'left',
-                              color: isTimePast ? '#cbd5e1' : isTimeSelected ? '#0284c7' : '#475569',
+                              color: isTimeSelected ? '#0284c7' : '#475569',
                               fontWeight: isTimeSelected ? 700 : 400, marginBottom: 2,
-                              opacity: isTimePast ? 0.45 : 1,
-                              background: isTimePast ? '#f8fafc' : isTimeSelected ? '#e0f2fe' : 'transparent'
+                              background: isTimeSelected ? '#e0f2fe' : 'transparent'
                             }}
-                            aria-label={`${timeStr}${isTimePast ? ', geçmiş saat, seçilemez' : ''}`}
                           >
                             {timeStr}
                           </button>
@@ -1735,7 +1769,8 @@ export function NewAppointmentModal({
                     <button
                       type="button"
                       onClick={() => {
-                        const nextSlot = getNextAppointmentSlot();
+                        hasAdjustedAppointmentDate.current = true;
+                        const nextSlot = getNextAppointmentSlot(serverNow);
                         setSelectedDate(nextSlot);
                         setPickerMonth(nextSlot.getMonth());
                         setPickerYear(nextSlot.getFullYear());
