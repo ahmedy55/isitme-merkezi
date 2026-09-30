@@ -492,9 +492,12 @@ export default function AppointmentsPage() {
     .filter(appointment => appointment.date >= weekStartStr && appointment.date < weekEndStr)
     .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
   const weeklyCount = weeklyAppointments.length;
-  const completedCount = selectedDateScopedAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length;
-  const pendingCount = selectedDateScopedAppointments.filter(appointment => ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)).length;
-  const canceledCount = selectedDateScopedAppointments.filter(appointment => ['İptal', 'Gelmedi'].includes(appointment.status)).length;
+  const metricAppointments = viewMode === 'hafta' ? weeklyAppointments : selectedDateScopedAppointments;
+  const dailyCompletedCount = selectedDateScopedAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length;
+  const dailyPendingCount = selectedDateScopedAppointments.filter(appointment => ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)).length;
+  const completedCount = metricAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length;
+  const pendingCount = metricAppointments.filter(appointment => ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)).length;
+  const canceledCount = metricAppointments.filter(appointment => ['İptal', 'Gelmedi'].includes(appointment.status)).length;
 
   const handleShowThisWeek = () => {
     const firstDay = new Date(weekStart);
@@ -607,7 +610,7 @@ export default function AppointmentsPage() {
           <div>
             <span>Seçili Gün Randevuları</span>
             <strong>{selectedDateScopedAppointments.length}</strong>
-            <small><span style={{ color: '#0b8463', fontWeight: 600 }}>{completedCount}</span> tamamlandı • <span style={{ color: '#d97706', fontWeight: 600 }}>{pendingCount}</span> bekliyor</small>
+            <small><span style={{ color: '#0b8463', fontWeight: 600 }}>{dailyCompletedCount}</span> tamamlandı • <span style={{ color: '#d97706', fontWeight: 600 }}>{dailyPendingCount}</span> bekliyor</small>
           </div>
         </div>
 
