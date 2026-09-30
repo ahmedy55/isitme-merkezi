@@ -213,6 +213,7 @@ export default function AppointmentsPage() {
   const [filterTimeRange, setFilterTimeRange] = useState('Tüm Gün');
   const [dateInputVal, setDateInputVal] = useState(() => formatCalendarDate(getIstanbulDate()));
   const [statusFilter, setStatusFilter] = useState<'all' | 'bekleyen' | 'tamamlanan' | 'iptal'>('all');
+  const [serverNow, setServerNow] = useState<Date>(() => new Date());
 
   // Modals and action dropdown
   const [showcaseList, setShowcaseList] = useState<ShowcaseSlot[]>(defaultShowcaseSlots);
@@ -230,7 +231,9 @@ export default function AppointmentsPage() {
         return response.json() as Promise<{ now: string }>;
       })
       .then(({ now }) => {
-        if (cancelled || hasUserSelectedDate.current || !now) return;
+        if (cancelled || !now) return;
+        setServerNow(new Date(now));
+        if (hasUserSelectedDate.current) return;
         const today = getIstanbulDate(new Date(now));
         setCurrentDate(today);
         setDateInputVal(formatCalendarDate(today));
@@ -311,7 +314,10 @@ export default function AppointmentsPage() {
       const response = await fetch('/api/system-time', { cache: 'no-store' });
       if (response.ok) {
         const { now } = await response.json() as { now: string };
-        if (now) today = getIstanbulDate(new Date(now));
+        if (now) {
+          setServerNow(new Date(now));
+          today = getIstanbulDate(new Date(now));
+        }
       }
     } catch {
       // Fall back to the browser's clock if the server clock cannot be reached.
@@ -445,6 +451,28 @@ export default function AppointmentsPage() {
   }, [visibleAppointments]);
 
   const selectedDayAppointments = visibleAppointments.filter(appointment => appointment.date === selectedDateStr);
+  const todayDateStr = formatCalendarDate(getIstanbulDate(serverNow));
+  const todaySummaryAppointments = appointmentsList.filter(appointment =>
+    appointment.date === todayDateStr &&
+    (filterAudiologist === 'Tümü' || appointment.audiologist === filterAudiologist) &&
+    (filterBranch === 'All' || appointment.branchId === filterBranch)
+  );
+  const todaySummaryCounts = {
+    total: todaySummaryAppointments.length,
+    pending: todaySummaryAppointments.filter(appointment => ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)).length,
+    completed: todaySummaryAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length,
+    canceled: todaySummaryAppointments.filter(appointment => appointment.status === 'İptal').length,
+    noShow: todaySummaryAppointments.filter(appointment => appointment.status === 'Gelmedi').length,
+  };
+  const upcomingAppointments = appointmentsList
+    .filter(appointment =>
+      isOpenAppointment(appointment.status) &&
+      (filterAudiologist === 'Tümü' || appointment.audiologist === filterAudiologist) &&
+      (filterBranch === 'All' || appointment.branchId === filterBranch) &&
+      Date.parse(`${appointment.date}T${appointment.time}:00+03:00`) > serverNow.getTime()
+    )
+    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
+    .slice(0, 3);
   const weekStart = new Date(currentDate);
   weekStart.setDate(currentDate.getDate() - ((currentDate.getDay() + 6) % 7));
   const weekEnd = new Date(weekStart);
@@ -915,27 +943,27 @@ export default function AppointmentsPage() {
               <div className={styles.summaryList}>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#e0f2fe', color: '#0284c7' }}>👥</div>
-                  <strong>{selectedDayAppointments.length}</strong>
+                  <strong>{todaySummaryCounts.total}</strong>
                   <span>Toplam randevu</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#fef3c7', color: '#d97706' }}>🕒</div>
-                  <strong>{pendingCount}</strong>
+                  <strong>{todaySummaryCounts.pending}</strong>
                   <span>Bekleyen</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#dcfce7', color: '#16a34a' }}>✓</div>
-                  <strong>{completedCount}</strong>
+                  <strong>{todaySummaryCounts.completed}</strong>
                   <span>Tamamlanan</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#fee2e2', color: '#dc2626' }}>✕</div>
-                  <strong>{selectedDayAppointments.filter(appointment => appointment.status === 'İptal').length}</strong>
+                  <strong>{todaySummaryCounts.canceled}</strong>
                   <span>İptal</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#fee2e2', color: '#991b1b' }}>🚫</div>
-                  <strong>{selectedDayAppointments.filter(appointment => appointment.status === 'Gelmedi').length}</strong>
+                  <strong>{todaySummaryCounts.noShow}</strong>
                   <span>Gelmedi</span>
                 </div>
               </div>
@@ -957,29 +985,29 @@ export default function AppointmentsPage() {
               </div>
 
               <div className={styles.upcomingList}>
-                <div className={styles.upcomingItem}>
-                  <div className={styles.upcomingAvatar} style={{ background: '#3b82f6' }}>MD</div>
-                  <div className={styles.upcomingInfo}>
-                    <span className={styles.upcomingName}>Mehmet Demir</span>
-                    <span className={styles.upcomingTime}>Yarın 10:00 - Cihaz Teslimi</span>
-                  </div>
-                </div>
-
-                <div className={styles.upcomingItem}>
-                  <div className={styles.upcomingAvatar} style={{ background: '#ef4444' }}>ZA</div>
-                  <div className={styles.upcomingInfo}>
-                    <span className={styles.upcomingName}>Zeynep Arslan</span>
-                    <span className={styles.upcomingTime}>Yarın 11:30 - Kontrol</span>
-                  </div>
-                </div>
-
-                <div className={styles.upcomingItem}>
-                  <div className={styles.upcomingAvatar} style={{ background: '#6366f1' }}>HY</div>
-                  <div className={styles.upcomingInfo}>
-                    <span className={styles.upcomingName}>Hasan Yıldız</span>
-                    <span className={styles.upcomingTime}>Yarın 14:00 - Pil Değişimi</span>
-                  </div>
-                </div>
+                {upcomingAppointments.length === 0 ? (
+                  <p className={styles.upcomingTime}>Yaklaşan randevu bulunmuyor.</p>
+                ) : upcomingAppointments.map(appointment => {
+                  const [year, month, day] = appointment.date.split('-').map(Number);
+                  const today = getIstanbulDate(serverNow);
+                  const dayDifference = Math.round((Date.UTC(year, month - 1, day) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86_400_000);
+                  const dateLabel = dayDifference === 0
+                    ? 'Bugün'
+                    : dayDifference === 1
+                      ? 'Yarın'
+                      : `${day} ${['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'][month - 1]}`;
+                  return (
+                    <div className={styles.upcomingItem} key={appointment.id}>
+                      <div className={styles.upcomingAvatar} style={{ background: getAvatarColor(appointment.patientName) }}>
+                        {getInitials(appointment.patientName, '')}
+                      </div>
+                      <div className={styles.upcomingInfo}>
+                        <span className={styles.upcomingName}>{appointment.patientName}</span>
+                        <span className={styles.upcomingTime}>{dateLabel} {appointment.time} - {appointment.type}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
