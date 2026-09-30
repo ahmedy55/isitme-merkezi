@@ -6,6 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import CustomSelect from '../components/CustomSelect';
 import { useDebounce } from '../hooks/useDebounce';
+import { isValidTurkishPhone, normalizeTurkishPhoneInput } from '../lib/turkishPhone';
 import styles from './PatientsPage.module.css';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
@@ -320,6 +321,10 @@ export default function PatientsPage() {
   const handleSave = async () => {
     if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.tc.trim() || !formData.phone.trim() || !formData.address.trim()) {
       addToast({ type: 'warning', message: 'Lütfen zorunlu alanları (* işaretli: Ad, Soyad, TC Kimlik No, Telefon, Adres) doldurunuz.' });
+      return;
+    }
+    if (!isValidTurkishPhone(formData.phone)) {
+      addToast({ type: 'warning', message: 'Telefon numarası 10 haneli olmalı veya başında 0 ile 11 hane girilmelidir.' });
       return;
     }
     if (!formData.consentGiven) {
@@ -1326,10 +1331,16 @@ export default function PatientsPage() {
                   <label className="form-label"><span style={{ color: 'var(--danger-500)', marginRight: 2 }}>*</span> Telefon</label>
                   <input
                     className="form-input"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
                     placeholder="05XX XXX XX XX"
+                    maxLength={11}
+                    aria-describedby="patient-phone-hint"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, phone: normalizeTurkishPhoneInput(e.target.value) })}
                   />
+                  <small id="patient-phone-hint" className="form-hint">10 hane veya başında 0 ile 11 hane girin. +90 ile yapıştırılan numaralar otomatik düzenlenir.</small>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Doğum Tarihi</label>
