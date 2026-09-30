@@ -814,6 +814,12 @@
   font-weight: 600;
 }
 
+.emptyDetailText {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+}
+
 /* JSON Viewer */
 .drawerJsonSection {
   display: flex;

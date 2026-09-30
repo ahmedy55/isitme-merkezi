@@ -23,6 +23,35 @@ interface AuditItem {
   detailsJson: Record<string, any>;
 }
 
+const DETAIL_LABELS: Record<string, string> = {
+  amount: 'Tutar', total: 'Toplam', total_amount: 'Toplam tutar', payment_method: 'Ödeme yöntemi',
+  method: 'Yöntem', branch: 'Şube', branch_name: 'Şube', created_at: 'İşlem tarihi', date: 'Tarih',
+  status: 'Durum', result: 'Sonuç', patient_name: 'Hasta', device_name: 'Cihaz', serial_no: 'Seri numarası',
+  barcode: 'Barkod', description: 'Açıklama', reason: 'Neden', note: 'Not', quantity: 'Adet',
+  discount: 'İndirim', tax: 'Vergi', old_value: 'Önceki değer', new_value: 'Yeni değer',
+  entity: 'Kayıt türü', entity_name: 'Kayıt adı',
+};
+
+const formatDetailLabel = (key: string) => DETAIL_LABELS[key] || key
+  .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+  .replace(/[_-]+/g, ' ')
+  .replace(/\b\w/g, letter => letter.toLocaleUpperCase('tr-TR'));
+
+const formatDetailValue = (key: string, value: unknown) => {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Evet' : 'Hayır';
+  if (typeof value === 'number' && /(amount|total|price|cost|discount|tax|tutar|fiyat|ücret)/i.test(key)) {
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 2 }).format(value);
+  }
+  if (typeof value === 'string' && /(created_at|updated_at|date|tarih)/i.test(key)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  }
+  if (Array.isArray(value)) return value.map(item => typeof item === 'object' && item ? Object.values(item).join(' · ') : String(item)).join(', ');
+  if (typeof value === 'object') return Object.entries(value as Record<string, unknown>).map(([name, item]) => `${formatDetailLabel(name)}: ${String(item)}`).join(' · ');
+  return String(value);
+};
+
 const INITIAL_AUDIT_LOGS: AuditItem[] = [
   {
     id: 'audit-1',
@@ -268,7 +297,7 @@ export default function AuditLogPage() {
   const [selectedRowId, setSelectedRowId] = useState<string>('audit-1');
   const [checkedIds, setCheckedIds] = useState<string[]>(['audit-1']);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
-  const [isJsonExpanded, setIsJsonExpanded] = useState<boolean>(true);
+  const [isJsonExpanded, setIsJsonExpanded] = useState<boolean>(false);
 
   // Pagination
   const [currentPageNum, setCurrentPageNum] = useState<number>(1);
@@ -1041,20 +1070,40 @@ export default function AuditLogPage() {
                 </div>
               </div>
 
-              {/* Section 3: Detaylar (JSON) */}
+              {/* Kullanıcı dostu işlem alanları; teknik JSON yalnızca isteğe bağlı açılır. */}
+              <div className={styles.drawerSection}>
+                <h4 className={styles.drawerSectionTitle}>İşlem Detayları</h4>
+                <div className={styles.drawerKeyValueList}>
+                  {Object.entries(activeLog.detailsJson || {})
+                    .filter(([key, value]) => value !== null && value !== undefined && value !== '' && !/(^id$|_id$|^organization|^tenant|^metadata$)/i.test(key))
+                    .map(([key, value]) => (
+                      <div className={styles.drawerKeyValueRow} key={key}>
+                        <span className={styles.drawerKey}>{formatDetailLabel(key)}</span>
+                        <span className={styles.drawerValue}>{formatDetailValue(key, value)}</span>
+                      </div>
+                    ))}
+                  {Object.entries(activeLog.detailsJson || {}).filter(([key, value]) => value !== null && value !== undefined && value !== '' && !/(^id$|_id$|^organization|^tenant|^metadata$)/i.test(key)).length === 0 && (
+                    <p className={styles.emptyDetailText}>Bu işlem için ek detay bulunmuyor.</p>
+                  )}
+                </div>
+              </div>
+
               <div className={styles.drawerJsonSection}>
-                <div 
+                <div
                   className={styles.drawerJsonHeader}
                   onClick={() => setIsJsonExpanded(!isJsonExpanded)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setIsJsonExpanded(!isJsonExpanded); } }}
+                  aria-expanded={isJsonExpanded}
                 >
-                  <div className={styles.drawerJsonTitleWrap}>
-                    <span>Detaylar (JSON)</span>
-                  </div>
+                  <div className={styles.drawerJsonTitleWrap}><span>Ham teknik veri (JSON)</span></div>
                   <div className={styles.drawerJsonActions}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className={styles.btnCopyJson}
                       title="JSON Kopyala"
+                      aria-label="Ham JSON verisini kopyala"
                       onClick={handleCopyJson}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1062,27 +1111,12 @@ export default function AuditLogPage() {
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                       </svg>
                     </button>
-                    <svg 
-                      width="14" 
-                      height="14" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                      style={{ transform: isJsonExpanded ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}
-                    >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isJsonExpanded ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>
                       <polyline points="18 15 12 9 6 15"></polyline>
                     </svg>
                   </div>
                 </div>
-
-                {isJsonExpanded && (
-                  <pre className={styles.jsonCodeBlock}>
-                    {JSON.stringify(activeLog.detailsJson, null, 2)}
-                  </pre>
-                )}
+                {isJsonExpanded && <pre className={styles.jsonCodeBlock}>{JSON.stringify(activeLog.detailsJson, null, 2)}</pre>}
               </div>
             </div>
           </aside>
