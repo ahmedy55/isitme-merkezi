@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
+import { isClosedAppointment, isOpenAppointment } from '../lib/appointmentStatus';
 import { getAvatarColor, getInitials } from '../data/mockData';
 import { IconPlus, IconCalendar, IconCheck, IconClose, IconSearch, IconPhone, IconMail } from '../components/Icons';
 import styles from './AppointmentsPage.module.css';
@@ -207,9 +208,24 @@ export default function AppointmentsPage() {
 
   // Modals and action dropdown
   const [showcaseList, setShowcaseList] = useState<ShowcaseSlot[]>(defaultShowcaseSlots);
+  const [updatingAppointmentIds, setUpdatingAppointmentIds] = useState<Set<string>>(() => new Set());
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeSlotMenu, setActiveSlotMenu] = useState<{ id: string; top: number; right: number; patientName: string; phone?: string } | null>(null);
   const slotMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleAppointmentStatusChange = async (id: string, status: 'Geldi' | 'İptal' | 'Hatırlatıldı') => {
+    if (updatingAppointmentIds.has(id)) return false;
+    setUpdatingAppointmentIds(prev => new Set(prev).add(id));
+    try {
+      return await updateAppointmentStatus(id, status);
+    } finally {
+      setUpdatingAppointmentIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
 
   // Close slot action menu on outside click or scroll
   useEffect(() => {
@@ -946,16 +962,17 @@ export default function AppointmentsPage() {
                     <td data-label="Odyolog">{apt.audiologist}</td>
                     <td data-label="Şube" style={{ fontSize: '0.78rem' }}>{apt.branch}</td>
                     <td data-label="Durum">
-                      <span className={`badge badge-${apt.status === 'Geldi' ? 'success' : apt.status === 'Bekliyor' ? 'warning' : 'neutral'}`}>
+                      <span className={`badge badge-${apt.status === 'Geldi' ? 'success' : isOpenAppointment(apt.status) ? 'warning' : isClosedAppointment(apt.status) ? (apt.status === 'İptal' || apt.status === 'Gelmedi' ? 'danger' : 'success') : 'neutral'}`}>
                         {apt.status}
                       </span>
                     </td>
                     <td data-label="İşlem">
-                      <div style={{ display: 'flex', gap: 4 }}>
+                      {isOpenAppointment(apt.status) ? <div style={{ display: 'flex', gap: 4 }}>
                         <button
                           type="button"
                           className="btn btn-sm btn-primary"
-                          onClick={() => updateAppointmentStatus(apt.id, 'Geldi')}
+                          disabled={updatingAppointmentIds.has(apt.id)}
+                          onClick={() => void handleAppointmentStatusChange(apt.id, 'Geldi')}
                           style={{ display: 'flex', alignItems: 'center', gap: 4 }}
                         >
                           <IconCheck size={12} /> Geldi
@@ -963,11 +980,12 @@ export default function AppointmentsPage() {
                         <button
                           type="button"
                           className="btn btn-sm btn-danger"
-                          onClick={() => updateAppointmentStatus(apt.id, 'İptal')}
+                          disabled={updatingAppointmentIds.has(apt.id)}
+                          onClick={() => void handleAppointmentStatusChange(apt.id, 'İptal')}
                         >
                           İptal
                         </button>
-                      </div>
+                      </div> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>İşlem tamamlandı</span>}
                     </td>
                   </tr>
                 ))}

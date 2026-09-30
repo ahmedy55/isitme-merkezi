@@ -111,7 +111,7 @@ interface AppContextType {
   addPatient: (patient: Patient) => Promise<void>;
   updatePatient: (patient: Patient) => void;
   addAppointment: (appointment: Appointment) => Promise<void>;
-  updateAppointmentStatus: (id: string, status: Appointment['status']) => void;
+  updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<boolean>;
   addSale: (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => Promise<void>;
   addSupplierPurchaseTransaction: (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => Promise<void>;
   approveSGKPrescription: (patientId: string, prescriptionNo: string, reportNo: string) => Promise<void>;
@@ -503,17 +503,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
+    const targetApt = appointmentsList.find(appointment => appointment.id === id);
+    if (!targetApt || targetApt.status === status) return false;
     if (currentOrgId) {
       try {
         await dbUpdateAppointmentStatus(id, status);
         setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
         addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
+        return true;
       } catch (err: any) {
         logger.warn(`dbUpdateAppointmentStatus background sync error: ${err.message}`, 'AppContext');
         addToast({ type: 'error', message: 'Randevu durumu kaydedilemedi. Lütfen tekrar deneyin.' });
+        return false;
       }
     } else {
-      const targetApt = appointmentsList.find(a => a.id === id);
       setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
       addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
 
@@ -532,6 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
         setRecallList(prev => [newRecall, ...prev]);
       }
+      return true;
     }
   };
 

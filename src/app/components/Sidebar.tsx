@@ -3,6 +3,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { getDisplayName, getUserRole, getUserInitials } from '../lib/userHelpers';
+import { countOpenAppointments } from '../lib/appointmentStatus';
+import { useBranch } from '../context/BranchContext';
 import styles from './Sidebar.module.css';
 
 interface NavItemDef {
@@ -28,7 +30,13 @@ export default function Sidebar() {
     logout,
     loggingOut,
     usersList,
+    appointmentsList,
   } = useApp();
+  const { activeBranch } = useBranch();
+  const pendingAppointmentsCount = useMemo(
+    () => countOpenAppointments(appointmentsList, activeBranch),
+    [appointmentsList, activeBranch],
+  );
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -189,7 +197,7 @@ export default function Sidebar() {
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: icons.dashboard },
         { id: 'patients', label: 'Hastalar', icon: icons.patients },
-        { id: 'appointments', label: 'Randevular', badge: 2, icon: icons.appointments },
+        { id: 'appointments', label: 'Randevular', badge: pendingAppointmentsCount || null, icon: icons.appointments },
       ],
     },
     {
@@ -217,7 +225,7 @@ export default function Sidebar() {
         { id: 'support', label: 'Destek', icon: icons.support },
       ],
     },
-  ], [icons]);
+  ], [icons, pendingAppointmentsCount]);
 
   // Filter sections by search query
   const filteredSections = useMemo(() => {
