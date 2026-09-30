@@ -53,7 +53,14 @@ function IconCrossCard({ size = 20 }: { size?: number }) {
 
 const audiologists = ['Dr. Elif Arslan', 'Dr. Can Yılmaz'];
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
-const todayISO = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(new Date());
+const formatCalendarDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const getIstanbulDate = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find(item => item.type === type)?.value);
+  return new Date(part('year'), part('month') - 1, part('day'), 12);
+};
 
 // Default Showcase Schedule items for the screenshot design
 interface ShowcaseSlot {
@@ -196,15 +203,15 @@ export default function AppointmentsPage() {
   const [viewMode, setViewMode] = useState<'takvim' | 'liste' | 'gun' | 'hafta' | 'ay'>('takvim');
 
   // Selected date state (defaults to 12 Eylül 2025 as in mockup, or dynamic)
-  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
-  const [calendarViewMonth, setCalendarViewMonth] = useState<number>(() => new Date().getMonth());
-  const [calendarViewYear, setCalendarViewYear] = useState<number>(() => new Date().getFullYear());
+  const [currentDate, setCurrentDate] = useState<Date>(() => getIstanbulDate());
+  const [calendarViewMonth, setCalendarViewMonth] = useState<number>(() => getIstanbulDate().getMonth());
+  const [calendarViewYear, setCalendarViewYear] = useState<number>(() => getIstanbulDate().getFullYear());
 
   // Filters
   const [filterAudiologist, setFilterAudiologist] = useState('Tümü');
   const [filterBranch, setFilterBranch] = useState('All');
   const [filterTimeRange, setFilterTimeRange] = useState('Tüm Gün');
-  const [dateInputVal, setDateInputVal] = useState(todayISO);
+  const [dateInputVal, setDateInputVal] = useState(() => formatCalendarDate(getIstanbulDate()));
   const [statusFilter, setStatusFilter] = useState<'all' | 'bekleyen' | 'tamamlanan' | 'iptal'>('all');
 
   // Modals and action dropdown
@@ -213,6 +220,28 @@ export default function AppointmentsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeSlotMenu, setActiveSlotMenu] = useState<{ id: string; top: number; right: number; patientName: string; phone?: string } | null>(null);
   const slotMenuRef = useRef<HTMLDivElement>(null);
+  const hasUserSelectedDate = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/system-time', { cache: 'no-store' })
+      .then(response => {
+        if (!response.ok) throw new Error('Sunucu saati alınamadı');
+        return response.json() as Promise<{ now: string }>;
+      })
+      .then(({ now }) => {
+        if (cancelled || hasUserSelectedDate.current || !now) return;
+        const today = getIstanbulDate(new Date(now));
+        setCurrentDate(today);
+        setDateInputVal(formatCalendarDate(today));
+        setCalendarViewMonth(today.getMonth());
+        setCalendarViewYear(today.getFullYear());
+      })
+      .catch(() => {
+        // Browser's Istanbul-local date remains the fallback if server time is unavailable.
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleAppointmentStatusChange = async (id: string, status: 'Geldi' | 'İptal' | 'Hatırlatıldı') => {
     if (updatingAppointmentIds.has(id)) return false;
@@ -254,29 +283,41 @@ export default function AppointmentsPage() {
 
   // Navigation handlers
   const handlePrevDay = () => {
+    hasUserSelectedDate.current = true;
     setCurrentDate(prev => {
       const next = new Date(prev);
       next.setDate(next.getDate() - 1);
-      setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
+      setDateInputVal(formatCalendarDate(next));
       setCalendarViewMonth(next.getMonth());
       setCalendarViewYear(next.getFullYear());
       return next;
     });
   };
   const handleNextDay = () => {
+    hasUserSelectedDate.current = true;
     setCurrentDate(prev => {
       const next = new Date(prev);
       next.setDate(next.getDate() + 1);
-      setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
+      setDateInputVal(formatCalendarDate(next));
       setCalendarViewMonth(next.getMonth());
       setCalendarViewYear(next.getFullYear());
       return next;
     });
   };
-  const handleToday = () => {
-    const today = new Date();
+  const handleToday = async () => {
+    hasUserSelectedDate.current = true;
+    let today = getIstanbulDate();
+    try {
+      const response = await fetch('/api/system-time', { cache: 'no-store' });
+      if (response.ok) {
+        const { now } = await response.json() as { now: string };
+        if (now) today = getIstanbulDate(new Date(now));
+      }
+    } catch {
+      // Fall back to the browser's clock if the server clock cannot be reached.
+    }
     setCurrentDate(today);
-    setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(today));
+    setDateInputVal(formatCalendarDate(today));
     setCalendarViewMonth(today.getMonth());
     setCalendarViewYear(today.getFullYear());
   };
@@ -634,12 +675,13 @@ export default function AppointmentsPage() {
               className={styles.filterDateInput}
               value={dateInputVal}
               onChange={(e) => {
+                hasUserSelectedDate.current = true;
                 const val = e.target.value;
                 setDateInputVal(val);
                 if (val) {
                   const parts = val.split('-').map(Number);
                   if (parts[0] && parts[1]) {
-                          const next = new Date(parts[0], parts[1] - 1, parts[2] || 1);
+                          const next = new Date(parts[0], parts[1] - 1, parts[2] || 1, 12);
                           setCurrentDate(next);
                     setCalendarViewMonth(parts[1] - 1);
                     setCalendarViewYear(parts[0]);
@@ -829,9 +871,10 @@ export default function AppointmentsPage() {
                       className={`${styles.miniDayCell} ${!c.isCurrentMonth ? styles.miniDayOtherMonth : ''} ${isSelected ? styles.miniDaySelected : ''}`}
                       onClick={() => {
                         if (c.isCurrentMonth) {
-                          const next = new Date(calendarViewYear, calendarViewMonth, c.dayNum);
+                          hasUserSelectedDate.current = true;
+                          const next = new Date(calendarViewYear, calendarViewMonth, c.dayNum, 12);
                           setCurrentDate(next);
-                          setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
+                          setDateInputVal(formatCalendarDate(next));
                         }
                       }}
                     >
@@ -1049,9 +1092,10 @@ export default function AppointmentsPage() {
                     className={`calendar-cell ${!cell.isCurrentMonth ? 'other-month' : ''}`}
                     onClick={() => {
                       if (cell.isCurrentMonth) {
-                        const next = new Date(calendarViewYear, calendarViewMonth, cell.dayNum);
+                    hasUserSelectedDate.current = true;
+                    const next = new Date(calendarViewYear, calendarViewMonth, cell.dayNum, 12);
                         setCurrentDate(next);
-                        setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
+                        setDateInputVal(formatCalendarDate(next));
                         setViewMode('takvim');
                       }
                     }}
