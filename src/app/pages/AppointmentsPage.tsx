@@ -491,6 +491,12 @@ export default function AppointmentsPage() {
   const weeklyAppointments = scopedAppointments
     .filter(appointment => appointment.date >= weekStartStr && appointment.date < weekEndStr)
     .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+  const filteredWeeklyAppointments = weeklyAppointments.filter(appointment => {
+    if (statusFilter === 'bekleyen') return ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status);
+    if (statusFilter === 'tamamlanan') return ['Tamamlandı', 'Geldi'].includes(appointment.status);
+    if (statusFilter === 'iptal') return ['İptal', 'Gelmedi'].includes(appointment.status);
+    return true;
+  });
   const weeklyCount = weeklyAppointments.length;
   const metricAppointments = viewMode === 'hafta' ? weeklyAppointments : selectedDateScopedAppointments;
   const dailyCompletedCount = selectedDateScopedAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length;
@@ -500,14 +506,13 @@ export default function AppointmentsPage() {
   const canceledCount = metricAppointments.filter(appointment => ['İptal', 'Gelmedi'].includes(appointment.status)).length;
 
   const handleShowThisWeek = () => {
-    const firstDay = new Date(weekStart);
-    hasUserSelectedDate.current = true;
-    setCurrentDate(firstDay);
-    setDateInputVal(formatCalendarDate(firstDay));
-    setCalendarViewMonth(firstDay.getMonth());
-    setCalendarViewYear(firstDay.getFullYear());
     setStatusFilter('all');
     setViewMode('hafta');
+  };
+
+  const handleShowSelectedDay = () => {
+    setStatusFilter('all');
+    setViewMode('takvim');
   };
 
   const visibleTimelineSlots = useMemo(() => timelineSlots.filter(slot => {
@@ -602,7 +607,7 @@ export default function AppointmentsPage() {
         {/* 1. Bugünkü Randevular */}
         <div
           className={`${styles.statCard} ${statusFilter === 'all' && viewMode !== 'hafta' ? styles.statCardActive : ''}`}
-          onClick={() => setStatusFilter('all')}
+          onClick={handleShowSelectedDay}
         >
           <div className={`${styles.statIcon} ${styles.iconGreen}`}>
             <IconCalendarCard size={22} />
@@ -799,7 +804,7 @@ export default function AppointmentsPage() {
                 const day = new Date(weekStart);
                 day.setDate(weekStart.getDate() + index);
                 const dateKey = formatCalendarDate(day);
-                const dayAppointments = weeklyAppointments.filter(appointment => appointment.date === dateKey);
+                const dayAppointments = filteredWeeklyAppointments.filter(appointment => appointment.date === dateKey);
                 return (
                   <div key={dateKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(145px, 190px) minmax(0, 1fr)', gap: 12, alignItems: 'start', padding: 12, border: '1px solid #e2e8f0', borderRadius: 10, background: '#fff' }}>
                     <button
