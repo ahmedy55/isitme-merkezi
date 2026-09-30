@@ -8,7 +8,7 @@ import { fetchServiceTickets, ServiceRecord } from '../repositories/ServiceTicke
 import styles from './DashboardPage.module.css';
 
 export default function DashboardPage() {
-  const { setCurrentPage, addToast, salesList, appointmentsList, patientsList, branchesList, currentOrgId } = useApp();
+  const { setCurrentPage, addToast, salesList, appointmentsList, patientsList, branchesList, auditLogList, currentOrgId } = useApp();
   const { matches } = useBranchScope();
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
 
@@ -86,6 +86,10 @@ export default function DashboardPage() {
   const todaysAppointments = appointmentsList
     .filter(appointment => matches(appointment.branch, appointment.branchId) && appointment.date.slice(0, 10) === todayKey)
     .sort((a, b) => a.time.localeCompare(b.time));
+  const recentAuditEntries = auditLogList
+    .filter(entry => matches(undefined, entry.branchId))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, 5);
 
   const updateRange = (range: typeof activeTimeRange) => {
     const end = new Date();
@@ -714,7 +718,17 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              <tr><td colSpan={4} style={{ textAlign: 'center', color: '#6B7280' }}>Gösterilecek gerçek işlem kaydı bulunmuyor.</td></tr>
+              {recentAuditEntries.map(entry => (
+                <tr key={entry.id}>
+                  <td>{new Date(entry.timestamp).toLocaleString('tr-TR')}</td>
+                  <td>{entry.action}</td>
+                  <td>{entry.description || '—'}</td>
+                  <td>{entry.userName || 'Kullanıcı bilgisi yok'}</td>
+                </tr>
+              ))}
+              {recentAuditEntries.length === 0 && (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: '#6B7280' }}>Bu şubede henüz işlem kaydı bulunmuyor.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
