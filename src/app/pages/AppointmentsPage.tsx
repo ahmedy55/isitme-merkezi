@@ -615,7 +615,7 @@ export default function AppointmentsPage() {
         </div>
 
         {/* 2. Bu Hafta */}
-        <div className={`${styles.statCard} ${viewMode === 'hafta' ? styles.statCardActive : ''}`} onClick={handleShowThisWeek} role="button" aria-pressed={viewMode === 'hafta'} tabIndex={0} onKeyDown={event => {
+        <div className={`${styles.statCard} ${viewMode === 'hafta' && statusFilter === 'all' ? styles.statCardActive : ''}`} onClick={handleShowThisWeek} role="button" aria-pressed={viewMode === 'hafta' && statusFilter === 'all'} tabIndex={0} onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             handleShowThisWeek();
