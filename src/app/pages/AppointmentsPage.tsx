@@ -388,6 +388,21 @@ export default function AppointmentsPage() {
     return true;
   }), [appointmentsList, filterAudiologist, filterBranch, statusFilter]);
 
+  const calendarStatusDots = useMemo(() => {
+    const colorsByDate = new Map<string, Set<string>>();
+    for (const appointment of visibleAppointments) {
+      const color = ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)
+        ? '#f97316'
+        : ['Tamamlandı', 'Geldi'].includes(appointment.status)
+          ? '#10b981'
+          : '#ef4444';
+      const colors = colorsByDate.get(appointment.date) ?? new Set<string>();
+      colors.add(color);
+      colorsByDate.set(appointment.date, colors);
+    }
+    return colorsByDate;
+  }, [visibleAppointments]);
+
   const selectedDayAppointments = visibleAppointments.filter(appointment => appointment.date === selectedDateStr);
   const weekStart = new Date(currentDate);
   weekStart.setDate(currentDate.getDate() - ((currentDate.getDay() + 6) % 7));
@@ -803,8 +818,10 @@ export default function AppointmentsPage() {
               <div className={styles.miniCalendarGrid}>
                 {miniCalendarDays.map((c, idx) => {
                   const isSelected = c.isCurrentMonth && c.dayNum === currentDate.getDate() && calendarViewMonth === currentDate.getMonth() && calendarViewYear === currentDate.getFullYear();
-                  const hasDot = c.isCurrentMonth && [3, 8, 10, 12, 18, 24, 26].includes(c.dayNum);
-                  const dotColor = c.dayNum === 12 ? '#10b981' : c.dayNum === 3 || c.dayNum === 18 ? '#f59e0b' : c.dayNum === 8 ? '#f97316' : '#ef4444';
+                  const dateKey = c.isCurrentMonth
+                    ? `${calendarViewYear}-${String(calendarViewMonth + 1).padStart(2, '0')}-${String(c.dayNum).padStart(2, '0')}`
+                    : '';
+                  const statusDots = [...(calendarStatusDots.get(dateKey) ?? [])];
 
                   return (
                     <div
@@ -819,8 +836,10 @@ export default function AppointmentsPage() {
                       }}
                     >
                       <span>{c.dayNum}</span>
-                      {hasDot && !isSelected && (
-                        <span className={styles.miniDayDot} style={{ background: dotColor }} />
+                      {statusDots.length > 0 && !isSelected && (
+                        <span style={{ display: 'flex', gap: 2, marginTop: 2 }} aria-label={`${statusDots.length} randevu durumu`}>
+                          {statusDots.map(color => <span key={color} className={styles.miniDayDot} style={{ background: color, marginTop: 0 }} />)}
+                        </span>
                       )}
                     </div>
                   );
@@ -829,11 +848,9 @@ export default function AppointmentsPage() {
 
               {/* Calendar Legend */}
               <div className={styles.miniCalendarLegend}>
-                <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: '#f59e0b' }} /> Dolu</span>
                 <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: '#f97316' }} /> Bekleyen</span>
                 <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: '#10b981' }} /> Tamamlanan</span>
-                <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: '#ef4444' }} /> İptal</span>
-                <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: '#94a3b8' }} /> Randevu yok</span>
+                <span className={styles.legendItem}><span className={styles.legendDot} style={{ background: '#ef4444' }} /> İptal / Gelmedi</span>
               </div>
             </div>
 
