@@ -7,6 +7,7 @@ These tests exercise the real Supabase Auth + PostgREST + RLS/trigger path using
 Run only against an isolated test Supabase project. Tests intentionally have no service-role key and do not create or delete fixture data. The duplicate-serial test attempts one insert that must be rejected by the database trigger. Seed:
 
 - Tenant A and tenant B test users, each with an active membership.
+- An active tenant A Odyometrist account and a finance transaction visible to the tenant manager.
 - A patient visible to tenant B and its UUID.
 - Exactly one non-deleted `Cihaz` stock row for tenant A with the fixture serial number.
 - Tenant A's organization UUID and an authorized branch UUID.
@@ -23,6 +24,9 @@ $env:E2E_TENANT_A_EMAIL = '<tenant-a-test-user>'
 $env:E2E_TENANT_A_PASSWORD = '<tenant-a-test-password>'
 $env:E2E_TENANT_B_EMAIL = '<tenant-b-test-user>'
 $env:E2E_TENANT_B_PASSWORD = '<tenant-b-test-password>'
+$env:E2E_TENANT_A_ODYOMETRIST_EMAIL = '<tenant-a-odyometrist-test-user>'
+$env:E2E_TENANT_A_ODYOMETRIST_PASSWORD = '<tenant-a-odyometrist-test-password>'
+$env:E2E_FINANCE_TRANSACTION_ID = '<tenant-a-finance-transaction-uuid>'
 $env:E2E_TENANT_B_PATIENT_ID = '<tenant-b-patient-uuid>'
 $env:E2E_TENANT_A_ORGANIZATION_ID = '<tenant-a-organization-uuid>'
 $env:E2E_TENANT_A_BRANCH_ID = '<tenant-a-branch-uuid>'

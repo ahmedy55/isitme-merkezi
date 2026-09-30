@@ -12,6 +12,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import { IconCheck, IconWarning, IconClose } from './components/Icons';
+import { canAccessPage } from './lib/pageAuthorization';
 const pageLoading = () => <p role="status" style={{ padding: 24 }}>Ekran yükleniyor…</p>;
 const DashboardPage = dynamic(() => import('./pages/DashboardPage'), { loading: pageLoading });
 const PatientsPage = dynamic(() => import('./pages/PatientsPage'), { loading: pageLoading });
@@ -83,12 +84,8 @@ function AppContent() {
 
   const renderPage = () => {
     if ((!currentUser || (!currentOrgId && !demoModeActive)) || dataLoading) return <p>Oturum ve firma verileri yükleniyor…</p>;
-    const roles: string[]=currentUser.membership?.roles || [];
-    const manager=roles.includes('Firma Yöneticisi');
-    const management=['branches','settings','suppliers','audit-log','branch-activities'];
-    const financial=['cash','expenses','reports','sgk-receivables','assets'];
-    if ((!manager && management.includes(currentPage)) ||
-      (!manager && financial.includes(currentPage) && !roles.some(r=>['Şube Yöneticisi','Muhasebe'].includes(r)))) return <p>Bu modül için yetkiniz yok.</p>;
+    const roles: string[] = currentUser.membership?.roles || [];
+    if (!canAccessPage(currentPage, roles)) return <p>Bu modül için yetkiniz yok.</p>;
     switch (currentPage) {
       case 'dashboard':         return <DashboardPage />;
       case 'patients':          return <PatientsPage />;
