@@ -6,7 +6,6 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import CustomSelect from '../components/CustomSelect';
 import { useDebounce } from '../hooks/useDebounce';
-import ExcelJS from 'exceljs';
 import styles from './PatientsPage.module.css';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
@@ -191,6 +190,7 @@ export default function PatientsPage() {
   const handleBulkFileSelectAndParse = async (file: File) => {
     setSelectedBulkFile(file);
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const buffer = await file.arrayBuffer();
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(buffer);
@@ -240,6 +240,7 @@ export default function PatientsPage() {
   const handleFileSelectAndParse = async (file: File) => {
     setSelectedImportFile(file);
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const buffer = await file.arrayBuffer();
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(buffer);
