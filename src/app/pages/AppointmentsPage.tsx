@@ -65,6 +65,7 @@ const getIstanbulDate = (date = new Date()) => {
 // Default Showcase Schedule items for the screenshot design
 interface ShowcaseSlot {
   id: string;
+  date?: string;
   hour: string;
   timeRange: string;
   isBreak?: boolean;
@@ -219,6 +220,7 @@ export default function AppointmentsPage() {
   const [showcaseList, setShowcaseList] = useState<ShowcaseSlot[]>(defaultShowcaseSlots);
   const [updatingAppointmentIds, setUpdatingAppointmentIds] = useState<Set<string>>(() => new Set());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedDetailSlot, setSelectedDetailSlot] = useState<ShowcaseSlot | null>(null);
   const [activeSlotMenu, setActiveSlotMenu] = useState<{ id: string; top: number; right: number; patientName: string; phone?: string } | null>(null);
   const slotMenuRef = useRef<HTMLDivElement>(null);
   const hasUserSelectedDate = useRef(false);
@@ -388,6 +390,7 @@ export default function AppointmentsPage() {
         const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
         return {
           id: apt.id,
+          date: apt.date,
           hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '09:00',
           timeRange: `${apt.time || '10:00'}-${(parseInt(apt.time?.split(':')[1] || '0') + 30).toString().padStart(2, '0')}`,
           patientName: apt.patientName,
@@ -409,6 +412,7 @@ export default function AppointmentsPage() {
         const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
         return {
           id: apt.id,
+          date: apt.date,
           hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '10:00',
           timeRange: `${apt.time || '10:00'}`,
           patientName: apt.patientName,
@@ -521,6 +525,27 @@ export default function AppointmentsPage() {
     if (statusFilter === 'iptal' && !['İptal', 'Gelmedi'].includes(slot.status || '')) return false;
     return true;
   }), [timelineSlots, filterTimeRange, filterAudiologist, filterBranch, statusFilter, appointmentsList]);
+
+  const detailAppointment = selectedDetailSlot
+    ? appointmentsList.find(appointment => appointment.id === selectedDetailSlot.id)
+    : undefined;
+  const detailPatient = selectedDetailSlot
+    ? patientsList.find(patient => patient.id === detailAppointment?.patientId || `${patient.firstName} ${patient.lastName}` === selectedDetailSlot.patientName)
+    : undefined;
+
+  useEffect(() => {
+    if (!selectedDetailSlot) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedDetailSlot(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedDetailSlot]);
 
   // Open slot action dropdown
   const handleOpenSlotMenu = (e: React.MouseEvent, slot: ShowcaseSlot) => {
@@ -879,8 +904,9 @@ export default function AppointmentsPage() {
                           <button
                             type="button"
                             className={styles.slotActionBtn}
-                            title="Dosya / Detay"
-                            onClick={() => addToast({ type: 'info', message: `${slot.patientName} randevu detayları açılıyor.` })}
+                            title="Randevu Detayı"
+                            aria-label={`${slot.patientName} randevu detayını aç`}
+                            onClick={() => setSelectedDetailSlot(slot)}
                           >
                             <IconFileText size={14} />
                           </button>
@@ -1289,6 +1315,42 @@ export default function AppointmentsPage() {
       )}
 
       {/* ── CRITICAL: Preserved New Appointment Modal ── */}
+      {selectedDetailSlot && (
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setSelectedDetailSlot(null);
+          }}
+        >
+          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="appointment-detail-title" style={{ width: 'min(100%, 560px)', borderRadius: 16, alignSelf: 'center' }}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title" id="appointment-detail-title">Randevu Detayı</div>
+                <span style={{ display: 'block', marginTop: 4, fontSize: '0.78rem', color: '#64748b' }}>{selectedDetailSlot.patientName}</span>
+              </div>
+              <button type="button" className="modal-close" aria-label="Detay penceresini kapat" onClick={() => setSelectedDetailSlot(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <dl className="profile-details" style={{ marginBottom: 0 }}>
+                <div><dt>Tarih</dt><dd>{new Date(`${selectedDetailSlot.date || selectedDateStr}T12:00:00`).toLocaleDateString('tr-TR')}</dd></div>
+                <div><dt>Saat</dt><dd>{selectedDetailSlot.timeRange || selectedDetailSlot.hour}</dd></div>
+                <div><dt>Randevu Türü</dt><dd>{selectedDetailSlot.type || '—'}</dd></div>
+                <div><dt>Durum</dt><dd>{selectedDetailSlot.status || '—'}</dd></div>
+                <div><dt>Odyolog</dt><dd>{detailAppointment?.audiologist || '—'}</dd></div>
+                <div><dt>Şube</dt><dd>{detailAppointment?.branch || '—'}</dd></div>
+                <div><dt>Telefon</dt><dd>{detailPatient?.phone || selectedDetailSlot.phone || '—'}</dd></div>
+                <div><dt>Cihaz</dt><dd>{detailPatient?.currentDevice || selectedDetailSlot.device || '—'}</dd></div>
+                <div style={{ gridColumn: '1 / -1' }}><dt>Not</dt><dd>{detailAppointment?.notes || 'Randevu için not eklenmemiş.'}</dd></div>
+              </dl>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setSelectedDetailSlot(null)}>Kapat</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {showAddModal && (
         <NewAppointmentModal
           onClose={() => setShowAddModal(false)}
