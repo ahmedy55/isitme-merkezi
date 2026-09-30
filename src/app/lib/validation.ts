@@ -52,3 +52,16 @@ export function validateAppointmentDate(dateStr: string): { isValid: boolean; er
   }
   return { isValid: true };
 }
+
+/** Randevunun seçilen tarih ve saatten önce oluşturulmasını engeller. */
+export function validateAppointmentDateTime(
+  dateStr: string,
+  timeStr: string,
+  now = new Date(),
+): { isValid: boolean; error?: string } {
+  if (!dateStr || !timeStr) return { isValid: false, error: 'Randevu tarihi ve saati seçiniz.' };
+  const selectedDateTime = new Date(`${dateStr}T${timeStr}:00`);
+  if (!Number.isFinite(selectedDateTime.getTime())) return { isValid: false, error: 'Geçerli bir randevu tarihi ve saati seçiniz.' };
+  if (selectedDateTime <= now) return { isValid: false, error: 'Geçmiş bir tarih veya saate randevu oluşturulamaz.' };
+  return { isValid: true };
+}

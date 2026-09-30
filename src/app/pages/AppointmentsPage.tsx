@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { isClosedAppointment, isOpenAppointment } from '../lib/appointmentStatus';
+import { validateAppointmentDateTime } from '../lib/validation';
 import { getAvatarColor, getInitials } from '../data/mockData';
 import { IconPlus, IconCalendar, IconCheck, IconClose, IconSearch, IconPhone, IconMail } from '../components/Icons';
 import styles from './AppointmentsPage.module.css';
@@ -1155,6 +1156,19 @@ export function NewAppointmentModal({
   patientsList: any[];
   addToast?: any;
 }) {
+  const getNextAppointmentSlot = (from = new Date()) => {
+    const slot = new Date(from);
+    slot.setSeconds(0, 0);
+    let minutes = Math.ceil((slot.getHours() * 60 + slot.getMinutes()) / 30) * 30;
+    if (minutes < 8 * 60) minutes = 8 * 60;
+    if (minutes >= 18 * 60) {
+      slot.setDate(slot.getDate() + 1);
+      minutes = 8 * 60;
+    }
+    slot.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+    return slot;
+  };
+
   // Patient Search & Selection State
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string; phone: string } | null>(null);
@@ -1164,7 +1178,7 @@ export function NewAppointmentModal({
   const [newPatientPhone, setNewPatientPhone] = useState('');
 
   // Date & Time State
-  const [selectedDate, setSelectedDate] = useState<Date>(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0); });
+  const [selectedDate, setSelectedDate] = useState<Date>(() => getNextAppointmentSlot());
   const [showPicker, setShowPicker] = useState(false);
   const [pickerMonth, setPickerMonth] = useState(() => new Date().getMonth());
   const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
@@ -1273,6 +1287,13 @@ export function NewAppointmentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const appointmentDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+    const appointmentTime = `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}`;
+    const dateTimeValidation = validateAppointmentDateTime(appointmentDate, appointmentTime);
+    if (!dateTimeValidation.isValid) {
+      addToast?.({ type: 'error', message: dateTimeValidation.error || 'Geçmiş bir saate randevu oluşturulamaz.' });
+      return;
+    }
     let patientNameFinal = '';
     let patientIdFinal = 'p-unknown';
 
@@ -1549,11 +1570,15 @@ export function NewAppointmentModal({
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center' }}>
                         {calendarDays.map((cell, idx) => {
                           const isSelected = cell.isCurrent && selectedDate.getDate() === cell.num && selectedDate.getMonth() === pickerMonth && selectedDate.getFullYear() === pickerYear;
+                          const cellDate = new Date(pickerYear, pickerMonth, cell.num);
+                          const todayStart = new Date();
+                          todayStart.setHours(0, 0, 0, 0);
+                          const isPastDay = !cell.isCurrent || cellDate < todayStart;
                           return (
                             <div
                               key={idx}
                               onClick={() => {
-                                if (cell.isCurrent) {
+                                if (cell.isCurrent && !isPastDay) {
                                   const newD = new Date(selectedDate);
                                   newD.setFullYear(pickerYear);
                                   newD.setMonth(pickerMonth);
@@ -1563,11 +1588,12 @@ export function NewAppointmentModal({
                               }}
                               style={{
                                 padding: '5px 0', fontSize: '0.8rem', borderRadius: 6,
-                                cursor: cell.isCurrent ? 'pointer' : 'default',
-                                color: !cell.isCurrent ? '#cbd5e1' : isSelected ? '#ffffff' : '#334155',
+                                cursor: isPastDay ? 'not-allowed' : 'pointer',
+                                color: isPastDay ? '#cbd5e1' : isSelected ? '#ffffff' : '#334155',
                                 background: isSelected ? '#3b82f6' : 'transparent',
                                 fontWeight: isSelected ? 700 : 400
                               }}
+                              aria-disabled={isPastDay}
                             >
                               {cell.num}
                             </div>
@@ -1578,13 +1604,18 @@ export function NewAppointmentModal({
 
                     {/* Right: Time picker */}
                     <div style={{ width: 75, borderLeft: '1px solid #f1f5f9', paddingLeft: 8, display: 'flex', flexDirection: 'column', height: 180, overflowY: 'auto' }}>
-                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Saat</div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' }}>Saat · geçmiş saatler kapalı</div>
                       {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00'].map((timeStr) => {
                         const [h, m] = timeStr.split(':').map(Number);
                         const isTimeSelected = selectedDate.getHours() === h && selectedDate.getMinutes() === m;
+                        const optionDate = new Date(selectedDate);
+                        optionDate.setHours(h, m, 0, 0);
+                        const isTimePast = optionDate <= new Date();
                         return (
-                          <div
+                          <button
                             key={timeStr}
+                            type="button"
+                            disabled={isTimePast}
                             onClick={() => {
                               const newD = new Date(selectedDate);
                               newD.setHours(h);
@@ -1592,14 +1623,15 @@ export function NewAppointmentModal({
                               setSelectedDate(newD);
                             }}
                             style={{
-                              padding: '4px 6px', fontSize: '0.78rem', borderRadius: 4, cursor: 'pointer',
+                              padding: '4px 6px', fontSize: '0.78rem', borderRadius: 4, cursor: isTimePast ? 'not-allowed' : 'pointer',
+                              border: 0, textAlign: 'left',
                               background: isTimeSelected ? '#e0f2fe' : 'transparent',
-                              color: isTimeSelected ? '#0284c7' : '#475569',
+                              color: isTimePast ? '#cbd5e1' : isTimeSelected ? '#0284c7' : '#475569',
                               fontWeight: isTimeSelected ? 700 : 400, marginBottom: 2
                             }}
                           >
                             {timeStr}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -1611,10 +1643,10 @@ export function NewAppointmentModal({
                     <button
                       type="button"
                       onClick={() => {
-                        const now = new Date();
-                        setSelectedDate(now);
-                        setPickerMonth(now.getMonth());
-                        setPickerYear(now.getFullYear());
+                        const nextSlot = getNextAppointmentSlot();
+                        setSelectedDate(nextSlot);
+                        setPickerMonth(nextSlot.getMonth());
+                        setPickerYear(nextSlot.getFullYear());
                       }}
                       style={{ background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
                     >

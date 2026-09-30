@@ -23,6 +23,7 @@ import { CashDomainService } from '../services/CashDomainService';
 import { PurchaseDomainService } from '../services/PurchaseDomainService';
 import { ServiceDomainService } from '../services/ServiceDomainService';
 import { EventBus } from '../services/EventBus';
+import { validateAppointmentDateTime } from '../lib/validation';
 import {
   dbFetchPatients, dbInsertPatient, dbUpdatePatient, dbDeletePatient,
   dbFetchAppointments, dbInsertAppointment, dbUpdateAppointmentStatus,
@@ -493,6 +494,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addAppointment = async (appointment: Appointment) => {
+    const appointmentValidation = validateAppointmentDateTime(appointment.date, appointment.time);
+    if (!appointmentValidation.isValid) {
+      const message = appointmentValidation.error || 'Geçmiş bir saate randevu oluşturulamaz.';
+      addToast({ type: 'error', message });
+      throw new Error(message);
+    }
     if (currentOrgId) {
       try {
         const created = await dbInsertAppointment(appointment);
