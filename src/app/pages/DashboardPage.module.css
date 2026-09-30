@@ -295,6 +295,21 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   pointer-events: none;
   z-index: 2;
+  transition: left 180ms ease;
+}
+
+.chartBarGroup {
+  cursor: pointer;
+  outline: none;
+}
+
+.chartBar {
+  transition: height 220ms ease, y 220ms ease, fill 180ms ease;
+}
+
+.chartBarGroup:focus-visible rect {
+  stroke: #064e3b;
+  stroke-width: 2;
 }
 
 .tooltipBubble::after {
@@ -416,6 +431,13 @@
   color: #9ca3af;
   min-width: 24px;
   text-align: right;
+}
+
+.chartEmptyLegend {
+  color: #9ca3af;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 6px 0;
 }
 
 /* ── Lower Middle Row: 2 Cards ── */

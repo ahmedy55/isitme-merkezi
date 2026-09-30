@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [customStartDate, setCustomStartDate] = useState(() => toDateInput(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [customEndDate, setCustomEndDate] = useState(() => toDateInput(today));
   const [dashboardChartMetric, setDashboardChartMetric] = useState<'Ciro' | 'Adet'>('Ciro');
+  const [activeChartMonthIndex, setActiveChartMonthIndex] = useState(11);
   const [appointmentChartPeriod, setAppointmentChartPeriod] = useState<'Bu Ay' | 'Bu Hafta'>('Bu Ay');
   const [patientChartPeriod, setPatientChartPeriod] = useState<'Bu Ay' | 'Bu Hafta'>('Bu Ay');
 
@@ -121,7 +122,7 @@ export default function DashboardPage() {
   };
 
   const monthLabels = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-  const reportYear = new Date().getFullYear();
+  const reportYear = today.getFullYear();
   const chartMonths = Array.from({ length: 12 }, (_, index) => {
     const date = new Date(selectedRange.end.getFullYear(), selectedRange.end.getMonth() - (11 - index), 1);
     return { year: date.getFullYear(), month: date.getMonth(), label: monthLabels[date.getMonth()] };
@@ -131,7 +132,8 @@ export default function DashboardPage() {
     .reduce((sum, sale) => sum + (dashboardChartMetric === 'Ciro' ? sale.total : sale.items.reduce((qty, item) => qty + item.quantity, 0)), 0));
   const monthlyMax = Math.max(...monthlyValues, 1);
   const monthlyData = chartMonths.map((item, index) => ({ month: item.label, value: monthlyValues[index], height: monthlyValues[index] / monthlyMax * 108, isCurrent: index === 11 }));
-  const chartEndMonthIndex = 11;
+  const selectedChartMonthIndex = Math.min(activeChartMonthIndex, monthlyData.length - 1);
+  const selectedChartMonth = monthlyData[selectedChartMonthIndex];
 
   // Helper to calculate SVG donut slice offsets
   // Circumference for r=38 is 2 * PI * 38 = 238.76
@@ -145,11 +147,12 @@ export default function DashboardPage() {
   const matchesChartPeriod = (value: string, period: 'Bu Ay' | 'Bu Hafta') => {
     const date = new Date(`${value.slice(0, 10)}T00:00:00`);
     if (Number.isNaN(date.getTime())) return false;
-    const start = new Date(today);
+    const anchor = selectedRange.end;
+    const start = new Date(anchor);
     if (period === 'Bu Ay') start.setDate(1);
     else start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
     start.setHours(0, 0, 0, 0);
-    return date >= start && date <= today;
+    return date >= start && date <= anchor && date >= selectedRange.start;
   };
   const appointmentCounts = [
     { label: 'Tamamlanan', count: rangeAppointments.filter(a => matchesChartPeriod(a.date, appointmentChartPeriod) && a.status === 'Geldi').length, color: '#08785B' },
@@ -157,9 +160,11 @@ export default function DashboardPage() {
     { label: 'İptal Edilen', count: rangeAppointments.filter(a => matchesChartPeriod(a.date, appointmentChartPeriod) && a.status === 'İptal').length, color: '#F97316' },
     { label: 'Gelmedi', count: rangeAppointments.filter(a => matchesChartPeriod(a.date, appointmentChartPeriod) && a.status === 'Gelmedi').length, color: '#9CA3AF' },
   ];
+  const chartAppointmentTotal = appointmentCounts.reduce((sum, item) => sum + item.count, 0);
   const apptSlices = makeSlices(appointmentCounts);
   const sourceColors = ['#08785B', '#2563EB', '#F97316', '#8B5CF6', '#0EA5E9'];
   const sourcePatients = rangePatients.filter(patient => matchesChartPeriod(patient.createdAt || patient.lastVisit || '', patientChartPeriod));
+  const chartSourcePatientTotal = sourcePatients.length;
   const sourceCounts = Array.from(new Set(sourcePatients.map(patient => patient.source || 'Belirtilmemiş'))).map((source, index) => ({
     label: source,
     count: sourcePatients.filter(patient => (patient.source || 'Belirtilmemiş') === source).length,
@@ -336,9 +341,9 @@ export default function DashboardPage() {
 
           <div className={styles.barChartWrap}>
             {/* Tooltip Bubble */}
-            <div className={styles.tooltipBubble}>
-              <div className={styles.tooltipMonth}>{chartMonths[chartEndMonthIndex].label} {chartMonths[chartEndMonthIndex].year}</div>
-              <div className={styles.tooltipValue}>{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyValues[chartEndMonthIndex]) : `${monthlyValues[chartEndMonthIndex]} adet`}</div>
+            <div className={styles.tooltipBubble} style={{ left: `${((48 + selectedChartMonthIndex * 34 + 8) / 460) * 100}%` }}>
+              <div className={styles.tooltipMonth}>{chartMonths[selectedChartMonthIndex].label} {chartMonths[selectedChartMonthIndex].year}</div>
+              <div className={styles.tooltipValue}>{dashboardChartMetric === 'Ciro' ? formatCurrency(selectedChartMonth.value) : `${selectedChartMonth.value} adet`}</div>
             </div>
 
             <svg className={styles.barChartSvg} viewBox="0 0 460 140" preserveAspectRatio="none">
@@ -366,21 +371,30 @@ export default function DashboardPage() {
                 const yPos = 120 - barHeight;
 
                 return (
-                  <g key={item.month}>
+                  <g
+                    key={`${chartMonths[idx].year}-${item.month}`}
+                    className={styles.chartBarGroup}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`${item.month} ${chartMonths[idx].year}: ${dashboardChartMetric === 'Ciro' ? formatCurrency(item.value) : `${item.value} adet`}`}
+                    onMouseEnter={() => setActiveChartMonthIndex(idx)}
+                    onFocus={() => setActiveChartMonthIndex(idx)}
+                  >
                     <rect
                       x={xPos}
                       y={yPos}
                       width={barWidth}
                       height={barHeight}
                       rx="3"
-                      fill={item.isCurrent ? '#08785B' : '#A7F3D0'}
+                      className={styles.chartBar}
+                      fill={idx === selectedChartMonthIndex ? '#08785B' : '#A7F3D0'}
                     />
                     <text
                       x={xPos + barWidth / 2}
                       y="134"
-                      fill={item.isCurrent ? '#08785B' : '#6B7280'}
+                      fill={idx === selectedChartMonthIndex ? '#08785B' : '#6B7280'}
                       fontSize="9.5"
-                      fontWeight={item.isCurrent ? '700' : '500'}
+                      fontWeight={idx === selectedChartMonthIndex ? '700' : '500'}
                       textAnchor="middle"
                     >
                       {item.month}
@@ -415,6 +429,7 @@ export default function DashboardPage() {
           <div className={styles.donutFlexWrap}>
             <div className={styles.donutSvgWrap}>
               <svg width="120" height="120" viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)' }}>
+                <circle cx="50" cy="50" r={cRadius} fill="transparent" stroke="#eef2f0" strokeWidth="11" />
                 {apptSlices.map(s => {
                   const strokeDasharray = `${s.length} ${circ - s.length}`;
                   const strokeDashoffset = -apptOffset;
@@ -435,7 +450,7 @@ export default function DashboardPage() {
                 })}
               </svg>
               <div className={styles.donutCenterText}>
-                <span className={styles.donutBigVal}>{rangeAppointments.length}</span>
+                <span className={styles.donutBigVal}>{chartAppointmentTotal}</span>
                 <span className={styles.donutSubVal}>Toplam Randevu</span>
               </div>
             </div>
@@ -453,6 +468,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
+              {chartAppointmentTotal === 0 && <div className={styles.chartEmptyLegend}>Seçili dönemde randevu yok.</div>}
             </div>
           </div>
         </div>
@@ -480,6 +496,7 @@ export default function DashboardPage() {
           <div className={styles.donutFlexWrap}>
             <div className={styles.donutSvgWrap}>
               <svg width="120" height="120" viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)' }}>
+                <circle cx="50" cy="50" r={cRadius} fill="transparent" stroke="#eef2f0" strokeWidth="11" />
                 {sourceSlices.map(s => {
                   const strokeDasharray = `${s.length} ${circ - s.length}`;
                   const strokeDashoffset = -sourceOffset;
@@ -500,7 +517,7 @@ export default function DashboardPage() {
                 })}
               </svg>
               <div className={styles.donutCenterText}>
-                <span className={styles.donutBigVal}>{rangePatients.length}</span>
+                <span className={styles.donutBigVal}>{chartSourcePatientTotal}</span>
                 <span className={styles.donutSubVal}>Yeni Hasta</span>
               </div>
             </div>
@@ -518,6 +535,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
+              {chartSourcePatientTotal === 0 && <div className={styles.chartEmptyLegend}>Seçili dönemde yeni hasta yok.</div>}
             </div>
           </div>
         </div>
