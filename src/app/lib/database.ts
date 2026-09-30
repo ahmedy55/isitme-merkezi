@@ -167,6 +167,22 @@ export const dbUpdateAppointmentStatus = async (id: string, status: string) => {
   }, 'dbUpdateAppointmentStatus');
 };
 
+export const dbUpdateAppointment = async (appointment: any) => {
+  return executeDbQuery(async () => {
+    const { id, patientName: _patientName, ...fields } = appointment;
+    const payload = await writePayload('appointments', fields);
+    const { data, error } = await supabase
+      .from('appointments')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new DatabaseError('Randevu kaydedilemedi veya şubeye erişim yetkisi yok.');
+    return toCamel(data);
+  }, 'dbUpdateAppointment');
+};
+
 // ═══════════════════════════════════════════════
 // 3. Stock Items (Stok)
 // ═══════════════════════════════════════════════

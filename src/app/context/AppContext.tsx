@@ -26,7 +26,7 @@ import { EventBus } from '../services/EventBus';
 import { validateAppointmentDateTime } from '../lib/validation';
 import {
   dbFetchPatients, dbInsertPatient, dbUpdatePatient, dbDeletePatient,
-  dbFetchAppointments, dbInsertAppointment, dbUpdateAppointmentStatus,
+  dbFetchAppointments, dbInsertAppointment, dbUpdateAppointment, dbUpdateAppointmentStatus,
   dbFetchStockItems, dbInsertStockItem, dbUpdateStockItem, dbDeleteStockItem,
   dbAdjustStockItem,
   dbFetchSales, dbInsertSale,
@@ -113,6 +113,7 @@ interface AppContextType {
   updatePatient: (patient: Patient) => void;
   deletePatient: (id: string) => Promise<boolean>;
   addAppointment: (appointment: Appointment) => Promise<void>;
+  updateAppointment: (appointment: Appointment) => Promise<boolean>;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<boolean>;
   addSale: (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => Promise<void>;
   addSupplierPurchaseTransaction: (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => Promise<void>;
@@ -535,6 +536,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...prev
       ]);
     }
+  };
+
+  const updateAppointment = async (appointment: Appointment) => {
+    const existing = appointmentsList.find(item => item.id === appointment.id);
+    if (!existing) {
+      addToast({ type: 'error', message: 'Düzenlenecek randevu bulunamadı.' });
+      return false;
+    }
+    const appointmentValidation = validateAppointmentDateTime(appointment.date, appointment.time);
+    const scheduleChanged = existing.date !== appointment.date || existing.time !== appointment.time;
+    if (!appointmentValidation.isValid && scheduleChanged) {
+      addToast({ type: 'error', message: appointmentValidation.error || 'Geçmiş bir saate randevu oluşturulamaz.' });
+      return false;
+    }
+    if (currentOrgId) {
+      try {
+        const updated = await dbUpdateAppointment(appointment);
+        setAppointmentsList(prev => prev.map(item => item.id === appointment.id ? { ...item, ...updated, patientName: appointment.patientName } : item));
+      } catch (err: any) {
+        logger.warn(`dbUpdateAppointment error: ${err.message}`, 'AppContext');
+        addToast({ type: 'error', message: 'Randevu güncellenemedi. Lütfen tekrar deneyin.' });
+        return false;
+      }
+    } else {
+      setAppointmentsList(prev => prev.map(item => item.id === appointment.id ? { ...item, ...appointment } : item));
+    }
+    addToast({ type: 'success', message: 'Randevu başarıyla güncellendi.' });
+    return true;
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
@@ -995,6 +1024,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updatePatient,
       deletePatient,
       addAppointment,
+      updateAppointment,
       updateAppointmentStatus,
       addSale,
       addSupplierPurchaseTransaction,

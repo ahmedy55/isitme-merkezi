@@ -193,7 +193,7 @@ const defaultShowcaseSlots: ShowcaseSlot[] = [
 ];
 
 export default function AppointmentsPage() {
-  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointmentStatus, addToast, currentOrgId } = useApp();
+  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointment, updateAppointmentStatus, addToast, currentOrgId } = useApp();
   const { activeBranch } = useBranch();
 
   const appointmentsList = useMemo(() => {
@@ -220,6 +220,7 @@ export default function AppointmentsPage() {
   const [showcaseList, setShowcaseList] = useState<ShowcaseSlot[]>(defaultShowcaseSlots);
   const [updatingAppointmentIds, setUpdatingAppointmentIds] = useState<Set<string>>(() => new Set());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingAppointment, setEditingAppointment] = useState<any | null>(null);
   const [selectedDetailSlot, setSelectedDetailSlot] = useState<ShowcaseSlot | null>(null);
   const [activeSlotMenu, setActiveSlotMenu] = useState<{ id: string; top: number; right: number; patientName: string; phone?: string } | null>(null);
   const slotMenuRef = useRef<HTMLDivElement>(null);
@@ -1271,6 +1272,20 @@ export default function AppointmentsPage() {
           style={{ top: activeSlotMenu.top, right: activeSlotMenu.right }}
           onClick={(e) => e.stopPropagation()}
         >
+          {appointmentsList.find(appointment => appointment.id === activeSlotMenu.id) && (
+            <button
+              type="button"
+              className={styles.actionDropdownItem}
+              onClick={() => {
+                const appointment = appointmentsList.find(item => item.id === activeSlotMenu.id);
+                if (appointment) setEditingAppointment(appointment);
+                setActiveSlotMenu(null);
+              }}
+            >
+              <IconFileText size={14} />
+              <span>Randevuyu Düzenle</span>
+            </button>
+          )}
           <button
             type="button"
             className={styles.actionDropdownItem}
@@ -1359,6 +1374,18 @@ export default function AppointmentsPage() {
               </dl>
             </div>
             <div className="modal-footer">
+              {detailAppointment && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setEditingAppointment(detailAppointment);
+                    setSelectedDetailSlot(null);
+                  }}
+                >
+                  Randevuyu Düzenle
+                </button>
+              )}
               <button type="button" className="btn btn-secondary" onClick={() => setSelectedDetailSlot(null)}>Kapat</button>
             </div>
           </section>
@@ -1376,6 +1403,18 @@ export default function AppointmentsPage() {
           addToast={addToast}
         />
       )}
+      {editingAppointment && (
+        <NewAppointmentModal
+          initialAppointment={editingAppointment}
+          onClose={() => setEditingAppointment(null)}
+          onSave={async updatedAppointment => {
+            const saved = await updateAppointment(updatedAppointment);
+            if (saved) setEditingAppointment(null);
+          }}
+          patientsList={patientsList}
+          addToast={addToast}
+        />
+      )}
     </div>
   );
 }
@@ -1387,12 +1426,14 @@ export function NewAppointmentModal({
   onClose,
   onSave,
   patientsList,
-  addToast
+  addToast,
+  initialAppointment
 }: {
   onClose: () => void;
   onSave: (apt: any) => void | Promise<void>;
   patientsList: any[];
   addToast?: any;
+  initialAppointment?: any;
 }) {
   const getNextAppointmentSlot = (from = new Date()) => {
     const slot = new Date(from);
@@ -1408,20 +1449,26 @@ export function NewAppointmentModal({
   };
 
   // Patient Search & Selection State
-  const [patientSearch, setPatientSearch] = useState('');
-  const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string; phone: string } | null>(null);
+  const [patientSearch, setPatientSearch] = useState(initialAppointment?.patientName || '');
+  const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string; phone: string } | null>(() => initialAppointment ? {
+    id: initialAppointment.patientId,
+    name: initialAppointment.patientName,
+    phone: patientsList.find(patient => patient.id === initialAppointment.patientId)?.phone || ''
+  } : null);
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [isAddingNewPatient, setIsAddingNewPatient] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientPhone, setNewPatientPhone] = useState('');
 
   // Date & Time State
-  const [selectedDate, setSelectedDate] = useState<Date>(() => getNextAppointmentSlot());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => initialAppointment
+    ? new Date(`${initialAppointment.date}T${initialAppointment.time}:00`)
+    : getNextAppointmentSlot());
   const [showPicker, setShowPicker] = useState(false);
-  const [pickerMonth, setPickerMonth] = useState(() => new Date().getMonth());
-  const [pickerYear, setPickerYear] = useState(() => new Date().getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(() => initialAppointment ? new Date(`${initialAppointment.date}T12:00:00`).getMonth() : new Date().getMonth());
+  const [pickerYear, setPickerYear] = useState(() => initialAppointment ? new Date(`${initialAppointment.date}T12:00:00`).getFullYear() : new Date().getFullYear());
   const [serverNow, setServerNow] = useState(() => new Date());
-  const hasAdjustedAppointmentDate = useRef(false);
+  const hasAdjustedAppointmentDate = useRef(Boolean(initialAppointment));
 
   useEffect(() => {
     let cancelled = false;
@@ -1445,17 +1492,17 @@ export function NewAppointmentModal({
   }, []);
 
   // Appointment Type State
-  const [aptType, setAptType] = useState('Muayene');
+  const [aptType, setAptType] = useState(initialAppointment?.type || 'Muayene');
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
 
   // Audiologist & Branch
-  const [audiologist, setAudiologist] = useState('Dr. Elif Arslan');
+  const [audiologist, setAudiologist] = useState(initialAppointment?.audiologist || 'Dr. Elif Arslan');
   const { branchesList } = useApp();
   const { activeBranch } = useBranch();
-  const [branch, setBranch] = useState(activeBranch.mode === 'single' ? activeBranch.branchId : '');
+  const [branch, setBranch] = useState(initialAppointment?.branchId || (activeBranch.mode === 'single' ? activeBranch.branchId : ''));
 
   // Notes
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(initialAppointment?.notes || '');
 
   // Takip Planı
   const [createFollowupPlan, setCreateFollowupPlan] = useState(false);
@@ -1496,6 +1543,9 @@ export function NewAppointmentModal({
     { label: 'Cihaz Teslim', color: '#ea580c' },
     { label: 'Servis', color: '#0891b2' },
   ];
+  if (initialAppointment?.type && !aptTypeOptions.some(option => option.label === initialAppointment.type)) {
+    aptTypeOptions.push({ label: initialAppointment.type, color: '#64748b' });
+  }
 
   const currentTypeOption = aptTypeOptions.find(o => o.label === aptType) || aptTypeOptions[0];
 
@@ -1551,7 +1601,8 @@ export function NewAppointmentModal({
     const appointmentDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     const appointmentTime = `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}`;
     const dateTimeValidation = validateAppointmentDateTime(appointmentDate, appointmentTime);
-    if (!dateTimeValidation.isValid) {
+    const scheduleChanged = initialAppointment && (appointmentDate !== initialAppointment.date || appointmentTime !== initialAppointment.time);
+    if (!dateTimeValidation.isValid && (!initialAppointment || scheduleChanged)) {
       addToast?.({ type: 'error', message: dateTimeValidation.error || 'Geçmiş bir saate randevu oluşturulamaz.' });
       return;
     }
@@ -1587,11 +1638,12 @@ export function NewAppointmentModal({
     const defaultBranch = branchesList.find(b => b.status === 'Aktif') || branchesList[0];
     const assignedBranchId = activeBranch.mode === 'single'
       ? activeBranch.branchId
-      : (linkedPatient?.branchId || branch || defaultBranch?.id);
+      : (initialAppointment ? (branch || initialAppointment.branchId || defaultBranch?.id) : (linkedPatient?.branchId || branch || defaultBranch?.id));
     const assignedBranch = branchesList.find(item => item.id === assignedBranchId) || defaultBranch;
     if (!assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için geçerli bir şube bulunamadı.' }); return; }
     const newApt = {
-      id: `apt-${Date.now().toString().slice(-6)}`,
+      ...(initialAppointment || {}),
+      id: initialAppointment?.id || `apt-${Date.now().toString().slice(-6)}`,
       patientId: patientIdFinal,
       patientName: patientNameFinal,
       date: dateStr,
@@ -1600,7 +1652,7 @@ export function NewAppointmentModal({
       audiologist,
       branch: assignedBranch.name as any,
       branchId: assignedBranchId,
-      status: 'Bekliyor' as const,
+      status: initialAppointment?.status || 'Bekliyor',
       notes: notes,
       followupPlan: createFollowupPlan,
       followupPeriods: createFollowupPlan ? selectedPeriods : [],
@@ -1641,7 +1693,7 @@ export function NewAppointmentModal({
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>
             <span>📅</span>
-            <span>Yeni Randevu</span>
+            <span>{initialAppointment ? 'Randevuyu Düzenle' : 'Yeni Randevu'}</span>
           </div>
           <button 
             onClick={onClose}
@@ -1672,12 +1724,13 @@ export function NewAppointmentModal({
                     className="form-input"
                     placeholder="Hasta seçin veya arayın..."
                     value={selectedPatient ? `${selectedPatient.name} - ${selectedPatient.phone || ''}` : patientSearch}
+                    readOnly={Boolean(initialAppointment)}
                     onChange={(e) => {
                       setSelectedPatient(null);
                       setPatientSearch(e.target.value);
                       setIsPatientDropdownOpen(true);
                     }}
-                    onFocus={() => setIsPatientDropdownOpen(true)}
+                    onFocus={() => { if (!initialAppointment) setIsPatientDropdownOpen(true); }}
                     style={{
                       width: '100%', padding: '10px 36px 10px 14px', borderRadius: 10,
                       border: isPatientDropdownOpen ? '2px solid #3b82f6' : '1px solid #cbd5e1',
@@ -1997,7 +2050,15 @@ export function NewAppointmentModal({
 
           </div>
 
-          {activeBranch.mode === 'all' && branchesList.filter(item => item.status === 'Aktif').length > 1 && <label className="form-group">Kayıt şubesi<select className="form-select" value={patientsList.find(patient => patient.id === selectedPatient?.id)?.branchId || branch} disabled={Boolean(selectedPatient)} onChange={event => setBranch(event.target.value)}><option value="">Şube seçin</option>{branchesList.filter(item => item.status === 'Aktif').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+          {initialAppointment && (
+            <label className="form-group">Odyolog
+              <select className="form-select" value={audiologist} onChange={event => setAudiologist(event.target.value)}>
+                {[...new Set([...audiologists, initialAppointment.audiologist].filter(Boolean))].map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+          )}
+
+          {activeBranch.mode === 'all' && branchesList.filter(item => item.status === 'Aktif').length > 1 && <label className="form-group">Kayıt şubesi<select className="form-select" value={initialAppointment ? branch : (patientsList.find(patient => patient.id === selectedPatient?.id)?.branchId || branch)} disabled={Boolean(selectedPatient) && !initialAppointment} onChange={event => setBranch(event.target.value)}><option value="">Şube seçin</option>{branchesList.filter(item => item.status === 'Aktif').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
 
           {/* Notlar */}
           <div>
@@ -2323,7 +2384,7 @@ export function NewAppointmentModal({
                 cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
               }}
             >
-              <span>📅</span> Randevu Oluştur
+              <span>📅</span> {initialAppointment ? 'Değişiklikleri Kaydet' : 'Randevu Oluştur'}
             </button>
           </div>
 
