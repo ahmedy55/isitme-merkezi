@@ -416,7 +416,7 @@ export default function AppointmentsPage() {
           id: apt.id,
           date: apt.date,
           hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '10:00',
-          timeRange: `${apt.time || '10:00'}`,
+          timeRange: `${apt.time?.slice(0, 5) || '10:00'}`,
           patientName: apt.patientName,
           patientInitials: getInitials(apt.patientName, ''),
           avatarColor: getAvatarColor(apt.patientName),
@@ -542,6 +542,9 @@ export default function AppointmentsPage() {
   const detailPatient = selectedDetailSlot
     ? patientsList.find(patient => patient.id === detailAppointment?.patientId || `${patient.firstName} ${patient.lastName}` === selectedDetailSlot.patientName)
     : undefined;
+  const detailBranch = detailAppointment?.branch
+    || branchesList.find(branch => branch.id === detailAppointment?.branchId)?.name
+    || '—';
 
   useEffect(() => {
     if (!selectedDetailSlot) return;
@@ -1147,7 +1150,7 @@ export default function AppointmentsPage() {
                 ) : visibleAppointments.map((apt) => (
                   <tr key={apt.id}>
                     <td data-label="Saat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)', fontWeight: 600 }}>
-                      {apt.time}
+                      {apt.time?.slice(0, 5)}
                     </td>
                     <td data-label="Hasta">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1164,7 +1167,7 @@ export default function AppointmentsPage() {
                       <span className="badge badge-info">{apt.type}</span>
                     </td>
                     <td data-label="Odyolog">{apt.audiologist}</td>
-                    <td data-label="Şube" style={{ fontSize: '0.78rem' }}>{apt.branch}</td>
+                    <td data-label="Şube" style={{ fontSize: '0.78rem' }}>{apt.branch || branchesList.find(branch => branch.id === apt.branchId)?.name || '—'}</td>
                     <td data-label="Durum">
                       <span className={`badge badge-${apt.status === 'Geldi' ? 'success' : isOpenAppointment(apt.status) ? 'warning' : isClosedAppointment(apt.status) ? (apt.status === 'İptal' || apt.status === 'Gelmedi' ? 'danger' : 'success') : 'neutral'}`}>
                         {apt.status}
@@ -1368,7 +1371,7 @@ export default function AppointmentsPage() {
                 <div><dt>Randevu Türü</dt><dd>{selectedDetailSlot.type || '—'}</dd></div>
                 <div><dt>Durum</dt><dd>{selectedDetailSlot.status || '—'}</dd></div>
                 <div><dt>Odyolog</dt><dd>{detailAppointment?.audiologist || '—'}</dd></div>
-                <div><dt>Şube</dt><dd>{detailAppointment?.branch || '—'}</dd></div>
+                <div><dt>Şube</dt><dd>{detailBranch}</dd></div>
                 <div><dt>Telefon</dt><dd>{detailPatient?.phone || selectedDetailSlot.phone || '—'}</dd></div>
                 <div><dt>Cihaz</dt><dd>{detailPatient?.currentDevice || selectedDetailSlot.device || '—'}</dd></div>
                 <div style={{ gridColumn: '1 / -1' }}><dt>Not</dt><dd>{detailAppointment?.notes || 'Randevu için not eklenmemiş.'}</dd></div>
