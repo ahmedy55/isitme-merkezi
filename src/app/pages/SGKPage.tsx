@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import styles from './SGKPage.module.css';
@@ -228,7 +228,7 @@ const INITIAL_SGK_LIST: SGKPrescriptionItem[] = [
 ];
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, approveSGKPrescription, updatePatient } = useApp();
+  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, approveSGKPrescription, updatePatient, currentOrgId } = useApp();
   const { matches } = useBranchScope();
 
   // Navigation tab states
@@ -241,11 +241,11 @@ export default function SGKPage() {
   const [dateRange, setDateRange] = useState('');
 
   // Items list
-  const [items, setItems] = useState<SGKPrescriptionItem[]>(INITIAL_SGK_LIST);
+  const [items, setItems] = useState<SGKPrescriptionItem[]>(currentOrgId ? [] : INITIAL_SGK_LIST);
 
   // Selection states
-  const [selectedIds, setSelectedIds] = useState<string[]>(['sgk-1']);
-  const [activeItem, setActiveItem] = useState<SGKPrescriptionItem | null>(INITIAL_SGK_LIST[0]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activeItem, setActiveItem] = useState<SGKPrescriptionItem | null>(currentOrgId ? null : INITIAL_SGK_LIST[0]);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'recete' | 'surec' | 'evrak' | 'islemler'>('genel');
 
   // Modals & Menu states
@@ -253,6 +253,12 @@ export default function SGKPage() {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setItems(currentOrgId ? [] : INITIAL_SGK_LIST);
+    setSelectedIds([]);
+    setActiveItem(currentOrgId ? null : INITIAL_SGK_LIST[0]);
+  }, [currentOrgId]);
 
   // New Prescription Form state
   const [formData, setFormData] = useState({
@@ -441,8 +447,10 @@ export default function SGKPage() {
 
   const handleQueryMedula = (item: SGKPrescriptionItem) => {
     addToast({
-      type: 'info',
-      message: `Medula Web Servisi: ${item.prescriptionNo} nolu reçete provizyonu (${item.provisionNo || 'PRV-88319'}) aktif ve geçerlidir.`
+      type: 'warning',
+      message: currentOrgId
+        ? 'Medula bağlantısı yapılandırılmadı; provizyon durumu doğrulanamadı.'
+        : `Demo ortamı: ${item.prescriptionNo} için gerçek Medula sorgusu yapılmadı.`
     });
   };
 
@@ -1371,52 +1379,35 @@ export default function SGKPage() {
             </div>
             <button
               className={styles.btnFilter}
-              onClick={() => addToast({ type: 'success', message: 'Medula Servis Ping: 112ms (Çevrimiçi ve Aktif)' })}
+              onClick={() => addToast({ type: 'warning', message: 'Medula bağlantı testi bu ortamda yapılandırılmadı; canlı bağlantı doğrulanamadı.' })}
             >
-              🔄 Bağlantıyı Test Et
+              🔄 Bağlantı Durumunu Kontrol Et
             </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
             <div style={{ padding: 16, borderRadius: 12, background: '#f0fdf8', border: '1px solid #bbf7d0' }}>
               <div style={{ fontSize: 12, color: '#08785b', fontWeight: 600 }}>MEDULA SERVİSİ</div>
-              <div style={{ fontSize: 20, fontWeight: 750, color: '#08785b', marginTop: 4 }}>Çevrimiçi (Online)</div>
-              <div style={{ fontSize: 11.5, color: '#047857', marginTop: 4 }}>Son Yanıt: 118ms</div>
+              <div style={{ fontSize: 17, fontWeight: 750, color: '#b45309', marginTop: 4 }}>Yapılandırılmadı</div>
+              <div style={{ fontSize: 11.5, color: '#92400e', marginTop: 4 }}>Canlı servis bağlantısı doğrulanmadı</div>
             </div>
 
             <div style={{ padding: 16, borderRadius: 12, background: '#eff6ff', border: '1px solid #bfdbfe' }}>
               <div style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 600 }}>GÜNLÜK PROVİZYON</div>
-              <div style={{ fontSize: 20, fontWeight: 750, color: '#1e40af', marginTop: 4 }}>42 Başarılı / 1 Hata</div>
-              <div style={{ fontSize: 11.5, color: '#2563eb', marginTop: 4 }}>Başarı Oranı: %97.6</div>
+              <div style={{ fontSize: 17, fontWeight: 750, color: '#1e40af', marginTop: 4 }}>Gerçek veri yok</div>
+              <div style={{ fontSize: 11.5, color: '#2563eb', marginTop: 4 }}>Canlı istek geçmişi gösterilmiyor</div>
             </div>
 
             <div style={{ padding: 16, borderRadius: 12, background: '#faf5ff', border: '1px solid #e9d5ff' }}>
               <div style={{ fontSize: 12, color: '#7e22ce', fontWeight: 600 }}>E-REÇETE SENKRONİZASYONU</div>
-              <div style={{ fontSize: 20, fontWeight: 750, color: '#6b21a8', marginTop: 4 }}>Otomatik Aktif</div>
-              <div style={{ fontSize: 11.5, color: '#9333ea', marginTop: 4 }}>Son Eşitleme: 5 dk önce</div>
+              <div style={{ fontSize: 17, fontWeight: 750, color: '#6b21a8', marginTop: 4 }}>Etkin değil</div>
+              <div style={{ fontSize: 11.5, color: '#9333ea', marginTop: 4 }}>Eşitleme yapılandırılmadı</div>
             </div>
           </div>
 
           <div style={{ fontWeight: 650, fontSize: 14, color: '#0f172a', marginBottom: 10 }}>Son Medula İstek Günlükleri:</div>
-          <div style={{ display: 'grid', gap: 8, fontSize: 12.5 }}>
-            {[
-              { time: '15:42:10', type: 'ProvizyonSorgu', tc: '12345678901', status: '200 OK', msg: 'Reçete hak sahipliği onaylandı (Oticon More 1)' },
-              { time: '14:30:05', type: 'RaporSorgu', tc: '98765432109', status: '200 OK', msg: 'Sağlık kurulu heyet raporu geçerli' },
-              { time: '13:15:22', type: 'E-ReçeteOnay', tc: '45678912345', status: '422 SGK_ERR', msg: 'Cihaz yenileme süresi dolmamış (Kalan: 32 gün)' },
-              { time: '11:10:48', type: 'ProvizyonSorgu', tc: '32165498701', status: '200 OK', msg: 'Bilateral cihaz hakkı tanımlandı' }
-            ].map((log, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <span style={{ fontFamily: 'monospace', color: '#64748b' }}>{log.time}</span>
-                  <span style={{ fontWeight: 650, color: '#0f172a' }}>{log.type}</span>
-                  <span style={{ fontFamily: 'monospace', color: '#475569' }}>TC: {log.tc}</span>
-                  <span style={{ color: '#64748b' }}>— {log.msg}</span>
-                </div>
-                <span className={`${styles.badgeStatus} ${log.status.includes('200') ? styles.badgeApproved : styles.badgeRejected}`}>
-                  {log.status}
-                </span>
-              </div>
-            ))}
+          <div style={{ padding: 16, borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 13 }}>
+            Bu ortamda doğrulanmış Medula istek günlüğü bulunmuyor. Hasta kimlik bilgileri için örnek/sabit kayıt gösterilmez.
           </div>
         </div>
       )}

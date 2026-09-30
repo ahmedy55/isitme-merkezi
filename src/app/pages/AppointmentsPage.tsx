@@ -51,6 +51,7 @@ function IconCrossCard({ size = 20 }: { size?: number }) {
 
 const audiologists = ['Dr. Elif Arslan', 'Dr. Can Yılmaz'];
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
+const todayISO = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(new Date());
 
 // Default Showcase Schedule items for the screenshot design
 interface ShowcaseSlot {
@@ -182,7 +183,7 @@ const defaultShowcaseSlots: ShowcaseSlot[] = [
 ];
 
 export default function AppointmentsPage() {
-  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointmentStatus, addToast } = useApp();
+  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointmentStatus, addToast, currentOrgId } = useApp();
   const { activeBranch } = useBranch();
 
   const appointmentsList = useMemo(() => {
@@ -193,15 +194,15 @@ export default function AppointmentsPage() {
   const [viewMode, setViewMode] = useState<'takvim' | 'liste' | 'gun' | 'hafta' | 'ay'>('takvim');
 
   // Selected date state (defaults to 12 Eylül 2025 as in mockup, or dynamic)
-  const [currentDate, setCurrentDate] = useState<Date>(() => new Date(2025, 8, 12));
-  const [calendarViewMonth, setCalendarViewMonth] = useState<number>(8); // September (0-indexed = 8)
-  const [calendarViewYear, setCalendarViewYear] = useState<number>(2025);
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [calendarViewMonth, setCalendarViewMonth] = useState<number>(() => new Date().getMonth());
+  const [calendarViewYear, setCalendarViewYear] = useState<number>(() => new Date().getFullYear());
 
   // Filters
   const [filterAudiologist, setFilterAudiologist] = useState('Tümü');
   const [filterBranch, setFilterBranch] = useState('All');
   const [filterTimeRange, setFilterTimeRange] = useState('Tüm Gün');
-  const [dateInputVal, setDateInputVal] = useState('2025-09-12');
+  const [dateInputVal, setDateInputVal] = useState(todayISO);
   const [statusFilter, setStatusFilter] = useState<'all' | 'bekleyen' | 'tamamlanan' | 'iptal'>('all');
 
   // Modals and action dropdown
@@ -239,6 +240,9 @@ export default function AppointmentsPage() {
     setCurrentDate(prev => {
       const next = new Date(prev);
       next.setDate(next.getDate() - 1);
+      setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
+      setCalendarViewMonth(next.getMonth());
+      setCalendarViewYear(next.getFullYear());
       return next;
     });
   };
@@ -246,13 +250,18 @@ export default function AppointmentsPage() {
     setCurrentDate(prev => {
       const next = new Date(prev);
       next.setDate(next.getDate() + 1);
+      setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
+      setCalendarViewMonth(next.getMonth());
+      setCalendarViewYear(next.getFullYear());
       return next;
     });
   };
   const handleToday = () => {
-    setCurrentDate(new Date(2025, 8, 12));
-    setCalendarViewMonth(8);
-    setCalendarViewYear(2025);
+    const today = new Date();
+    setCurrentDate(today);
+    setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(today));
+    setCalendarViewMonth(today.getMonth());
+    setCalendarViewYear(today.getFullYear());
   };
 
   // Format date display (e.g. "12 Eylül 2025, Cuma")
@@ -308,7 +317,7 @@ export default function AppointmentsPage() {
     // plus any dynamically added live appointments
     const liveForDay = appointmentsList.filter(a => a.date === selectedDateStr);
     
-    if (selectedDateStr === '2025-09-12') {
+    if (!currentOrgId && selectedDateStr === '2025-09-12') {
       if (liveForDay.length === 0) return showcaseList;
       // Merge live appointments
       const extraSlots: ShowcaseSlot[] = liveForDay.map(apt => {
@@ -350,8 +359,49 @@ export default function AppointmentsPage() {
       });
     }
 
-    return showcaseList;
-  }, [selectedDateStr, appointmentsList, patientsList, showcaseList]);
+    return currentOrgId ? [] : showcaseList;
+  }, [selectedDateStr, appointmentsList, patientsList, showcaseList, currentOrgId]);
+
+  const visibleAppointments = useMemo(() => appointmentsList.filter(appointment => {
+    if (filterAudiologist !== 'Tümü' && appointment.audiologist !== filterAudiologist) return false;
+    if (filterBranch !== 'All' && appointment.branchId !== filterBranch) return false;
+    if (statusFilter === 'bekleyen' && appointment.status !== 'Bekliyor') return false;
+    if (statusFilter === 'tamamlanan' && !['Tamamlandı', 'Geldi'].includes(appointment.status)) return false;
+    if (statusFilter === 'iptal' && !['İptal', 'Gelmedi'].includes(appointment.status)) return false;
+    return true;
+  }), [appointmentsList, filterAudiologist, filterBranch, statusFilter]);
+
+  const selectedDayAppointments = visibleAppointments.filter(appointment => appointment.date === selectedDateStr);
+  const weekStart = new Date(currentDate);
+  weekStart.setDate(currentDate.getDate() - ((currentDate.getDay() + 6) % 7));
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+  const weeklyCount = visibleAppointments.filter(appointment => {
+    const date = new Date(`${appointment.date}T00:00:00`);
+    return date >= weekStart && date < weekEnd;
+  }).length;
+  const completedCount = selectedDayAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length;
+  const pendingCount = selectedDayAppointments.filter(appointment => ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)).length;
+  const canceledCount = selectedDayAppointments.filter(appointment => ['İptal', 'Gelmedi'].includes(appointment.status)).length;
+
+  const visibleTimelineSlots = useMemo(() => timelineSlots.filter(slot => {
+    if (slot.isBreak) return filterTimeRange === 'Tüm Gün';
+    const hour = Number((slot.timeRange || slot.hour).slice(0, 2));
+    if (filterTimeRange === 'Sabah' && (hour < 9 || hour >= 13)) return false;
+    if (filterTimeRange === 'Öğleden Sonra' && (hour < 13 || hour >= 18)) return false;
+    if (filterAudiologist !== 'Tümü') {
+      const appointment = appointmentsList.find(item => item.id === slot.id);
+      if (!appointment || appointment.audiologist !== filterAudiologist) return false;
+    }
+    if (filterBranch !== 'All') {
+      const appointment = appointmentsList.find(item => item.id === slot.id);
+      if (!appointment || appointment.branchId !== filterBranch) return false;
+    }
+    if (statusFilter === 'bekleyen' && !['Bekliyor', 'Hatırlatıldı', 'Randevu Onayı'].includes(slot.status || '')) return false;
+    if (statusFilter === 'tamamlanan' && !['Tamamlandı', 'Geldi'].includes(slot.status || '')) return false;
+    if (statusFilter === 'iptal' && !['İptal', 'Gelmedi'].includes(slot.status || '')) return false;
+    return true;
+  }), [timelineSlots, filterTimeRange, filterAudiologist, filterBranch, statusFilter, appointmentsList]);
 
   // Open slot action dropdown
   const handleOpenSlotMenu = (e: React.MouseEvent, slot: ShowcaseSlot) => {
@@ -411,9 +461,9 @@ export default function AppointmentsPage() {
             <IconCalendarCard size={22} />
           </div>
           <div>
-            <span>Bugünkü Randevular</span>
-            <strong>12</strong>
-            <small><span style={{ color: '#0b8463', fontWeight: 600 }}>3</span> tamamlandı • <span style={{ color: '#d97706', fontWeight: 600 }}>7</span> bekliyor</small>
+            <span>Seçili Gün Randevuları</span>
+            <strong>{selectedDayAppointments.length}</strong>
+            <small><span style={{ color: '#0b8463', fontWeight: 600 }}>{completedCount}</span> tamamlandı • <span style={{ color: '#d97706', fontWeight: 600 }}>{pendingCount}</span> bekliyor</small>
           </div>
         </div>
 
@@ -424,7 +474,7 @@ export default function AppointmentsPage() {
           </div>
           <div>
             <span>Bu Hafta</span>
-            <strong>48</strong>
+            <strong>{weeklyCount}</strong>
             <div className={styles.statChangeUp}>
               <IconTrendUp size={11} /> %12 artış
             </div>
@@ -441,7 +491,7 @@ export default function AppointmentsPage() {
           </div>
           <div>
             <span>Bekleyen</span>
-            <strong>7</strong>
+            <strong>{pendingCount}</strong>
             <small style={{ color: '#d97706', fontWeight: 600 }}>● onay bekliyor</small>
           </div>
         </div>
@@ -456,7 +506,7 @@ export default function AppointmentsPage() {
           </div>
           <div>
             <span>Tamamlanan</span>
-            <strong>38</strong>
+            <strong>{completedCount}</strong>
             <div className={styles.statChangeUp}>
               <IconTrendUp size={11} /> %18 artış
             </div>
@@ -473,7 +523,7 @@ export default function AppointmentsPage() {
           </div>
           <div>
             <span>İptal / Gelmedi</span>
-            <strong>3</strong>
+            <strong>{canceledCount}</strong>
             <div className={styles.statChangeDown}>
               <IconTrendDown size={11} /> %25 azalış
             </div>
@@ -557,7 +607,8 @@ export default function AppointmentsPage() {
                 if (val) {
                   const parts = val.split('-').map(Number);
                   if (parts[0] && parts[1]) {
-                    setCurrentDate(new Date(parts[0], parts[1] - 1, parts[2] || 1));
+                          const next = new Date(parts[0], parts[1] - 1, parts[2] || 1);
+                          setCurrentDate(next);
                     setCalendarViewMonth(parts[1] - 1);
                     setCalendarViewYear(parts[0]);
                   }
@@ -609,7 +660,7 @@ export default function AppointmentsPage() {
 
             {/* Hourly Slot Rows */}
             <div className={styles.slotList}>
-              {timelineSlots.map((slot) => {
+              {visibleTimelineSlots.map((slot) => {
                 if (slot.isBreak) {
                   return (
                     <div key={slot.id} className={styles.slotRow}>
@@ -744,7 +795,9 @@ export default function AppointmentsPage() {
                       className={`${styles.miniDayCell} ${!c.isCurrentMonth ? styles.miniDayOtherMonth : ''} ${isSelected ? styles.miniDaySelected : ''}`}
                       onClick={() => {
                         if (c.isCurrentMonth) {
-                          setCurrentDate(new Date(calendarViewYear, calendarViewMonth, c.dayNum));
+                          const next = new Date(calendarViewYear, calendarViewMonth, c.dayNum);
+                          setCurrentDate(next);
+                          setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
                         }
                       }}
                     >
@@ -785,27 +838,27 @@ export default function AppointmentsPage() {
               <div className={styles.summaryList}>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#e0f2fe', color: '#0284c7' }}>👥</div>
-                  <strong>12</strong>
+                  <strong>{selectedDayAppointments.length}</strong>
                   <span>Toplam randevu</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#fef3c7', color: '#d97706' }}>🕒</div>
-                  <strong>7</strong>
+                  <strong>{pendingCount}</strong>
                   <span>Bekleyen</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#dcfce7', color: '#16a34a' }}>✓</div>
-                  <strong>3</strong>
+                  <strong>{completedCount}</strong>
                   <span>Tamamlanan</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#fee2e2', color: '#dc2626' }}>✕</div>
-                  <strong>1</strong>
+                  <strong>{selectedDayAppointments.filter(appointment => appointment.status === 'İptal').length}</strong>
                   <span>İptal</span>
                 </div>
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryIconBadge} style={{ background: '#fee2e2', color: '#991b1b' }}>🚫</div>
-                  <strong>1</strong>
+                  <strong>{selectedDayAppointments.filter(appointment => appointment.status === 'Gelmedi').length}</strong>
                   <span>Gelmedi</span>
                 </div>
               </div>
@@ -871,7 +924,7 @@ export default function AppointmentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {appointmentsList.map((apt) => (
+                {visibleAppointments.map((apt) => (
                   <tr key={apt.id}>
                     <td data-label="Saat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)', fontWeight: 600 }}>
                       {apt.time}
@@ -960,7 +1013,9 @@ export default function AppointmentsPage() {
                     className={`calendar-cell ${!cell.isCurrentMonth ? 'other-month' : ''}`}
                     onClick={() => {
                       if (cell.isCurrentMonth) {
-                        setCurrentDate(new Date(calendarViewYear, calendarViewMonth, cell.dayNum));
+                        const next = new Date(calendarViewYear, calendarViewMonth, cell.dayNum);
+                        setCurrentDate(next);
+                        setDateInputVal(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(next));
                         setViewMode('takvim');
                       }
                     }}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
@@ -228,7 +228,7 @@ const DEFAULT_MOCK_ITEMS: DisplayStockItem[] = [
 ];
 
 export default function StockPage() {
-  const { stockList, updateStockItem, addStockItem, deleteStockItem, adjustStockItem, addToast, branchesList } = useApp();
+  const { stockList, updateStockItem, addStockItem, deleteStockItem, adjustStockItem, addToast, branchesList, currentOrgId } = useApp();
   const { activeBranch } = useBranch();
 
   // Combine demo / app stock items seamlessly
@@ -236,12 +236,12 @@ export default function StockPage() {
     if (stockList && stockList.length > 0) {
       return stockList.map(item => ({
         ...item,
-        branchStockBreakdown: { 'Merkez': Math.max(0, Math.floor(item.quantity / 2)), 'Çankaya': Math.max(0, Math.ceil(item.quantity / 2)), 'Kadıköy': 0 },
+        branchStockBreakdown: { [item.branch]: item.quantity },
         description: item.brand && item.model ? `${item.brand} ${item.model} ${item.category}` : item.name
       }));
     }
-    return DEFAULT_MOCK_ITEMS;
-  }, [stockList]);
+    return currentOrgId ? [] : DEFAULT_MOCK_ITEMS;
+  }, [stockList, currentOrgId]);
 
   // Pill tab filter (Tümü, Cihaz, Pil, Kalıp, Aksesuar)
   const [categoryPill, setCategoryPill] = useState('Tümü');
@@ -253,8 +253,8 @@ export default function StockPage() {
   const [selectedStatus, setSelectedStatus] = useState('Tüm Durumlar');
 
   // Table selection and drawer active item
-  const [selectedIds, setSelectedIds] = useState<string[]>(['stk-1']);
-  const [activeItem, setActiveItem] = useState<DisplayStockItem | null>(DEFAULT_MOCK_ITEMS[0]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activeItem, setActiveItem] = useState<DisplayStockItem | null>(null);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'stok' | 'uts' | 'hareketler' | 'iliskili'>('genel');
 
   // Action Menu dropdown state
@@ -333,12 +333,26 @@ export default function StockPage() {
     });
   }, [allStockItems, activeBranch, categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm]);
 
-  // Statistics
-  const totalProducts = 148; // matching mockup
-  const totalStockQty = 320; // matching mockup
-  const totalStockValue = 1285000; // matching mockup
-  const utsRegisteredCount = 120; // matching mockup
-  const criticalStockCount = 6; // matching mockup
+  // Keep the detail drawer bound to a row that is actually present in the current scope.
+  useEffect(() => {
+    if (filteredItems.length === 0) {
+      setActiveItem(null);
+      return;
+    }
+    if (!activeItem || !filteredItems.some(item => item.id === activeItem.id)) {
+      setActiveItem(filteredItems[0]);
+    }
+  }, [filteredItems, activeItem]);
+
+  // Statistics are derived from the same tenant/branch-scoped inventory as the table.
+  const scopedStockItems = useMemo(() => allStockItems.filter(item =>
+    BranchService.matchesBranch(item.branch, item.branchId, activeBranch)
+  ), [allStockItems, activeBranch]);
+  const totalProducts = scopedStockItems.length;
+  const totalStockQty = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
+  const totalStockValue = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0) * (Number(item.purchasePrice) || Number(item.price) || 0), 0);
+  const utsRegisteredCount = scopedStockItems.filter(item => item.utsStatus === 'Bildirildi').length;
+  const criticalStockCount = scopedStockItems.filter(item => item.quantity <= item.criticalLevel).length;
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -1131,18 +1145,12 @@ export default function StockPage() {
                     </div>
 
                     <div className={styles.branchStockBox}>
-                      <div className={styles.branchStockRow}>
-                        <span>Merkez</span>
-                        <strong>{activeItem.branchStockBreakdown?.['Merkez'] ?? Math.max(0, Math.floor(activeItem.quantity / 2))}</strong>
-                      </div>
-                      <div className={styles.branchStockRow}>
-                        <span>Çankaya</span>
-                        <strong>{activeItem.branchStockBreakdown?.['Çankaya'] ?? Math.max(0, Math.ceil(activeItem.quantity / 2))}</strong>
-                      </div>
-                      <div className={styles.branchStockRow}>
-                        <span>Kadıköy</span>
-                        <strong>{activeItem.branchStockBreakdown?.['Kadıköy'] ?? 0}</strong>
-                      </div>
+                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => (
+                        <div className={styles.branchStockRow} key={branch.id}>
+                          <span>{branch.name}</span>
+                          <strong>{activeItem.branchStockBreakdown?.[branch.name] ?? 0}</strong>
+                        </div>
+                      ))}
                       <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '4px 0' }} />
                       <div className={styles.branchStockRow}>
                         <span style={{ fontWeight: 700, color: '#0f172a' }}>Toplam</span>

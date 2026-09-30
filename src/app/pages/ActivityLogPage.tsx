@@ -96,6 +96,7 @@ export interface ActivityRecord {
     branch: string;
   };
 }
+const todayISO = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(new Date());
 
 const defaultShowcaseActivities: ActivityRecord[] = [
   {
@@ -276,7 +277,9 @@ export default function ActivityLogPage() {
 
   // Search and select filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateRange, setDateRange] = useState('12.09.2025 - 12.09.2025');
+  const todayDate = new Date();
+  const todayDateLabel = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Istanbul' }).format(todayDate);
+  const [dateRange, setDateRange] = useState(`${todayDateLabel} - ${todayDateLabel}`);
   const [filterType, setFilterType] = useState('Tümü');
   const [filterStaff, setFilterStaff] = useState('Tümü');
   const [filterBranch, setFilterBranch] = useState('Tümü');
@@ -299,7 +302,7 @@ export default function ActivityLogPage() {
   const [formBranchName, setFormBranchName] = useState('Merkez');
 
   // Live activities from repository
-  const [activities, setActivities] = useState<ActivityRecord[]>(defaultShowcaseActivities);
+  const [activities, setActivities] = useState<ActivityRecord[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -310,7 +313,7 @@ export default function ActivityLogPage() {
             const mapped: ActivityRecord[] = (rows as any[]).map((r, idx) => ({
               id: r.id || `act-live-${idx}`,
               timestamp: r.timestamp || '2025-09-12 12:00',
-              dateStr: r.timestamp ? r.timestamp.split(' ')[0] : '12 Eyl 2025',
+              dateStr: r.timestamp ? new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(r.timestamp.replace(' ', 'T'))) : '',
               timeStr: r.timestamp ? r.timestamp.split(' ')[1] : '12:00',
               patientId: r.patientId,
               patientName: r.patientName || 'Hasta',
@@ -326,10 +329,14 @@ export default function ActivityLogPage() {
               staffAvatarColor: '#3b82f6',
               branchName: r.branchName || 'Merkez'
             }));
-            setActivities([...defaultShowcaseActivities, ...mapped]);
+            setActivities(mapped);
+          } else if (!cancelled) {
+            setActivities([]);
           }
         })
         .catch(() => {});
+    } else {
+      setActivities(defaultShowcaseActivities);
     }
     return () => { cancelled = true; };
   }, [currentOrgId]);
@@ -348,6 +355,7 @@ export default function ActivityLogPage() {
 
   // Filtered rows
   const filteredActivities = useMemo(() => {
+    const [fromDate, toDate] = dateRange.split('-').map(value => value.trim().split('.').reverse().join('-'));
     return activities.filter(act => {
       // Category tab
       if (activeTab !== 'Tümü' && act.type !== activeTab) {
@@ -373,9 +381,22 @@ export default function ActivityLogPage() {
       // Branch filter
       if (filterBranch !== 'Tümü' && act.branchName !== filterBranch) return false;
 
+      const activityDate = act.timestamp.slice(0, 10);
+      if (fromDate && /^\d{4}-\d{2}-\d{2}$/.test(fromDate) && activityDate < fromDate) return false;
+      if (toDate && /^\d{4}-\d{2}-\d{2}$/.test(toDate) && activityDate > toDate) return false;
+
       return true;
     });
-  }, [activities, activeTab, searchQuery, filterType, filterStaff, filterBranch]);
+  }, [activities, activeTab, searchQuery, filterType, filterStaff, filterBranch, dateRange]);
+
+  const sortedActivities = useMemo(() => [...filteredActivities].sort((a, b) => {
+    const direction = sortBy === 'Tarih (Eski → Yeni)' ? 1 : -1;
+    return a.timestamp.localeCompare(b.timestamp) * direction;
+  }), [filteredActivities, sortBy]);
+
+  const todayKey = todayISO();
+  const todaysActivities = activities.filter(activity => activity.timestamp.slice(0, 10) === todayKey);
+  const activityCount = (type: ActivityRecord['type']) => todaysActivities.filter(activity => activity.type === type).length;
 
   const activeRecord = activities.find(a => a.id === selectedActId) || activities[0] || defaultShowcaseActivities[0];
 
@@ -390,8 +411,8 @@ export default function ActivityLogPage() {
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const newRecord: ActivityRecord = {
       id: `act-${Date.now()}`,
-      timestamp: `2025-09-12 ${timeStr}`,
-      dateStr: '12 Eyl 2025',
+      timestamp: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${timeStr}`,
+      dateStr: new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }).format(now),
       timeStr,
       patientName: formPatientName,
       patientAge: 65,
@@ -462,7 +483,7 @@ export default function ActivityLogPage() {
           </div>
           <div>
             <span>Bugünkü Toplam Aktivite</span>
-            <strong>24</strong>
+            <strong>{todaysActivities.length}</strong>
             <div className={styles.statChangeUp}>
               <IconTrendUp size={11} /> %20 düne göre
             </div>
@@ -476,7 +497,7 @@ export default function ActivityLogPage() {
           </div>
           <div>
             <span>Telefon Görüşmeleri</span>
-            <strong>12</strong>
+            <strong>{activityCount('Telefon Araması')}</strong>
             <div className={styles.statChangeUp}>
               <IconTrendUp size={11} /> %33
             </div>
@@ -490,7 +511,7 @@ export default function ActivityLogPage() {
           </div>
           <div>
             <span>Yüz Yüze Görüşmeler</span>
-            <strong>6</strong>
+            <strong>{activityCount('Yüz Yüze Görüşme')}</strong>
             <div className={styles.statChangeUp}>
               <IconTrendUp size={11} /> %20
             </div>
@@ -504,7 +525,7 @@ export default function ActivityLogPage() {
           </div>
           <div>
             <span>Not / Diğer İşlemler</span>
-            <strong>4</strong>
+            <strong>{activityCount('Not Ekleme') + activityCount('Diğer')}</strong>
             <div className={styles.statChangeDown}>
               <IconTrendDown size={11} /> %33
             </div>
@@ -518,7 +539,7 @@ export default function ActivityLogPage() {
           </div>
           <div>
             <span>Yeni Hasta Kaydı</span>
-            <strong>2</strong>
+            <strong>{activityCount('Yeni Hasta')}</strong>
             <div className={styles.statChangeUp}>
               <IconTrendUp size={11} /> %100
             </div>
@@ -659,7 +680,7 @@ export default function ActivityLogPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredActivities.map((act) => {
+                {sortedActivities.map((act) => {
                   const isSelected = selectedActId === act.id;
                   const isChecked = checkedIds.has(act.id);
 

@@ -165,7 +165,7 @@ export default function AssetsPage() {
   const { activeBranch } = useBranch();
 
   // Asset list state
-  const [assetList, setAssetList] = useState<DisplayAsset[]>(INITIAL_MOCK_ASSETS);
+  const [assetList, setAssetList] = useState<DisplayAsset[]>(currentOrgId ? [] : INITIAL_MOCK_ASSETS);
 
   // Category pill filter
   const [categoryPill, setCategoryPill] = useState('Tümü');
@@ -177,8 +177,8 @@ export default function AssetsPage() {
   const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
 
   // Table selection & active detail item
-  const [selectedIds, setSelectedIds] = useState<string[]>(['ast-1']);
-  const [activeItem, setActiveItem] = useState<DisplayAsset | null>(INITIAL_MOCK_ASSETS[0]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activeItem, setActiveItem] = useState<DisplayAsset | null>(null);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'bakim' | 'dosyalar' | 'gecmis'>('genel');
 
   // Action menu dropdown
@@ -213,7 +213,7 @@ export default function AssetsPage() {
     if (currentOrgId) {
       fetchAssets()
         .then(rows => {
-          if (!cancelled && rows && rows.length > 0) {
+          if (!cancelled) {
             const mapped: DisplayAsset[] = rows.map((r: any) => ({
               id: r.id,
               name: r.name,
@@ -233,15 +233,27 @@ export default function AssetsPage() {
               notes: r.notes || ''
             }));
             setAssetList(mapped);
+            setSelectedIds([]);
+            setActiveItem(null);
           }
         })
         .catch(() => {
-          // fallback to mock gracefully
+          if (!cancelled) setAssetList([]);
         });
     }
     return () => {
       cancelled = true;
     };
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (!currentOrgId) {
+      setAssetList(INITIAL_MOCK_ASSETS);
+      return;
+    }
+    setAssetList([]);
+    setSelectedIds([]);
+    setActiveItem(null);
   }, [currentOrgId]);
 
   // Filtered Assets list
@@ -285,11 +297,18 @@ export default function AssetsPage() {
     });
   }, [assetList, activeBranch, categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm]);
 
+  useEffect(() => {
+    if (!activeItem || !filteredAssets.some(asset => asset.id === activeItem.id)) {
+      setActiveItem(filteredAssets[0] ?? null);
+      setSelectedIds(filteredAssets[0] ? [filteredAssets[0].id] : []);
+    }
+  }, [activeItem, filteredAssets]);
+
   // Metric counts matching the mockup
-  const totalAssetsCount = 24;
-  const totalAssetsValue = 1285000;
-  const inMaintenanceCount = 3;
-  const calibrationWarningCount = 2;
+  const totalAssetsCount = filteredAssets.length;
+  const totalAssetsValue = filteredAssets.reduce((sum, asset) => sum + asset.cost, 0);
+  const inMaintenanceCount = filteredAssets.filter(asset => asset.status === 'Bakımda' || asset.status === 'Onarımda').length;
+  const calibrationWarningCount = filteredAssets.filter(asset => asset.nextCalibrationDate && new Date(asset.nextCalibrationDate.split('.').reverse().join('-')) <= new Date()).length;
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -1488,15 +1507,15 @@ export default function AssetsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                 <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Kayıtlı Demirbaş</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>24 Adet</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{totalAssetsCount} Adet</div>
                 </div>
                 <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Değer</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#08785b', marginTop: 4 }}>₺1.285.000</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{formatCurrency(totalAssetsValue)}</div>
                 </div>
                 <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Faal Cihaz Oranı</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>%87.5</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>{totalAssetsCount ? `%${((filteredAssets.filter(asset => asset.status === 'Aktif').length / totalAssetsCount) * 100).toFixed(1)}` : '—'}</div>
                 </div>
               </div>
             </div>

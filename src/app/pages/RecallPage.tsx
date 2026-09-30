@@ -111,7 +111,8 @@ interface ShowcaseRecall {
   planDate: string;
   planTime: string;
   overdueText?: string;
-  status: 'Tarihi Geçti' | 'Bekliyor' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi';
+  status: 'Tarihi Geçti' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi';
+  branchName?: string;
   lastAction: string;
 }
 
@@ -280,7 +281,7 @@ const defaultShowcaseRecalls: ShowcaseRecall[] = [
 ];
 
 export default function RecallPage() {
-  const { recallList, patientsList, branchesList, addToast, setCurrentPage, setSelectedPatientId, addRecallItem, updateRecallItemStatus } = useApp();
+  const { recallList, patientsList, branchesList, currentOrgId, addToast, setCurrentPage, setSelectedPatientId, addRecallItem, updateRecallItemStatus } = useApp();
   const { matches } = useBranchScope();
 
   // Selected tab: 'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi'
@@ -344,21 +345,20 @@ export default function RecallPage() {
         typeSub: `(${item.probability || 'Planlandı'})`,
         planDate: item.dueDate || new Date().toISOString().split('T')[0],
         planTime: '10:00',
-        status: (item.status === 'Gönderildi' ? 'Bekliyor' : item.status) as any,
+        status: item.status as ShowcaseRecall['status'],
+        branchName: p?.branch || '',
         lastAction: item.lastContact ? `Son temas: ${item.lastContact}` : '—',
       };
     });
-    return [...liveConverted, ...defaultShowcaseRecalls];
-  }, [recallList, patientsList]);
+    return currentOrgId ? liveConverted : [...liveConverted, ...defaultShowcaseRecalls];
+  }, [recallList, patientsList, currentOrgId]);
 
   // Filtered rows
   const filteredRecalls = useMemo(() => {
     return allRecalls.filter(item => {
       // Tab filter
       if (activeTab !== 'Tümü') {
-        if (activeTab === 'Gönderildi' && item.status !== 'Bekliyor') {
-          // example mapping
-        } else if (item.status !== activeTab) {
+        if (item.status !== activeTab) {
           return false;
         }
       }
@@ -377,11 +377,26 @@ export default function RecallPage() {
         if (!item.typeTitle.toLowerCase().includes(filterType.toLowerCase())) return false;
       }
 
+      if (filterBranch !== 'Tümü' && item.branchName !== filterBranch) return false;
+
+      if (filterDateRange.trim()) {
+        const [from, to] = filterDateRange.split('→').map(value => value.trim());
+        const toISO = (value: string) => {
+          const parsed = Date.parse(value);
+          return Number.isNaN(parsed) ? '' : new Date(parsed).toISOString().slice(0, 10);
+        };
+        const recallDate = /^\d{4}-\d{2}-\d{2}$/.test(item.planDate) ? item.planDate : toISO(item.planDate);
+        const fromISO = toISO(from || '');
+        const toDateISO = toISO(to || '');
+        if (fromISO && recallDate < fromISO) return false;
+        if (toDateISO && recallDate > toDateISO) return false;
+      }
+
       return true;
     });
-  }, [allRecalls, activeTab, searchQuery, filterType]);
+  }, [allRecalls, activeTab, searchQuery, filterType, filterBranch, filterDateRange]);
 
-  const activeRecall = allRecalls.find(r => r.id === selectedRecallId) || allRecalls[0] || defaultShowcaseRecalls[0];
+  const activeRecall = allRecalls.find(r => r.id === selectedRecallId) || allRecalls[0] || (!currentOrgId ? defaultShowcaseRecalls[0] : undefined);
 
   const handleOpenAppointment = (patientId: string) => {
     setSelectedPatientId(patientId);

@@ -87,21 +87,21 @@ export default function ReportsPage() {
   const { matches } = useBranchScope();
 
   // Dynamic Calculated Metrics
-  const dynamicTotalRevenue = useMemo(() => {
-    const live = salesList.reduce((acc, s) => acc + (s.total || 0), 0);
-    return live > 0 ? live : 125000;
-  }, [salesList]);
+  const scopedSales = useMemo(() => salesList.filter(sale => matches(undefined, sale.branchId)), [salesList, matches]);
+  const scopedExpenses = useMemo(() => expensesList.filter(expense => matches(expense.branch, expense.branchId)), [expensesList, matches]);
+  const scopedPatients = useMemo(() => patientsList.filter(patient => matches(patient.branch, patient.branchId)), [patientsList, matches]);
+  const scopedAppointments = useMemo(() => appointmentsList.filter(appointment => matches(appointment.branch, appointment.branchId)), [appointmentsList, matches]);
+  const dynamicTotalRevenue = useMemo(() => scopedSales.reduce((acc, sale) => acc + (sale.total || 0), 0), [scopedSales]);
 
   const dynamicTotalExpenses = useMemo(() => {
-    const live = expensesList.reduce((acc, e) => acc + (e.amount || 0), 0);
-    return live > 0 ? live : 38400;
-  }, [expensesList]);
+    return scopedExpenses.reduce((acc, expense) => acc + (expense.amount || 0), 0);
+  }, [scopedExpenses]);
 
   const dynamicNetProfit = dynamicTotalRevenue - dynamicTotalExpenses;
-  const dynamicPatientCount = patientsList.length > 0 ? patientsList.length : 248;
-  const dynamicAppointmentCount = appointmentsList.length > 0 ? appointmentsList.length : 68;
-  const dynamicDeviceSalesCount = salesList.filter(s => s.items?.some(i => i.type === 'Cihaz')).length || 18;
-  const dynamicServiceRevenue = salesList.filter(s => s.items?.some(i => i.type === 'Servis Geliri')).reduce((acc, s) => acc + s.total, 0) || 3250;
+  const dynamicPatientCount = scopedPatients.length;
+  const dynamicAppointmentCount = scopedAppointments.length;
+  const dynamicDeviceSalesCount = scopedSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((count, item) => count + item.quantity, 0), 0);
+  const dynamicServiceRevenue = scopedSales.filter(sale => sale.items?.some(item => item.type === 'Servis Geliri')).reduce((acc, sale) => acc + sale.total, 0);
 
   // Active Sub-Tab
   const [activeTab, setActiveTab] = useState<string>('Genel Bakış');
@@ -118,20 +118,21 @@ export default function ReportsPage() {
   const [showDateModal, setShowDateModal] = useState(false);
 
   // 12 Months Bar Chart Data
-  const monthlyData = [
-    { month: 'Oca', value: 2800, heightPct: 22 },
-    { month: 'Şub', value: 3800, heightPct: 30 },
-    { month: 'Mar', value: 3600, heightPct: 28 },
-    { month: 'Nis', value: 4900, heightPct: 38 },
-    { month: 'May', value: 6200, heightPct: 48 },
-    { month: 'Haz', value: 7500, heightPct: 60 },
-    { month: 'Tem', value: 4800, heightPct: 38 },
-    { month: 'Ağu', value: 6800, heightPct: 54 },
-    { month: 'Eyl', value: 12500, heightPct: 100, isCurrent: true },
-    { month: 'Eki', value: 6900, heightPct: 55 },
-    { month: 'Kas', value: 4100, heightPct: 32 },
-    { month: 'Ara', value: 5600, heightPct: 44 }
-  ];
+  const monthNames = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  const reportYear = new Date().getFullYear();
+  const rawMonthlyValues = monthNames.map((_, monthIndex) => {
+    const monthKey = `${reportYear}-${String(monthIndex + 1).padStart(2, '0')}`;
+    const monthSales = scopedSales.filter(sale => sale.date.startsWith(monthKey));
+    const monthExpenses = scopedExpenses.filter(expense => expense.date.startsWith(monthKey)).reduce((sum, expense) => sum + expense.amount, 0);
+    if (chartMetric === 'Satış Adedi') return monthSales.reduce((sum, sale) => sum + sale.items.reduce((qty, item) => qty + item.quantity, 0), 0);
+    if (chartMetric === 'Karlılık') return monthSales.reduce((sum, sale) => sum + sale.total, 0) - monthExpenses;
+    return monthSales.reduce((sum, sale) => sum + sale.total, 0);
+  });
+  const chartScaleMax = Math.max(...rawMonthlyValues.map(value => Math.max(0, value)), 1);
+  const monthlyData = monthNames.map((month, index) => ({ month, value: rawMonthlyValues[index], heightPct: Math.max(0, rawMonthlyValues[index]) / chartScaleMax * 100, isCurrent: index === new Date().getMonth() }));
+  const chartUnit = chartMetric === 'Satış Adedi' ? 'adet' : '₺';
+  const chartTitle = chartMetric === 'Satış Adedi' ? 'Aylık Satış Adedi' : chartMetric === 'Karlılık' ? 'Aylık Karlılık' : 'Aylık Ciro Trendi';
+  const chartTickValues = Array.from({ length: 6 }, (_, index) => Math.round(chartScaleMax * (5 - index) / 5));
 
   // Gelir Dağılımı Donut Data
   const revenueDistributionSlices: DonutSlice[] = [
@@ -405,7 +406,7 @@ export default function ReportsPage() {
                 <path d="M3 3v18h18"></path>
                 <path d="M18 9l-5 5-4-4-3 3"></path>
               </svg>
-              <h3>Aylık Ciro Trendi (2026)</h3>
+              <h3>{chartTitle} ({reportYear})</h3>
             </div>
             <div className={styles.cardControls}>
               <select
@@ -430,12 +431,7 @@ export default function ReportsPage() {
           <div className={styles.barChartContainer}>
             {/* Y Axis Ticks */}
             <div className={styles.chartAxisY}>
-              <span>12.5K TL</span>
-              <span>10K TL</span>
-              <span>7.5K TL</span>
-              <span>5K TL</span>
-              <span>2.5K TL</span>
-              <span>0 TL</span>
+              {chartTickValues.map((tick, index) => <span key={index}>{chartUnit === '₺' ? formatCurrency(tick) : `${tick} adet`}</span>)}
             </div>
 
             {/* Horizontal Grid lines */}
@@ -461,8 +457,8 @@ export default function ReportsPage() {
                   >
                     {isHovered && (
                       <div className={styles.tooltipBubble}>
-                        <div className={styles.tooltipBubbleTitle}>{item.month === 'Eyl' ? 'Eylül 2026' : `${item.month} 2026`}</div>
-                        <div className={styles.tooltipBubbleVal}>₺{item.value.toLocaleString('tr-TR')}</div>
+                        <div className={styles.tooltipBubbleTitle}>{item.month} {reportYear}</div>
+                        <div className={styles.tooltipBubbleVal}>{chartUnit === '₺' ? formatCurrency(item.value) : `${item.value.toLocaleString('tr-TR')} adet`}</div>
                       </div>
                     )}
                     <div className={styles.barTrack}>

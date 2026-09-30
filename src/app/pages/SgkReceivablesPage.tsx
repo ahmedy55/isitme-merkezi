@@ -48,13 +48,13 @@ export default function SgkReceivablesPage() {
   const [activeTab, setActiveTab] = useState<'schedule' | 'records' | 'history' | 'reports'>('schedule');
 
   // Invoice records state
-  const [invoices, setInvoices] = useState<InvoiceRecord[]>(INITIAL_MOCK_INVOICES);
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Form states
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [periodYearMonth, setPeriodYearMonth] = useState('2026-09');
+  const [periodYearMonth, setPeriodYearMonth] = useState(() => monthKey());
   const [invoiceNo, setInvoiceNo] = useState('');
   const [amount, setAmount] = useState('');
   const [branch, setBranch] = useState(activeBranchId || (branchesList.length > 0 ? branchesList[0].id : ''));
@@ -90,7 +90,7 @@ export default function SgkReceivablesPage() {
           .order('invoice_month', { ascending: false });
 
         if (cancelled) return;
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           const mapped: InvoiceRecord[] = data.map((d: any) => {
             const rawPeriod = (d.invoice_month || '').slice(0, 7) || '2026-09';
             const rawExpected = (d.expected_month || '').slice(0, 7) || expectedPaymentMonth(rawPeriod);
@@ -98,7 +98,7 @@ export default function SgkReceivablesPage() {
             return {
               id: d.id,
               branch_id: d.branch_id,
-              branchName: foundBranch ? foundBranch.name : 'Test Şube 1',
+              branchName: foundBranch?.name || '',
               invoice_month: rawPeriod,
               invoice_period_label: monthLabel(rawPeriod),
               expected_month: rawExpected,
@@ -106,11 +106,13 @@ export default function SgkReceivablesPage() {
               invoice_no: d.invoice_no,
               amount: Number(d.amount) || 0,
               status: d.status || 'Bekliyor',
-              created_at: d.created_at ? new Date(d.created_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '12.09.2025 14:30',
+              created_at: d.created_at ? new Date(d.created_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
               notes: d.notes || ''
             };
           });
           setInvoices(mapped);
+        } else if (!cancelled && !error) {
+          setInvoices([]);
         }
       } catch {
         // Fallback to local state gracefully
@@ -144,8 +146,8 @@ export default function SgkReceivablesPage() {
   }, [scopedList, searchTerm, periodFilter]);
 
   // Dynamic statistics
-  const currentMonthKey = '2026-09';
-  const nextMonthKey = '2026-11';
+  const currentMonthKey = monthKey();
+  const nextMonthKey = expectedPaymentMonth(currentMonthKey);
 
   const thisMonthExpected = scopedList
     .filter(i => i.expected_month === currentMonthKey && i.status === 'Bekliyor')
@@ -160,6 +162,13 @@ export default function SgkReceivablesPage() {
   const totalCollectedThisYear = scopedList
     .filter(i => i.status === 'Tahsil Edildi')
     .reduce((sum, i) => sum + i.amount, 0);
+  const totalInvoicedThisYear = scopedList
+    .filter(i => i.invoice_month.startsWith(String(new Date().getFullYear())))
+    .reduce((sum, i) => sum + i.amount, 0);
+  const paidThisYear = scopedList.filter(i => i.status === 'Tahsil Edildi' && i.invoice_month.startsWith(String(new Date().getFullYear())));
+  const collectionRate = totalInvoicedThisYear > 0
+    ? Math.round(paidThisYear.reduce((sum, invoice) => sum + invoice.amount, 0) / totalInvoicedThisYear * 100)
+    : null;
 
   // Form Submit
   const handleSaveInvoice = async (e: React.FormEvent) => {
@@ -863,15 +872,15 @@ export default function SgkReceivablesPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Yıllık Toplam Faturalanan</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>₺25.000</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{formatCurrency(totalInvoicedThisYear)}</div>
             </div>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Ortalama Tahsilat Süresi</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>60 Gün</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{paidThisYear.length ? '—' : 'Veri yok'}</div>
             </div>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Tahsilat Başarı Oranı</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>%100</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>{collectionRate === null ? '—' : `%${collectionRate}`}</div>
             </div>
           </div>
         </div>

@@ -72,6 +72,7 @@ export default function PatientsPage() {
   const [filterLoss, setFilterLoss] = useState('Tümü');
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [filterSource, setFilterSource] = useState('Tümü');
+  const [filterBranch, setFilterBranch] = useState('Tümü');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterDevice, setFilterDevice] = useState('Tümü');
@@ -539,6 +540,7 @@ export default function PatientsPage() {
       const matchLoss = filterLoss === 'Tümü' || p.hearingLoss === filterLoss;
       const matchStatus = filterStatus === 'Tümü' || (p.patientStatus || 'Potansiyel') === filterStatus;
       const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
+      const matchBranch = filterBranch === 'Tümü' || p.branchId === filterBranch;
       const hasDevice = patientHasDevice(p);
       const matchDevice = filterDevice === 'Tümü' || (filterDevice === 'Cihaz kullanıyor' ? hasDevice : !hasDevice);
       const hasUpcomingAppointment = branchAppointments.some(appointment => appointment.patientId === p.id && appointment.date >= new Date().toISOString().slice(0, 10) && !['İptal', 'Gelmedi'].includes(appointment.status));
@@ -565,9 +567,9 @@ export default function PatientsPage() {
         }
       }
       
-      return matchSearch && matchLoss && matchStatus && matchSource && matchDevice && matchAppointment && matchQuickFilter && matchDate;
+      return matchSearch && matchLoss && matchStatus && matchSource && matchBranch && matchDevice && matchAppointment && matchQuickFilter && matchDate;
     });
-  }, [branchFilteredPatients, branchAppointments, stockList, patientHasDevice, debouncedSearch, filterLoss, filterStatus, filterSource, filterDevice, filterAppointment, quickFilter, filterStartDate, filterEndDate]);
+  }, [branchFilteredPatients, branchAppointments, stockList, patientHasDevice, debouncedSearch, filterLoss, filterStatus, filterSource, filterBranch, filterDevice, filterAppointment, quickFilter, filterStartDate, filterEndDate]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
@@ -775,9 +777,9 @@ export default function PatientsPage() {
               </div>
             </div>
 
-            {/* Şube */}
+            {/* Hasta kaynağı */}
             <div style={{ minWidth: 110, flex: '1 1 100px' }}>
-              <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Şube</label>
+              <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Hasta Kaynağı</label>
               <select className="form-select" style={{ padding: '7px 10px', fontSize: '0.82rem', width: '100%', height: 36 }} value={filterSource} onChange={(e) => setFilterSource(e.target.value)}>
                 <option value="Tümü">Tümü</option>
                 <option value="Doktor">Doktor Yönlendirmesi</option>
@@ -785,6 +787,14 @@ export default function PatientsPage() {
                 <option value="Tavsiye">Hasta Tavsiyesi</option>
                 <option value="Yürüyerek">Yürüyerek (Walk-in)</option>
                 <option value="Web">Web Sitesi</option>
+              </select>
+            </div>
+
+            <div style={{ minWidth: 110, flex: '1 1 100px' }}>
+              <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Şube</label>
+              <select className="form-select" style={{ padding: '7px 10px', fontSize: '0.82rem', width: '100%', height: 36 }} value={filterBranch} onChange={event => setFilterBranch(event.target.value)} aria-label="Şube filtresi">
+                <option value="Tümü">Tüm şubeler</option>
+                {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
               </select>
             </div>
 
@@ -856,7 +866,7 @@ export default function PatientsPage() {
               </button>
           ))}
           <button type="button" className={styles.clearFilters} onClick={() => {
-            setSearch(''); setFilterLoss('Tümü'); setFilterStatus('Tümü'); setFilterSource('Tümü');
+            setSearch(''); setFilterLoss('Tümü'); setFilterStatus('Tümü'); setFilterSource('Tümü'); setFilterBranch('Tümü');
             setFilterStartDate(''); setFilterEndDate(''); setFilterDevice('Tümü'); setFilterAppointment('Tümü'); setQuickFilter('Tümü');
           }}><IconRefresh size={14} /> Filtreleri Temizle</button>
         </div>

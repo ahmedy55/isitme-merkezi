@@ -2,53 +2,116 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBranchScope } from '../hooks/useBranchScope';
+import { formatCurrency } from '../data/mockData';
 import styles from './DashboardPage.module.css';
 
 export default function DashboardPage() {
-  const { setCurrentPage, addToast } = useApp();
+  const { setCurrentPage, addToast, salesList, appointmentsList, patientsList, branchesList } = useApp();
+  const { matches } = useBranchScope();
 
   const [activeTimeRange, setActiveTimeRange] = useState<'Bugün' | 'Bu Hafta' | 'Bu Ay' | 'Bu Yıl'>('Bu Ay');
-  const [dateRangeText, setDateRangeText] = useState('01.09.2026 - 30.09.2026');
+  const today = new Date();
+  const formatDate = (date: Date) => new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Istanbul' }).format(date);
+  const [dateRangeText, setDateRangeText] = useState(() => {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    return `${formatDate(start)} - ${formatDate(today)}`;
+  });
   const [showDateModal, setShowDateModal] = useState(false);
+  const [dashboardChartMetric, setDashboardChartMetric] = useState<'Ciro' | 'Adet'>('Ciro');
+  const [appointmentChartPeriod, setAppointmentChartPeriod] = useState<'Bu Ay' | 'Bu Hafta'>('Bu Ay');
+  const [patientChartPeriod, setPatientChartPeriod] = useState<'Bu Ay' | 'Bu Hafta'>('Bu Ay');
 
-  // Month bars data for Aylık Ciro Trendi (Max scale 15K)
-  const monthlyData = [
-    { month: 'Oca', value: 3.5, height: 23 },
-    { month: 'Şub', value: 4.8, height: 32 },
-    { month: 'Mar', value: 6.2, height: 41 },
-    { month: 'Nis', value: 7.9, height: 53 },
-    { month: 'May', value: 8.5, height: 57 },
-    { month: 'Haz', value: 7.2, height: 48 },
-    { month: 'Tem', value: 9.1, height: 61 },
-    { month: 'Ağu', value: 10.4, height: 69 },
-    { month: 'Eyl', value: 12.5, height: 83, isCurrent: true },
-    { month: 'Eki', value: 9.8, height: 65 },
-    { month: 'Kas', value: 8.6, height: 57 },
-    { month: 'Ara', value: 6.9, height: 46 },
-  ];
+  const selectedRange = React.useMemo(() => {
+    const [startText, endText] = dateRangeText.split(' - ');
+    const parseDate = (text: string) => {
+      const [day, month, year] = text.split('.').map(Number);
+      return day && month && year ? new Date(year, month - 1, day) : new Date(NaN);
+    };
+    return { start: parseDate(startText || ''), end: parseDate(endText || '') };
+  }, [dateRangeText]);
+  const inSelectedRange = (value: string) => {
+    if (!value || Number.isNaN(selectedRange.start.getTime()) || Number.isNaN(selectedRange.end.getTime())) return false;
+    const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+    return date >= selectedRange.start && date <= selectedRange.end;
+  };
+  const rangeSales = salesList.filter(sale => matches(undefined, sale.branchId) && inSelectedRange(sale.date));
+  const rangeAppointments = appointmentsList.filter(appointment => matches(appointment.branch, appointment.branchId) && inSelectedRange(appointment.date));
+  const rangePatients = patientsList.filter(patient => matches(patient.branch, patient.branchId) && inSelectedRange(patient.createdAt || patient.lastVisit || ''));
+  const dashboardRevenue = rangeSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+  const deviceSales = rangeSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((qty, item) => qty + item.quantity, 0), 0);
+  const serviceCount = rangeSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Servis Geliri').reduce((qty, item) => qty + item.quantity, 0), 0);
+  const branchMetrics = branchesList.filter(branch => matches(branch.name, branch.id)).map(branch => {
+    const branchSales = rangeSales.filter(sale => sale.branchId === branch.id);
+    const branchPatients = rangePatients.filter(patient => patient.branchId === branch.id);
+    const branchAppointments = rangeAppointments.filter(appointment => appointment.branchId === branch.id);
+    return {
+      ...branch,
+      revenue: branchSales.reduce((sum, sale) => sum + sale.total, 0),
+      patients: branchPatients.length,
+      appointments: branchAppointments.length,
+      devices: branchSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((qty, item) => qty + item.quantity, 0), 0),
+      services: branchSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Servis Geliri').reduce((qty, item) => qty + item.quantity, 0), 0),
+    };
+  });
+  const todayKey = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(today);
+  const todaysAppointments = appointmentsList
+    .filter(appointment => matches(appointment.branch, appointment.branchId) && appointment.date.slice(0, 10) === todayKey)
+    .sort((a, b) => a.time.localeCompare(b.time));
+
+  const updateRange = (range: typeof activeTimeRange) => {
+    const end = new Date();
+    const start = new Date(end);
+    if (range === 'Bugün') start.setHours(0, 0, 0, 0);
+    if (range === 'Bu Hafta') start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    if (range === 'Bu Ay') start.setDate(1);
+    if (range === 'Bu Yıl') start.setMonth(0, 1);
+    setActiveTimeRange(range);
+    setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
+    addToast({ type: 'info', message: `Zaman aralığı: ${range} seçildi` });
+  };
+
+  const monthLabels = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  const reportYear = new Date().getFullYear();
+  const monthlyValues = monthLabels.map((_, month) => rangeSales
+    .filter(sale => sale.date.startsWith(`${reportYear}-${String(month + 1).padStart(2, '0')}`))
+    .reduce((sum, sale) => sum + (dashboardChartMetric === 'Ciro' ? sale.total : sale.items.reduce((qty, item) => qty + item.quantity, 0)), 0));
+  const monthlyMax = Math.max(...monthlyValues, 1);
+  const monthlyData = monthLabels.map((month, index) => ({ month, value: monthlyValues[index], height: monthlyValues[index] / monthlyMax * 108, isCurrent: index === today.getMonth() }));
 
   // Helper to calculate SVG donut slice offsets
   // Circumference for r=38 is 2 * PI * 38 = 238.76
   const cRadius = 38;
   const circ = 2 * Math.PI * cRadius;
 
-  // Randevu Durumu: Total 52
-  // Tamamlanan: 38 (73.08%), Bekleyen: 8 (15.38%), İptal: 4 (7.69%), Gelmedi: 2 (3.85%)
-  const apptSlices = [
-    { label: 'Tamamlanan', count: 38, percent: 73, color: '#08785B', length: circ * 0.7308 },
-    { label: 'Bekleyen', count: 8, percent: 15, color: '#2563EB', length: circ * 0.1538 },
-    { label: 'İptal Edilen', count: 4, percent: 8, color: '#F97316', length: circ * 0.0769 },
-    { label: 'Gelmedi', count: 2, percent: 4, color: '#9CA3AF', length: circ * 0.0385 },
+  const makeSlices = (entries: { label: string; count: number; color: string }[]) => {
+    const total = entries.reduce((sum, entry) => sum + entry.count, 0);
+    return entries.map(entry => ({ ...entry, percent: total ? Math.round(entry.count / total * 100) : 0, length: total ? circ * entry.count / total : 0 }));
+  };
+  const matchesChartPeriod = (value: string, period: 'Bu Ay' | 'Bu Hafta') => {
+    const date = new Date(`${value.slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return false;
+    const start = new Date(today);
+    if (period === 'Bu Ay') start.setDate(1);
+    else start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+    start.setHours(0, 0, 0, 0);
+    return date >= start && date <= today;
+  };
+  const appointmentCounts = [
+    { label: 'Tamamlanan', count: rangeAppointments.filter(a => matchesChartPeriod(a.date, appointmentChartPeriod) && a.status === 'Geldi').length, color: '#08785B' },
+    { label: 'Bekleyen', count: rangeAppointments.filter(a => matchesChartPeriod(a.date, appointmentChartPeriod) && (a.status === 'Bekliyor' || a.status === 'Hatırlatıldı')).length, color: '#2563EB' },
+    { label: 'İptal Edilen', count: rangeAppointments.filter(a => matchesChartPeriod(a.date, appointmentChartPeriod) && a.status === 'İptal').length, color: '#F97316' },
+    { label: 'Gelmedi', count: rangeAppointments.filter(a => matchesChartPeriod(a.date, appointmentChartPeriod) && a.status === 'Gelmedi').length, color: '#9CA3AF' },
   ];
-
-  // Hasta Kaynak Dağılımı: Total 18
-  // Referans: 8 (44.4%), Web Site: 4 (22.2%), Walk-in: 3 (16.7%), Doktor: 3 (16.7%)
-  const sourceSlices = [
-    { label: 'Referans', count: 8, percent: 44, color: '#08785B', length: circ * 0.444 },
-    { label: 'Web Site', count: 4, percent: 22, color: '#2563EB', length: circ * 0.222 },
-    { label: 'Walk-in', count: 3, percent: 17, color: '#F97316', length: circ * 0.167 },
-    { label: 'Doktor Yönlendirme', count: 3, percent: 17, color: '#8B5CF6', length: circ * 0.167 },
-  ];
+  const apptSlices = makeSlices(appointmentCounts);
+  const sourceColors = ['#08785B', '#2563EB', '#F97316', '#8B5CF6', '#0EA5E9'];
+  const sourcePatients = rangePatients.filter(patient => matchesChartPeriod(patient.createdAt || patient.lastVisit || '', patientChartPeriod));
+  const sourceCounts = Array.from(new Set(sourcePatients.map(patient => patient.source || 'Belirtilmemiş'))).map((source, index) => ({
+    label: source,
+    count: sourcePatients.filter(patient => (patient.source || 'Belirtilmemiş') === source).length,
+    color: sourceColors[index % sourceColors.length],
+  }));
+  const sourceSlices = makeSlices(sourceCounts);
 
   let apptOffset = 0;
   let sourceOffset = 0;
@@ -89,12 +152,7 @@ export default function DashboardPage() {
                 type="button"
                 className={`${styles.timePill} ${activeTimeRange === pill ? styles.timePillActive : ''}`}
                 onClick={() => {
-                  setActiveTimeRange(pill);
-                  if (pill === 'Bugün') setDateRangeText('29.09.2026 - 29.09.2026');
-                  else if (pill === 'Bu Hafta') setDateRangeText('23.09.2026 - 29.09.2026');
-                  else if (pill === 'Bu Ay') setDateRangeText('01.09.2026 - 30.09.2026');
-                  else if (pill === 'Bu Yıl') setDateRangeText('01.01.2026 - 31.12.2026');
-                  addToast({ type: 'info', message: `Zaman aralığı: ${pill} seçildi` });
+                  updateRange(pill);
                 }}
               >
                 {pill}
@@ -117,10 +175,9 @@ export default function DashboardPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Toplam Ciro</span>
-            <span className={styles.statValue}>₺12.500</span>
+            <span className={styles.statValue}>{formatCurrency(dashboardRevenue)}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %12</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
+              <span className={styles.trendSub}>Seçili tarih aralığı</span>
             </div>
           </div>
         </div>
@@ -137,10 +194,9 @@ export default function DashboardPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Randevu</span>
-            <span className={styles.statValue}>52</span>
+            <span className={styles.statValue}>{rangeAppointments.length}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %8</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
+              <span className={styles.trendSub}>Seçili tarih aralığı</span>
             </div>
           </div>
         </div>
@@ -157,10 +213,9 @@ export default function DashboardPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Yeni Hasta</span>
-            <span className={styles.statValue}>18</span>
+            <span className={styles.statValue}>{rangePatients.length}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %28</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
+              <span className={styles.trendSub}>Seçili tarih aralığı</span>
             </div>
           </div>
         </div>
@@ -176,10 +231,9 @@ export default function DashboardPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Cihaz Satışı</span>
-            <span className={styles.statValue}>12</span>
+            <span className={styles.statValue}>{deviceSales}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %20</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
+              <span className={styles.trendSub}>Seçili tarih aralığı</span>
             </div>
           </div>
         </div>
@@ -193,10 +247,9 @@ export default function DashboardPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Teknik Servis</span>
-            <span className={styles.statValue}>6</span>
+            <span className={styles.statValue}>{serviceCount}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendRed}>↓ %14</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
+              <span className={styles.trendSub}>Seçili tarih aralığı</span>
             </div>
           </div>
         </div>
@@ -217,7 +270,7 @@ export default function DashboardPage() {
               </span>
               <span>Aylık Ciro Trendi</span>
             </div>
-            <select className={styles.miniSelect} defaultValue="Ciro">
+            <select className={styles.miniSelect} value={dashboardChartMetric} onChange={event => setDashboardChartMetric(event.target.value as 'Ciro' | 'Adet')}>
               <option value="Ciro">Ciro</option>
               <option value="Adet">Adet</option>
             </select>
@@ -226,25 +279,25 @@ export default function DashboardPage() {
           <div className={styles.barChartWrap}>
             {/* Tooltip Bubble */}
             <div className={styles.tooltipBubble}>
-              <div className={styles.tooltipMonth}>Eylül 2026</div>
-              <div className={styles.tooltipValue}>₺12.500</div>
+              <div className={styles.tooltipMonth}>{monthLabels[today.getMonth()]} {reportYear}</div>
+              <div className={styles.tooltipValue}>{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyValues[today.getMonth()]) : `${monthlyValues[today.getMonth()]} adet`}</div>
             </div>
 
             <svg className={styles.barChartSvg} viewBox="0 0 460 140" preserveAspectRatio="none">
               {/* Grid lines and Y axis */}
-              <text x="28" y="15" fill="#9CA3AF" fontSize="9" textAnchor="end">15K ₺</text>
+              <text x="28" y="15" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax) : `${Math.round(monthlyMax)} adet`}</text>
               <line x1="34" y1="12" x2="450" y2="12" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
-              <text x="28" y="42" fill="#9CA3AF" fontSize="9" textAnchor="end">12K ₺</text>
+              <text x="28" y="42" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax * .75) : `${Math.round(monthlyMax * .75)} adet`}</text>
               <line x1="34" y1="39" x2="450" y2="39" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
-              <text x="28" y="69" fill="#9CA3AF" fontSize="9" textAnchor="end">9K ₺</text>
+              <text x="28" y="69" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax * .5) : `${Math.round(monthlyMax * .5)} adet`}</text>
               <line x1="34" y1="66" x2="450" y2="66" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
-              <text x="28" y="96" fill="#9CA3AF" fontSize="9" textAnchor="end">6K ₺</text>
+              <text x="28" y="96" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax * .25) : `${Math.round(monthlyMax * .25)} adet`}</text>
               <line x1="34" y1="93" x2="450" y2="93" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
-              <text x="28" y="122" fill="#9CA3AF" fontSize="9" textAnchor="end">0 ₺</text>
+              <text x="28" y="122" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? '₺0' : '0 adet'}</text>
               <line x1="34" y1="120" x2="450" y2="120" stroke="#E5E7EB" strokeWidth="1" />
 
               {/* Monthly Bars */}
@@ -295,7 +348,7 @@ export default function DashboardPage() {
               </span>
               <span>Randevu Durumu</span>
             </div>
-            <select className={styles.miniSelect} defaultValue="Bu Ay">
+            <select className={styles.miniSelect} value={appointmentChartPeriod} onChange={event => setAppointmentChartPeriod(event.target.value as 'Bu Ay' | 'Bu Hafta')}>
               <option value="Bu Ay">Bu Ay</option>
               <option value="Bu Hafta">Bu Hafta</option>
             </select>
@@ -324,7 +377,7 @@ export default function DashboardPage() {
                 })}
               </svg>
               <div className={styles.donutCenterText}>
-                <span className={styles.donutBigVal}>52</span>
+                <span className={styles.donutBigVal}>{rangeAppointments.length}</span>
                 <span className={styles.donutSubVal}>Toplam Randevu</span>
               </div>
             </div>
@@ -360,7 +413,7 @@ export default function DashboardPage() {
               </span>
               <span>Hasta Kaynak Dağılımı</span>
             </div>
-            <select className={styles.miniSelect} defaultValue="Bu Ay">
+            <select className={styles.miniSelect} value={patientChartPeriod} onChange={event => setPatientChartPeriod(event.target.value as 'Bu Ay' | 'Bu Hafta')}>
               <option value="Bu Ay">Bu Ay</option>
               <option value="Bu Hafta">Bu Hafta</option>
             </select>
@@ -389,7 +442,7 @@ export default function DashboardPage() {
                 })}
               </svg>
               <div className={styles.donutCenterText}>
-                <span className={styles.donutBigVal}>18</span>
+                <span className={styles.donutBigVal}>{rangePatients.length}</span>
                 <span className={styles.donutSubVal}>Yeni Hasta</span>
               </div>
             </div>
@@ -447,64 +500,23 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>
-                  <div className={styles.branchCell}>
-                    <span className={styles.branchIconBox} style={{ background: '#EFF6FF', color: '#2563EB' }}>
-                      🏢
-                    </span>
-                    <span>Merkez</span>
-                  </div>
-                </td>
-                <td style={{ fontWeight: 700, color: '#111827' }}>₺8.250</td>
-                <td>12</td>
-                <td>28</td>
-                <td>8</td>
-                <td>3</td>
-                <td style={{ textAlign: 'right', color: '#08785B', fontWeight: 600 }}>↑ %15</td>
-              </tr>
-              <tr>
-                <td>
-                  <div className={styles.branchCell}>
-                    <span className={styles.branchIconBox} style={{ background: '#E6F7F2', color: '#08785B' }}>
-                      🏢
-                    </span>
-                    <span>Çankaya</span>
-                  </div>
-                </td>
-                <td style={{ fontWeight: 700, color: '#111827' }}>₺3.750</td>
-                <td>5</td>
-                <td>16</td>
-                <td>3</td>
-                <td>2</td>
-                <td style={{ textAlign: 'right', color: '#08785B', fontWeight: 600 }}>↑ %9</td>
-              </tr>
-              <tr>
-                <td>
-                  <div className={styles.branchCell}>
-                    <span className={styles.branchIconBox} style={{ background: '#FFF7ED', color: '#EA580C' }}>
-                      🏢
-                    </span>
-                    <span>Kadıköy</span>
-                  </div>
-                </td>
-                <td style={{ fontWeight: 700, color: '#111827' }}>₺500</td>
-                <td>1</td>
-                <td>8</td>
-                <td>1</td>
-                <td>1</td>
-                <td style={{ textAlign: 'right', color: '#DC2626', fontWeight: 600 }}>↓ %12</td>
-              </tr>
+              {branchMetrics.length === 0 ? <tr><td colSpan={7} style={{ textAlign: 'center' }}>Şube verisi bulunamadı.</td></tr> : branchMetrics.map(branch => (
+                <tr key={branch.id}>
+                  <td><div className={styles.branchCell}><span className={styles.branchIconBox} style={{ background: '#E6F7F2', color: '#08785B' }}>🏢</span><span>{branch.name}</span></div></td>
+                  <td style={{ fontWeight: 700, color: '#111827' }}>{formatCurrency(branch.revenue)}</td>
+                  <td>{branch.patients}</td><td>{branch.appointments}</td><td>{branch.devices}</td><td>{branch.services}</td><td>—</td>
+                </tr>
+              ))}
             </tbody>
             <tfoot>
               <tr>
                 <td>Toplam</td>
-                <td>₺12.500</td>
-                <td>18</td>
-                <td>52</td>
-                <td>12</td>
-                <td>6</td>
-                <td style={{ textAlign: 'right', color: '#08785B' }}>↑ %12</td>
+                <td>{formatCurrency(branchMetrics.reduce((sum, branch) => sum + branch.revenue, 0))}</td>
+                <td>{branchMetrics.reduce((sum, branch) => sum + branch.patients, 0)}</td>
+                <td>{branchMetrics.reduce((sum, branch) => sum + branch.appointments, 0)}</td>
+                <td>{branchMetrics.reduce((sum, branch) => sum + branch.devices, 0)}</td>
+                <td>{branchMetrics.reduce((sum, branch) => sum + branch.services, 0)}</td>
+                <td>—</td>
               </tr>
             </tfoot>
           </table>
@@ -534,75 +546,15 @@ export default function DashboardPage() {
           </div>
 
           <div className={styles.apptList}>
-            {/* Row 1 */}
-            <div className={styles.apptRow}>
-              <span className={styles.apptTime}>09:30</span>
-              <div className={styles.apptPatient}>
-                <span style={{ color: '#EA580C' }}>👤</span>
-                <span>Ayşe Yılmaz</span>
-              </div>
-              <span className={`${styles.apptBadge} ${styles.badgeWaiting}`}>Bekliyor</span>
-              <div className={styles.apptMeta}>
-                <span>Merkez</span>
-                <span>Kontrol</span>
-              </div>
-            </div>
-
-            {/* Row 2 */}
-            <div className={styles.apptRow}>
-              <span className={styles.apptTime}>10:15</span>
-              <div className={styles.apptPatient}>
-                <span style={{ color: '#EA580C' }}>👤</span>
-                <span>Mehmet Kaya</span>
-              </div>
-              <span className={`${styles.apptBadge} ${styles.badgeArrived}`}>Geldi</span>
-              <div className={styles.apptMeta}>
-                <span>Çankaya</span>
-                <span>Cihaz Ayarı</span>
-              </div>
-            </div>
-
-            {/* Row 3 */}
-            <div className={styles.apptRow}>
-              <span className={styles.apptTime}>11:00</span>
-              <div className={styles.apptPatient}>
-                <span style={{ color: '#8B5CF6' }}>👤</span>
-                <span>Elif Demir</span>
-              </div>
-              <span className={`${styles.apptBadge} ${styles.badgeArrived}`}>Geldi</span>
-              <div className={styles.apptMeta}>
-                <span>Merkez</span>
-                <span>İlk Muayene</span>
-              </div>
-            </div>
-
-            {/* Row 4 */}
-            <div className={styles.apptRow}>
-              <span className={styles.apptTime}>13:30</span>
-              <div className={styles.apptPatient}>
-                <span style={{ color: '#08785B' }}>👤</span>
-                <span>Zeynep Güneş</span>
-              </div>
-              <span className={`${styles.apptBadge} ${styles.badgeNeutral}`}>Beklemede</span>
-              <div className={styles.apptMeta}>
-                <span>Kadıköy</span>
-                <span>Cihaz Teslimi</span>
-              </div>
-            </div>
-
-            {/* Row 5 */}
-            <div className={styles.apptRow}>
-              <span className={styles.apptTime}>15:00</span>
-              <div className={styles.apptPatient}>
-                <span style={{ color: '#2563EB' }}>👤</span>
-                <span>Ali Veli</span>
-              </div>
-              <span className={`${styles.apptBadge} ${styles.badgePlanned}`}>Planlandı</span>
-              <div className={styles.apptMeta}>
-                <span>Merkez</span>
-                <span>Kontrol</span>
-              </div>
-            </div>
+            {todaysAppointments.length === 0 ? <div className={styles.apptRow}>Bugün için randevu bulunmuyor.</div> : todaysAppointments.slice(0, 5).map(appointment => {
+              const statusClass = appointment.status === 'Geldi' ? styles.badgeArrived : appointment.status === 'İptal' ? styles.badgeNeutral : appointment.status === 'Gelmedi' ? styles.badgePlanned : styles.badgeWaiting;
+              return <div className={styles.apptRow} key={appointment.id}>
+                <span className={styles.apptTime}>{appointment.time}</span>
+                <div className={styles.apptPatient}><span style={{ color: '#08785B' }}>👤</span><span>{appointment.patientName}</span></div>
+                <span className={`${styles.apptBadge} ${statusClass}`}>{appointment.status}</span>
+                <div className={styles.apptMeta}><span>{appointment.branch}</span><span>{appointment.type}</span></div>
+              </div>;
+            })}
           </div>
 
           <button 
@@ -708,61 +660,7 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td style={{ fontSize: '11px', color: '#6B7280', whiteSpace: 'nowrap' }}>29.09.2026 13:47</td>
-                <td>
-                  <div className={styles.actionItemCell}>
-                    <span style={{ color: '#08785B' }}>🛒</span>
-                    <span>Satış Ekleme</span>
-                  </div>
-                </td>
-                <td style={{ fontSize: '11px', color: '#6B7280' }}>Satış: 559fecee-c123-4220-88bb-00edc98873fc</td>
-                <td style={{ fontWeight: 600, color: '#111827' }}>Ahmet Yılmaz</td>
-              </tr>
-              <tr>
-                <td style={{ fontSize: '11px', color: '#6B7280', whiteSpace: 'nowrap' }}>29.09.2026 12:11</td>
-                <td>
-                  <div className={styles.actionItemCell}>
-                    <span style={{ color: '#EA580C' }}>📅</span>
-                    <span>Randevu Güncelleme</span>
-                  </div>
-                </td>
-                <td style={{ fontSize: '11px', color: '#6B7280' }}>Randevu #1245 tarihi değiştirildi</td>
-                <td style={{ fontWeight: 600, color: '#111827' }}>Zeynep Kaya</td>
-              </tr>
-              <tr>
-                <td style={{ fontSize: '11px', color: '#6B7280', whiteSpace: 'nowrap' }}>28.09.2026 17:06</td>
-                <td>
-                  <div className={styles.actionItemCell}>
-                    <span style={{ color: '#2563EB' }}>👤</span>
-                    <span>Hasta Güncelleme</span>
-                  </div>
-                </td>
-                <td style={{ fontSize: '11px', color: '#6B7280' }}>Hasta bilgileri güncellendi</td>
-                <td style={{ fontWeight: 600, color: '#111827' }}>Mehmet Kaya</td>
-              </tr>
-              <tr>
-                <td style={{ fontSize: '11px', color: '#6B7280', whiteSpace: 'nowrap' }}>28.09.2026 15:22</td>
-                <td>
-                  <div className={styles.actionItemCell}>
-                    <span style={{ color: '#08785B' }}>💵</span>
-                    <span>Ödeme Ekleme</span>
-                  </div>
-                </td>
-                <td style={{ fontSize: '11px', color: '#6B7280' }}>Tahsilat #785 - ₺2.500 (Nakit)</td>
-                <td style={{ fontWeight: 600, color: '#111827' }}>Elif Demir</td>
-              </tr>
-              <tr>
-                <td style={{ fontSize: '11px', color: '#6B7280', whiteSpace: 'nowrap' }}>27.09.2026 11:45</td>
-                <td>
-                  <div className={styles.actionItemCell}>
-                    <span style={{ color: '#EA580C' }}>📦</span>
-                    <span>Cihaz Ekleme</span>
-                  </div>
-                </td>
-                <td style={{ fontSize: '11px', color: '#6B7280' }}>Cihaz: Oticon More 1 (SN: 9876543210)</td>
-                <td style={{ fontWeight: 600, color: '#111827' }}>Ahmet Yılmaz</td>
-              </tr>
+              <tr><td colSpan={4} style={{ textAlign: 'center', color: '#6B7280' }}>Gösterilecek gerçek işlem kaydı bulunmuyor.</td></tr>
             </tbody>
           </table>
         </div>
@@ -784,7 +682,7 @@ export default function DashboardPage() {
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                {['Bugün', 'Son 7 Gün', 'Bu Ay (Eylül 2026)', 'Son 3 Ay', 'Bu Yıl (2026)', 'Tüm Zamanlar'].map((rangeOption) => (
+                {['Bugün', 'Son 7 Gün', `Bu Ay (${new Intl.DateTimeFormat('tr-TR', { month: 'long' }).format(today)} ${reportYear})`, 'Son 3 Ay', `Bu Yıl (${reportYear})`, 'Tüm Zamanlar'].map((rangeOption) => (
                   <button
                     key={rangeOption}
                     type="button"
@@ -800,13 +698,19 @@ export default function DashboardPage() {
                       textAlign: 'left'
                     }}
                     onClick={() => {
-                      if (rangeOption.includes('Bu Ay')) {
-                        setDateRangeText('01.09.2026 - 30.09.2026');
-                      } else if (rangeOption === 'Son 7 Gün') {
-                        setDateRangeText('23.09.2026 - 30.09.2026');
-                      } else {
-                        setDateRangeText(rangeOption);
+                      const end = new Date();
+                      const start = new Date(end);
+                      if (rangeOption === 'Bugün') start.setHours(0, 0, 0, 0);
+                      else if (rangeOption === 'Son 7 Gün') start.setDate(start.getDate() - 6);
+                      else if (rangeOption.startsWith('Bu Ay')) start.setDate(1);
+                      else if (rangeOption === 'Son 3 Ay') start.setMonth(start.getMonth() - 3);
+                      else if (rangeOption.startsWith('Bu Yıl')) start.setMonth(0, 1);
+                      else if (rangeOption === 'Tüm Zamanlar') {
+                        const dates = [...salesList.map(item => item.date), ...appointmentsList.map(item => item.date), ...patientsList.map(item => item.createdAt || '')].filter(Boolean).sort();
+                        if (dates[0]) start.setTime(new Date(`${dates[0].slice(0, 10)}T00:00:00`).getTime());
+                        else start.setFullYear(2000, 0, 1);
                       }
+                      setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
                       setShowDateModal(false);
                       addToast({ type: 'info', message: `Tarih aralığı güncellendi: ${rangeOption}` });
                     }}
