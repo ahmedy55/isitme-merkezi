@@ -1575,28 +1575,29 @@ export function NewAppointmentModal({
                           todayStart.setHours(0, 0, 0, 0);
                           const isPastDay = !cell.isCurrent || cellDate < todayStart;
                           return (
-                            <div
+                            <button
+                              type="button"
                               key={idx}
+                              disabled={isPastDay}
                               onClick={() => {
-                                if (cell.isCurrent && !isPastDay) {
-                                  const newD = new Date(selectedDate);
-                                  newD.setFullYear(pickerYear);
-                                  newD.setMonth(pickerMonth);
-                                  newD.setDate(cell.num);
-                                  setSelectedDate(newD);
-                                }
+                                const newD = new Date(selectedDate);
+                                newD.setFullYear(pickerYear);
+                                newD.setMonth(pickerMonth);
+                                newD.setDate(cell.num);
+                                setSelectedDate(newD);
                               }}
                               style={{
                                 padding: '5px 0', fontSize: '0.8rem', borderRadius: 6,
                                 cursor: isPastDay ? 'not-allowed' : 'pointer',
                                 color: isPastDay ? '#cbd5e1' : isSelected ? '#ffffff' : '#334155',
-                                background: isSelected ? '#3b82f6' : 'transparent',
-                                fontWeight: isSelected ? 700 : 400
+                                background: isSelected ? '#3b82f6' : isPastDay ? '#f8fafc' : 'transparent',
+                                border: 0, fontWeight: isSelected ? 700 : 400,
+                                opacity: isPastDay ? 0.55 : 1
                               }}
-                              aria-disabled={isPastDay}
+                              aria-label={`${cell.num} ${monthShortNames[pickerMonth]}${isPastDay ? ', geçmiş tarih, seçilemez' : ''}`}
                             >
                               {cell.num}
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -1625,10 +1626,12 @@ export function NewAppointmentModal({
                             style={{
                               padding: '4px 6px', fontSize: '0.78rem', borderRadius: 4, cursor: isTimePast ? 'not-allowed' : 'pointer',
                               border: 0, textAlign: 'left',
-                              background: isTimeSelected ? '#e0f2fe' : 'transparent',
                               color: isTimePast ? '#cbd5e1' : isTimeSelected ? '#0284c7' : '#475569',
-                              fontWeight: isTimeSelected ? 700 : 400, marginBottom: 2
+                              fontWeight: isTimeSelected ? 700 : 400, marginBottom: 2,
+                              opacity: isTimePast ? 0.45 : 1,
+                              background: isTimePast ? '#f8fafc' : isTimeSelected ? '#e0f2fe' : 'transparent'
                             }}
+                            aria-label={`${timeStr}${isTimePast ? ', geçmiş saat, seçilemez' : ''}`}
                           >
                             {timeStr}
                           </button>
