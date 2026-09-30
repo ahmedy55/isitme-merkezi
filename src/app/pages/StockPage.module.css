@@ -929,4 +929,8 @@
     width: 100%;
     justify-content: flex-start;
   }
+  .contentLayout, .tableSection, .tableWrap { min-width: 0; max-width: 100%; width: 100%; }
+  .headerActions { flex-wrap: wrap; }
+  .headerActions > button { flex: 1 1 auto; min-width: 0; }
+  .detailDrawer { min-width: 0; }
 }

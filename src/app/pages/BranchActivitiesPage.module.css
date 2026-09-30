@@ -854,4 +854,9 @@
   .headerActions {
     width: 100%;
   }
+  .headerActions { flex-wrap: wrap; }
+  .headerActions > button { flex: 1 1 auto; min-width: 0; }
+  .section2Grid > *, .section3Grid > *, .branchesGrid3 > *, .cardWhite { min-width: 0; max-width: 100%; }
+  .matrixTable { min-width: 640px; }
+  .matrixTable { display: block; max-width: 100%; overflow-x: auto; }
 }

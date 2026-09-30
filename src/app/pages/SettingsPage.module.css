@@ -47,6 +47,8 @@
   display: flex;
   gap: 8px;
   overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--settings-line);
   border-radius: 15px;

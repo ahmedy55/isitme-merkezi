@@ -133,6 +133,11 @@
   border-bottom: 1px solid var(--csh-border);
   padding-bottom: 2px;
   overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overscroll-behavior-inline: contain;
 }
 
 .navTabBtn {

@@ -400,6 +400,8 @@
 .tableSection {
   flex: 1;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   background: #ffffff;
   border: 1px solid var(--srv-border);
   border-radius: 14px;
@@ -414,7 +416,10 @@
 
 .tableWrapper {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 .serviceTable {
@@ -1091,4 +1096,9 @@
   .quickSearchActions {
     max-width: 100%;
   }
+  .headerActions { flex-wrap: wrap; }
+  .headerActions > button { flex: 1 1 auto; min-width: 0; }
+  .tableSection { flex-basis: auto; }
+  .detailDrawer { min-width: 0; }
+  .formGrid2 { grid-template-columns: minmax(0, 1fr); }
 }

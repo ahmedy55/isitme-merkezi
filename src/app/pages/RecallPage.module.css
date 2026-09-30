@@ -839,4 +839,8 @@
   .searchInputsRow {
     grid-template-columns: 1fr;
   }
+  .pageHeading { align-items: stretch; }
+  .headingCopy { min-width: 0; width: 100%; }
+  .headerActions { flex: 1 1 100%; width: 100%; max-width: 100%; justify-content: flex-start; }
+  .headerActions > button { flex: 1 1 auto; min-width: 0; max-width: 100%; }
 }

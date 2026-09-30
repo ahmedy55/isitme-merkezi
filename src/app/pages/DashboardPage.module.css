@@ -456,6 +456,10 @@
   border-collapse: collapse;
   text-align: left;
   font-size: 12px;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
 }
 
 .dashTable thead th {

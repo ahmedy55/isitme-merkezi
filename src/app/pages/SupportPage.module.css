@@ -17,7 +17,7 @@
   position: relative;
   display: flex;
   min-height: 270px;
-  overflow: hidden;
+  overflow: clip;
   align-items: center;
   border-radius: 16px;
   padding: 30px 32px;

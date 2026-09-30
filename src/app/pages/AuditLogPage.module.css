@@ -129,9 +129,9 @@
   margin-bottom: 20px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1280px) {
   .statsGrid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -139,6 +139,8 @@
   .statsGrid {
     grid-template-columns: 1fr;
   }
+  .contentLayout, .tableSection, .tableWrapper { min-width: 0; max-width: 100%; width: 100%; }
+  .filterGrid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .statCard {

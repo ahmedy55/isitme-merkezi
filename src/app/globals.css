@@ -365,6 +365,18 @@ img        { max-width: 100%; display: block; }
   padding-bottom: var(--bottom-nav-height);
 }
 
+/* Route content must be allowed to shrink below its children’s intrinsic width. */
+.main-content > div {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.main-content > div > * { min-width: 0; }
+
+@media (max-width: 1024px) {
+  .main-content > div { overflow-x: clip; }
+}
+
 /* ============================================================
    BOTTOM NAVIGATION (MOBİL)
    ============================================================ */
@@ -1637,17 +1649,6 @@ tbody tr:hover { background: var(--gray-25); }
   .sidebar-collapsed .sidebar-footer { padding: 8px; }
   .sidebar-collapsed .sidebar-user { justify-content: center; }
 
-  /* Main content margin'i sidebar genişliğine uyum sağlamalı */
-  .main-content {
-    margin-left: var(--sidebar-width);
-    padding-bottom: 0;
-  }
-  .sidebar-collapsed .main-content {
-    margin-left: var(--sidebar-collapsed-width);
-  }
-
-  .bottom-nav { display: none; }
-
   .header { padding: 0 24px; }
   .header-hamburger { display: none; }
   .header-subtitle { display: block; }
@@ -1676,10 +1677,11 @@ tbody tr:hover { background: var(--gray-25); }
   .settings-grid { grid-template-columns: 220px 1fr; }
 }
 
-/* ── Desktop: 1024px+ ── */
-@media (min-width: 1024px) {
+/* ── Desktop: full sidebar is enabled above the sidebar's 1024px mobile breakpoint ── */
+@media (min-width: 1025px) {
   .main-content { margin-left: var(--sidebar-width); }
   .sidebar-collapsed .main-content { margin-left: var(--sidebar-collapsed-width); }
+  .bottom-nav { display: none; }
 
   /* 1024px+ ekranlarda sidebar genelde tam açık kalır */
   .sidebar { width: var(--sidebar-width); }
@@ -1694,6 +1696,11 @@ tbody tr:hover { background: var(--gray-25); }
 
   .page { padding: 26px 32px; }
   .header { padding: 0 32px; }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .main-content { margin-left: 0; padding-bottom: var(--bottom-nav-height); }
+  .bottom-nav { display: flex; }
 }
 
 /* ── Geniş Ekran: 1280px+ ── */
