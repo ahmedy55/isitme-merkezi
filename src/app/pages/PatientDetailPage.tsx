@@ -17,6 +17,7 @@ import { useBranchScope } from '../hooks/useBranchScope';
 import { saveServiceTicket } from '../repositories/ServiceTicketRepository';
 import { supabase } from '../lib/supabase';
 import { AUDIOGRAM_BUCKET, validateAudiogramUpload } from '../lib/audiogramUpload';
+import { isSupportedPatientPhoto, resizePatientPhoto } from '../lib/patientPhoto';
 
 const FREQUENCIES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
 const dateInputOffset = (days = 0) => { const value = new Date(); value.setDate(value.getDate() + days); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; };
@@ -47,6 +48,7 @@ export default function PatientDetailPage() {
   const [isUploadingAudiogram, setIsUploadingAudiogram] = useState(false);
   const [audiogramFiles, setAudiogramFiles] = useState<{ name: string; created_at?: string | null }[]>([]);
   const audiogramFileInputRef = useRef<HTMLInputElement>(null);
+  const patientPhotoInputRef = useRef<HTMLInputElement>(null);
   const [saleStockId, setSaleStockId] = useState('');
   const [saleEarSide, setSaleEarSide] = useState<'Sağ' | 'Sol'>('Sağ');
   const [trialStockId, setTrialStockId] = useState('');
@@ -139,6 +141,19 @@ export default function PatientDetailPage() {
   });
 
   const patient = patientsList.find(p => p.id === selectedPatientId && matches(p.branch, p.branchId));
+  const handlePatientPhotoChange = async (file?: File) => {
+    if (!file || !patient) return;
+    if (!isSupportedPatientPhoto(file)) {
+      addToast({ type: 'error', message: 'Yalnızca JPG, PNG veya WebP formatında ve en fazla 5 MB fotoğraf yükleyebilirsiniz.' });
+      return;
+    }
+    try {
+      const photoUrl = await resizePatientPhoto(file);
+      await updatePatient({ ...patient, photoUrl });
+    } catch {
+      addToast({ type: 'error', message: 'Hasta fotoğrafı kaydedilemedi. Lütfen tekrar deneyin.' });
+    }
+  };
   const isSaleEligible = (item: typeof stockList[number]) => item.quantity > 0 && item.branchId === patient?.branchId && (
     item.status === 'Stokta' || (item.status === 'Hastaya Ayrıldı' && item.assignedPatientId === patient?.id)
   );
@@ -582,6 +597,19 @@ export default function PatientDetailPage() {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            ref={patientPhotoInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            onChange={event => {
+              void handlePatientPhotoChange(event.target.files?.[0]);
+              event.currentTarget.value = '';
+            }}
+          />
+          <button className="btn btn-secondary" onClick={() => patientPhotoInputRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <IconUpload size={15} /> Fotoğraf Yükle
+          </button>
           <button className="btn btn-secondary" onClick={() => setShowEditPatientModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <IconEdit size={15} strokeWidth={1.8} /> Düzenle
           </button>

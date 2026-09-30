@@ -79,6 +79,7 @@ export interface Database {
           birth_date: string | null
           gender: 'Erkek' | 'Kadın' | null
           address: string | null
+          photo_url: string | null
           hearing_loss: 'Hafif' | 'Orta' | 'İleri' | 'Çok İleri' | null
           hearing_loss_side: 'Sol' | 'Sağ' | 'Her İki Kulak' | null
           current_device: string | null

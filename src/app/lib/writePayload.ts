@@ -60,6 +60,7 @@ const columns: Record<string,string[]>={
     "birth_date",
     "gender",
     "address",
+    "photo_url",
     "hearing_loss",
     "hearing_loss_side",
     "current_device",

@@ -7,6 +7,7 @@ import { BranchService } from '../services/BranchService';
 import CustomSelect from '../components/CustomSelect';
 import { useDebounce } from '../hooks/useDebounce';
 import { isValidTurkishPhone, normalizeTurkishPhoneInput } from '../lib/turkishPhone';
+import { isSupportedPatientPhoto, resizePatientPhoto } from '../lib/patientPhoto';
 import styles from './PatientsPage.module.css';
 import {
   getAvatarColor, getInitials, formatDate, calculateAge,
@@ -950,9 +951,13 @@ export default function PatientsPage() {
                   {/* Hasta */}
                   <td data-label="Hasta">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="avatar" style={{ background: getAvatarColor(patient.firstName), borderRadius: '50%' }}>
-                        {getInitials(patient.firstName, patient.lastName)}
-                      </div>
+                      {patient.photoUrl ? (
+                        <img className="avatar" src={patient.photoUrl} alt={`${patient.firstName} ${patient.lastName}`} style={{ borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <div className="avatar" style={{ background: getAvatarColor(patient.firstName), borderRadius: '50%' }}>
+                          {getInitials(patient.firstName, patient.lastName)}
+                        </div>
+                      )}
                       <div>
                         <div className="td-primary">{patient.firstName} {patient.lastName}</div>
                         <div style={{ fontSize: '0.68rem', color: '#7c8991' }}>
@@ -1062,7 +1067,11 @@ export default function PatientsPage() {
       {showPatientPanel && activePatient && (
         <aside className={styles.patientPanel} aria-label={`${activePatient.firstName} ${activePatient.lastName} hasta özeti`}>
           <div className={styles.patientPanelHeader}>
-            <div className={styles.patientAvatar} style={{ background: getAvatarColor(activePatient.firstName) }}>{getInitials(activePatient.firstName, activePatient.lastName)}</div>
+            {activePatient.photoUrl ? (
+              <img className={styles.patientAvatar} src={activePatient.photoUrl} alt={`${activePatient.firstName} ${activePatient.lastName}`} style={{ objectFit: 'cover' }} />
+            ) : (
+              <div className={styles.patientAvatar} style={{ background: getAvatarColor(activePatient.firstName) }}>{getInitials(activePatient.firstName, activePatient.lastName)}</div>
+            )}
             <div className={styles.patientPanelIdentity}>
               <strong>{activePatient.firstName} {activePatient.lastName}</strong>
               <span>{calculateAge(activePatient.birthDate)} yaş · {activePatient.gender}</span>
@@ -1245,11 +1254,13 @@ export default function PatientsPage() {
                           alert('Dosya boyutu 5 MB\'dan büyük olamaz.');
                           return;
                         }
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setFormData(prev => ({ ...prev, photoUrl: reader.result as string }));
-                        };
-                        reader.readAsDataURL(file);
+                        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                          addToast({ type: 'error', message: 'Yalnızca JPG, PNG veya WebP fotoğraf yükleyebilirsiniz.' });
+                          return;
+                        }
+                        void resizePatientPhoto(file)
+                          .then(photoUrl => setFormData(prev => ({ ...prev, photoUrl })))
+                          .catch(() => addToast({ type: 'error', message: 'Fotoğraf okunamadı. Lütfen başka bir görsel deneyin.' }));
                       }
                     }}
                   />
