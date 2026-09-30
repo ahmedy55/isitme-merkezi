@@ -426,14 +426,18 @@ export default function AppointmentsPage() {
     return currentOrgId ? [] : showcaseList;
   }, [selectedDateStr, appointmentsList, patientsList, showcaseList, currentOrgId]);
 
-  const visibleAppointments = useMemo(() => appointmentsList.filter(appointment => {
+  const scopedAppointments = useMemo(() => appointmentsList.filter(appointment => {
     if (filterAudiologist !== 'Tümü' && appointment.audiologist !== filterAudiologist) return false;
     if (filterBranch !== 'All' && appointment.branchId !== filterBranch) return false;
+    return true;
+  }), [appointmentsList, filterAudiologist, filterBranch]);
+
+  const visibleAppointments = useMemo(() => scopedAppointments.filter(appointment => {
     if (statusFilter === 'bekleyen' && appointment.status !== 'Bekliyor') return false;
     if (statusFilter === 'tamamlanan' && !['Tamamlandı', 'Geldi'].includes(appointment.status)) return false;
     if (statusFilter === 'iptal' && !['İptal', 'Gelmedi'].includes(appointment.status)) return false;
     return true;
-  }), [appointmentsList, filterAudiologist, filterBranch, statusFilter]);
+  }), [scopedAppointments, statusFilter]);
 
   const calendarStatusDots = useMemo(() => {
     const colorsByDate = new Map<string, Set<string>>();
@@ -451,6 +455,7 @@ export default function AppointmentsPage() {
   }, [visibleAppointments]);
 
   const selectedDayAppointments = visibleAppointments.filter(appointment => appointment.date === selectedDateStr);
+  const selectedDateScopedAppointments = scopedAppointments.filter(appointment => appointment.date === selectedDateStr);
   const todayDateStr = formatCalendarDate(getIstanbulDate(serverNow));
   const todaySummaryAppointments = appointmentsList.filter(appointment =>
     appointment.date === todayDateStr &&
@@ -473,17 +478,30 @@ export default function AppointmentsPage() {
     )
     .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
     .slice(0, 3);
-  const weekStart = new Date(currentDate);
-  weekStart.setDate(currentDate.getDate() - ((currentDate.getDay() + 6) % 7));
+  const weekStart = getIstanbulDate(serverNow);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 7);
-  const weeklyCount = visibleAppointments.filter(appointment => {
-    const date = new Date(`${appointment.date}T00:00:00`);
-    return date >= weekStart && date < weekEnd;
-  }).length;
-  const completedCount = selectedDayAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length;
-  const pendingCount = selectedDayAppointments.filter(appointment => ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)).length;
-  const canceledCount = selectedDayAppointments.filter(appointment => ['İptal', 'Gelmedi'].includes(appointment.status)).length;
+  const weekStartStr = formatCalendarDate(weekStart);
+  const weekEndStr = formatCalendarDate(weekEnd);
+  const weeklyAppointments = scopedAppointments
+    .filter(appointment => appointment.date >= weekStartStr && appointment.date < weekEndStr)
+    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+  const weeklyCount = weeklyAppointments.length;
+  const completedCount = selectedDateScopedAppointments.filter(appointment => ['Tamamlandı', 'Geldi'].includes(appointment.status)).length;
+  const pendingCount = selectedDateScopedAppointments.filter(appointment => ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status)).length;
+  const canceledCount = selectedDateScopedAppointments.filter(appointment => ['İptal', 'Gelmedi'].includes(appointment.status)).length;
+
+  const handleShowThisWeek = () => {
+    const firstDay = new Date(weekStart);
+    hasUserSelectedDate.current = true;
+    setCurrentDate(firstDay);
+    setDateInputVal(formatCalendarDate(firstDay));
+    setCalendarViewMonth(firstDay.getMonth());
+    setCalendarViewYear(firstDay.getFullYear());
+    setStatusFilter('all');
+    setViewMode('hafta');
+  };
 
   const visibleTimelineSlots = useMemo(() => timelineSlots.filter(slot => {
     if (slot.isBreak) return filterTimeRange === 'Tüm Gün';
@@ -563,13 +581,18 @@ export default function AppointmentsPage() {
           </div>
           <div>
             <span>Seçili Gün Randevuları</span>
-            <strong>{selectedDayAppointments.length}</strong>
+            <strong>{selectedDateScopedAppointments.length}</strong>
             <small><span style={{ color: '#0b8463', fontWeight: 600 }}>{completedCount}</span> tamamlandı • <span style={{ color: '#d97706', fontWeight: 600 }}>{pendingCount}</span> bekliyor</small>
           </div>
         </div>
 
         {/* 2. Bu Hafta */}
-        <div className={styles.statCard} onClick={() => setViewMode('hafta')}>
+        <div className={styles.statCard} onClick={handleShowThisWeek} role="button" tabIndex={0} onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleShowThisWeek();
+          }
+        }}>
           <div className={`${styles.statIcon} ${styles.iconBlue}`}>
             <IconCalendarCard size={22} />
           </div>
@@ -731,7 +754,57 @@ export default function AppointmentsPage() {
       </div>
 
       {/* ── Main Workspace: 2 Column Layout ── */}
-      {viewMode !== 'liste' && viewMode !== 'ay' ? (
+      {viewMode === 'hafta' ? (
+        <div className="card">
+          <div className="card-body">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Bu Haftaki Randevular</h2>
+                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
+                  {weekStart.toLocaleDateString('tr-TR')} – {new Date(weekEnd.getTime() - 86_400_000).toLocaleDateString('tr-TR')} · {weeklyCount} randevu
+                </p>
+              </div>
+              <button type="button" className="btn btn-sm btn-secondary" onClick={() => setViewMode('takvim')}>Günlük görünüme dön</button>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {Array.from({ length: 7 }, (_, index) => {
+                const day = new Date(weekStart);
+                day.setDate(weekStart.getDate() + index);
+                const dateKey = formatCalendarDate(day);
+                const dayAppointments = weeklyAppointments.filter(appointment => appointment.date === dateKey);
+                return (
+                  <div key={dateKey} style={{ display: 'grid', gridTemplateColumns: 'minmax(145px, 190px) minmax(0, 1fr)', gap: 12, alignItems: 'start', padding: 12, border: '1px solid #e2e8f0', borderRadius: 10, background: '#fff' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentDate(day);
+                        setDateInputVal(dateKey);
+                        setCalendarViewMonth(day.getMonth());
+                        setCalendarViewYear(day.getFullYear());
+                        setViewMode('takvim');
+                      }}
+                      style={{ border: 0, background: 'transparent', textAlign: 'left', color: '#173042', cursor: 'pointer', fontWeight: 650, padding: 0 }}
+                    >
+                      {day.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      <span style={{ display: 'block', color: '#64748b', fontSize: '0.75rem', fontWeight: 400 }}>{dayAppointments.length} randevu</span>
+                    </button>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {dayAppointments.length === 0 ? <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Randevu yok</span> : dayAppointments.map(appointment => (
+                        <div key={appointment.id} style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'center', fontSize: '0.82rem' }}>
+                          <strong style={{ color: '#08785b', minWidth: 42 }}>{appointment.time}</strong>
+                          <span style={{ fontWeight: 600 }}>{appointment.patientName}</span>
+                          <span style={{ color: '#64748b' }}>{appointment.type}</span>
+                          <span style={{ color: appointment.status === 'İptal' || appointment.status === 'Gelmedi' ? '#dc2626' : ['Geldi', 'Tamamlandı'].includes(appointment.status) ? '#08785b' : '#c46b0b' }}>{appointment.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : viewMode !== 'liste' && viewMode !== 'ay' ? (
         <div className={styles.workspaceLayout}>
           {/* Left Column: Timeline Schedule */}
           <div className={styles.timelineCard}>
