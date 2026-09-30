@@ -1136,7 +1136,13 @@ export default function AppointmentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleAppointments.map((apt) => (
+                {visibleAppointments.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--text-muted)' }}>
+                      Bu filtrelerle eşleşen randevu bulunamadı. Filtreleri değiştirebilir veya temizleyebilirsiniz.
+                    </td>
+                  </tr>
+                ) : visibleAppointments.map((apt) => (
                   <tr key={apt.id}>
                     <td data-label="Saat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)', fontWeight: 600 }}>
                       {apt.time}
@@ -1554,7 +1560,7 @@ export function NewAppointmentModal({
 
     if (isAddingNewPatient) {
       if (!newPatientName.trim()) {
-        alert('Lütfen yeni hasta adı girin.');
+        addToast?.({ type: 'error', message: 'Lütfen yeni hasta adı girin.' });
         return;
       }
       patientNameFinal = newPatientName.trim();
@@ -1564,7 +1570,7 @@ export function NewAppointmentModal({
     } else if (patientSearch.trim()) {
       patientNameFinal = patientSearch.trim();
     } else {
-      alert('Lütfen bir hasta seçin veya yeni hasta adı girin.');
+      addToast?.({ type: 'error', message: 'Lütfen bir hasta seçin veya yeni hasta adı girin.' });
       return;
     }
 
