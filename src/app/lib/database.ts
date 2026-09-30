@@ -509,10 +509,20 @@ export const dbFetchAuditLogs = async (): Promise<any[]> => {
       .order('created_at', { ascending: false });
     if (error) throw error;
     const rawList = toCamel(data || []);
+    const userIds = [...new Set(rawList.map((item: any) => item.userId).filter(Boolean))];
+    const { data: memberships } = userIds.length
+      ? await supabase.from('memberships').select('user_id,first_name,last_name').in('user_id', userIds)
+      : { data: [] };
+    const namesByUserId = new Map((memberships || []).map((membership: any) => [
+      membership.user_id,
+      [membership.first_name, membership.last_name].filter(Boolean).join(' ').trim(),
+    ]));
     return rawList.map((item: any) => ({
       ...item,
       timestamp: item.timestamp || item.createdAt || '',
-      userName: item.userName || item.userId || 'Kullanıcı bilgisi yok'
+      // Older rows may not have user_name; resolve their UUID through the organization membership.
+      // Never render a raw auth UUID as a human-readable name.
+      userName: item.userName || namesByUserId.get(item.userId) || 'Kullanıcı bilgisi yok'
     }));
   }, 'dbFetchAuditLogs');
 };
@@ -523,7 +533,8 @@ export const dbInsertAuditLog = async (log: any) => {
     if (!orgId) return;
     
     const { data: { user } } = await supabase.auth.getUser();
-    const { id, timestamp, ...payload } = toSnake({ ...log, userId: user?.id });
+    const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || log.userName || null;
+    const { id, timestamp, ...payload } = toSnake({ ...log, userId: user?.id, userName });
     const { error } = await supabase
       .from('audit_log')
       .insert([{ ...await writePayload('audit_log',payload), organization_id: orgId }]);
