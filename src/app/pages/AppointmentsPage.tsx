@@ -6,6 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { isClosedAppointment, isOpenAppointment } from '../lib/appointmentStatus';
 import { validateAppointmentDateTime } from '../lib/validation';
+import { parseAppointmentDateTime } from '../lib/appointmentDateTime';
 import { getAvatarColor, getInitials } from '../data/mockData';
 import { IconPlus, IconCalendar, IconCheck, IconClose, IconSearch, IconPhone, IconMail } from '../components/Icons';
 import styles from './AppointmentsPage.module.css';
@@ -1461,12 +1462,13 @@ export function NewAppointmentModal({
   const [newPatientPhone, setNewPatientPhone] = useState('');
 
   // Date & Time State
-  const [selectedDate, setSelectedDate] = useState<Date>(() => initialAppointment
-    ? new Date(`${initialAppointment.date}T${initialAppointment.time}:00`)
-    : getNextAppointmentSlot());
+  const initialAppointmentDate = initialAppointment
+    ? parseAppointmentDateTime(initialAppointment.date, initialAppointment.time)
+    : null;
+  const [selectedDate, setSelectedDate] = useState<Date>(() => initialAppointmentDate || getNextAppointmentSlot());
   const [showPicker, setShowPicker] = useState(false);
-  const [pickerMonth, setPickerMonth] = useState(() => initialAppointment ? new Date(`${initialAppointment.date}T12:00:00`).getMonth() : new Date().getMonth());
-  const [pickerYear, setPickerYear] = useState(() => initialAppointment ? new Date(`${initialAppointment.date}T12:00:00`).getFullYear() : new Date().getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(() => initialAppointmentDate?.getMonth() ?? new Date().getMonth());
+  const [pickerYear, setPickerYear] = useState(() => initialAppointmentDate?.getFullYear() ?? new Date().getFullYear());
   const [serverNow, setServerNow] = useState(() => new Date());
   const hasAdjustedAppointmentDate = useRef(Boolean(initialAppointment));
 

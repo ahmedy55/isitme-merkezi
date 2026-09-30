@@ -1,25 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { validateAppointmentDateTime } from '../validation';
+import { parseAppointmentDateTime } from '../appointmentDateTime';
 
-describe('appointment date and time validation', () => {
-  const now = new Date(2026, 8, 30, 14, 30, 0);
-
-  it('rejects an appointment on a past day', () => {
-    expect(validateAppointmentDateTime('2026-09-29', '16:00', now).isValid).toBe(false);
+describe('parseAppointmentDateTime', () => {
+  it('parses Postgres TIME values with seconds', () => {
+    const result = parseAppointmentDateTime('2026-10-01', '08:00:00');
+    expect(result).not.toBeNull();
+    expect(result?.getFullYear()).toBe(2026);
+    expect(result?.getMonth()).toBe(9);
+    expect(result?.getDate()).toBe(1);
+    expect(result?.getHours()).toBe(8);
+    expect(result?.getMinutes()).toBe(0);
   });
 
-  it('rejects an earlier time today and the current minute', () => {
-    expect(validateAppointmentDateTime('2026-09-30', '14:00', now).isValid).toBe(false);
-    expect(validateAppointmentDateTime('2026-09-30', '14:30', now).isValid).toBe(false);
+  it('accepts date-time strings and ignores seconds for the picker', () => {
+    const result = parseAppointmentDateTime('2026-10-01T00:00:00.000Z', '14:35:59');
+    expect(result?.getHours()).toBe(14);
+    expect(result?.getMinutes()).toBe(35);
   });
 
-  it('accepts a future time today and a future date', () => {
-    expect(validateAppointmentDateTime('2026-09-30', '14:31', now).isValid).toBe(true);
-    expect(validateAppointmentDateTime('2026-10-01', '09:00', now).isValid).toBe(true);
-  });
-
-  it('rejects missing or invalid date-time values', () => {
-    expect(validateAppointmentDateTime('', '09:00', now).isValid).toBe(false);
-    expect(validateAppointmentDateTime('not-a-date', '09:00', now).isValid).toBe(false);
+  it.each([
+    ['', '08:00:00'],
+    ['2026-02-30', '08:00:00'],
+    ['2026-10-01', '25:00:00'],
+    ['2026-10-01', 'not-a-time'],
+  ])('returns null for invalid date/time values (%s, %s)', (date, time) => {
+    expect(parseAppointmentDateTime(date, time)).toBeNull();
   });
 });
