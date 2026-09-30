@@ -323,7 +323,7 @@ export const dbInsertSale = async (sale: any, stockItemId?: string, cashRegister
   const {data,error}=await supabase.rpc('complete_sale',{
       p_sale:{patient_id:payload.patient_id,date:payload.date,items:payload.items.map((item: any) => ({name:item.name,quantity:item.quantity,price:item.price,type:item.type,stock_item_id:item.stock_item_id})),installments:payload.installments || [],
       total:payload.total,sgk_amount:payload.sgk_amount || 0,patient_amount:payload.patient_amount ?? payload.total,
-      payment_method:payload.payment_method,status:payload.status,audiologist:payload.audiologist},
+      payment_method:payload.payment_method,status:payload.status,audiologist:payload.audiologist,device_ear_side:payload.device_ear_side},
     p_key:payload.idempotency_key,p_stock:stockItemId || null,p_register:cashRegisterId || 'kas-1',
   });
   if(error) throw new DatabaseError('Satış işlemi tamamlanamadı.',error);

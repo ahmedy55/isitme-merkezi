@@ -84,6 +84,7 @@ export interface StockItem {
   utsStatus: 'Bekliyor' | 'Bildirildi' | 'Hata' | 'Gerekli Değil';
   assignedPatientId?: string;
   assignedPatientName?: string;
+  assignedEar?: 'Sağ' | 'Sol' | null;
   branch: string;
   branchId?: string;
   utsKurumNo?: string;
@@ -106,6 +107,7 @@ export interface SaleRecord {
   audiologist?: string;
   idempotencyKey?: string;
   branchId?: string;
+  deviceEarSide?: 'Sağ' | 'Sol';
 }
 
 // ── Enterprise Domain Ledgers & Policies ──

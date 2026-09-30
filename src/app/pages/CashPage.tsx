@@ -230,10 +230,12 @@ export default function CashPage() {
     patientId: '',
     patientName: '',
     productId: '',
+    deviceEarSide: 'Sağ' as 'Sağ' | 'Sol',
     paymentMethod: 'Nakit' as 'Nakit' | 'Kredi Kartı' | 'Havale' | 'Taksit',
     amount: 12500,
     account: 'Ana Kasa'
   });
+  const salePatient = patientsList.find(patient => patient.id === saleForm.patientId);
 
   // Deposit/Withdrawal Form State
   const [depositForm, setDepositForm] = useState({
@@ -316,18 +318,34 @@ export default function CashPage() {
     const amount = Number(saleForm.amount) || 0;
     const saleId = `sale-${Date.now()}`;
     const selectedStock = stockList.find(s => s.id === saleForm.productId);
+    const selectedPatient = patientsList.find(patient => patient.id === saleForm.patientId);
 
-    if (saleForm.productId && selectedStock && selectedStock.quantity <= 0) {
+    if (!selectedPatient) {
+      addToast({ type: 'error', message: 'Satış için kayıtlı bir hasta seçin. Satışlar hasta ve şube kaydıyla ilişkilendirilir.' });
+      return;
+    }
+
+    if (saleForm.productId && selectedStock && (selectedStock.quantity <= 0 || selectedStock.status !== 'Stokta')) {
       addToast({ type: 'error', message: 'Seçilen ürünün stoğu tükenmiş.' });
       return;
     }
+
+    if (selectedStock && (selectedStock.branchId !== selectedPatient.branchId || !matches(selectedStock.branch, selectedStock.branchId))) {
+      addToast({ type: 'error', message: 'Seçilen ürün hastanın şubesiyle aynı şubede değil.' });
+      return;
+    }
+    const deviceEarSide = selectedStock?.category === 'Cihaz'
+      ? (selectedPatient.hearingLossSide === 'Sağ' || selectedPatient.hearingLossSide === 'Sol'
+          ? selectedPatient.hearingLossSide
+          : saleForm.deviceEarSide)
+      : undefined;
 
     try {
       await addSale({
         id: saleId,
         idempotencyKey: crypto.randomUUID(),
-        patientId: 'pat-1',
-        patientName: saleForm.patientName || 'Perakende Müşteri',
+        patientId: selectedPatient.id,
+        patientName: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
         date: new Date().toISOString().split('T')[0],
         items: [
           {
@@ -344,7 +362,8 @@ export default function CashPage() {
         patientAmount: amount,
         paymentMethod: saleForm.paymentMethod,
         status: 'Tahsil Edildi',
-        branchId: activeBranch.mode === 'single' ? activeBranch.branchId : 'merkez'
+        branchId: selectedPatient.branchId,
+        deviceEarSide
       }, selectedStock?.id);
 
       const branchName = activeBranch.mode === 'single'
@@ -358,7 +377,7 @@ export default function CashPage() {
         type: 'Giriş',
         category: 'Cihaz Satışı',
         description: selectedStock ? `${selectedStock.name} satışı (Stoktan -1 düşüldü)` : 'İşitme cihazı satışı',
-        patientOrEntity: saleForm.patientName || 'Perakende Müşteri',
+        patientOrEntity: `${selectedPatient.firstName} ${selectedPatient.lastName}`,
         amount: amount,
         paymentMethod: saleForm.paymentMethod,
         status: 'Tahsil Edildi',
@@ -1455,7 +1474,7 @@ export default function CashPage() {
             <form onSubmit={handleCreateSale}>
               <div style={{ padding: 20, display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kayıtlı Hasta Seçimi (İsteğe Bağlı)</label>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kayıtlı Hasta <span style={{ color: '#dc2626' }}>*</span></label>
                   <select
                     className={styles.filterSelect}
                     style={{ width: '100%', marginBottom: 6 }}
@@ -1466,22 +1485,19 @@ export default function CashPage() {
                       setSaleForm({
                         ...saleForm,
                         patientId: selectedPatId,
-                        patientName: pat ? `${pat.firstName} ${pat.lastName}` : saleForm.patientName
+                        patientName: pat ? `${pat.firstName} ${pat.lastName}` : '',
+                        productId: '',
+                        deviceEarSide: pat?.hearingLossSide === 'Sol' ? 'Sol' : 'Sağ'
                       });
                     }}
+                    required
                   >
-                    <option value="">-- Kayıtlı Hastalardan Seçin (veya aşağıya yazın) --</option>
-                    {patientsList.map(p => (
+                    <option value="">-- Satışın bağlanacağı hastayı seçin --</option>
+                    {patientsList.filter(p => matches(p.branch, p.branchId)).map(p => (
                       <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.phone || p.tc || 'Kayıtlı'})</option>
                     ))}
                   </select>
-                  <input
-                    placeholder="Veya Hasta Adı Soyadı yazın (Örn: Ayşe Yılmaz)"
-                    className={styles.filterSelect}
-                    style={{ width: '100%' }}
-                    value={saleForm.patientName}
-                    onChange={e => setSaleForm({ ...saleForm, patientName: e.target.value })}
-                  />
+                  <small style={{ color: '#64748b' }}>Satış, fatura ve stok hareketleri seçilen hasta ile aynı şubeye kaydedilir.</small>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satılacak Ürün / Cihaz (Stoktan Düşülecek)</label>
@@ -1489,6 +1505,7 @@ export default function CashPage() {
                     className={styles.filterSelect}
                     style={{ width: '100%' }}
                     value={saleForm.productId}
+                    disabled={!salePatient}
                     onChange={e => {
                       const selectedId = e.target.value;
                       const found = stockList.find(s => s.id === selectedId);
@@ -1500,12 +1517,21 @@ export default function CashPage() {
                     }}
                   >
                     <option value="">-- Stoktan Ürün Seçin --</option>
-                    {stockList.map(item => (
-                      <option key={item.id} value={item.id} disabled={item.quantity <= 0}>
+                    {stockList.filter(item => !!salePatient && item.branchId === salePatient.branchId && matches(item.branch, item.branchId)).map(item => (
+                      <option key={item.id} value={item.id} disabled={item.quantity <= 0 || item.status !== 'Stokta'}>
                         {item.name} ({item.category}) — Stok: {item.quantity} adet — ₺{item.price.toLocaleString('tr-TR')}
                       </option>
                     ))}
                   </select>
+                  {salePatient && stockList.find(item => item.id === saleForm.productId)?.category === 'Cihaz' && salePatient.hearingLossSide === 'Her İki Kulak' && (
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Cihazın atanacağı kulak</label>
+                      <select className={styles.filterSelect} style={{ width: '100%' }} value={saleForm.deviceEarSide} onChange={e => setSaleForm({ ...saleForm, deviceEarSide: e.target.value as 'Sağ' | 'Sol' })}>
+                        <option value="Sağ">Sağ kulak</option>
+                        <option value="Sol">Sol kulak</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>

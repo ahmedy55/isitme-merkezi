@@ -15,6 +15,8 @@ import DevicePicker from '../components/DevicePicker';
 import DeviceIdentityFields from '../components/DeviceIdentityFields';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { saveServiceTicket } from '../repositories/ServiceTicketRepository';
+import { supabase } from '../lib/supabase';
+import { AUDIOGRAM_BUCKET, validateAudiogramUpload } from '../lib/audiogramUpload';
 
 const FREQUENCIES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000];
 const dateInputOffset = (days = 0) => { const value = new Date(); value.setDate(value.getDate() + days); return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`; };
@@ -36,13 +38,19 @@ export default function PatientDetailPage() {
     appointmentsList,
     addAppointment,
     salesList,
-    currentOrgId
+    currentOrgId,
+    refreshOrganizationData
   } = useApp();
 
   const [activeTab, setActiveTab] = useState('genel');
   const [comparePast, setComparePast] = useState(false);
-  const [isParsingXml, setIsParsingXml] = useState(false);
+  const [isUploadingAudiogram, setIsUploadingAudiogram] = useState(false);
+  const [audiogramFiles, setAudiogramFiles] = useState<{ name: string; created_at?: string | null }[]>([]);
+  const audiogramFileInputRef = useRef<HTMLInputElement>(null);
   const [saleStockId, setSaleStockId] = useState('');
+  const [saleEarSide, setSaleEarSide] = useState<'Sağ' | 'Sol'>('Sağ');
+  const [trialStockId, setTrialStockId] = useState('');
+  const [activeDeviceTrials, setActiveDeviceTrials] = useState<{ id: string; stock_item_id: string; serial_no: string; barcode: string; due_at: string }[]>([]);
   const [serviceBarcode, setServiceBarcode] = useState('');
   const [serviceStockId, setServiceStockId] = useState('');
 
@@ -131,6 +139,9 @@ export default function PatientDetailPage() {
   });
 
   const patient = patientsList.find(p => p.id === selectedPatientId && matches(p.branch, p.branchId));
+  const isSaleEligible = (item: typeof stockList[number]) => item.quantity > 0 && item.branchId === patient?.branchId && (
+    item.status === 'Stokta' || (item.status === 'Hastaya Ayrıldı' && item.assignedPatientId === patient?.id)
+  );
 
   const [audioLeft, setAudioLeft] = useState<number[]>([]);
   const [audioRight, setAudioRight] = useState<number[]>([]);
@@ -162,6 +173,7 @@ export default function PatientDetailPage() {
       setLastPurchaseDate(patient.lastBatteryPurchaseDate || '');
       setPackCount(patient.batteryPackCount || 1);
       setNotesText(patient.notes || '');
+      setSaleEarSide(patient.hearingLossSide === 'Sol' ? 'Sol' : 'Sağ');
       setIsEditingNotes(false);
       setEditFormData({
         firstName: patient.firstName,
@@ -187,31 +199,98 @@ export default function PatientDetailPage() {
     }
   }, [selectedPatientId, patient]);
 
-  const handleXmlDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsParsingXml(true);
-    setTimeout(() => {
-      setAudioLeft([25, 35, 45, 55, 65, 70, 75, 80]);
-      setAudioRight([20, 30, 40, 50, 60, 65, 70, 75]);
-      setIsParsingXml(false);
-      addToast({
-        type: 'success',
-        message: 'Noah XML dosyası başarıyla ayrıştırıldı. Odyogram güncellendi.'
+  useEffect(() => {
+    let active = true;
+    const loadTrials = async () => {
+      if (!currentOrgId || !patient?.id) {
+        setActiveDeviceTrials([]);
+        return;
+      }
+      const { data } = await supabase.from('device_trials').select('id,stock_item_id,serial_no,barcode,due_at')
+        .eq('organization_id', currentOrgId).eq('patient_id', patient.id).eq('status', 'Denemede').order('started_at', { ascending: false });
+      if (active) setActiveDeviceTrials(data || []);
+    };
+    void loadTrials();
+    return () => { active = false; };
+  }, [currentOrgId, patient?.id]);
+
+  useEffect(() => {
+    let active = true;
+    const loadFiles = async () => {
+      if (!currentOrgId || !patient?.branchId || !patient.id) {
+        setAudiogramFiles([]);
+        return;
+      }
+      const folder = `${currentOrgId}/${patient.branchId}/${patient.id}`;
+      const { data, error } = await supabase.storage.from(AUDIOGRAM_BUCKET).list(folder, {
+        limit: 100,
+        sortBy: { column: 'created_at', order: 'desc' },
       });
-    }, 1200);
+      if (!active) return;
+      if (error) {
+        setAudiogramFiles([]);
+        return;
+      }
+      setAudiogramFiles((data || []).filter(file => file.id).map(file => ({ name: file.name, created_at: file.created_at })));
+    };
+    void loadFiles();
+    return () => { active = false; };
+  }, [currentOrgId, patient?.branchId, patient?.id]);
+
+  const handleAudiogramFile = async (file?: File) => {
+    if (!file) return;
+    const validationError = validateAudiogramUpload(file);
+    if (validationError) {
+      addToast({ type: 'error', message: validationError });
+      return;
+    }
+    if (!currentOrgId || !patient?.id || !patient.branchId) {
+      addToast({ type: 'error', message: 'Dosya yüklemek için oturum açmış ve şubeye atanmış bir hasta gerekli.' });
+      return;
+    }
+
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!extension) return;
+    const folder = `${currentOrgId}/${patient.branchId}/${patient.id}`;
+    const objectPath = `${folder}/${crypto.randomUUID()}.${extension}`;
+    setIsUploadingAudiogram(true);
+    try {
+      const { error } = await supabase.storage.from(AUDIOGRAM_BUCKET).upload(objectPath, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false,
+      });
+      if (error) throw error;
+      const { data, error: listError } = await supabase.storage.from(AUDIOGRAM_BUCKET).list(folder, {
+        limit: 100,
+        sortBy: { column: 'created_at', order: 'desc' },
+      });
+      if (listError) throw listError;
+      setAudiogramFiles((data || []).filter(item => item.id).map(item => ({ name: item.name, created_at: item.created_at })));
+      addToast({ type: 'success', message: 'Dosya hasta dosyasına özel ve güvenli olarak yüklendi. Noah XML verileri henüz otomatik ayrıştırılmıyor.' });
+    } catch (error) {
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Dosya yüklenemedi.' });
+    } finally {
+      setIsUploadingAudiogram(false);
+    }
   };
 
-  const handleXmlClick = () => {
-    setIsParsingXml(true);
-    setTimeout(() => {
-      setAudioLeft([30, 40, 50, 60, 70, 75, 80, 85]);
-      setAudioRight([25, 35, 45, 55, 65, 70, 75, 80]);
-      setIsParsingXml(false);
-      addToast({
-        type: 'success',
-        message: 'Noah XML simülasyon verisi başarıyla yüklendi.'
-      });
-    }, 1200);
+  const handleXmlDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    void handleAudiogramFile(e.dataTransfer.files[0]);
+  };
+
+  const handleXmlClick = () => audiogramFileInputRef.current?.click();
+
+  const downloadAudiogramFile = async (name: string) => {
+    if (!currentOrgId || !patient?.id || !patient.branchId) return;
+    const objectPath = `${currentOrgId}/${patient.branchId}/${patient.id}/${name}`;
+    const { data, error } = await supabase.storage.from(AUDIOGRAM_BUCKET).createSignedUrl(objectPath, 60, { download: true });
+    if (error || !data?.signedUrl) {
+      addToast({ type: 'error', message: 'Hasta dosyası açılamadı. Yetki veya bağlantıyı kontrol edin.' });
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   if (!patient) {
@@ -232,8 +311,8 @@ export default function PatientDetailPage() {
   }
 
   const handleStartSale = async (deviceName: string, price: number, stockId: string) => {
-    const matchedStockItem = stockList.find(s => s.id === stockId && s.quantity > 0) ||
-                             stockList.find(s => s.name.toLowerCase().includes(deviceName.toLowerCase()) && s.quantity > 0);
+    const matchedStockItem = stockList.find(s => s.id === stockId && isSaleEligible(s)) ||
+                             stockList.find(s => s.name.toLowerCase().includes(deviceName.toLowerCase()) && isSaleEligible(s));
     if (!matchedStockItem) {
       addToast({ type: 'error', message: 'Seçilen cihaz için stokta yeterli adet bulunamadı.' });
       return;
@@ -261,7 +340,10 @@ export default function PatientDetailPage() {
         patientAmount: price - sgkAmount,
         paymentMethod: 'Kredi Kartı',
         status: 'Tahsil Edildi',
-        branchId: effectiveBranchId
+        branchId: effectiveBranchId,
+        deviceEarSide: matchedStockItem.category === 'Cihaz'
+          ? (patient.hearingLossSide === 'Her İki Kulak' ? saleEarSide : patient.hearingLossSide)
+          : undefined
       }, matchedStockItem.id);
 
       // Otomatik olarak hasta kartında cihazı güncelle ve zaman çizelgesine ekle
@@ -280,6 +362,49 @@ export default function PatientDetailPage() {
     } catch {
       return;
     }
+  };
+
+  const refreshActiveDeviceTrials = async () => {
+    if (!currentOrgId || !patient?.id) return;
+    const { data } = await supabase.from('device_trials').select('id,stock_item_id,serial_no,barcode,due_at')
+      .eq('organization_id', currentOrgId).eq('patient_id', patient.id).eq('status', 'Denemede').order('started_at', { ascending: false });
+    setActiveDeviceTrials(data || []);
+  };
+
+  const handleStartDeviceTrial = async () => {
+    const selectedDevice = stockList.find(item => item.id === trialStockId && item.status === 'Stokta' && item.quantity === 1);
+    if (!currentOrgId || !patient?.branchId || !selectedDevice) {
+      addToast({ type: 'error', message: 'Deneme için bu şubede bulunan seri numaralı bir cihaz seçin.' });
+      return;
+    }
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 14);
+    const dueAt = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}`;
+    const { error } = await supabase.rpc('start_device_trial', {
+      p_patient: patient.id,
+      p_stock: selectedDevice.id,
+      p_due_at: dueAt,
+      p_request: crypto.randomUUID(),
+    });
+    if (error) {
+      addToast({ type: 'error', message: error.message || 'Cihaz denemeye verilemedi.' });
+      return;
+    }
+    await refreshOrganizationData();
+    await refreshActiveDeviceTrials();
+    setTrialStockId('');
+    addToast({ type: 'success', message: `${selectedDevice.name} (${selectedDevice.serialNo}) 14 günlük denemeye verildi; stok adedi düşürülmedi.` });
+  };
+
+  const handleReturnDeviceTrial = async (trialId: string) => {
+    const { error } = await supabase.rpc('return_device_trial', { p_trial: trialId });
+    if (error) {
+      addToast({ type: 'error', message: error.message || 'Deneme cihazı iade alınamadı.' });
+      return;
+    }
+    await refreshOrganizationData();
+    await refreshActiveDeviceTrials();
+    addToast({ type: 'success', message: 'Deneme cihazı iade alındı ve şube stoğuna geri döndü.' });
   };
 
   const handleUpdatePatient = () => {
@@ -549,6 +674,12 @@ export default function PatientDetailPage() {
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Mevcut Cihaz</div>
                          <div style={{ fontWeight: 600 }}>{patient.currentDevice || 'Cihaz yok'}</div>
                        </div>
+                       {stockList.filter(item => item.assignedPatientId === patient.id && item.category === 'Cihaz' && item.status === 'Satıldı').map(item => (
+                         <div key={item.id} style={{ gridColumn: '1 / -1' }}>
+                           <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Satılan Cihaz Kimliği</div>
+                           <div style={{ fontWeight: 600 }}>{item.assignedEar || 'Kulak belirtilmedi'} · {item.name} · SN {item.serialNo} · Barkod {item.barcode || '—'}</div>
+                         </div>
+                       ))}
                        {patient.deviceDate && (
                          <div>
                            <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Cihaz Alım Tarihi</div>
@@ -574,6 +705,34 @@ export default function PatientDetailPage() {
                          <div style={{ fontWeight: 600 }}>{formatDate(patient.lastVisit || '')}</div>
                        </div>
                      </div>
+                     {currentOrgId && patient.branchId && (
+                       <div style={{ borderTop: '1px solid var(--gray-200)', marginTop: 16, paddingTop: 14 }}>
+                         <strong style={{ fontSize: '0.84rem' }}>Deneme / Emanet Cihazlar</strong>
+                         {activeDeviceTrials.map(trial => {
+                           const trialDevice = stockList.find(item => item.id === trial.stock_item_id);
+                           return (
+                             <div key={trial.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--gray-100)' }}>
+                               <div style={{ fontSize: '0.8rem' }}>
+                                 <div style={{ fontWeight: 600 }}>{trialDevice?.name || 'İşitme cihazı'} · SN {trial.serial_no}</div>
+                                 <div style={{ color: 'var(--gray-500)' }}>Barkod {trial.barcode} · İade tarihi {formatDate(trial.due_at)}</div>
+                               </div>
+                               <button className="btn btn-sm btn-secondary" onClick={() => void handleReturnDeviceTrial(trial.id)}>İade Al</button>
+                             </div>
+                           );
+                         })}
+                         <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                           <DevicePicker
+                             items={stockList.filter(item => item.category === 'Cihaz' && item.status === 'Stokta' && item.quantity === 1 && item.branchId === patient.branchId)}
+                             value={trialStockId}
+                             onChange={item => setTrialStockId(item.id)}
+                           />
+                           <button className="btn btn-secondary" disabled={!trialStockId} onClick={() => void handleStartDeviceTrial()}>
+                             Seçilen Cihazı 14 Günlüğüne Denemeye Ver
+                           </button>
+                           <small style={{ color: 'var(--gray-500)' }}>Denemede cihaz satılabilir stoktan ayrılır; stok adedi ve kasa hareketi ancak satışta değişir.</small>
+                         </div>
+                       </div>
+                     )}
                    </div>
                  </div>
                </div>
@@ -996,20 +1155,23 @@ export default function PatientDetailPage() {
                 </table>
               </div>
 
-              {/* Noah XML Sürükle Bırak Simülatörü */}
+              {/* Hasta dosyaları için özel Supabase Storage alanı */}
               <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleXmlDrop}
                 onClick={handleXmlClick}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleXmlClick(); }}
                 style={{
                   border: '2px dashed var(--surface-border)',
                   borderRadius: 'var(--radius-lg)',
                   padding: '24px',
                   textAlign: 'center',
                   cursor: 'pointer',
-                  background: isParsingXml ? 'var(--primary-50)' : 'var(--gray-50)',
-                  borderColor: isParsingXml ? 'var(--primary-400)' : 'var(--surface-border)',
-                  color: isParsingXml ? 'var(--primary-700)' : 'var(--gray-600)',
+                  background: isUploadingAudiogram ? 'var(--primary-50)' : 'var(--gray-50)',
+                  borderColor: isUploadingAudiogram ? 'var(--primary-400)' : 'var(--surface-border)',
+                  color: isUploadingAudiogram ? 'var(--primary-700)' : 'var(--gray-600)',
                   transition: 'all 200ms ease',
                   display: 'flex',
                   flexDirection: 'column',
@@ -1017,21 +1179,50 @@ export default function PatientDetailPage() {
                   gap: 8,
                 }}
               >
-                <IconUpload size={32} strokeWidth={1.5} className={isParsingXml ? 'animate-pulse' : ''} />
-                {isParsingXml ? (
+                <IconUpload size={32} strokeWidth={1.5} className={isUploadingAudiogram ? 'animate-pulse' : ''} />
+                {isUploadingAudiogram ? (
                   <div>
-                    <h4 style={{ fontWeight: 600, color: 'var(--primary-700)' }}>Noah XML Ayrıştırılıyor...</h4>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--primary-500)' }}>Frekans verileri grafik eğrisine aktarılıyor</p>
+                    <h4 style={{ fontWeight: 600, color: 'var(--primary-700)' }}>Dosya güvenli alana yükleniyor...</h4>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--primary-500)' }}>Dosya yalnızca bu hastanın yetkili şube ekibine açık</p>
                   </div>
                 ) : (
                   <div>
                     <h4 style={{ fontWeight: 600, color: 'var(--gray-800)' }}>Noah XML / Test Sonucu Yükle</h4>
                     <p style={{ fontSize: '0.78rem', color: 'var(--gray-500)', marginTop: 2 }}>
-                      Dosyayı buraya sürükleyin veya simülasyonu çalıştırmak için tıklayın
+                      XML, PDF, PNG veya JPG/JPEG — en fazla 10 MB. Dosyayı sürükleyin veya seçmek için tıklayın.
                     </p>
                   </div>
                 )}
+                <input
+                  ref={audiogramFileInputRef}
+                  type="file"
+                  accept=".xml,.pdf,.png,.jpg,.jpeg,application/xml,text/xml,application/pdf,image/png,image/jpeg"
+                  hidden
+                  onChange={(event) => {
+                    const selectedFile = event.target.files?.[0];
+                    event.target.value = '';
+                    void handleAudiogramFile(selectedFile);
+                  }}
+                />
               </div>
+
+              {audiogramFiles.length > 0 && (
+                <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                  <strong style={{ fontSize: '0.84rem' }}>Hasta dosyasındaki yüklemeler</strong>
+                  {audiogramFiles.map(file => (
+                    <button
+                      key={file.name}
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={(event) => { event.stopPropagation(); void downloadAudiogramFile(file.name); }}
+                      style={{ display: 'flex', justifyContent: 'space-between', textAlign: 'left' }}
+                    >
+                      <span>{file.name.split('.').pop()?.toUpperCase()} dosyası</span>
+                      <span>{file.created_at ? new Date(file.created_at).toLocaleDateString('tr-TR') : 'Aç'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Lejant */}
               <div style={{ marginTop: 20, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -1133,6 +1324,15 @@ export default function PatientDetailPage() {
                     <span className="card-title">Uyuşan En İyi Modeller</span>
                   </div>
                   <div className="card-body" style={{ display: 'grid', gap: 14 }}>
+                    {patient.hearingLossSide === 'Her İki Kulak' && (
+                      <div className="form-group">
+                        <label className="form-label" htmlFor="sale-ear-side">Bu satışın cihaz kulağı</label>
+                        <select id="sale-ear-side" className="form-select" value={saleEarSide} onChange={event => setSaleEarSide(event.target.value as 'Sağ' | 'Sol')}>
+                          <option value="Sağ">Sağ kulak</option>
+                          <option value="Sol">Sol kulak</option>
+                        </select>
+                      </div>
+                    )}
                     {matchingBrands.map((brand, idx) => (
                       <div key={idx} style={{
                         padding: 16,
@@ -1171,12 +1371,12 @@ export default function PatientDetailPage() {
                               </span>
                             </div>
                           </div>
-                        <DevicePicker items={stockList.filter(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && s.quantity > 0)} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
+                        <DevicePicker items={stockList.filter(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && isSaleEligible(s))} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
                         <button
                           className="btn btn-sm btn-primary"
-                          disabled={!stockList.some(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && s.quantity > 0)}
+                          disabled={!stockList.some(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && isSaleEligible(s))}
                           onClick={() => {
-                            const effectiveStock = stockList.find(s => s.id === saleStockId) || stockList.find(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && s.quantity > 0);
+                            const effectiveStock = stockList.find(s => s.id === saleStockId && isSaleEligible(s)) || stockList.find(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && isSaleEligible(s));
                             handleStartSale(brand.name, brand.price, effectiveStock?.id || saleStockId);
                           }}
                         >
