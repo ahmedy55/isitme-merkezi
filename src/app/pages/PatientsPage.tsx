@@ -327,6 +327,10 @@ export default function PatientsPage() {
       addToast({ type: 'warning', message: 'Telefon numarası 10 haneli olmalı veya başında 0 ile 11 hane girilmelidir.' });
       return;
     }
+    if (formData.emergencyContactPhone && !isValidTurkishPhone(formData.emergencyContactPhone)) {
+      addToast({ type: 'warning', message: 'Hasta yakını telefonu 10 haneli olmalı veya başında 0 ile 11 hane girilmelidir.' });
+      return;
+    }
     if (!formData.consentGiven) {
       addToast({ type: 'warning', message: '⚠️ DİKKAT: Kişisel Sağlık Verilerinin İşlenmesine İlişkin KVKK Açık Rıza Onayı verilmeden hasta kaydı oluşturulamaz.' });
       return;
@@ -1422,10 +1426,16 @@ export default function PatientsPage() {
                   <label className="form-label">Yakın Telefon</label>
                   <input
                     className="form-input"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
                     placeholder="05XX XXX XX XX"
+                    maxLength={11}
+                    aria-describedby="emergency-phone-hint"
                     value={formData.emergencyContactPhone}
-                    onChange={(e) => setFormData({ ...formData, emergencyContactPhone: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, emergencyContactPhone: normalizeTurkishPhoneInput(e.target.value) })}
                   />
+                  <small id="emergency-phone-hint" className="form-hint">İsteğe bağlı. Girilirse 10 veya 0 ile başlayan 11 hane olmalıdır.</small>
                 </div>
               </div>
 
