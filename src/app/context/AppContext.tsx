@@ -892,6 +892,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addToast({ type: 'success', message: 'Şube başarıyla oluşturuldu.' });
       } catch (err: any) {
         addToast({ type: 'error', message: `Şube oluşturulamadı: ${err.message}` });
+        throw err;
       }
     } else {
       setBranchesList(prev => [...prev, branch]);

@@ -16,10 +16,10 @@ export default function Header() {
     currentUser,
     branchesList,
     stockList: allStock,
+    appointmentsList: allAppointments,
     usersList,
     logout,
-    loggingOut,
-    addToast
+    loggingOut
   } = useApp();
 
   const { activeBranch, selectBranchBySlug, allowedBranches } = useBranch();
@@ -27,8 +27,10 @@ export default function Header() {
 
   const patientsList = useMemo(() => allPatients.filter(p => matches(p.branch, p.branchId)), [allPatients, matches]);
   const stockList = useMemo(() => allStock.filter(s => matches(s.branch, s.branchId)), [allStock, matches]);
+  const appointmentsList = useMemo(() => allAppointments.filter(a => matches(a.branch, a.branchId)), [allAppointments, matches]);
 
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationsRead, setNotificationsRead] = useState(false);
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -84,11 +86,28 @@ export default function Header() {
   }, [activeBranch, branchesList]);
 
   // Notifications
-  const notifications = useMemo(() => [
-    { id: 1, title: 'Kritik Stok Uyarısı', desc: 'Oticon More 1 stok seviyesi 2 adede düştü.', time: '10 dk önce', page: 'stock' },
-    { id: 2, title: 'Yeni Randevu Talebi', desc: 'Ayşe Yılmaz yarın 14:30 için randevu oluşturdu.', time: '25 dk önce', page: 'appointments' },
-    { id: 3, title: 'SGK Reçete Onayı', desc: '5 adet reçete onay bekliyor.', time: '1 saat önce', page: 'sgk' },
-  ], []);
+  const notifications = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const parseDate = (value: string) => {
+      const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+      const tr = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+      return tr ? new Date(Number(tr[3]), Number(tr[2]) - 1, Number(tr[1])) : new Date('invalid');
+    };
+    const dateLabel = (date: Date) => new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium' }).format(date);
+    const lowStock = stockList
+      .filter(item => item.quantity <= item.criticalLevel && item.status !== 'Satıldı')
+      .map(item => ({ id: `stock-${item.id}`, title: 'Kritik stok uyarısı', desc: `${item.name}: ${item.quantity} adet kaldı.`, time: 'Stok listesi', page: 'stock' as const }));
+    const upcoming = appointmentsList
+      .map(appointment => ({ appointment, date: parseDate(appointment.date) }))
+      .filter(item => !Number.isNaN(item.date.getTime()) && item.date >= today && item.date < nextWeek && item.appointment.status !== 'İptal')
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .map(({ appointment, date }) => ({ id: `appointment-${appointment.id}`, title: 'Yaklaşan randevu', desc: `${appointment.patientName} · ${dateLabel(date)} ${appointment.time}`, time: 'Randevular', page: 'appointments' as const }));
+    return [...lowStock, ...upcoming].slice(0, 8);
+  }, [stockList, appointmentsList]);
 
   const userName = getDisplayName(currentUser, usersList) || 'Ahmet Yılmaz';
   const userInitials = getUserInitials(userName) || 'AH';
@@ -201,19 +220,19 @@ export default function Header() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
               <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
             </svg>
-            <span className={styles.bellBadge}>3</span>
+            {notifications.length > 0 && !notificationsRead && <span className={styles.bellBadge}>{notifications.length}</span>}
           </button>
 
           {showNotifications && (
             <div className={styles.notifDropdown}>
               <div className={styles.notifHeader}>
-                <span className={styles.notifTitle}>Bildirimler (3)</span>
-                <span className={styles.notifClear} onClick={() => addToast({ type: 'info', message: 'Tüm bildirimler okundu olarak işaretlendi.' })}>
+                <span className={styles.notifTitle}>Bildirimler ({notifications.length})</span>
+                <span className={styles.notifClear} role="button" tabIndex={0} onClick={() => setNotificationsRead(true)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setNotificationsRead(true); }}>
                   Tümünü Oku
                 </span>
               </div>
               <div>
-                {notifications.map(n => (
+                {notifications.length === 0 ? <div className={styles.notifItem}>Görüntülenecek güncel uyarı yok.</div> : notifications.map(n => (
                   <div
                     key={n.id}
                     className={styles.notifItem}

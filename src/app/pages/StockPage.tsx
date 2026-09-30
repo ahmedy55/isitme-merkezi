@@ -251,6 +251,8 @@ export default function StockPage() {
   const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
   const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
   const [selectedStatus, setSelectedStatus] = useState('Tüm Durumlar');
+  const [currentTablePage, setCurrentTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(10);
 
   // Table selection and drawer active item
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -332,6 +334,10 @@ export default function StockPage() {
       return true;
     });
   }, [allStockItems, activeBranch, categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm]);
+
+  useEffect(() => setCurrentTablePage(1), [categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm, tablePageSize]);
+  const tablePageCount = Math.max(1, Math.ceil(filteredItems.length / tablePageSize));
+  const pagedItems = useMemo(() => filteredItems.slice((currentTablePage - 1) * tablePageSize, currentTablePage * tablePageSize), [filteredItems, currentTablePage, tablePageSize]);
 
   // Keep the detail drawer bound to a row that is actually present in the current scope.
   useEffect(() => {
@@ -841,7 +847,7 @@ export default function StockPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredItems.map(item => {
+                  pagedItems.map(item => {
                     const isSelected = selectedIds.includes(item.id);
                     const isActive = activeItem?.id === item.id;
                     return (
@@ -1003,21 +1009,15 @@ export default function StockPage() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div className={styles.pagination}>
-                <button className={styles.pageBtn}>‹</button>
-                <button className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-                <button className={styles.pageBtn}>2</button>
-                <button className={styles.pageBtn}>3</button>
-                <button className={styles.pageBtn}>4</button>
-                <button className={styles.pageBtn}>5</button>
-                <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
-                <button className={styles.pageBtn}>15</button>
-                <button className={styles.pageBtn}>›</button>
+                <button type="button" className={styles.pageBtn} aria-label="Önceki sayfa" disabled={currentTablePage <= 1} onClick={() => setCurrentTablePage(page => Math.max(1, page - 1))}>‹</button>
+                {Array.from({ length: tablePageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${currentTablePage === page ? styles.pageBtnActive : ''}`} aria-current={currentTablePage === page ? 'page' : undefined} onClick={() => setCurrentTablePage(page)}>{page}</button>)}
+                <button type="button" className={styles.pageBtn} aria-label="Sonraki sayfa" disabled={currentTablePage >= tablePageCount} onClick={() => setCurrentTablePage(page => Math.min(tablePageCount, page + 1))}>›</button>
               </div>
 
-              <select className={styles.filterSelect} style={{ height: 32, minWidth: 90, padding: '0 8px' }}>
-                <option>10 / sayfa</option>
-                <option>25 / sayfa</option>
-                <option>50 / sayfa</option>
+              <select aria-label="Sayfa başına ürün" className={styles.filterSelect} style={{ height: 32, minWidth: 90, padding: '0 8px' }} value={tablePageSize} onChange={event => setTablePageSize(Number(event.target.value))}>
+                <option value={10}>10 / sayfa</option>
+                <option value={25}>25 / sayfa</option>
+                <option value={50}>50 / sayfa</option>
               </select>
             </div>
           </div>

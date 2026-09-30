@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import type { Branch, SystemUser } from '../data/mockData';
+import { canAccessPage } from '../lib/pageAuthorization';
 import { useBranchScope } from '../hooks/useBranchScope';
 import styles from './BranchesPage.module.css';
 
@@ -14,7 +16,7 @@ interface StaffUser {
   avatarColor: string;
   email: string;
   phone: string;
-  role: 'Firma Yöneticisi' | 'Sekreter' | 'Odyometrist' | 'Muhasebe' | 'Diğer';
+  role: SystemUser['roles'][number] | 'Diğer';
   branch: string;
   status: 'Aktif' | 'Pasif';
   lastLogin: string;
@@ -281,15 +283,29 @@ const INITIAL_STAFF: StaffUser[] = [
 ];
 
 export default function BranchesPage() {
-  const { addToast } = useApp();
+  const { addToast, setCurrentPage, branchesList, usersList, patientsList, salesList, auditLogList, currentOrgId, addBranch, addUser, updateUser, deleteUser } = useApp();
   const { matches } = useBranchScope();
 
   // Active Sub-Tab
   const [activeTab, setActiveTab] = useState('Şube Genel Bakış');
 
   // Branch and Staff States
-  const [branches, setBranches] = useState<BranchItem[]>(INITIAL_BRANCHES);
-  const [staffList, setStaffList] = useState<StaffUser[]>(INITIAL_STAFF);
+  const branches = useMemo<BranchItem[]>(() => {
+    const source = branchesList.length ? branchesList : currentOrgId ? [] : INITIAL_BRANCHES.map(item => ({ id: item.id, name: item.name, address: item.address, phone: item.phone, status: item.status as Branch['status'], patientsCount: item.patientCount }));
+    return source.map(branch => {
+      const assigned = usersList.filter(user => user.branchId === branch.id || (!user.branchId && user.branch === branch.name));
+      const patientCount = patientsList.filter(patient => patient.branchId === branch.id || (!patient.branchId && patient.branch === branch.name)).length;
+      const salesCount = salesList.filter(sale => sale.branchId === branch.id).reduce((sum, sale) => sum + sale.items.reduce((qty, item) => qty + item.quantity, 0), 0);
+      return { id: branch.id, name: branch.name, cityDistrict: branch.address || 'Adres belirtilmedi', status: branch.status, patientCount, staffCount: assigned.length, salesCount, staffAvatars: assigned.slice(0, 4).map(user => ({ initials: `${user.firstName[0] || ''}${user.lastName[0] || ''}`.toUpperCase(), color: '#0d9488' })), image: '', address: branch.address, phone: branch.phone };
+    });
+  }, [branchesList, usersList, patientsList, salesList, currentOrgId]);
+  const staffList = useMemo<StaffUser[]>(() => {
+    const source: SystemUser[] = usersList.length ? usersList : currentOrgId ? [] : INITIAL_STAFF.map(item => ({ id: item.id, userId: item.uuid, firstName: item.firstName, lastName: item.lastName, email: item.email, phone: item.phone, roles: [item.role === 'Diğer' ? 'Odyometrist' : item.role] as SystemUser['roles'], branch: item.branch, status: item.status, createdAt: item.lastLogin, lastLogin: item.lastLogin }));
+    return source.map(user => {
+      const role: StaffUser['role'] = user.roles[0] || 'Odyometrist';
+      return { id: user.id, uuid: user.userId || user.id, firstName: user.firstName, lastName: user.lastName, initials: `${user.firstName[0] || ''}${user.lastName[0] || ''}`.toUpperCase(), avatarColor: '#0d9488', email: user.email, phone: user.phone, role, branch: user.branch, status: user.status, lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleString('tr-TR') : '—', accessLevel: role === 'Firma Yöneticisi' ? 'Tam Erişim' : 'Sınırlı Erişim' };
+    });
+  }, [usersList, currentOrgId]);
 
   // Search & Filters for Staff Table
   const [searchTerm, setSearchTerm] = useState('');
@@ -320,24 +336,33 @@ export default function BranchesPage() {
     lastName: '',
     email: '',
     phone: '',
-    role: 'Odyometrist' as StaffUser['role'],
-    branch: 'Merkez',
-    accessLevel: 'Sınırlı Erişim' as StaffUser['accessLevel']
+    role: 'Odyometrist' as SystemUser['roles'][number],
+    branch: '',
   });
 
   // Donut 1: Şubeler Arası Hasta Dağılımı (Total: 54)
-  const branchPatientSlices = [
-    { label: 'Merkez', value: 24, color: '#10b981' },
-    { label: 'Çankaya', value: 18, color: '#0284c7' },
-    { label: 'Kadıköy', value: 12, color: '#f59e0b' }
+  const visibleBranches = branches.filter(branch => matches(branch.name, branch.id));
+  const branchPatientSlices = visibleBranches.map((branch, index) => ({ label: branch.name, value: branch.patientCount, color: ['#10b981', '#0284c7', '#f59e0b', '#8b5cf6'][index % 4] }));
+  const roleStaffList = staffList.filter(user => matches(user.branch) && (selectedBranchForRoleProgress === 'Tüm Şubeler' || user.branch === selectedBranchForRoleProgress));
+  const roleCountRows = [...new Set(roleStaffList.map(user => user.role))].map((role, index) => ({ role, count: roleStaffList.filter(user => user.role === role).length, max: Math.max(1, roleStaffList.length), color: ['#10b981', '#0284c7', '#f59e0b', '#8b5cf6', '#94a3b8'][index % 5] }));
+  const roleSlices = roleCountRows.map(row => ({ label: row.role, value: row.count, color: row.color }));
+  const authorizationRoles = ['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyolog', 'Odyometrist', 'Sekreter', 'Resepsiyon', 'Muhasebe'];
+  const authorizationPages = [
+    { label: 'Şube & Yetki Yönetimi', page: 'branches' }, { label: 'Ayarlar', page: 'settings' },
+    { label: 'Tedarikçiler', page: 'suppliers' }, { label: 'İşlem Kayıtları', page: 'audit-log' },
+    { label: 'Şube Aktiviteleri', page: 'branch-activities' }, { label: 'Kasa', page: 'cash' },
+    { label: 'Masraflar', page: 'expenses' }, { label: 'Raporlar', page: 'reports' },
+    { label: 'SGK Ödeme Takvimi', page: 'sgk-receivables' }, { label: 'Demirbaşlar', page: 'assets' },
   ];
-
-  // Donut 2: Yetki Durumu (Total: 8)
-  const accessLevelSlices = [
-    { label: 'Tam Erişim', value: 3, color: '#10b981' },
-    { label: 'Sınırlı Erişim', value: 4, color: '#0284c7' },
-    { label: 'Okuma Yetkisi', value: 1, color: '#f59e0b' }
-  ];
+  const roleDescriptions: Record<string, string> = {
+    'Firma Yöneticisi': 'Firma ve şube yönetimi dahil tüm sayfa kapsamlarına erişebilir.',
+    'Şube Yöneticisi': 'Finansal sayfalara rol kuralı kapsamında erişebilir; yönetim sayfaları firma yöneticisine özeldir.',
+    'Muhasebe': 'Finansal sayfalara erişebilir; yönetim sayfaları firma yöneticisine özeldir.',
+    'Odyolog': 'Yönetim ve finans sayfaları bu uygulama kuralında kapalıdır.',
+    'Odyometrist': 'Yönetim ve finans sayfaları bu uygulama kuralında kapalıdır.',
+    'Sekreter': 'Yönetim ve finans sayfaları bu uygulama kuralında kapalıdır.',
+    'Resepsiyon': 'Yönetim ve finans sayfaları bu uygulama kuralında kapalıdır.',
+  };
 
   // Filtered Staff
   const filteredStaff = useMemo(() => {
@@ -361,84 +386,83 @@ export default function BranchesPage() {
   }, [staffList, selectedBranchFilter, selectedRoleFilter, selectedStatusFilter, searchTerm, matches]);
 
   // Handle Add Branch
-  const handleSaveBranch = (e: React.FormEvent) => {
+  const handleSaveBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBranchForm.name.trim()) {
       addToast({ type: 'error', message: 'Lütfen şube adını girin.' });
       return;
     }
 
-    const newBranch: BranchItem = {
-      id: `br-${Date.now()}`,
+    const newBranch: Branch = {
+      id: crypto.randomUUID(),
       name: newBranchForm.name,
-      cityDistrict: newBranchForm.cityDistrict || 'İstanbul / Kadıköy',
+      address: newBranchForm.address || newBranchForm.cityDistrict || '',
+      phone: newBranchForm.phone,
+      patientsCount: 0,
       status: 'Aktif',
-      patientCount: 0,
-      staffCount: 1,
-      salesCount: 0,
-      staffAvatars: [{ initials: 'YK', color: '#0d9488' }],
-      image: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=360&auto=format&fit=crop&q=80',
-      address: newBranchForm.address || 'Adres belirtilmedi',
-      phone: newBranchForm.phone || '0216 000 00 00'
     };
 
-    setBranches([...branches, newBranch]);
-    setShowAddBranchModal(false);
-    setNewBranchForm({ name: '', cityDistrict: '', address: '', phone: '' });
-    addToast({ type: 'success', message: `${newBranch.name} şubesi başarıyla oluşturuldu.` });
+    try {
+      await addBranch(newBranch);
+      setShowAddBranchModal(false);
+      setNewBranchForm({ name: '', cityDistrict: '', address: '', phone: '' });
+    } catch { /* Context displays the persistence error. */ }
   };
 
   // Handle Add Staff
-  const handleSaveStaff = (e: React.FormEvent) => {
+  const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaffForm.firstName || !newStaffForm.lastName) {
       addToast({ type: 'error', message: 'Ad ve soyad zorunludur.' });
       return;
     }
+    if (!newStaffForm.branch || !branchesList.some(branch => branch.name === newStaffForm.branch) && currentOrgId) {
+      addToast({ type: 'error', message: 'Lütfen mevcut bir şube seçin.' });
+      return;
+    }
 
-    const initials = (newStaffForm.firstName[0] + newStaffForm.lastName[0]).toUpperCase();
-    const newStaff: StaffUser = {
-      id: `usr-${Date.now()}`,
-      uuid: crypto.randomUUID().slice(0, 18),
+    if (!newStaffForm.email.trim()) {
+      addToast({ type: 'error', message: 'Kullanıcı daveti için e-posta adresi zorunludur.' });
+      return;
+    }
+    const newStaff: SystemUser = {
+      id: crypto.randomUUID(),
       firstName: newStaffForm.firstName,
       lastName: newStaffForm.lastName,
-      initials,
-      avatarColor: '#0d9488',
-      email: newStaffForm.email || `${newStaffForm.firstName.toLowerCase()}@isitmemerkezi.com`,
-      phone: newStaffForm.phone || '05XX XXX XX XX',
-      role: newStaffForm.role,
+      email: newStaffForm.email,
+      phone: newStaffForm.phone,
+      roles: [newStaffForm.role],
       branch: newStaffForm.branch,
+      branchId: branchesList.find(branch => branch.name === newStaffForm.branch)?.id || null,
       status: 'Aktif',
-      lastLogin: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-      accessLevel: newStaffForm.accessLevel
+      createdAt: new Date().toISOString(),
     };
 
-    setStaffList([newStaff, ...staffList]);
-    setShowAddStaffModal(false);
+    try {
+      await addUser(newStaff);
+      setShowAddStaffModal(false);
+    } catch { return; }
     setNewStaffForm({
       firstName: '',
       lastName: '',
       email: '',
       phone: '',
       role: 'Odyometrist',
-      branch: 'Merkez',
-      accessLevel: 'Sınırlı Erişim'
+      branch: '',
     });
-    addToast({ type: 'success', message: `${newStaff.firstName} ${newStaff.lastName} sisteme eklendi.` });
   };
 
   // Handle Toggle Staff Status
-  const handleToggleStaffStatus = (user: StaffUser) => {
+  const handleToggleStaffStatus = async (user: StaffUser) => {
     const nextStatus = user.status === 'Aktif' ? 'Pasif' : 'Aktif';
-    setStaffList(staffList.map(u => u.id === user.id ? { ...u, status: nextStatus } : u));
-    addToast({ type: 'info', message: `${user.firstName} ${user.lastName} durumu "${nextStatus}" yapıldı.` });
+    const original = usersList.find(item => item.id === user.id);
+    if (original) await updateUser({ ...original, status: nextStatus });
   };
 
   // Handle Delete Staff
   const handleDeleteStaff = (user: StaffUser) => {
     if (confirm(`${user.firstName} ${user.lastName} adlı kullanıcıyı silmek istediğinize emin misiniz?`)) {
-      setStaffList(staffList.filter(u => u.id !== user.id));
-      addToast({ type: 'warning', message: 'Personel kaydı silindi.' });
+      void deleteUser(user.id);
     }
   };
 
@@ -548,11 +572,7 @@ export default function BranchesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Şube</span>
-            <span className={styles.statValue}>3</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↘ %0</span>
-              <span className={styles.trendMuted}>geçen aya göre</span>
-            </div>
+          <span className={styles.statValue}>{visibleBranches.length}</span>
           </div>
         </div>
 
@@ -566,11 +586,7 @@ export default function BranchesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Personel</span>
-            <span className={styles.statValue}>8</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↗ %14</span>
-              <span className={styles.trendMuted}>geçen aya göre</span>
-            </div>
+          <span className={styles.statValue}>{staffList.length}</span>
           </div>
         </div>
 
@@ -583,11 +599,7 @@ export default function BranchesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Aktif Roller</span>
-            <span className={styles.statValue}>4</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↘ %0</span>
-              <span className={styles.trendMuted}>geçen aya göre</span>
-            </div>
+          <span className={styles.statValue}>{new Set(staffList.map(user => user.role)).size}</span>
           </div>
         </div>
 
@@ -601,11 +613,7 @@ export default function BranchesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Yetkilendirilmiş Personel</span>
-            <span className={styles.statValue}>8</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↗ %14</span>
-              <span className={styles.trendMuted}>geçen aya göre</span>
-            </div>
+          <span className={styles.statValue}>{staffList.filter(user => user.status === 'Aktif').length}</span>
           </div>
         </div>
       </div>
@@ -632,7 +640,7 @@ export default function BranchesPage() {
       </div>
 
       {/* ── SECTION 1: Şubelerimiz Grid + Hasta Dağılımı Donut ── */}
-      <div className={styles.section1Grid}>
+      <div className={styles.section1Grid} style={{ display: ['Şube Genel Bakış', 'Şube Aktiviteleri', 'Erişim Logları'].includes(activeTab) ? undefined : 'none' }}>
         {/* Left: Şubelerimiz */}
         <div className={styles.branchesContainer}>
           <div className={styles.containerHeader}>
@@ -641,13 +649,13 @@ export default function BranchesPage() {
           </div>
 
           <div className={styles.branchesCardRow}>
-            {branches.map(branch => (
+            {visibleBranches.map(branch => (
               <div key={branch.id} className={styles.branchItemCard}>
-                <img
+                {branch.image ? <img
                   src={branch.image}
                   alt={branch.name}
                   className={styles.branchThumbnail}
-                />
+                /> : <div className={styles.branchThumbnail} aria-hidden="true" style={{ display: 'grid', placeItems: 'center', background: '#eaf6f2', color: '#08785b', fontSize: 32 }}>⌂</div>}
                 <div className={styles.branchCardBody}>
                   <div className={styles.branchHeadLine}>
                     <div className={styles.branchTitleWrap}>
@@ -703,10 +711,7 @@ export default function BranchesPage() {
         <div className={styles.cardWhite}>
           <div className={styles.cardHeaderRow}>
             <h3>Şubeler Arası Hasta Dağılımı</h3>
-            <select className={styles.miniSelect} defaultValue="Bu Yıl">
-              <option value="Bu Yıl">Bu Yıl</option>
-              <option value="Bu Ay">Bu Ay</option>
-            </select>
+            <span style={{ color: '#64748b', fontSize: 12 }}>Firma kapsamındaki mevcut hasta kayıtları</span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, margin: 'auto 0' }}>
@@ -714,24 +719,20 @@ export default function BranchesPage() {
               size={130}
               strokeWidth={20}
               slices={branchPatientSlices}
-              centerValue="54"
+              centerValue={visibleBranches.reduce((sum, branch) => sum + branch.patientCount, 0)}
               centerLabel="Toplam Hasta"
             />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-              {[
-                { name: 'Merkez', count: 24, pct: 44, color: '#10b981' },
-                { name: 'Çankaya', count: 18, pct: 33, color: '#0284c7' },
-                { name: 'Kadıköy', count: 12, pct: 22, color: '#f59e0b' }
-              ].map(item => (
-                <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+              {branchPatientSlices.map(item => (
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }}></span>
-                    <span style={{ color: '#334155' }}>{item.name}</span>
+                    <span style={{ color: '#334155' }}>{item.label}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.count}</span>
-                    <span style={{ color: '#64748b', fontSize: 11 }}>%{item.pct}</span>
+                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
+                    <span style={{ color: '#64748b', fontSize: 11 }}>%{visibleBranches.reduce((sum, branch) => sum + branch.patientCount, 0) ? Math.round(item.value / visibleBranches.reduce((sum, branch) => sum + branch.patientCount, 0) * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -752,20 +753,12 @@ export default function BranchesPage() {
               onChange={e => setSelectedBranchForRoleProgress(e.target.value)}
             >
               <option value="Tüm Şubeler">Tüm Şubeler</option>
-              <option value="Merkez">Merkez</option>
-              <option value="Çankaya">Çankaya</option>
-              <option value="Kadıköy">Kadıköy</option>
+              {branches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
             </select>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
-            {[
-              { role: 'Odyometrist', count: 3, max: 5, color: '#10b981' },
-              { role: 'Sekreter', count: 2, max: 5, color: '#0284c7' },
-              { role: 'Muhasebe', count: 1, max: 5, color: '#f59e0b' },
-              { role: 'Firma Yöneticisi', count: 1, max: 5, color: '#8b5cf6' },
-              { role: 'Diğer', count: 1, max: 5, color: '#94a3b8' }
-            ].map(r => (
+            {roleCountRows.map(r => (
               <div key={r.role} className={styles.roleProgressRow}>
                 <span className={styles.roleLabel}>{r.role}</span>
                 <span className={styles.roleCount}>{r.count}</span>
@@ -790,25 +783,21 @@ export default function BranchesPage() {
             <SvgDonut
               size={120}
               strokeWidth={18}
-              slices={accessLevelSlices}
-              centerValue="8"
+              slices={roleSlices}
+              centerValue={roleStaffList.length}
               centerLabel="Toplam Personel"
             />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-              {[
-                { name: 'Tam Erişim', count: 3, pct: 38, color: '#10b981' },
-                { name: 'Sınırlı Erişim', count: 4, pct: 50, color: '#0284c7' },
-                { name: 'Okuma Yetkisi', count: 1, pct: 12, color: '#f59e0b' }
-              ].map(item => (
-                <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+              {roleSlices.map(item => (
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }}></span>
-                    <span style={{ color: '#334155' }}>{item.name}</span>
+                    <span style={{ color: '#334155' }}>{item.label}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.count}</span>
-                    <span style={{ color: '#64748b', fontSize: 11 }}>%{item.pct}</span>
+                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
+                    <span style={{ color: '#64748b', fontSize: 11 }}>%{roleStaffList.length ? Math.round(item.value / roleStaffList.length * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -823,36 +812,32 @@ export default function BranchesPage() {
             <button
               type="button"
               className={styles.btnDetailMini}
-              onClick={() => addToast({ type: 'info', message: 'Tüm aktiviteler listeleniyor.' })}
+              onClick={() => setCurrentPage('audit-log')}
             >
               Tümünü Gör &gt;
             </button>
           </div>
 
           <div className={styles.timelineList}>
-            {[
-              { name: 'Ahmet Yılmaz', date: '29.09.2026 14:32', note: 'Kadıköy şubesine atandı.', dotColor: '#10b981' },
-              { name: 'Zeynep Kaya', date: '29.09.2026 11:15', note: 'Yeni sekreter rolü verildi.', dotColor: '#f59e0b' },
-              { name: 'Mehmet Arslan', date: '28.09.2026 16:20', note: 'Çankaya şubesinde yetki güncellendi.', dotColor: '#10b981' },
-              { name: 'Elif Demir', date: '27.09.2026 10:05', note: 'Merkez şubesine atandı.', dotColor: '#10b981' }
-            ].map((act, i) => (
-              <div key={i} className={styles.timelineItem}>
-                <span className={styles.timelineDot} style={{ background: act.dotColor }}></span>
+            {auditLogList.slice(0, 4).map((act) => (
+              <div key={act.id} className={styles.timelineItem}>
+                <span className={styles.timelineDot} style={{ background: '#10b981' }}></span>
                 <div className={styles.timelineItemBody}>
                   <div>
-                    <strong>{act.name}</strong>
-                    <span className={styles.timelineItemDate}>{act.date}</span>
+                    <strong>{act.userName}</strong>
+                    <span className={styles.timelineItemDate}>{new Date(act.timestamp).toLocaleString('tr-TR')}</span>
                   </div>
-                  <div className={styles.timelineItemNote}>{act.note}</div>
+                  <div className={styles.timelineItemNote}>{act.description}</div>
                 </div>
               </div>
             ))}
+            {auditLogList.length === 0 && <p>Bu firma için görüntülenecek denetim kaydı yok.</p>}
           </div>
         </div>
       </div>
 
       {/* ── SECTION 3: Sistem Personelleri Tablosu ── */}
-      <div className={styles.tableContainerCard}>
+      <div className={styles.tableContainerCard} style={{ display: activeTab === 'Personel Yönetimi' || activeTab === 'Rol & Yetkiler' ? undefined : 'none' }}>
         <div className={styles.tableToolbar}>
           <div className={styles.tableToolbarLeft}>
             <span className={styles.tableTitle}>Sistem Personelleri</span>
@@ -878,9 +863,7 @@ export default function BranchesPage() {
               onChange={e => setSelectedBranchFilter(e.target.value)}
             >
               <option value="Tüm Şubeler">Tüm Şubeler</option>
-              <option value="Merkez">Merkez</option>
-              <option value="Çankaya">Çankaya</option>
-              <option value="Kadıköy">Kadıköy</option>
+              {branches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
             </select>
 
             <select
@@ -893,7 +876,9 @@ export default function BranchesPage() {
               <option value="Odyometrist">Odyometrist</option>
               <option value="Sekreter">Sekreter</option>
               <option value="Muhasebe">Muhasebe</option>
-              <option value="Diğer">Diğer</option>
+              <option value="Odyolog">Odyolog</option>
+              <option value="Resepsiyon">Resepsiyon</option>
+              <option value="Şube Yöneticisi">Şube Yöneticisi</option>
             </select>
 
             <select
@@ -1150,6 +1135,7 @@ export default function BranchesPage() {
                     <label className={styles.formLabel}>E-posta</label>
                     <input
                       type="email"
+                      required
                       placeholder="burak@isitmemerkezi.com"
                       className={styles.formInput}
                       value={newStaffForm.email}
@@ -1174,13 +1160,14 @@ export default function BranchesPage() {
                     <select
                       className={styles.formSelect}
                       value={newStaffForm.role}
-                      onChange={e => setNewStaffForm({ ...newStaffForm, role: e.target.value as StaffUser['role'] })}
+                      onChange={e => setNewStaffForm({ ...newStaffForm, role: e.target.value as SystemUser['roles'][number] })}
                     >
                       <option value="Odyometrist">Odyometrist</option>
                       <option value="Sekreter">Sekreter</option>
                       <option value="Muhasebe">Muhasebe</option>
-                      <option value="Firma Yöneticisi">Firma Yöneticisi</option>
-                      <option value="Diğer">Diğer</option>
+                      <option value="Şube Yöneticisi">Şube Yöneticisi</option>
+                      <option value="Odyolog">Odyolog</option>
+                      <option value="Resepsiyon">Resepsiyon</option>
                     </select>
                   </div>
 
@@ -1191,6 +1178,7 @@ export default function BranchesPage() {
                       value={newStaffForm.branch}
                       onChange={e => setNewStaffForm({ ...newStaffForm, branch: e.target.value })}
                     >
+                      <option value="">Şube seçin</option>
                       {branches.map(b => (
                         <option key={b.name} value={b.name}>{b.name}</option>
                       ))}
@@ -1198,18 +1186,7 @@ export default function BranchesPage() {
                   </div>
                 </div>
 
-                <div className={styles.formGroup}>
-                  <label className={styles.formLabel}>Erişim Seviyesi</label>
-                  <select
-                    className={styles.formSelect}
-                    value={newStaffForm.accessLevel}
-                    onChange={e => setNewStaffForm({ ...newStaffForm, accessLevel: e.target.value as StaffUser['accessLevel'] })}
-                  >
-                    <option value="Tam Erişim">Tam Erişim</option>
-                    <option value="Sınırlı Erişim">Sınırlı Erişim</option>
-                    <option value="Okuma Yetkisi">Okuma Yetkisi</option>
-                  </select>
-                </div>
+                  <p role="note" style={{ fontSize: 12, color: '#64748b' }}>Erişim, atanan sistem rolü ve şube kapsamı üzerinden belirlenir.</p>
               </div>
               <div className={styles.modalFooter}>
                 <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowAddStaffModal(false)}>İptal</button>
@@ -1228,11 +1205,15 @@ export default function BranchesPage() {
               <h2>✏️ Personel Düzenle — {editingStaff.firstName} {editingStaff.lastName}</h2>
               <button type="button" className={styles.modalCloseBtn} onClick={() => setShowEditStaffModal(false)}>✕</button>
             </div>
-            <form onSubmit={e => {
+            <form onSubmit={async e => {
               e.preventDefault();
-              setStaffList(staffList.map(u => u.id === editingStaff.id ? editingStaff : u));
-              setShowEditStaffModal(false);
-              addToast({ type: 'success', message: 'Personel bilgileri güncellendi.' });
+              const original = usersList.find(user => user.id === editingStaff.id);
+              if (!original) return;
+              const branchId = branchesList.find(branch => branch.name === editingStaff.branch)?.id || null;
+              try {
+                await updateUser({ ...original, firstName: editingStaff.firstName, lastName: editingStaff.lastName, phone: editingStaff.phone, roles: [editingStaff.role === 'Diğer' ? 'Odyometrist' : editingStaff.role], branch: editingStaff.branch, branchId });
+                setShowEditStaffModal(false);
+              } catch { /* Context displays the persistence error. */ }
             }}>
               <div className={styles.modalBody}>
                 <div className={styles.formGrid2}>
@@ -1268,7 +1249,9 @@ export default function BranchesPage() {
                       <option value="Sekreter">Sekreter</option>
                       <option value="Muhasebe">Muhasebe</option>
                       <option value="Firma Yöneticisi">Firma Yöneticisi</option>
-                      <option value="Diğer">Diğer</option>
+                      <option value="Odyolog">Odyolog</option>
+                      <option value="Resepsiyon">Resepsiyon</option>
+                      <option value="Şube Yöneticisi">Şube Yöneticisi</option>
                     </select>
                   </div>
                   <div className={styles.formGroup}>
@@ -1309,36 +1292,23 @@ export default function BranchesPage() {
         <div className={styles.modalOverlay} onClick={() => setShowMatrixModal(false)}>
           <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
             <div className={styles.modalHeader}>
-              <h2>🛡️ Şube &amp; Modül Yetki Matrisi</h2>
+              <h2>🛡️ Sayfa Erişim Kuralları</h2>
               <button type="button" className={styles.modalCloseBtn} onClick={() => setShowMatrixModal(false)}>✕</button>
             </div>
             <div className={styles.modalBody}>
+              <p style={{ fontSize: 12, color: '#64748b' }}>Bu görünüm uygulamadaki sayfa erişim kuralını gösterir; kayıt ekleme/düzenleme gibi işlem izinlerini temsil etmez.</p>
               <table className={styles.staffTable}>
                 <thead>
                   <tr>
                     <th>MODÜL</th>
-                    <th style={{ textAlign: 'center' }}>FİRMA YÖNETİCİSİ</th>
-                    <th style={{ textAlign: 'center' }}>ODYOMETRİST</th>
-                    <th style={{ textAlign: 'center' }}>SEKRETER</th>
-                    <th style={{ textAlign: 'center' }}>MUHASEBE</th>
+                    {authorizationRoles.map(role => <th key={role} style={{ textAlign: 'center' }}>{role}</th>)}
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    { mod: 'Hastalar & CRM', a: 'Tam', b: 'Tam', c: 'Okuma / Ekleme', d: 'Okuma' },
-                    { mod: 'Randevular & Takvim', a: 'Tam', b: 'Tam', c: 'Tam', d: 'Okuma' },
-                    { mod: 'Kasa, Tahsilat & Masraflar', a: 'Tam', b: 'Yok', c: 'Sadece Tahsilat', d: 'Tam' },
-                    { mod: 'Teknik Servis', a: 'Tam', b: 'Tam', c: 'Kabul / Teslim', d: 'Yok' },
-                    { mod: 'Stok & Aksesuar', a: 'Tam', b: 'Okuma', c: 'Okuma', d: 'Tam' },
-                    { mod: 'Şube & Yetki Yönetimi', a: 'Tam', b: 'Yok', c: 'Yok', d: 'Yok' },
-                    { mod: 'Raporlar & Analitik', a: 'Tam', b: 'Kendi Şubesi', c: 'Yok', d: 'Finansal' }
-                  ].map((row, i) => (
+                  {authorizationPages.map((row, i) => (
                     <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{row.mod}</td>
-                      <td style={{ textAlign: 'center', color: '#16a34a', fontWeight: 600 }}>{row.a}</td>
-                      <td style={{ textAlign: 'center', color: row.b === 'Yok' ? '#94a3b8' : '#0284c7' }}>{row.b}</td>
-                      <td style={{ textAlign: 'center', color: row.c === 'Yok' ? '#94a3b8' : '#0284c7' }}>{row.c}</td>
-                      <td style={{ textAlign: 'center', color: row.d === 'Yok' ? '#94a3b8' : '#0284c7' }}>{row.d}</td>
+                      <td style={{ fontWeight: 600 }}>{row.label}</td>
+                      {authorizationRoles.map(role => { const allowed = canAccessPage(row.page, [role]); return <td key={role} style={{ textAlign: 'center', color: allowed ? '#16a34a' : '#94a3b8', fontWeight: 600 }}>{allowed ? 'Erişim var' : 'Yok'}</td>; })}
                     </tr>
                   ))}
                 </tbody>
@@ -1361,13 +1331,7 @@ export default function BranchesPage() {
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  { role: 'Firma Yöneticisi', desc: 'Sistemdeki tüm şubeler, finansal kayıtlar ve personel yetkilerine tam erişim yetkisi.', count: 1, color: '#ea580c' },
-                  { role: 'Odyometrist', desc: 'Hasta kabulü, işitme testleri, cihaz denemeleri, satış ve teknik servis girişleri yapabilir.', count: 3, color: '#10b981' },
-                  { role: 'Sekreter', desc: 'Randevu planlama, hasta karşılama, telefon iletişimi ve hızlı tahsilat işlemleri.', count: 2, color: '#0284c7' },
-                  { role: 'Muhasebe', desc: 'Kasa giriş/çıkış, masraf yönetimi, faturalar ve tedarikçi borç takibi.', count: 1, color: '#b45309' },
-                  { role: 'Diğer Destek', desc: 'Stajyer ve geçici destek personeli için kısıtlı görüntüleme.', count: 1, color: '#64748b' }
-                ].map(r => (
+                {authorizationRoles.map((role, index) => ({ role, desc: roleDescriptions[role], count: staffList.filter(user => user.role === role).length, color: ['#ea580c', '#0d9488', '#0284c7', '#10b981', '#64748b', '#2563eb', '#b45309'][index] })).map(r => (
                   <div key={r.role} style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: 8, borderLeft: `4px solid ${r.color}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <strong style={{ color: '#0f172a' }}>{r.role}</strong>

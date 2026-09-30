@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
-import { formatCurrency } from '../data/mockData';
+import { formatCurrency, formatDate } from '../data/mockData';
+import { getNextMaintenanceDate } from '../lib/assetMaintenance';
 import { archiveAsset, AssetRecord, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
 import styles from './AssetsPage.module.css';
 
@@ -26,6 +27,13 @@ interface DisplayAsset {
   maintenanceStatus?: string;
   notes?: string;
 }
+
+const toIsoDate = (value: string) => {
+  if (!value || value === '—') return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const tr = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  return tr ? `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}` : '';
+};
 
 const INITIAL_MOCK_ASSETS: DisplayAsset[] = [
   {
@@ -198,7 +206,7 @@ export default function AssetsPage() {
     name: '',
     category: 'Cihaz' as DisplayAsset['category'],
     brandModel: '',
-    branch: 'Test Şube 1',
+    branch: '',
     serialNo: '',
     purchaseDate: new Date().toISOString().split('T')[0],
     warrantyExpiry: '',
@@ -206,6 +214,10 @@ export default function AssetsPage() {
     status: 'Aktif' as DisplayAsset['status'],
     notes: ''
   });
+
+  useEffect(() => {
+    if (!newAssetForm.branch && branchesList[0]) setNewAssetForm(form => ({ ...form, branch: branchesList[0].name }));
+  }, [branchesList, newAssetForm.branch]);
 
   // Sync Supabase operations repository if configured
   useEffect(() => {
@@ -219,17 +231,17 @@ export default function AssetsPage() {
               name: r.name,
               category: r.category === 'Klinik Cihaz' ? 'Cihaz' : r.category === 'Bilgisayar & Çevre' ? 'Bilgisayar' : r.category || 'Cihaz',
               brandModel: r.model || r.name,
-              branch: r.branch || 'Test Şube 1',
+              branch: r.branch || '—',
               branchId: r.branchId,
               serialNo: r.serialNo || '—',
-              purchaseDate: r.purchaseDate || '01.01.2024',
+              purchaseDate: formatDate(r.purchaseDate || ''),
               warrantyExpiry: r.warrantyExpiry || '—',
               cost: Number(r.cost) || 0,
               status: r.status === 'Arızalı' ? 'Onarımda' : r.status || 'Aktif',
               calibrationIntervalMonths: r.maintenanceIntervalMonths || 12,
-              lastCalibrationDate: r.lastMaintenance || '01.01.2024',
-              nextCalibrationDate: '01.01.2025',
-              maintenanceStatus: 'Bakım gerekmiyor',
+              lastCalibrationDate: formatDate(r.lastMaintenance || ''),
+              nextCalibrationDate: getNextMaintenanceDate(r.lastMaintenance, r.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—',
+              maintenanceStatus: getNextMaintenanceDate(r.lastMaintenance, r.maintenanceIntervalMonths) && getNextMaintenanceDate(r.lastMaintenance, r.maintenanceIntervalMonths)! < new Date() ? 'Bakım zamanı geçti' : r.lastMaintenance ? 'Bakım takvimde' : 'Son bakım kaydı yok',
               notes: r.notes || ''
             }));
             setAssetList(mapped);
@@ -411,21 +423,48 @@ export default function AssetsPage() {
       return;
     }
 
+    const branchRecord = branchesList.find(branch => branch.name === newAssetForm.branch);
+    if (currentOrgId && !branchRecord) {
+      addToast({ type: 'error', message: 'Demirbaş için geçerli bir şube seçin.' });
+      return;
+    }
+    const assetId = crypto.randomUUID();
+    const record: AssetRecord = {
+      id: assetId,
+      name: newAssetForm.name.trim(),
+      category: newAssetForm.category === 'Cihaz' ? 'Klinik Cihaz' : newAssetForm.category === 'Bilgisayar' ? 'Bilgisayar & Çevre' : newAssetForm.category,
+      serialNo: newAssetForm.serialNo.trim(),
+      branch: newAssetForm.branch,
+      branchId: branchRecord?.id,
+      purchaseDate: newAssetForm.purchaseDate,
+      cost: Number(newAssetForm.cost) || 0,
+      warrantyExpiry: newAssetForm.warrantyExpiry,
+      lastMaintenance: '',
+      maintenanceIntervalMonths: 12,
+      status: newAssetForm.status,
+      notes: newAssetForm.notes,
+    };
+    let savedRecord = record;
+    if (currentOrgId) {
+      try { savedRecord = await saveAsset(record); }
+      catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş kaydedilemedi.' }); return; }
+    }
     const newAsset: DisplayAsset = {
-      id: `ast-${Date.now()}`,
+      id: savedRecord.id,
       name: newAssetForm.name,
       category: newAssetForm.category,
       brandModel: newAssetForm.brandModel || newAssetForm.name,
-      branch: newAssetForm.branch,
+      branch: savedRecord.branch || newAssetForm.branch,
+      branchId: savedRecord.branchId,
       serialNo: newAssetForm.serialNo || '—',
-      purchaseDate: newAssetForm.purchaseDate,
-      warrantyExpiry: newAssetForm.warrantyExpiry || '—',
-      cost: Number(newAssetForm.cost) || 0,
-      status: newAssetForm.status,
-      calibrationIntervalMonths: 12,
-      lastCalibrationDate: newAssetForm.purchaseDate,
-      nextCalibrationDate: '10.08.2026',
-      maintenanceStatus: 'Bakım gerekmiyor',
+      purchaseDate: formatDate(savedRecord.purchaseDate),
+      warrantyExpiry: formatDate(savedRecord.warrantyExpiry),
+      cost: savedRecord.cost,
+      status: savedRecord.status as DisplayAsset['status'],
+      calibrationIntervalMonths: savedRecord.maintenanceIntervalMonths,
+      lastCalibrationDate: formatDate(savedRecord.lastMaintenance),
+      nextCalibrationDate: getNextMaintenanceDate(savedRecord.lastMaintenance, savedRecord.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—',
+      maintenanceStatus: savedRecord.lastMaintenance ? 'Bakım takvimde' : 'Son bakım kaydı yok',
       notes: newAssetForm.notes
     };
 
@@ -433,37 +472,19 @@ export default function AssetsPage() {
     setActiveItem(newAsset);
     setSelectedIds([newAsset.id]);
     setShowAddModal(false);
-    addToast({ type: 'success', message: `${newAsset.name} demirbaş kaydı başarıyla oluşturuldu.` });
-
-    if (currentOrgId) {
-      try {
-        await saveAsset({
-          id: newAsset.id,
-          name: newAsset.name,
-          category: newAsset.category === 'Cihaz' ? 'Klinik Cihaz' : newAsset.category === 'Bilgisayar' ? 'Bilgisayar & Çevre' : newAsset.category,
-          serialNo: newAsset.serialNo,
-          branch: newAsset.branch,
-          purchaseDate: newAsset.purchaseDate,
-          cost: newAsset.cost,
-          warrantyExpiry: newAsset.warrantyExpiry,
-          lastMaintenance: newAsset.lastCalibrationDate,
-          maintenanceIntervalMonths: 12,
-          status: newAsset.status,
-          notes: newAsset.notes
-        } as AssetRecord);
-      } catch {
-        // gracefully saved locally
-      }
-    }
+    addToast({ type: 'success', message: `${newAsset.name} demirbaş kaydı kaydedildi.` });
   };
 
-  const handleDeleteAsset = (id: string) => {
+  const handleDeleteAsset = async (id: string) => {
+    if (currentOrgId) {
+      try { await archiveAsset(id); }
+      catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş arşivlenemedi.' }); return; }
+    }
     setAssetList(prev => prev.filter(x => x.id !== id));
     if (activeItem?.id === id) setActiveItem(null);
     setSelectedIds(prev => prev.filter(x => x !== id));
     setActiveActionMenuId(null);
-    addToast({ type: 'success', message: 'Demirbaş kaydı silindi.' });
-    if (currentOrgId) archiveAsset(id);
+    addToast({ type: 'success', message: 'Demirbaş kaydı arşivlendi.' });
   };
 
   return (
@@ -655,7 +676,7 @@ export default function AssetsPage() {
           {branchesList.map(b => (
             <option key={b.id} value={b.name}>{b.name}</option>
           ))}
-          {branchesList.length === 0 && (
+          {branchesList.length === 0 && !currentOrgId && (
             <>
               <option value="Test Şube 1">Test Şube 1</option>
               <option value="Merkez">Merkez</option>
@@ -1025,11 +1046,11 @@ export default function AssetsPage() {
                       </div>
                       <div className={styles.maintenanceRow}>
                         <span>Son Kalibrasyon</span>
-                        <strong>{activeItem.lastCalibrationDate || '10.08.2025'}</strong>
+                        <strong>{activeItem.lastCalibrationDate || '—'}</strong>
                       </div>
                       <div className={styles.maintenanceRow}>
                         <span>Sonraki Kalibrasyon</span>
-                        <strong style={{ color: '#dc2626' }}>{activeItem.nextCalibrationDate || '10.08.2026'}</strong>
+                        <strong style={{ color: activeItem.nextCalibrationDate && activeItem.nextCalibrationDate !== '—' ? '#dc2626' : '#64748b' }}>{activeItem.nextCalibrationDate || '—'}</strong>
                       </div>
                       <div className={styles.maintenanceRow}>
                         <span>Bakım Durumu</span>
@@ -1225,10 +1246,8 @@ export default function AssetsPage() {
                       value={newAssetForm.branch}
                       onChange={e => setNewAssetForm({ ...newAssetForm, branch: e.target.value })}
                     >
-                      <option value="Test Şube 1">Test Şube 1</option>
-                      <option value="Merkez">Merkez</option>
-                      <option value="Çankaya">Çankaya</option>
-                      <option value="Kadıköy">Kadıköy</option>
+                      <option value="">Şube seçin</option>
+                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1359,10 +1378,26 @@ export default function AssetsPage() {
               <button className={styles.btnClear} onClick={() => setShowEditModal(false)}>Vazgeç</button>
               <button
                 className={styles.btnNewAsset}
-                onClick={() => {
-                  setAssetList(prev => prev.map(a => a.id === activeItem.id ? activeItem : a));
+                onClick={async () => {
+                  const branch = branchesList.find(item => item.name === activeItem.branch);
+                  if (currentOrgId && !branch) { addToast({ type: 'error', message: 'Geçerli bir şube seçin.' }); return; }
+                  const record: AssetRecord = {
+                    id: activeItem.id, name: activeItem.name, category: activeItem.category === 'Cihaz' ? 'Klinik Cihaz' : activeItem.category === 'Bilgisayar' ? 'Bilgisayar & Çevre' : activeItem.category,
+                    serialNo: activeItem.serialNo === '—' ? '' : activeItem.serialNo, branch: activeItem.branch, branchId: branch?.id,
+                    purchaseDate: toIsoDate(activeItem.purchaseDate), cost: activeItem.cost, warrantyExpiry: toIsoDate(activeItem.warrantyExpiry),
+                    lastMaintenance: toIsoDate(activeItem.lastCalibrationDate || ''), maintenanceIntervalMonths: activeItem.calibrationIntervalMonths || 12,
+                    status: activeItem.status, notes: activeItem.notes,
+                  };
+                  let saved = record;
+                  if (currentOrgId) {
+                    try { saved = await saveAsset(record); }
+                    catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş güncellenemedi.' }); return; }
+                  }
+                  const updated: DisplayAsset = { ...activeItem, branchId: saved.branchId, purchaseDate: formatDate(saved.purchaseDate), warrantyExpiry: formatDate(saved.warrantyExpiry), lastCalibrationDate: formatDate(saved.lastMaintenance), nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—' };
+                  setAssetList(prev => prev.map(item => item.id === updated.id ? updated : item));
+                  setActiveItem(updated);
                   setShowEditModal(false);
-                  addToast({ type: 'success', message: 'Demirbaş bilgileri güncellendi.' });
+                  addToast({ type: 'success', message: 'Demirbaş bilgileri kaydedildi.' });
                 }}
               >
                 Kaydet

@@ -1,16 +1,27 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency } from '../data/mockData';
 import styles from './ReportsPage.module.css';
+import { fetchServiceTickets, type ServiceRecord } from '../repositories/ServiceTicketRepository';
 
 interface DonutSlice {
   value: number;
   color: string;
   label: string;
 }
+
+const REPORT_COLORS = ['#0d9488', '#f43f5e', '#f59e0b', '#0284c7', '#8b5cf6', '#64748b'];
+const dateKey = (value?: string) => {
+  if (!value) return '';
+  const iso = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  const tr = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  return tr ? `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}` : '';
+};
+const formatRangeDate = (date: Date) => new Intl.DateTimeFormat('tr-TR').format(date);
 
 // ── Reusable Pure SVG Donut Component ──
 function SvgDonut({
@@ -83,7 +94,7 @@ function SvgDonut({
 }
 
 export default function ReportsPage() {
-  const { addToast, salesList, expensesList, patientsList, stockList, appointmentsList } = useApp();
+  const { addToast, salesList, expensesList, patientsList, stockList, appointmentsList, branchesList, suppliersList, currentOrgId } = useApp();
   const { matches } = useBranchScope();
 
   // Dynamic Calculated Metrics
@@ -91,26 +102,73 @@ export default function ReportsPage() {
   const scopedExpenses = useMemo(() => expensesList.filter(expense => matches(expense.branch, expense.branchId)), [expensesList, matches]);
   const scopedPatients = useMemo(() => patientsList.filter(patient => matches(patient.branch, patient.branchId)), [patientsList, matches]);
   const scopedAppointments = useMemo(() => appointmentsList.filter(appointment => matches(appointment.branch, appointment.branchId)), [appointmentsList, matches]);
-  const dynamicTotalRevenue = useMemo(() => scopedSales.reduce((acc, sale) => acc + (sale.total || 0), 0), [scopedSales]);
+  const [activeTab, setActiveTab] = useState<string>('Genel Bakış');
+  const [dateRange, setDateRange] = useState(() => `01.01.${new Date().getFullYear()} - 31.12.${new Date().getFullYear()}`);
+  const [selectedPeriod, setSelectedPeriod] = useState('Bu Yıl');
+  const rangeBounds = useMemo(() => {
+    const [start, end] = dateRange.split(' - ').map(dateKey);
+    return { start, end };
+  }, [dateRange]);
+  const inRange = (value?: string) => {
+    const key = dateKey(value);
+    return Boolean(key && (!rangeBounds.start || key >= rangeBounds.start) && (!rangeBounds.end || key <= rangeBounds.end));
+  };
+  const reportSales = useMemo(() => scopedSales.filter(sale => inRange(sale.date)), [scopedSales, rangeBounds]);
+  const reportExpenses = useMemo(() => scopedExpenses.filter(expense => inRange(expense.date)), [scopedExpenses, rangeBounds]);
+  const reportPatients = useMemo(() => scopedPatients.filter(patient => inRange(patient.createdAt)), [scopedPatients, rangeBounds]);
+  const reportAppointments = useMemo(() => scopedAppointments.filter(appointment => inRange(appointment.date)), [scopedAppointments, rangeBounds]);
+  const previousRangeBounds = useMemo(() => {
+    if (!rangeBounds.start || !rangeBounds.end) return { start: '', end: '' };
+    const start = new Date(`${rangeBounds.start}T00:00:00`);
+    const end = new Date(`${rangeBounds.end}T00:00:00`);
+    const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+    const previousEnd = new Date(start); previousEnd.setDate(previousEnd.getDate() - 1);
+    const previousStart = new Date(previousEnd); previousStart.setDate(previousStart.getDate() - days + 1);
+    return { start: previousStart.toISOString().slice(0, 10), end: previousEnd.toISOString().slice(0, 10) };
+  }, [rangeBounds]);
+  const inPreviousRange = (value?: string) => {
+    const key = dateKey(value);
+    return Boolean(key && key >= previousRangeBounds.start && key <= previousRangeBounds.end);
+  };
+  const previousSales = scopedSales.filter(item => inPreviousRange(item.date));
+  const previousExpenses = scopedExpenses.filter(item => inPreviousRange(item.date));
+  const previousPatients = scopedPatients.filter(item => inPreviousRange(item.createdAt));
+  const previousAppointments = scopedAppointments.filter(item => inPreviousRange(item.date));
+  const dynamicTotalRevenue = useMemo(() => reportSales.reduce((acc, sale) => acc + (sale.total || 0), 0), [reportSales]);
 
   const dynamicTotalExpenses = useMemo(() => {
-    return scopedExpenses.reduce((acc, expense) => acc + (expense.amount || 0), 0);
-  }, [scopedExpenses]);
+    return reportExpenses.reduce((acc, expense) => acc + (expense.amount || 0), 0);
+  }, [reportExpenses]);
 
   const dynamicNetProfit = dynamicTotalRevenue - dynamicTotalExpenses;
-  const dynamicPatientCount = scopedPatients.length;
-  const dynamicAppointmentCount = scopedAppointments.length;
-  const dynamicDeviceSalesCount = scopedSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((count, item) => count + item.quantity, 0), 0);
-  const dynamicServiceRevenue = scopedSales.filter(sale => sale.items?.some(item => item.type === 'Servis Geliri')).reduce((acc, sale) => acc + sale.total, 0);
-
-  // Active Sub-Tab
-  const [activeTab, setActiveTab] = useState<string>('Genel Bakış');
-
-  // Date Range and Filters
-  const [dateRange, setDateRange] = useState('01.01.2026 - 31.12.2026');
-  const [selectedPeriod, setSelectedPeriod] = useState('Bu Yıl');
+  const dynamicPatientCount = reportPatients.length;
+  const dynamicAppointmentCount = reportAppointments.length;
+  const dynamicDeviceSalesCount = reportSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((count, item) => count + item.quantity, 0), 0);
+  const dynamicServiceRevenue = reportSales.filter(sale => sale.items?.some(item => item.type === 'Servis Geliri')).reduce((acc, sale) => acc + sale.total, 0);
+  const previousRevenue = previousSales.reduce((sum, item) => sum + item.total, 0);
+  const previousExpenseTotal = previousExpenses.reduce((sum, item) => sum + item.amount, 0);
+  const previousPatientCount = previousPatients.length;
+  const previousDeviceCount = previousSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((qty, item) => qty + item.quantity, 0), 0);
+  const previousServiceRevenue = previousSales.filter(sale => sale.items.some(item => item.type === 'Servis Geliri')).reduce((sum, sale) => sum + sale.total, 0);
+  const percentageChange = (current: number, previous: number) => previous ? `${current >= previous ? '+' : ''}%${Math.round((current - previous) / previous * 100)}` : 'Önceki dönemde veri yok';
+  const compareRows = [
+    { label: 'Toplam Ciro', current: dynamicTotalRevenue, previous: previousRevenue, format: formatCurrency },
+    { label: 'Toplam Hasta', current: dynamicPatientCount, previous: previousPatientCount, format: (value: number) => String(value) },
+    { label: 'Cihaz Satışı', current: dynamicDeviceSalesCount, previous: previousDeviceCount, format: (value: number) => `${value} Adet` },
+    { label: 'Teknik Servis Geliri', current: dynamicServiceRevenue, previous: previousServiceRevenue, format: formatCurrency },
+  ];
   const [chartMetric, setChartMetric] = useState('Ciro');
-  const [hoveredMonth, setHoveredMonth] = useState<string | null>('Eyl');
+  const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  useEffect(() => {
+    let active = true;
+    if (!currentOrgId) { setServiceRecords([]); return; }
+    fetchServiceTickets(currentOrgId).then(records => { if (active) setServiceRecords(records); }).catch(error => {
+      console.error('Rapor servis kayıtları yüklenemedi:', error);
+      if (active) addToast({ type: 'error', message: 'Teknik servis rapor verileri yüklenemedi.' });
+    });
+    return () => { active = false; };
+  }, [currentOrgId]);
 
   // Modals state
   const [showCompareModal, setShowCompareModal] = useState(false);
@@ -119,11 +177,11 @@ export default function ReportsPage() {
 
   // 12 Months Bar Chart Data
   const monthNames = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-  const reportYear = new Date().getFullYear();
+  const reportYear = Number(rangeBounds.start.slice(0, 4)) || new Date().getFullYear();
   const rawMonthlyValues = monthNames.map((_, monthIndex) => {
     const monthKey = `${reportYear}-${String(monthIndex + 1).padStart(2, '0')}`;
-    const monthSales = scopedSales.filter(sale => sale.date.startsWith(monthKey));
-    const monthExpenses = scopedExpenses.filter(expense => expense.date.startsWith(monthKey)).reduce((sum, expense) => sum + expense.amount, 0);
+    const monthSales = reportSales.filter(sale => dateKey(sale.date).startsWith(monthKey));
+    const monthExpenses = reportExpenses.filter(expense => dateKey(expense.date).startsWith(monthKey)).reduce((sum, expense) => sum + expense.amount, 0);
     if (chartMetric === 'Satış Adedi') return monthSales.reduce((sum, sale) => sum + sale.items.reduce((qty, item) => qty + item.quantity, 0), 0);
     if (chartMetric === 'Karlılık') return monthSales.reduce((sum, sale) => sum + sale.total, 0) - monthExpenses;
     return monthSales.reduce((sum, sale) => sum + sale.total, 0);
@@ -135,54 +193,72 @@ export default function ReportsPage() {
   const chartTickValues = Array.from({ length: 6 }, (_, index) => Math.round(chartScaleMax * (5 - index) / 5));
 
   // Gelir Dağılımı Donut Data
-  const revenueDistributionSlices: DonutSlice[] = [
-    { label: 'Cihaz Satışı', value: 60, color: '#0d9488' },
-    { label: 'Teknik Servis', value: 16, color: '#f43f5e' },
-    { label: 'Aksesuar Satışı', value: 12, color: '#f59e0b' },
-    { label: 'Hizmet / Diğer', value: 8, color: '#0284c7' }
-  ];
+  const revenueDistributionSlices: DonutSlice[] = useMemo(() => {
+    const totals = new Map<string, number>();
+    reportSales.forEach(sale => {
+      const lineTotals = sale.items.map(item => Math.max(0, item.price * item.quantity));
+      const lineTotal = lineTotals.reduce((sum, value) => sum + value, 0);
+      sale.items.forEach((item, index) => {
+        const label = item.type === 'Cihaz' ? 'Cihaz Satışı' : item.type === 'Aksesuar' || item.type === 'Pil' ? 'Aksesuar Satışı' : item.type === 'Servis Geliri' ? 'Teknik Servis' : 'Hizmet / Diğer';
+        const allocated = lineTotal ? (sale.total * lineTotals[index]) / lineTotal : 0;
+        totals.set(label, (totals.get(label) || 0) + allocated);
+      });
+    });
+    if (!reportSales.some(sale => sale.items.length)) return [];
+    return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
+  }, [reportSales]);
+  const reportSourceRows = useMemo(() => {
+    const totals = new Map<string, number>();
+    reportPatients.forEach(patient => {
+      const source = patient.source || 'Belirtilmemiş';
+      totals.set(source, (totals.get(source) || 0) + 1);
+    });
+    return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
+  }, [reportPatients]);
+  const reportAppointmentRows = useMemo(() => {
+    const totals = new Map<string, number>();
+    reportAppointments.forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
+    return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
+  }, [reportAppointments]);
+  const reportServiceRows = useMemo(() => {
+    const totals = new Map<string, number>();
+    serviceRecords.filter(item => matches(undefined, item.branchId) && inRange(item.receivedDate)).forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
+    return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
+  }, [serviceRecords, rangeBounds, matches]);
+  const topDevices = useMemo(() => {
+    const totals = new Map<string, { salesCount: number; revenue: number }>();
+    reportSales.forEach(sale => sale.items.filter(item => item.type === 'Cihaz').forEach(item => {
+      const current = totals.get(item.name) || { salesCount: 0, revenue: 0 };
+      current.salesCount += item.quantity;
+      current.revenue += item.price * item.quantity;
+      totals.set(item.name, current);
+    }));
+    const rows = [...totals].map(([name, value]) => ({ name, ...value })).sort((a, b) => b.salesCount - a.salesCount);
+    const total = rows.reduce((sum, row) => sum + row.salesCount, 0) || 1;
+    return rows.slice(0, 5).map((row, index) => ({ ...row, rank: index + 1, ratio: Math.round(row.salesCount / total * 100) }));
+  }, [reportSales]);
+  const branchPerformance = useMemo(() => branchesList.filter(branch => matches(branch.name, branch.id)).map(branch => ({
+    branch: branch.name,
+    patients: reportPatients.filter(patient => matches(patient.branch, patient.branchId) && (patient.branchId === branch.id || (!patient.branchId && patient.branch === branch.name))).length,
+    appointments: reportAppointments.filter(item => item.branchId === branch.id || (!item.branchId && item.branch === branch.name)).length,
+    revenue: reportSales.filter(sale => sale.branchId === branch.id).reduce((sum, sale) => sum + sale.total, 0),
+    service: reportSales.filter(sale => sale.branchId === branch.id).flatMap(sale => sale.items).filter(item => item.type === 'Servis Geliri').reduce((sum, item) => sum + item.quantity, 0),
+  })), [branchesList, reportPatients, reportAppointments, reportSales, matches]);
+  const reportStock = stockList.filter(item => matches(item.branch, item.branchId));
+  const reportSuppliers = suppliersList;
 
-  // Hasta Kaynak Dağılımı Slices
-  const patientSourceSlices: DonutSlice[] = [
-    { label: 'Google', value: 41, color: '#3b82f6' },
-    { label: 'Referans', value: 24, color: '#10b981' },
-    { label: 'Doktor Yönlendirmesi', value: 18, color: '#f87171' },
-    { label: 'Sosyal Medya', value: 12, color: '#38bdf8' },
-    { label: 'Diğer', value: 6, color: '#94a3b8' }
-  ];
-
-  // Randevu Durumu Slices
-  const appointmentStatusSlices: DonutSlice[] = [
-    { label: 'Tamamlanan', value: 73, color: '#10b981' },
-    { label: 'Bekleyen', value: 13, color: '#f59e0b' },
-    { label: 'İptal Edilen', value: 10, color: '#ef4444' },
-    { label: 'Gelmedi', value: 4, color: '#64748b' }
-  ];
-
-  // Teknik Servis Durumu Slices
-  const serviceStatusSlices: DonutSlice[] = [
-    { label: 'Teslim Edildi', value: 50, color: '#10b981' },
-    { label: 'Tamir Ediliyor', value: 25, color: '#14b8a6' },
-    { label: 'İnceleniyor', value: 17, color: '#0ea5e9' },
-    { label: 'Arızalı / Beklemede', value: 8, color: '#f87171' }
-  ];
-
-  // En Çok Satılan Cihazlar Data
-  const topDevices = [
-    { rank: 1, name: 'Oticon More 1', salesCount: 8, revenue: 4000, ratio: 32 },
-    { rank: 2, name: 'Phonak Audeo L', salesCount: 5, revenue: 2500, ratio: 20 },
-    { rank: 3, name: 'Widex Moment', salesCount: 4, revenue: 2000, ratio: 16 },
-    { rank: 4, name: 'Signia Pure 312', salesCount: 3, revenue: 1500, ratio: 12 },
-    { rank: 5, name: 'Diğer', salesCount: 5, revenue: 2500, ratio: 20 }
-  ];
-
-  // Şube Bazlı Performans Data
-  const branchPerformance = [
-    { branch: 'Merkez', patients: 18, appointments: 26, revenue: 7500, service: 12, satisfaction: 95 },
-    { branch: 'Çankaya', patients: 8, appointments: 14, revenue: 2500, service: 6, satisfaction: 90 },
-    { branch: 'Kadıköy', patients: 6, appointments: 10, revenue: 1500, service: 4, satisfaction: 87 },
-    { branch: 'Test Şube 1', patients: 2, appointments: 5, revenue: 1000, service: 2, satisfaction: 92 }
-  ];
+  const applyReportPeriod = (period: string) => {
+    if (period === 'Özel') { setShowDateModal(true); return; }
+    const now = new Date();
+    const start = new Date(now);
+    const end = new Date(now);
+    if (period === 'Bu Yıl') { start.setMonth(0, 1); end.setMonth(11, 31); }
+    else if (period === 'Bu Ay') { start.setDate(1); end.setMonth(end.getMonth() + 1, 0); }
+    else if (period === 'Son 6 Ay') start.setMonth(start.getMonth() - 5, 1);
+    else if (period === 'Tüm Zamanlar') { start.setFullYear(2000, 0, 1); }
+    setSelectedPeriod(period);
+    setDateRange(`${formatRangeDate(start)} - ${formatRangeDate(end)}`);
+  };
 
   const subTabs = [
     'Genel Bakış',
@@ -196,9 +272,48 @@ export default function ReportsPage() {
     'Özel Raporlar'
   ];
 
-  const handleExportReport = (format: string) => {
-    addToast({ type: 'success', message: `${format} formatında rapor dışa aktarılıyor...` });
-    setShowExportModal(false);
+  const handleExportReport = async (format: string) => {
+    try {
+      const rows = [
+        ['Rapor', 'Değer'], ['Tarih aralığı', dateRange], ['Ciro (₺)', String(dynamicTotalRevenue)],
+        ['Gider (₺)', String(dynamicTotalExpenses)], ['Net (₺)', String(dynamicNetProfit)],
+        ['Hasta', String(dynamicPatientCount)], ['Randevu', String(dynamicAppointmentCount)],
+        ['Satılan cihaz', String(dynamicDeviceSalesCount)], ['Teknik servis geliri (₺)', String(dynamicServiceRevenue)],
+        ...branchPerformance.map(branch => [`Şube: ${branch.branch}`, `Hasta ${branch.patients}; randevu ${branch.appointments}; ciro ${branch.revenue} TL`]),
+      ];
+      const safeName = `rapor-${new Date().toISOString().slice(0, 10)}`;
+      let blob: Blob;
+      let extension: string;
+      if (format === 'CSV') {
+        const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\r\n');
+        blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+        extension = 'csv';
+      } else if (format === 'Excel (XLSX)') {
+        const ExcelJS = (await import('exceljs')).default;
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Rapor');
+        worksheet.addRows(rows);
+        worksheet.columns = [{ width: 32 }, { width: 72 }];
+        const data = await workbook.xlsx.writeBuffer();
+        blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        extension = 'xlsx';
+      } else {
+        const popup = window.open('', '_blank');
+        if (!popup) throw new Error('PDF çıktısı için açılır pencereye izin verin.');
+        popup.document.write(`<html lang="tr"><head><title>İşitme Merkezi Raporu</title><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;padding:32px;color:#152b2a}h1{font-size:22px}table{border-collapse:collapse;width:100%}td{padding:9px;border-bottom:1px solid #ddd}td:first-child{font-weight:bold;width:35%}</style></head><body><h1>Raporlama & Analitik</h1><p>${dateRange}</p><table>${rows.slice(2).map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td></tr>`).join('')}</table><script>window.onload=()=>window.print()</script></body></html>`);
+        popup.document.close();
+        addToast({ type: 'success', message: 'Yazdır penceresi açıldı; hedef olarak PDF seçebilirsiniz.' });
+        setShowExportModal(false);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a'); link.href = url; link.download = `${safeName}.${extension}`; link.click();
+      URL.revokeObjectURL(url);
+      addToast({ type: 'success', message: `${extension.toUpperCase()} raporu indirildi.` });
+      setShowExportModal(false);
+    } catch (error) {
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Rapor dışa aktarılamadı.' });
+    }
   };
 
   return (
@@ -285,8 +400,8 @@ export default function ReportsPage() {
             <span className={styles.statLabel}>Toplam Ciro</span>
             <span className={styles.statValue}>₺{dynamicTotalRevenue.toLocaleString('tr-TR')}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↑ %18</span>
-              <span className={styles.trendMuted}>geçen yıla göre</span>
+              <span className={styles.trendMuted}>{percentageChange(dynamicTotalRevenue, previousRevenue)}</span>
+              <span className={styles.trendMuted}>önceki eşit döneme göre</span>
             </div>
           </div>
         </div>
@@ -303,8 +418,8 @@ export default function ReportsPage() {
             <span className={styles.statLabel}>Toplam Hasta</span>
             <span className={styles.statValue}>{dynamicPatientCount}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↑ %12</span>
-              <span className={styles.trendMuted}>geçen yıla göre</span>
+              <span className={styles.trendMuted}>{percentageChange(dynamicPatientCount, previousPatientCount)}</span>
+              <span className={styles.trendMuted}>önceki eşit döneme göre</span>
             </div>
           </div>
         </div>
@@ -323,8 +438,8 @@ export default function ReportsPage() {
             <span className={styles.statLabel}>Toplam Randevu</span>
             <span className={styles.statValue}>{dynamicAppointmentCount}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↑ %7</span>
-              <span className={styles.trendMuted}>geçen yıla göre</span>
+              <span className={styles.trendMuted}>{percentageChange(dynamicAppointmentCount, previousAppointments.length)}</span>
+              <span className={styles.trendMuted}>önceki eşit döneme göre</span>
             </div>
           </div>
         </div>
@@ -342,8 +457,8 @@ export default function ReportsPage() {
             <span className={styles.statLabel}>Cihaz Satışı</span>
             <span className={styles.statValue}>{dynamicDeviceSalesCount}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↑ %28</span>
-              <span className={styles.trendMuted}>geçen yıla göre</span>
+              <span className={styles.trendMuted}>{percentageChange(dynamicDeviceSalesCount, previousDeviceCount)}</span>
+              <span className={styles.trendMuted}>önceki eşit döneme göre</span>
             </div>
           </div>
         </div>
@@ -359,8 +474,8 @@ export default function ReportsPage() {
             <span className={styles.statLabel}>Teknik Servis Geliri</span>
             <span className={styles.statValue}>₺{dynamicServiceRevenue.toLocaleString('tr-TR')}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendDownRed}>↓ %10</span>
-              <span className={styles.trendMuted}>geçen yıla göre</span>
+              <span className={styles.trendMuted}>{percentageChange(dynamicServiceRevenue, previousServiceRevenue)}</span>
+              <span className={styles.trendMuted}>önceki eşit döneme göre</span>
             </div>
           </div>
         </div>
@@ -397,7 +512,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── ROW 1: Aylık Ciro Trendi (Left) & Gelir Dağılımı (Right) ── */}
-      <div className={styles.row1Grid}>
+      <div className={styles.row1Grid} style={{ display: ['Genel Bakış', 'Finansal Raporlar', 'Satış Raporları'].includes(activeTab) ? undefined : 'none' }}>
         {/* Left: Aylık Ciro Trendi */}
         <div className={styles.analyticsCard}>
           <div className={styles.cardHeaderRow}>
@@ -484,10 +599,11 @@ export default function ReportsPage() {
               <h3>Gelir Dağılımı</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} defaultValue="Bu Yıl">
+              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
                 <option value="Bu Yıl">Bu Yıl</option>
                 <option value="Son 6 Ay">Son 6 Ay</option>
                 <option value="Bu Ay">Bu Ay</option>
+                <option value="Özel">Özel</option>
               </select>
             </div>
           </div>
@@ -497,61 +613,22 @@ export default function ReportsPage() {
               size={154}
               strokeWidth={22}
               slices={revenueDistributionSlices}
-              centerValue="₺12.500"
+              centerValue={formatCurrency(dynamicTotalRevenue)}
               centerLabel="Toplam Ciro"
             />
 
             <div className={styles.legendList}>
-              <div className={styles.legendItem}>
-                <div className={styles.legendLabelWrap}>
-                  <span className={styles.legendColorDot} style={{ background: '#0d9488' }}></span>
-                  <span>Cihaz Satışı</span>
-                </div>
-                <div className={styles.legendNumbers}>
-                  <span className={styles.legendPct}>%60</span>
-                  <span className={styles.legendAmount}>₺7.500</span>
-                </div>
-              </div>
-
-              <div className={styles.legendItem}>
-                <div className={styles.legendLabelWrap}>
-                  <span className={styles.legendColorDot} style={{ background: '#f59e0b' }}></span>
-                  <span>Aksesuar Satışı</span>
-                </div>
-                <div className={styles.legendNumbers}>
-                  <span className={styles.legendPct}>%12</span>
-                  <span className={styles.legendAmount}>₺1.500</span>
-                </div>
-              </div>
-
-              <div className={styles.legendItem}>
-                <div className={styles.legendLabelWrap}>
-                  <span className={styles.legendColorDot} style={{ background: '#f43f5e' }}></span>
-                  <span>Teknik Servis</span>
-                </div>
-                <div className={styles.legendNumbers}>
-                  <span className={styles.legendPct}>%16</span>
-                  <span className={styles.legendAmount}>₺2.000</span>
-                </div>
-              </div>
-
-              <div className={styles.legendItem}>
-                <div className={styles.legendLabelWrap}>
-                  <span className={styles.legendColorDot} style={{ background: '#0284c7' }}></span>
-                  <span>Hizmet / Diğer</span>
-                </div>
-                <div className={styles.legendNumbers}>
-                  <span className={styles.legendPct}>%8</span>
-                  <span className={styles.legendAmount}>₺1.000</span>
-                </div>
-              </div>
+              {revenueDistributionSlices.length ? revenueDistributionSlices.map(slice => <div className={styles.legendItem} key={slice.label}>
+                <div className={styles.legendLabelWrap}><span className={styles.legendColorDot} style={{ background: slice.color }}></span><span>{slice.label}</span></div>
+                <div className={styles.legendNumbers}><span className={styles.legendPct}>%{dynamicTotalRevenue ? Math.round(slice.value / dynamicTotalRevenue * 100) : 0}</span><span className={styles.legendAmount}>{formatCurrency(slice.value)}</span></div>
+              </div>) : <div className={styles.emptyState}>Bu tarih aralığında gelir kaydı yok.</div>}
             </div>
           </div>
         </div>
       </div>
 
       {/* ── ROW 2: 3 Analysis Donut Cards ── */}
-      <div className={styles.row2Grid}>
+      <div className={styles.row2Grid} style={{ display: ['Genel Bakış', 'Hasta Analizleri', 'Randevu Raporları', 'Teknik Servis'].includes(activeTab) ? undefined : 'none' }}>
         {/* Card 1: Hasta Kaynak Dağılımı */}
         <div className={styles.analyticsCard}>
           <div className={styles.cardHeaderRow}>
@@ -564,9 +641,10 @@ export default function ReportsPage() {
               <h3>Hasta Kaynak Dağılımı</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} defaultValue="Bu Yıl">
+              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
                 <option value="Bu Yıl">Bu Yıl</option>
                 <option value="Bu Ay">Bu Ay</option>
+                <option value="Özel">Özel</option>
               </select>
             </div>
           </div>
@@ -575,27 +653,21 @@ export default function ReportsPage() {
             <SvgDonut
               size={120}
               strokeWidth={18}
-              slices={patientSourceSlices}
-              centerValue="34"
+              slices={reportSourceRows}
+              centerValue={reportPatients.length}
               centerLabel="Toplam Hasta"
             />
 
             <div className={styles.legendList} style={{ gap: 6 }}>
-              {[
-                { label: 'Google', count: 14, pct: 41, color: '#3b82f6' },
-                { label: 'Referans', count: 8, pct: 24, color: '#10b981' },
-                { label: 'Doktor Yönlendirmesi', count: 6, pct: 18, color: '#f87171' },
-                { label: 'Sosyal Medya', count: 4, pct: 12, color: '#38bdf8' },
-                { label: 'Diğer', count: 2, pct: 6, color: '#94a3b8' }
-              ].map(item => (
+              {reportSourceRows.map(item => (
                 <div key={item.label} className={styles.legendItem}>
                   <div className={styles.legendLabelWrap}>
                     <span className={styles.legendColorDot} style={{ background: item.color }}></span>
                     <span style={{ fontSize: 11 }}>{item.label}</span>
                   </div>
                   <div className={styles.legendNumbers} style={{ gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.count}</span>
-                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{item.pct}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
+                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{reportPatients.length ? Math.round(item.value / reportPatients.length * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -616,9 +688,10 @@ export default function ReportsPage() {
               <h3>Randevu Durumu</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} defaultValue="Bu Yıl">
+              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
                 <option value="Bu Yıl">Bu Yıl</option>
                 <option value="Bu Ay">Bu Ay</option>
+                <option value="Özel">Özel</option>
               </select>
             </div>
           </div>
@@ -627,26 +700,21 @@ export default function ReportsPage() {
             <SvgDonut
               size={120}
               strokeWidth={18}
-              slices={appointmentStatusSlices}
-              centerValue="52"
+              slices={reportAppointmentRows}
+              centerValue={reportAppointments.length}
               centerLabel="Toplam Randevu"
             />
 
             <div className={styles.legendList} style={{ gap: 6 }}>
-              {[
-                { label: 'Tamamlanan', count: 38, pct: 73, color: '#10b981' },
-                { label: 'Bekleyen', count: 7, pct: 13, color: '#f59e0b' },
-                { label: 'İptal Edilen', count: 5, pct: 10, color: '#ef4444' },
-                { label: 'Gelmedi', count: 2, pct: 4, color: '#64748b' }
-              ].map(item => (
+              {reportAppointmentRows.map(item => (
                 <div key={item.label} className={styles.legendItem}>
                   <div className={styles.legendLabelWrap}>
                     <span className={styles.legendColorDot} style={{ background: item.color }}></span>
                     <span style={{ fontSize: 11 }}>{item.label}</span>
                   </div>
                   <div className={styles.legendNumbers} style={{ gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.count}</span>
-                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{item.pct}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
+                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{reportAppointments.length ? Math.round(item.value / reportAppointments.length * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -664,9 +732,10 @@ export default function ReportsPage() {
               <h3>Teknik Servis Durumu</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} defaultValue="Bu Yıl">
+              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
                 <option value="Bu Yıl">Bu Yıl</option>
                 <option value="Bu Ay">Bu Ay</option>
+                <option value="Özel">Özel</option>
               </select>
             </div>
           </div>
@@ -675,26 +744,21 @@ export default function ReportsPage() {
             <SvgDonut
               size={120}
               strokeWidth={18}
-              slices={serviceStatusSlices}
-              centerValue="24"
+              slices={reportServiceRows}
+              centerValue={reportServiceRows.reduce((sum, item) => sum + item.value, 0)}
               centerLabel="Toplam Servis"
             />
 
             <div className={styles.legendList} style={{ gap: 6 }}>
-              {[
-                { label: 'Teslim Edildi', count: 12, pct: 50, color: '#10b981' },
-                { label: 'Tamir Ediliyor', count: 6, pct: 25, color: '#14b8a6' },
-                { label: 'İnceleniyor', count: 4, pct: 17, color: '#0ea5e9' },
-                { label: 'Arızalı / Beklemede', count: 2, pct: 8, color: '#f87171' }
-              ].map(item => (
+              {reportServiceRows.map(item => (
                 <div key={item.label} className={styles.legendItem}>
                   <div className={styles.legendLabelWrap}>
                     <span className={styles.legendColorDot} style={{ background: item.color }}></span>
                     <span style={{ fontSize: 11 }}>{item.label}</span>
                   </div>
                   <div className={styles.legendNumbers} style={{ gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.count}</span>
-                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{item.pct}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
+                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{reportServiceRows.length ? Math.round(item.value / reportServiceRows.reduce((sum, row) => sum + row.value, 0) * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -704,7 +768,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── ROW 3: 2 Performance Tables Grid ── */}
-      <div className={styles.row3Grid}>
+      <div className={styles.row3Grid} style={{ display: ['Genel Bakış', 'Satış Raporları', 'Finansal Raporlar'].includes(activeTab) ? undefined : 'none' }}>
         {/* Left: En Çok Satılan Cihazlar */}
         <div className={styles.analyticsCard}>
           <div className={styles.cardHeaderRow}>
@@ -717,10 +781,11 @@ export default function ReportsPage() {
               <h3>En Çok Satılan Cihazlar</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} defaultValue="Bu Yıl">
+              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
                 <option value="Bu Yıl">Bu Yıl</option>
                 <option value="Son 6 Ay">Son 6 Ay</option>
                 <option value="Bu Ay">Bu Ay</option>
+                <option value="Özel">Özel</option>
               </select>
             </div>
           </div>
@@ -765,10 +830,11 @@ export default function ReportsPage() {
               <h3>Şube Bazlı Performans</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} defaultValue="Bu Yıl">
+              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
                 <option value="Bu Yıl">Bu Yıl</option>
                 <option value="Son 6 Ay">Son 6 Ay</option>
                 <option value="Bu Ay">Bu Ay</option>
+                <option value="Özel">Özel</option>
               </select>
             </div>
           </div>
@@ -781,7 +847,6 @@ export default function ReportsPage() {
                 <th style={{ textAlign: 'center' }}>RANDEVU</th>
                 <th style={{ textAlign: 'right' }}>CİRO</th>
                 <th style={{ textAlign: 'center' }}>TEKNİK SERVİS</th>
-                <th style={{ textAlign: 'right' }}>MEMNUNİYET</th>
               </tr>
             </thead>
             <tbody>
@@ -792,26 +857,37 @@ export default function ReportsPage() {
                   <td style={{ textAlign: 'center' }}>{b.appointments}</td>
                   <td style={{ textAlign: 'right', fontWeight: 600 }}>₺{b.revenue.toLocaleString('tr-TR')}</td>
                   <td style={{ textAlign: 'center' }}>{b.service}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div className={styles.progressBarTrack}>
-                      <div className={styles.progressBarFill} style={{ width: `${b.satisfaction}%` }}></div>
-                    </div>
-                    <span style={{ fontSize: 11, color: '#64748b' }}>%{b.satisfaction}</span>
-                  </td>
                 </tr>
               ))}
               <tr className={styles.tableTotalRow}>
                 <td>Toplam</td>
-                <td style={{ textAlign: 'center' }}>34</td>
-                <td style={{ textAlign: 'center' }}>52</td>
-                <td style={{ textAlign: 'right' }}>₺12.500</td>
-                <td style={{ textAlign: 'center' }}>24</td>
-                <td style={{ textAlign: 'right' }}>%91</td>
+                <td style={{ textAlign: 'center' }}>{branchPerformance.reduce((sum, branch) => sum + branch.patients, 0)}</td>
+                <td style={{ textAlign: 'center' }}>{branchPerformance.reduce((sum, branch) => sum + branch.appointments, 0)}</td>
+                <td style={{ textAlign: 'right' }}>{formatCurrency(branchPerformance.reduce((sum, branch) => sum + branch.revenue, 0))}</td>
+                <td style={{ textAlign: 'center' }}>{branchPerformance.reduce((sum, branch) => sum + branch.service, 0)}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+
+      {activeTab === 'Stok & Envanter' && <section className={styles.analyticsCard}>
+        <h3>Şube kapsamındaki stok özeti</h3>
+        <p>Ürün: {reportStock.length} · Birim: {reportStock.reduce((sum, item) => sum + item.quantity, 0)} · Kritik seviye: {reportStock.filter(item => item.quantity <= item.criticalLevel).length}</p>
+        <table className={styles.perfTable}><thead><tr><th>ÜRÜN</th><th>ŞUBE</th><th style={{ textAlign: 'right' }}>ADET</th><th>DURUM</th></tr></thead><tbody>
+          {reportStock.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.branch}</td><td style={{ textAlign: 'right' }}>{item.quantity}</td><td>{item.quantity <= item.criticalLevel ? 'Kritik' : 'Normal'}</td></tr>)}
+          {reportStock.length === 0 && <tr><td colSpan={4}>Bu kapsamda stok kaydı bulunmuyor.</td></tr>}
+        </tbody></table>
+      </section>}
+      {activeTab === 'Tedarikçi Raporları' && <section className={styles.analyticsCard}>
+        <h3>Şube kapsamındaki tedarikçiler</h3>
+        <p>{reportSuppliers.length} tedarikçi kaydı</p>
+        <table className={styles.perfTable}><thead><tr><th>TEDARİKÇİ</th><th>İLETİŞİM</th><th>ŞUBE</th></tr></thead><tbody>
+          {reportSuppliers.map(item => <tr key={item.id}><td>{item.companyName}</td><td>{item.phone || item.email || '—'}</td><td>Firma geneli</td></tr>)}
+          {reportSuppliers.length === 0 && <tr><td colSpan={3}>Firma kapsamında tedarikçi kaydı bulunmuyor.</td></tr>}
+        </tbody></table>
+      </section>}
+      {activeTab === 'Özel Raporlar' && <section className={styles.analyticsCard}><h3>Özel rapor tanımı</h3><p>Bu hesapta özel rapor tanımı bulunmuyor. Sonuç üretiyormuş gibi görünen demo metrikleri gösterilmiyor.</p></section>}
 
       {/* ── MODAL 1: Karşılaştır Modalı ── */}
       {showCompareModal && (
@@ -825,11 +901,11 @@ export default function ReportsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
                   <div style={{ fontSize: 11, color: '#64748b' }}>A Dönemi (Mevcut)</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>2026 Yılı (Oca - Ara)</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{rangeBounds.start || '—'} – {rangeBounds.end || '—'}</div>
                 </div>
                 <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
                   <div style={{ fontSize: 11, color: '#64748b' }}>B Dönemi (Geçmiş)</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>2025 Yılı (Oca - Ara)</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{previousRangeBounds.start || '—'} – {previousRangeBounds.end || '—'}</div>
                 </div>
               </div>
 
@@ -837,36 +913,18 @@ export default function ReportsPage() {
                 <thead>
                   <tr>
                     <th>METRİK</th>
-                    <th style={{ textAlign: 'right' }}>2026</th>
-                    <th style={{ textAlign: 'right' }}>2025</th>
+                    <th style={{ textAlign: 'right' }}>Mevcut dönem</th>
+                    <th style={{ textAlign: 'right' }}>Önceki dönem</th>
                     <th style={{ textAlign: 'right' }}>DEĞİŞİM</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Toplam Ciro</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>₺12.500</td>
-                    <td style={{ textAlign: 'right' }}>₺10.590</td>
-                    <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 700 }}>+ %18</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Toplam Hasta</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>34</td>
-                    <td style={{ textAlign: 'right' }}>30</td>
-                    <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 700 }}>+ %12</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Cihaz Satışı</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>18 Adet</td>
-                    <td style={{ textAlign: 'right' }}>14 Adet</td>
-                    <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: 700 }}>+ %28</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600 }}>Teknik Servis Geliri</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>₺3.250</td>
-                    <td style={{ textAlign: 'right' }}>₺3.610</td>
-                    <td style={{ textAlign: 'right', color: '#dc2626', fontWeight: 700 }}>- %10</td>
-                  </tr>
+                  {compareRows.map(row => <tr key={row.label}>
+                    <td style={{ fontWeight: 600 }}>{row.label}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{row.format(row.current)}</td>
+                    <td style={{ textAlign: 'right' }}>{row.format(row.previous)}</td>
+                    <td style={{ textAlign: 'right', color: '#64748b', fontWeight: 700 }}>{percentageChange(row.current, row.previous)}</td>
+                  </tr>)}
                 </tbody>
               </table>
             </div>
@@ -876,7 +934,11 @@ export default function ReportsPage() {
                 type="button"
                 className={styles.btnPrimaryAction}
                 onClick={() => {
-                  addToast({ type: 'success', message: 'Karşılaştırma raporu indirildi.' });
+                  const rows = [['Metrik', 'Mevcut dönem', 'Önceki dönem', 'Değişim'], ...compareRows.map(row => [row.label, row.format(row.current), row.format(row.previous), percentageChange(row.current, row.previous)])];
+                  const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
+                  const url = URL.createObjectURL(new Blob(['\\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+                  const link = document.createElement('a'); link.href = url; link.download = 'donemsel-karsilastirma.csv'; link.click(); URL.revokeObjectURL(url);
+                  addToast({ type: 'success', message: 'Dönem karşılaştırması CSV olarak indirildi.' });
                   setShowCompareModal(false);
                 }}
               >
@@ -958,14 +1020,24 @@ export default function ReportsPage() {
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {[
-                  { label: 'Bugün', val: '29.09.2026 - 29.09.2026' },
-                  { label: 'Bu Hafta', val: '22.09.2026 - 29.09.2026' },
-                  { label: 'Bu Ay', val: '01.09.2026 - 30.09.2026' },
-                  { label: 'Son 3 Ay', val: '01.07.2026 - 30.09.2026' },
-                  { label: 'Bu Yıl (2026)', val: '01.01.2026 - 31.12.2026' },
-                  { label: 'Geçen Yıl (2025)', val: '01.01.2025 - 31.12.2025' }
-                ].map(opt => (
+                {(() => {
+                  const now = new Date();
+                  const day = new Date(now); day.setHours(0, 0, 0, 0);
+                  const week = new Date(day); week.setDate(week.getDate() - 6);
+                  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                  const threeMonths = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+                  const yearStart = new Date(now.getFullYear(), 0, 1);
+                  const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
+                  const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31);
+                  return [
+                    { label: 'Bugün', val: `${formatRangeDate(day)} - ${formatRangeDate(day)}` },
+                    { label: 'Son 7 Gün', val: `${formatRangeDate(week)} - ${formatRangeDate(day)}` },
+                    { label: 'Bu Ay', val: `${formatRangeDate(monthStart)} - ${formatRangeDate(day)}` },
+                    { label: 'Son 3 Ay', val: `${formatRangeDate(threeMonths)} - ${formatRangeDate(day)}` },
+                    { label: `Bu Yıl (${now.getFullYear()})`, val: `${formatRangeDate(yearStart)} - ${formatRangeDate(day)}` },
+                    { label: `Geçen Yıl (${now.getFullYear() - 1})`, val: `${formatRangeDate(lastYearStart)} - ${formatRangeDate(lastYearEnd)}` }
+                  ];
+                })().map(opt => (
                   <button
                     key={opt.label}
                     type="button"
@@ -973,6 +1045,7 @@ export default function ReportsPage() {
                     style={{ fontSize: 12, padding: '10px 8px' }}
                     onClick={() => {
                       setDateRange(opt.val);
+                      setSelectedPeriod('Özel');
                       setShowDateModal(false);
                       addToast({ type: 'info', message: `Tarih aralığı: ${opt.label} olarak seçildi.` });
                     }}

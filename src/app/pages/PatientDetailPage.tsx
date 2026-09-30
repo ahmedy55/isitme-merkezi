@@ -563,7 +563,7 @@ export default function PatientDetailPage() {
           <div className="patient-header-meta">
             <span style={{ fontFamily: 'var(--font-mono)' }}>{patient.tc}</span>
             <span>{patient.phone}</span>
-            <span>{calculateAge(patient.birthDate)} yaşında</span>
+            <span>{patient.birthDate ? `${calculateAge(patient.birthDate)} yaşında` : 'Yaş bilgisi yok'}</span>
             <span>{patient.address}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -638,7 +638,7 @@ export default function PatientDetailPage() {
                        </div>
                        <div>
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Doğum Tarihi</div>
-                         <div style={{ fontWeight: 600 }}>{formatDate(patient.birthDate)} ({calculateAge(patient.birthDate)} yaş)</div>
+                         <div style={{ fontWeight: 600 }}>{formatDate(patient.birthDate)}{patient.birthDate ? ` (${calculateAge(patient.birthDate)} yaş)` : ''}</div>
                        </div>
                        <div>
                          <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)', marginBottom: 2 }}>Cinsiyet</div>

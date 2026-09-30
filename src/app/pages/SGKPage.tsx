@@ -239,6 +239,8 @@ export default function SGKPage() {
   const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
   const [selectedStatus, setSelectedStatus] = useState('Tüm Durumlar');
   const [dateRange, setDateRange] = useState('');
+  const [tablePage, setTablePage] = useState(1);
+  const tablePageSize = 10;
 
   // Items list
   const [items, setItems] = useState<SGKPrescriptionItem[]>(currentOrgId ? [] : INITIAL_SGK_LIST);
@@ -303,9 +305,12 @@ export default function SGKPage() {
       return true;
     });
   }, [items, searchTerm, selectedBranch, selectedStatus, matches]);
+  useEffect(() => setTablePage(1), [searchTerm, selectedBranch, selectedStatus, dateRange]);
+  const tablePageCount = Math.max(1, Math.ceil(filteredList.length / tablePageSize));
+  const pagedList = useMemo(() => filteredList.slice((tablePage - 1) * tablePageSize, tablePage * tablePageSize), [filteredList, tablePage, tablePageSize]);
 
   // Statistics counts
-  const totalCount = items.length;
+  const totalCount = filteredList.length;
   const approvedCount = items.filter(i => i.status === 'Onaylandı').length;
   const pendingCount = items.filter(i => i.status === 'İşlemde').length;
   const rejectedCount = items.filter(i => i.status === 'Reddedildi').length;
@@ -760,7 +765,7 @@ export default function SGKPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredList.map(item => {
+                      pagedList.map(item => {
                         const isSelected = selectedIds.includes(item.id);
                         const isActive = activeItem?.id === item.id;
                         return (
@@ -909,15 +914,9 @@ export default function SGKPage() {
                 </div>
 
                 <div className={styles.pagination}>
-                  <button className={styles.pageBtn}>‹</button>
-                  <button className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-                  <button className={styles.pageBtn}>2</button>
-                  <button className={styles.pageBtn}>3</button>
-                  <button className={styles.pageBtn}>4</button>
-                  <button className={styles.pageBtn}>5</button>
-                  <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
-                  <button className={styles.pageBtn}>13</button>
-                  <button className={styles.pageBtn}>›</button>
+                  <button type="button" className={styles.pageBtn} aria-label="Önceki sayfa" disabled={tablePage <= 1} onClick={() => setTablePage(page => Math.max(1, page - 1))}>‹</button>
+                  {Array.from({ length: tablePageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${tablePage === page ? styles.pageBtnActive : ''}`} aria-current={tablePage === page ? 'page' : undefined} onClick={() => setTablePage(page)}>{page}</button>)}
+                  <button type="button" className={styles.pageBtn} aria-label="Sonraki sayfa" disabled={tablePage >= tablePageCount} onClick={() => setTablePage(page => Math.min(tablePageCount, page + 1))}>›</button>
                 </div>
               </div>
             </div>

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
+import { fetchBranchTransfers, transferPatient } from '../repositories/OperationsRepository';
 import styles from './BranchActivitiesPage.module.css';
 
 interface TransferLogItem {
@@ -144,18 +145,19 @@ const INITIAL_TRANSFERS: TransferLogItem[] = [
 ];
 
 export default function BranchActivitiesPage() {
-  const { addToast } = useApp();
+  const { addToast, currentOrgId, branchesList, patientsList, salesList, appointmentsList, currentUser, updatePatient, refreshOrganizationData } = useApp();
   const { matches } = useBranchScope();
 
   // State Management
-  const [dateRange, setDateRange] = useState('01.01.2026 - 30.09.2026');
-  const [transfers, setTransfers] = useState<TransferLogItem[]>(INITIAL_TRANSFERS);
+  const [dateRange, setDateRange] = useState(() => `01.01.${new Date().getFullYear()} - ${new Date().toLocaleDateString('tr-TR')}`);
+  const [transfers, setTransfers] = useState<TransferLogItem[]>(currentOrgId ? [] : INITIAL_TRANSFERS);
   const [transferMatrixTab, setTransferMatrixTab] = useState<'Şubeler Arası' | 'Giden / Gelen'>('Şubeler Arası');
+  const [transferStatusFilter, setTransferStatusFilter] = useState('Tümünü Gör');
 
   // Quick Transfer Form State
   const [searchPatientText, setSearchPatientText] = useState('');
-  const [sourceBranch, setSourceBranch] = useState('Merkez');
-  const [targetBranch, setTargetBranch] = useState('Çankaya');
+  const [sourceBranch, setSourceBranch] = useState('');
+  const [targetBranch, setTargetBranch] = useState('');
 
   // Modals state
   const [showNewTransferModal, setShowNewTransferModal] = useState(false);
@@ -164,18 +166,89 @@ export default function BranchActivitiesPage() {
 
   // New Transfer Form Modal State
   const [modalPatientName, setModalPatientName] = useState('');
-  const [modalSourceBranch, setModalSourceBranch] = useState('Merkez');
-  const [modalTargetBranch, setModalTargetBranch] = useState('Çankaya');
+  const [modalSourceBranch, setModalSourceBranch] = useState('');
+  const [modalTargetBranch, setModalTargetBranch] = useState('');
   const [modalTransferType, setModalTransferType] = useState<TransferLogItem['transferType']>('Cihaz Satışı');
   const [modalNotes, setModalNotes] = useState('');
 
+  useEffect(() => {
+    if (!currentOrgId) return;
+    let active = true;
+    setTransfers([]);
+    fetchBranchTransfers().then(rows => {
+      if (active) setTransfers(rows.map((row: any) => ({ id: row.id, date: row.date, patientName: row.patientName, fromBranch: row.fromBranch, toBranch: row.toBranch, transferredBy: row.transferredBy, status: 'Tamamlandı', transferType: row.transferType, notes: row.notes })));
+    }).catch(error => {
+      console.error('Şube transfer geçmişi yüklenemedi:', error);
+      if (active) addToast({ type: 'error', message: 'Şube transfer geçmişi yüklenemedi.' });
+    });
+    return () => { active = false; };
+  }, [currentOrgId]);
+
+  useEffect(() => {
+    if (branchesList.length < 2) return;
+    setSourceBranch(current => current || branchesList[0].name);
+    setTargetBranch(current => current || branchesList.find(branch => branch.id !== branchesList[0].id)!.name);
+    setModalSourceBranch(current => current || branchesList[0].name);
+    setModalTargetBranch(current => current || branchesList.find(branch => branch.id !== branchesList[0].id)!.name);
+  }, [branchesList]);
+
+  const performPatientTransfer = async (patientName: string, fromName: string, toName: string) => {
+    const patient = patientsList.find(item => `${item.firstName} ${item.lastName}`.toLocaleLowerCase('tr-TR') === patientName.trim().toLocaleLowerCase('tr-TR'));
+    const source = branchesList.find(branch => branch.name === fromName);
+    const target = branchesList.find(branch => branch.name === toName);
+    if (!patient || !patient.id) { addToast({ type: 'error', message: 'Hasta kaydı bulunamadı. Listeden kayıtlı bir hastanın tam adını girin.' }); return false; }
+    if (!source || !target || source.id === target.id) { addToast({ type: 'error', message: 'Kaynak ve hedef olarak farklı, mevcut şubeleri seçin.' }); return false; }
+    if (currentOrgId) {
+      if (patient.branchId !== source.id) { addToast({ type: 'error', message: 'Hastanın mevcut şubesi seçilen kaynak şube değil.' }); return false; }
+      try {
+        const userRoles = currentUser?.membership?.roles || [];
+        if (!userRoles.includes('Firma Yöneticisi')) { addToast({ type: 'error', message: 'Hasta şubesi transferi yalnızca firma yöneticisi tarafından yapılabilir.' }); return false; }
+        await transferPatient(patient.id, target.id, crypto.randomUUID());
+        await refreshOrganizationData();
+        const rows = await fetchBranchTransfers();
+        setTransfers(rows.map((row: any) => ({ id: row.id, date: row.date, patientName: row.patientName, fromBranch: row.fromBranch, toBranch: row.toBranch, transferredBy: row.transferredBy, status: 'Tamamlandı', transferType: 'Diğer', notes: row.notes })));
+      } catch (error) {
+        addToast({ type: 'error', message: error instanceof Error ? error.message : 'Hasta şube transferi yapılamadı.' });
+        return false;
+      }
+    } else {
+      updatePatient({ ...patient, branch: target.name, branchId: target.id });
+    }
+    return true;
+  };
+
   // Transfer Types Donut Slices
-  const transferTypeSlices = [
-    { label: 'Cihaz Satışı', value: 7, color: '#0d9488' },
-    { label: 'Randevu Transferi', value: 3, color: '#0284c7' },
-    { label: 'Teknik Servis', value: 1, color: '#f59e0b' },
-    { label: 'Diğer', value: 1, color: '#94a3b8' }
-  ];
+  const visibleBranches = branchesList.filter(branch => matches(branch.name, branch.id));
+  const normalizeDateKey = (value: string) => {
+    const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const tr = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+    return tr ? `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}` : '';
+  };
+  const [rangeStart, rangeEnd] = dateRange.split(' - ').map(normalizeDateKey);
+  const visibleTransfers = transfers.filter(item => {
+    const key = normalizeDateKey(item.date);
+    return (matches(item.fromBranch) || matches(item.toBranch)) && (!rangeStart || key >= rangeStart) && (!rangeEnd || key <= rangeEnd);
+  });
+  const filteredTransfers = visibleTransfers.filter(item => transferStatusFilter === 'Tümünü Gör' || (transferStatusFilter === 'Tamamlananlar' && item.status === 'Tamamlandı') || (transferStatusFilter === 'İptal Edilenler' && item.status === 'İptal Edildi'));
+  const transferTypeColors = ['#0d9488', '#0284c7', '#f59e0b', '#94a3b8'];
+  const transferTypeSlices = [...new Set(visibleTransfers.map(item => item.transferType || 'Diğer'))].map((label, index) => ({ label, value: visibleTransfers.filter(item => (item.transferType || 'Diğer') === label).length, color: transferTypeColors[index % transferTypeColors.length] }));
+  const transferTypeTotal = transferTypeSlices.reduce((sum, item) => sum + item.value, 0);
+  const transferTypeLegend = transferTypeSlices.map(item => ({ ...item, pct: transferTypeTotal ? Math.round(item.value / transferTypeTotal * 100) : 0 }));
+  const transferPairCounts = visibleTransfers.reduce((counts, item) => {
+    const key = `${item.fromBranch} → ${item.toBranch}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const busiestTransfer = [...transferPairCounts].sort((a, b) => b[1] - a[1])[0];
+  const branchStats = visibleBranches.map(branch => ({
+    branch,
+    patients: patientsList.filter(patient => patient.branchId === branch.id || (!patient.branchId && patient.branch === branch.name)).length,
+    revenue: salesList.filter(sale => sale.branchId === branch.id).reduce((sum, sale) => sum + sale.total, 0),
+    appointments: appointmentsList.filter(appointment => appointment.branchId === branch.id || (!appointment.branchId && appointment.branch === branch.name)).length,
+    outgoing: visibleTransfers.filter(item => item.fromBranch === branch.name).length,
+    incoming: visibleTransfers.filter(item => item.toBranch === branch.name).length,
+  }));
 
   // Quick Swap Branches
   const handleSwapBranches = () => {
@@ -185,7 +258,7 @@ export default function BranchActivitiesPage() {
   };
 
   // Submit Quick Transfer
-  const handleQuickTransferSubmit = (e: React.FormEvent) => {
+  const handleQuickTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchPatientText.trim()) {
       addToast({ type: 'error', message: 'Lütfen transfer edilecek hasta adını girin.' });
@@ -196,28 +269,30 @@ export default function BranchActivitiesPage() {
       return;
     }
 
+    const transferred = await performPatientTransfer(searchPatientText, sourceBranch, targetBranch);
+    if (!transferred) return;
     const newTrf: TransferLogItem = {
       id: `trf-${Date.now()}`,
       date: new Date().toLocaleDateString('tr-TR'),
       patientName: searchPatientText.trim(),
       fromBranch: sourceBranch,
       toBranch: targetBranch,
-      transferredBy: 'Ahmet Yılmaz',
+      transferredBy: currentUser?.user_metadata?.first_name ? `${currentUser.user_metadata.first_name} ${currentUser.user_metadata.last_name || ''}`.trim() : 'Mevcut kullanıcı',
       status: 'Tamamlandı',
       transferType: 'Cihaz Satışı',
       notes: `${sourceBranch} şubesinden ${targetBranch} şubesine hızlı dosya transferi yapıldı.`
     };
 
-    setTransfers([newTrf, ...transfers]);
+    if (!currentOrgId) setTransfers([newTrf, ...transfers]);
     setSearchPatientText('');
     addToast({
       type: 'success',
-      message: `${newTrf.patientName} adlı hastanın dosyası ${sourceBranch} ➜ ${targetBranch} şubesine transfer edildi.`
+      message: `${newTrf.patientName} hastası ${sourceBranch} ➜ ${targetBranch} şubesine aktarıldı.`
     });
   };
 
   // Submit Modal Transfer
-  const handleModalTransferSubmit = (e: React.FormEvent) => {
+  const handleModalTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!modalPatientName.trim()) {
       addToast({ type: 'error', message: 'Lütfen hasta adını girin.' });
@@ -228,19 +303,21 @@ export default function BranchActivitiesPage() {
       return;
     }
 
+    const transferred = await performPatientTransfer(modalPatientName, modalSourceBranch, modalTargetBranch);
+    if (!transferred) return;
     const newTrf: TransferLogItem = {
       id: `trf-${Date.now()}`,
       date: new Date().toLocaleDateString('tr-TR'),
       patientName: modalPatientName.trim(),
       fromBranch: modalSourceBranch,
       toBranch: modalTargetBranch,
-      transferredBy: 'Ahmet Yılmaz',
+      transferredBy: currentUser?.user_metadata?.first_name ? `${currentUser.user_metadata.first_name} ${currentUser.user_metadata.last_name || ''}`.trim() : 'Mevcut kullanıcı',
       status: 'Tamamlandı',
       transferType: modalTransferType,
       notes: modalNotes || 'Şubeler arası hasta ve cihaz dosyası transferi gerçekleştirildi.'
     };
 
-    setTransfers([newTrf, ...transfers]);
+    if (!currentOrgId) setTransfers([newTrf, ...transfers]);
     setShowNewTransferModal(false);
     setModalPatientName('');
     setModalNotes('');
@@ -249,6 +326,20 @@ export default function BranchActivitiesPage() {
       message: `${newTrf.patientName} transfer işlemi başarıyla tamamlandı.`
     });
   };
+
+  const rangePresets = (() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfQuarter = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const fmt = (date: Date) => date.toLocaleDateString('tr-TR');
+    return [
+      { label: 'Bugün', start: now, end: now },
+      { label: 'Bu Ay', start: startOfMonth, end: now },
+      { label: 'Son 3 Ay', start: startOfQuarter, end: now },
+      { label: `Bu Yıl (${now.getFullYear()})`, start: startOfYear, end: now },
+    ].map(item => ({ label: item.label, val: `${fmt(item.start)} - ${fmt(item.end)}` }));
+  })();
 
   return (
     <div className={styles.branchActivitiesPage}>
@@ -321,11 +412,7 @@ export default function BranchActivitiesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Transfer</span>
-            <span className={styles.statValue}>12</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %20</span>
-              <span style={{ color: '#64748b' }}>geçen döneme göre</span>
-            </div>
+            <span className={styles.statValue}>{visibleTransfers.length}</span>
           </div>
         </div>
 
@@ -341,11 +428,7 @@ export default function BranchActivitiesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Transfer Edilen Hasta</span>
-            <span className={styles.statValue}>18</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %12</span>
-              <span style={{ color: '#64748b' }}>geçen döneme göre</span>
-            </div>
+            <span className={styles.statValue}>{new Set(visibleTransfers.map(item => item.patientName)).size}</span>
           </div>
         </div>
 
@@ -360,11 +443,8 @@ export default function BranchActivitiesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Transfer Cirosu</span>
-            <span className={styles.statValue}>₺42.500</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %35</span>
-              <span style={{ color: '#64748b' }}>geçen döneme göre</span>
-            </div>
+            <span className={styles.statValue}>—</span>
+            <div className={styles.statTrend}><span style={{ color: '#64748b' }}>Transfer kaydında ciro tutulmuyor</span></div>
           </div>
         </div>
 
@@ -380,16 +460,14 @@ export default function BranchActivitiesPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>En Yoğun Transfer</span>
-            <span className={styles.statValueText}>Merkez ↔ Çankaya</span>
-            <div className={styles.statTrend}>
-              <span style={{ color: '#64748b' }}>8 hasta transferi</span>
-            </div>
+            <span className={styles.statValueText}>{busiestTransfer?.[0] || '—'}</span>
+            <div className={styles.statTrend}><span style={{ color: '#64748b' }}>{busiestTransfer ? `${busiestTransfer[1]} transfer` : 'Henüz transfer yok'}</span></div>
           </div>
         </div>
       </div>
 
       {/* ── SECTION 1: 3 Branch Cards Grid ── */}
-      <div className={styles.branchesGrid3}>
+      <div className={styles.branchesGrid3} style={{ display: currentOrgId ? 'none' : undefined }}>
         {/* Card 1: Merkez */}
         <div className={styles.branchCard}>
           <div className={styles.branchHeaderRow}>
@@ -595,6 +673,20 @@ export default function BranchActivitiesPage() {
         </div>
       </div>
 
+      {currentOrgId && <div className={styles.branchesGrid3}>
+        {branchStats.map(({ branch, patients, revenue, appointments, outgoing, incoming }) => <article key={branch.id} className={styles.branchCard}>
+          <div className={styles.branchHeaderRow}><div className={styles.branchTitleWrap}><h3>{branch.name}</h3><p>{branch.address || 'Adres belirtilmedi'}</p></div><span className={styles.badgeActive}>● {branch.status}</span></div>
+          <div className={styles.branchMetricsRow}>
+            <div className={styles.metricItem}><span>Hasta</span><strong>{patients}</strong></div>
+            <div className={styles.metricItem}><span>Ciro</span><strong>{new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 }).format(revenue)}</strong></div>
+            <div className={styles.metricItem}><span>Randevu</span><strong>{appointments}</strong></div>
+            <div className={styles.metricItem}><span>Giden</span><strong>{outgoing}</strong></div>
+            <div className={styles.metricItem}><span>Gelen</span><strong>{incoming}</strong></div>
+          </div>
+        </article>)}
+        {branchStats.length === 0 && <div className={styles.branchCard}>Yetkili olduğunuz şube bulunamadı.</div>}
+      </div>}
+
       {/* ── SECTION 2: Transfer Form (Left) & Transfer Matrix (Right) ── */}
       <div className={styles.section2Grid}>
         {/* Left: Quick Transfer */}
@@ -636,9 +728,8 @@ export default function BranchActivitiesPage() {
                   value={sourceBranch}
                   onChange={e => setSourceBranch(e.target.value)}
                 >
-                  <option value="Merkez">Merkez</option>
-                  <option value="Çankaya">Çankaya</option>
-                  <option value="Kadıköy">Kadıköy</option>
+                  <option value="">Şube seçin</option>
+                  {visibleBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                 </select>
               </div>
 
@@ -658,9 +749,8 @@ export default function BranchActivitiesPage() {
                   value={targetBranch}
                   onChange={e => setTargetBranch(e.target.value)}
                 >
-                  <option value="Çankaya">Çankaya</option>
-                  <option value="Merkez">Merkez</option>
-                  <option value="Kadıköy">Kadıköy</option>
+                  <option value="">Şube seçin</option>
+                  {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                 </select>
               </div>
             </div>
@@ -708,44 +798,15 @@ export default function BranchActivitiesPage() {
           </div>
 
           <table className={styles.matrixTable}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left' }}>Kaynak → Hedef</th>
-                <th>Merkez</th>
-                <th>Çankaya</th>
-                <th>Kadıköy</th>
-                <th>Toplam (Giden)</th>
-              </tr>
-            </thead>
+            <thead><tr><th style={{ textAlign: 'left' }}>Kaynak → Hedef</th>{visibleBranches.map(branch => <th key={branch.id}>{branch.name}</th>)}<th>Toplam (Giden)</th></tr></thead>
             <tbody>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: 600 }}>Merkez</td>
-                <td style={{ color: '#94a3b8' }}>—</td>
-                <td className={styles.matrixHighlightCell}>4</td>
-                <td className={styles.matrixHighlightCell}>2</td>
-                <td className={styles.matrixTotalCell}>6</td>
-              </tr>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: 600 }}>Çankaya</td>
-                <td className={styles.matrixHighlightCell}>3</td>
-                <td style={{ color: '#94a3b8' }}>—</td>
-                <td className={styles.matrixHighlightCell}>1</td>
-                <td className={styles.matrixTotalCell}>4</td>
-              </tr>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: 600 }}>Kadıköy</td>
-                <td className={styles.matrixHighlightCell}>1</td>
-                <td className={styles.matrixHighlightCell}>3</td>
-                <td style={{ color: '#94a3b8' }}>—</td>
-                <td className={styles.matrixTotalCell}>4</td>
-              </tr>
-              <tr style={{ background: '#f8fafc' }}>
-                <td style={{ textAlign: 'left', fontWeight: 700 }}>Toplam (Gelen)</td>
-                <td className={styles.matrixTotalCell}>4</td>
-                <td className={styles.matrixTotalCell}>7</td>
-                <td className={styles.matrixTotalCell}>3</td>
-                <td style={{ color: '#94a3b8' }}>—</td>
-              </tr>
+              {visibleBranches.map(source => <tr key={source.id}>
+                <td style={{ textAlign: 'left', fontWeight: 600 }}>{source.name}</td>
+                {visibleBranches.map(target => <td key={target.id} className={source.id === target.id ? undefined : styles.matrixHighlightCell} style={source.id === target.id ? { color: '#94a3b8' } : undefined}>{source.id === target.id ? '—' : visibleTransfers.filter(item => item.fromBranch === source.name && item.toBranch === target.name).length}</td>)}
+                <td className={styles.matrixTotalCell}>{visibleTransfers.filter(item => item.fromBranch === source.name).length}</td>
+              </tr>)}
+              <tr style={{ background: '#f8fafc' }}><td style={{ textAlign: 'left', fontWeight: 700 }}>Toplam (Gelen)</td>{visibleBranches.map(target => <td key={target.id} className={styles.matrixTotalCell}>{visibleTransfers.filter(item => item.toBranch === target.name).length}</td>)}<td style={{ color: '#94a3b8' }}>—</td></tr>
+              {visibleBranches.length === 0 && <tr><td colSpan={5}>Yetkili olduğunuz şube bulunamadı.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -767,7 +828,7 @@ export default function BranchActivitiesPage() {
             </div>
 
             <div className={styles.tableToolbarRight}>
-              <select className={styles.miniSelect} defaultValue="Tümünü Gör">
+              <select className={styles.miniSelect} value={transferStatusFilter} onChange={event => setTransferStatusFilter(event.target.value)}>
                 <option value="Tümünü Gör">Tümünü Gör ⌵</option>
                 <option value="Tamamlananlar">Tamamlananlar</option>
                 <option value="İptal Edilenler">İptal Edilenler</option>
@@ -790,7 +851,7 @@ export default function BranchActivitiesPage() {
                 </tr>
               </thead>
               <tbody>
-                {transfers.map(t => (
+                {filteredTransfers.map(t => (
                   <tr key={t.id}>
                     <td>{t.date}</td>
                     <td style={{ fontWeight: 600, color: '#0f172a' }}>{t.patientName}</td>
@@ -818,6 +879,7 @@ export default function BranchActivitiesPage() {
                     </td>
                   </tr>
                 ))}
+                {filteredTransfers.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 20 }}>Bu filtrede transfer kaydı yok.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -840,24 +902,19 @@ export default function BranchActivitiesPage() {
               size={136}
               strokeWidth={20}
               slices={transferTypeSlices}
-              centerValue="12"
+              centerValue={transferTypeTotal}
               centerLabel="Transfer"
             />
 
             <div className={styles.legendList}>
-              {[
-                { label: 'Cihaz Satışı', count: 7, pct: 58, color: '#0d9488' },
-                { label: 'Randevu Transferi', count: 3, pct: 25, color: '#0284c7' },
-                { label: 'Teknik Servis', count: 1, pct: 8, color: '#f59e0b' },
-                { label: 'Diğer', count: 1, pct: 8, color: '#94a3b8' }
-              ].map(item => (
+              {transferTypeLegend.map(item => (
                 <div key={item.label} className={styles.legendItem}>
                   <div className={styles.legendLabelWrap}>
                     <span className={styles.legendColorDot} style={{ background: item.color }}></span>
                     <span>{item.label}</span>
                   </div>
                   <div className={styles.legendNumbers}>
-                    <span className={styles.legendAmount}>{item.count}</span>
+                    <span className={styles.legendAmount}>{item.value}</span>
                     <span className={styles.legendPct}>%{item.pct}</span>
                   </div>
                 </div>
@@ -897,9 +954,8 @@ export default function BranchActivitiesPage() {
                       value={modalSourceBranch}
                       onChange={e => setModalSourceBranch(e.target.value)}
                     >
-                      <option value="Merkez">Merkez</option>
-                      <option value="Çankaya">Çankaya</option>
-                      <option value="Kadıköy">Kadıköy</option>
+                      <option value="">Şube seçin</option>
+                      {visibleBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
 
@@ -910,9 +966,8 @@ export default function BranchActivitiesPage() {
                       value={modalTargetBranch}
                       onChange={e => setModalTargetBranch(e.target.value)}
                     >
-                      <option value="Çankaya">Çankaya</option>
-                      <option value="Merkez">Merkez</option>
-                      <option value="Kadıköy">Kadıköy</option>
+                      <option value="">Şube seçin</option>
+                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -990,12 +1045,7 @@ export default function BranchActivitiesPage() {
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {[
-                  { label: 'Bugün', val: '29.09.2026 - 29.09.2026' },
-                  { label: 'Bu Ay', val: '01.09.2026 - 30.09.2026' },
-                  { label: 'Son 3 Ay', val: '01.07.2026 - 30.09.2026' },
-                  { label: 'Bu Yıl (2026)', val: '01.01.2026 - 30.09.2026' }
-                ].map(opt => (
+                {rangePresets.map(opt => (
                   <button
                     key={opt.label}
                     type="button"

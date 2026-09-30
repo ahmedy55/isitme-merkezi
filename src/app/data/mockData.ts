@@ -192,9 +192,13 @@ export const getInitials = (first: string, last: string) => {
 
 export const formatDate = (dateStr: string) => {
   if (!dateStr) return '—';
-  const parts = dateStr.split('-');
-  if (parts.length !== 3) return dateStr;
-  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  // Preserve date-only values as calendar dates (Date parsing can shift them
+  // across time zones), while accepting ISO timestamps from Supabase.
+  const isoDate = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) return `${isoDate[3]}.${isoDate[2]}.${isoDate[1]}`;
+  const trDate = dateStr.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (trDate) return `${trDate[1].padStart(2, '0')}.${trDate[2].padStart(2, '0')}.${trDate[3]}`;
+  return dateStr;
 };
 
 export const formatCurrency = (value: number) => {
@@ -203,9 +207,12 @@ export const formatCurrency = (value: number) => {
 
 export const calculateAge = (birthDate: string) => {
   if (!birthDate) return 0;
-  const today = new Date('2026-07-10'); // Demo günü
-  const birth = new Date(birthDate);
-  if (isNaN(birth.getTime())) return 0;
+  const match = birthDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const birth = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(birthDate);
+  if (isNaN(birth.getTime()) || birth > new Date()) return 0;
+  const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
   const m = today.getMonth() - birth.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {

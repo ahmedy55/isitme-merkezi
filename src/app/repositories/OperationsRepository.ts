@@ -14,7 +14,7 @@ const assetFromDb = (r: any): AssetRecord => ({
   status: r.status, notes: r.notes || '',
 });
 export async function fetchAssets(): Promise<AssetRecord[]> {
-  const { data, error } = await supabase.from('assets').select('*, branches(name)').order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('assets').select('*, branches(name)').is('archived_at', null).order('created_at', { ascending: false });
   if (error) throw new Error('Demirbaşlar yüklenemedi.');
   return (data || []).map(assetFromDb);
 }
@@ -67,10 +67,14 @@ export async function fetchBranchTransfers(): Promise<any[]> {
   if (error) throw new Error('Şube transferleri yüklenemedi.');
   const { data: branches } = await supabase.from('branches').select('id,name');
   const names = new Map((branches || []).map((b: any) => [b.id, b.name]));
+  const actorIds = (data || []).map((row: any) => row.transferred_by).filter(Boolean);
+  const { data: actors } = actorIds.length ? await supabase.from('memberships').select('user_id,first_name,last_name').in('user_id', actorIds) : { data: [] };
+  const actorNames = new Map((actors || []).map((actor: any) => [actor.user_id, `${actor.first_name || ''} ${actor.last_name || ''}`.trim()]));
   return (data || []).map((r: any) => ({
     id: r.id, patientName: r.patient_name, sourceBranchId: r.source_branch_id, targetBranchId: r.target_branch_id,
     fromBranch: names.get(r.source_branch_id) || '', toBranch: names.get(r.target_branch_id) || '',
-    date: r.created_at.slice(0, 10), approvedBy: 'Firma Yöneticisi', status: 'Tamamlandı',
+    patientId: r.patient_id, date: r.created_at.slice(0, 10), transferredBy: actorNames.get(r.transferred_by) || 'Personel', status: 'Tamamlandı',
+    transferType: 'Diğer', notes: 'Hasta kaydı hedef şubeye aktarıldı.',
   }));
 }
 export async function transferPatient(patientId: string, targetBranchId: string, requestId: string): Promise<void> {
