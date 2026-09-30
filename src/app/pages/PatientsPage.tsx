@@ -64,7 +64,7 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, addToast, dataLoading, branchesList, appointmentsList, stockList, salesList } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, updatePatient, deletePatient, addToast, dataLoading, branchesList, appointmentsList, stockList, salesList } = useApp();
   const { activeBranch } = useBranch();
 
   const [search, setSearch] = useState('');
@@ -2611,8 +2611,11 @@ export default function PatientsPage() {
                 onClick={() => {
                   const p = activeActionMenu.patient;
                   setActiveActionMenu(null);
-                  p.sgkStatus = 'Pasif';
-                  addToast({ type: 'warning', message: `${p.firstName} ${p.lastName} pasif duruma getirildi.` });
+                  if (p.sgkStatus === 'Pasif') {
+                    addToast({ type: 'info', message: `${p.firstName} ${p.lastName} zaten pasif durumda.` });
+                    return;
+                  }
+                  void updatePatient({ ...p, sgkStatus: 'Pasif' });
                 }}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
@@ -2625,7 +2628,7 @@ export default function PatientsPage() {
                   const p = activeActionMenu.patient;
                   setActiveActionMenu(null);
                   if (window.confirm(`${p.firstName} ${p.lastName} isimli hastayı silmek istediğinize emin misiniz?`)) {
-                    addToast({ type: 'info', message: `${p.firstName} ${p.lastName} başarıyla silindi.` });
+                    void deletePatient(p.id);
                   }
                 }}
               >

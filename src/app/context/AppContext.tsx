@@ -24,7 +24,7 @@ import { PurchaseDomainService } from '../services/PurchaseDomainService';
 import { ServiceDomainService } from '../services/ServiceDomainService';
 import { EventBus } from '../services/EventBus';
 import {
-  dbFetchPatients, dbInsertPatient, dbUpdatePatient,
+  dbFetchPatients, dbInsertPatient, dbUpdatePatient, dbDeletePatient,
   dbFetchAppointments, dbInsertAppointment, dbUpdateAppointmentStatus,
   dbFetchStockItems, dbInsertStockItem, dbUpdateStockItem, dbDeleteStockItem,
   dbAdjustStockItem,
@@ -110,6 +110,7 @@ interface AppContextType {
   // Veri Güncelleme Metotları
   addPatient: (patient: Patient) => Promise<void>;
   updatePatient: (patient: Patient) => void;
+  deletePatient: (id: string) => Promise<boolean>;
   addAppointment: (appointment: Appointment) => Promise<void>;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<boolean>;
   addSale: (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => Promise<void>;
@@ -462,6 +463,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
       addToast({ type: 'success', message: `${updatedPatient.firstName} ${updatedPatient.lastName} bilgileri güncellendi.` });
     }
+  };
+
+  const deletePatient = async (id: string) => {
+    const patient = patientsList.find(item => item.id === id);
+    if (!patient) {
+      addToast({ type: 'error', message: 'Hasta kaydı bulunamadı.' });
+      return false;
+    }
+
+    if (currentOrgId) {
+      try {
+        await dbDeletePatient(id);
+        try {
+          await dbInsertAuditLog({ action: 'Hasta Silme', module: 'Hastalar', description: `${patient.firstName} ${patient.lastName} silindi.` });
+        } catch (auditError: any) {
+          logger.warn(`Hasta silme denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext');
+        }
+      } catch (err: any) {
+        addToast({ type: 'error', message: `Hasta silinemedi: ${err.message}` });
+        return false;
+      }
+    }
+
+    setPatientsList(prev => prev.filter(item => item.id !== id));
+    setSelectedPatientId(prev => prev === id ? null : prev);
+    addToast({ type: 'success', message: `${patient.firstName} ${patient.lastName} başarıyla silindi.` });
+    return true;
   };
 
   const addAppointment = async (appointment: Appointment) => {
@@ -958,6 +986,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       addPatient,
       updatePatient,
+      deletePatient,
       addAppointment,
       updateAppointmentStatus,
       addSale,

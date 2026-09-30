@@ -48,6 +48,7 @@ export const dbFetchPatients = async () => {
     const { data, error } = await supabase
       .from('patients')
       .select('*, patient_timeline(*)')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (error) throw error;
     const rows = data || [];
@@ -100,11 +101,15 @@ export const dbUpdatePatient = async (id: string, patient: any) => {
 
 export const dbDeletePatient = async (id: string) => {
   return executeDbQuery(async () => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('patients')
       .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select('id')
+      .maybeSingle();
     if (error) throw error;
+    if (!data) throw new DatabaseError('Hasta silinemedi veya kayıt zaten kaldırılmış.');
   }, 'dbDeletePatient');
 };
 
