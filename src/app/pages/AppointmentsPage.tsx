@@ -598,7 +598,7 @@ export default function AppointmentsPage() {
       <div className={styles.statsGrid}>
         {/* 1. Bugünkü Randevular */}
         <div
-          className={`${styles.statCard} ${statusFilter === 'all' ? styles.statCardActive : ''}`}
+          className={`${styles.statCard} ${statusFilter === 'all' && viewMode !== 'hafta' ? styles.statCardActive : ''}`}
           onClick={() => setStatusFilter('all')}
         >
           <div className={`${styles.statIcon} ${styles.iconGreen}`}>
@@ -612,7 +612,7 @@ export default function AppointmentsPage() {
         </div>
 
         {/* 2. Bu Hafta */}
-        <div className={styles.statCard} onClick={handleShowThisWeek} role="button" tabIndex={0} onKeyDown={event => {
+        <div className={`${styles.statCard} ${viewMode === 'hafta' ? styles.statCardActive : ''}`} onClick={handleShowThisWeek} role="button" aria-pressed={viewMode === 'hafta'} tabIndex={0} onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             handleShowThisWeek();
