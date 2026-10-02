@@ -270,7 +270,7 @@ const defaultShowcaseActivities: ActivityRecord[] = [
 ];
 
 export default function ActivityLogPage() {
-  const { addToast, currentOrgId, branchesList, patientsList, setCurrentPage, setSelectedPatientId } = useApp();
+  const { addToast, currentOrgId, currentUser, dataLoading, branchesList, usersList, patientsList, setCurrentPage, setSelectedPatientId } = useApp();
   const { activeBranchId, matches } = useBranchScope();
 
   // Active category filter tab
@@ -304,8 +304,8 @@ export default function ActivityLogPage() {
   const [activePatientSuggestionIndex, setActivePatientSuggestionIndex] = useState(-1);
   const [formType, setFormType] = useState<ActivityRecord['type']>('Telefon Araması');
   const [formDescription, setFormDescription] = useState('');
-  const [formStaffName, setFormStaffName] = useState('Ahmet Yılmaz');
-  const [formBranchName, setFormBranchName] = useState('Merkez');
+  const [formStaffId, setFormStaffId] = useState('');
+  const [formBranchId, setFormBranchId] = useState('');
 
   // Live activities from repository
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
@@ -418,6 +418,21 @@ export default function ActivityLogPage() {
   const activityCount = (type: ActivityRecord['type']) => todaysActivities.filter(activity => activity.type === type).length;
 
   const activeRecord = selectedActId ? filteredActivities.find(a => a.id === selectedActId) : undefined;
+  const activityBranches = branchesList.filter(branch => (branch.status === 'Aktif' || (branch.status as string) === 'active') && matches(branch.name, branch.id));
+  const activityStaff = usersList.filter(user => (user.status === 'Aktif' || (user.status as string) === 'active')
+    && (!user.branchId || !formBranchId || user.branchId === formBranchId));
+
+  useEffect(() => {
+    if (activityBranches.length === 0 || activityBranches.some(branch => branch.id === formBranchId)) return;
+    const preferredBranch = activityBranches.find(branch => branch.id === activeBranchId) || activityBranches[0];
+    setFormBranchId(preferredBranch.id);
+  }, [activityBranches, activeBranchId, formBranchId]);
+
+  useEffect(() => {
+    if (activityStaff.length === 0 || activityStaff.some(user => user.id === formStaffId)) return;
+    const currentMembership = activityStaff.find(user => user.userId === currentUser?.id);
+    setFormStaffId((currentMembership || activityStaff[0]).id);
+  }, [activityStaff, currentUser?.id, formStaffId]);
   const patientSuggestions = useMemo(() => {
     const query = formPatientName.trim().toLocaleLowerCase('tr-TR');
     if (!query) return [];
@@ -445,6 +460,12 @@ export default function ActivityLogPage() {
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const selectedPatient = patientsList.find(patient => patient.id === formPatientId)
       || patientsList.find(patient => `${patient.firstName} ${patient.lastName}`.trim().toLocaleLowerCase('tr-TR') === formPatientName.trim().toLocaleLowerCase('tr-TR'));
+    const selectedStaff = usersList.find(user => user.id === formStaffId);
+    const selectedBranch = branchesList.find(branch => branch.id === formBranchId);
+    if (!selectedStaff || !selectedBranch) {
+      addToast({ type: 'warning', message: 'Aktivite kaydı için geçerli personel ve şube seçin.' });
+      return;
+    }
     const newRecord: ActivityRecord = {
       id: `act-${Date.now()}`,
       timestamp: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${timeStr}`,
@@ -459,10 +480,10 @@ export default function ActivityLogPage() {
       patientPhone: selectedPatient?.phone || '—',
       type: formType,
       description: formDescription,
-      staffName: formStaffName,
-      staffInitials: formStaffName.slice(0, 2).toUpperCase(),
+      staffName: `${selectedStaff.firstName} ${selectedStaff.lastName}`.trim(),
+      staffInitials: getInitials(selectedStaff.firstName, selectedStaff.lastName),
       staffAvatarColor: '#0f766e',
-      branchName: formBranchName
+      branchName: selectedBranch.name
     };
 
     setActivities(prev => [newRecord, ...prev]);
@@ -1133,14 +1154,14 @@ export default function ActivityLogPage() {
                     </label>
                     <select
                       className="form-select"
-                      value={formStaffName}
-                      onChange={(e) => setFormStaffName(e.target.value)}
+                      value={formStaffId}
+                      onChange={(e) => setFormStaffId(e.target.value)}
                       style={{ width: '100%', height: 38 }}
+                      required
+                      disabled={activityStaff.length === 0}
                     >
-                      <option value="Ahmet Yılmaz">Ahmet Yılmaz</option>
-                      <option value="Fatma Kaya">Fatma Kaya</option>
-                      <option value="Zeynep Arslan">Zeynep Arslan</option>
-                      <option value="Teknik Servis">Teknik Servis</option>
+                      <option value="">{dataLoading ? 'Personeller yükleniyor…' : 'Aktif personel seçin'}</option>
+                      {activityStaff.map(user => <option key={user.id} value={user.id}>{user.firstName} {user.lastName}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1151,12 +1172,14 @@ export default function ActivityLogPage() {
                   </label>
                   <select
                     className="form-select"
-                    value={formBranchName}
-                    onChange={(e) => setFormBranchName(e.target.value)}
+                      value={formBranchId}
+                      onChange={(e) => setFormBranchId(e.target.value)}
                     style={{ width: '100%', height: 38 }}
+                      required
+                      disabled={activityBranches.length === 0}
                   >
-                    <option value="Merkez">Merkez</option>
-                    <option value="Çankaya">Çankaya</option>
+                    <option value="">{dataLoading ? 'Şubeler yükleniyor…' : 'Aktif şube seçin'}</option>
+                    {activityBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                   </select>
                 </div>
 
