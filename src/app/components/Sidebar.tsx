@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { getDisplayName, getUserRole, getUserInitials } from '../lib/userHelpers';
 import { countOpenAppointments } from '../lib/appointmentStatus';
+import { getRecallCounts } from '../lib/recallStats';
 import { useBranch } from '../context/BranchContext';
 import styles from './Sidebar.module.css';
 
@@ -31,12 +32,22 @@ export default function Sidebar() {
     loggingOut,
     usersList,
     appointmentsList,
+    recallList,
   } = useApp();
   const { activeBranch } = useBranch();
   const pendingAppointmentsCount = useMemo(
     () => countOpenAppointments(appointmentsList, activeBranch),
     [appointmentsList, activeBranch],
   );
+  const pendingRecallCount = useMemo(() => {
+    const today = new Date();
+    const todayDateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const counts = getRecallCounts(
+      recallList.map(({ status, dueDate }) => ({ status, planDate: dueDate })),
+      todayDateKey,
+    );
+    return counts.pending + counts.overdue;
+  }, [recallList]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -203,7 +214,7 @@ export default function Sidebar() {
     {
       title: 'İŞLEMLER',
       items: [
-        { id: 'recall', label: 'Recall', badge: 2, icon: icons.recall },
+        { id: 'recall', label: 'Recall', badge: pendingRecallCount || null, icon: icons.recall },
         { id: 'activity-log', label: 'Aktivite Kaydı', icon: icons.activity },
         { id: 'sgk', label: 'SGK & Reçete', icon: icons.sgk },
         { id: 'sgk-receivables', label: 'SGK Ödeme Takvimi', icon: icons.sgkReceivables },
@@ -225,7 +236,7 @@ export default function Sidebar() {
         { id: 'support', label: 'Destek', icon: icons.support },
       ],
     },
-  ], [icons, pendingAppointmentsCount]);
+  ], [icons, pendingAppointmentsCount, pendingRecallCount]);
 
   // Filter sections by search query
   const filteredSections = useMemo(() => {
