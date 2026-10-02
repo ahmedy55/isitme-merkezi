@@ -286,12 +286,14 @@ export default function ActivityLogPage() {
   const [sortBy, setSortBy] = useState('Tarih (Yeni → Eski)');
 
   // Selected row and detail drawer
-  const [selectedActId, setSelectedActId] = useState<string>('act-1');
-  const [showDetailPanel, setShowDetailPanel] = useState<boolean>(true);
+  const [selectedActId, setSelectedActId] = useState<string | null>(null);
+  const [showDetailPanel, setShowDetailPanel] = useState<boolean>(false);
   const [panelTab, setPanelTab] = useState<'Genel' | 'Tüm Aktiviteleri'>('Genel');
 
   // Checkbox multi-select
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set(['act-1']));
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [currentPageIndex, setCurrentPageIndex] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   // Modal for new activity
   const [showModal, setShowModal] = useState(false);
@@ -393,12 +395,25 @@ export default function ActivityLogPage() {
     const direction = sortBy === 'Tarih (Eski → Yeni)' ? 1 : -1;
     return a.timestamp.localeCompare(b.timestamp) * direction;
   }), [filteredActivities, sortBy]);
+  const pageCount = Math.ceil(sortedActivities.length / pageSize);
+  const pagedActivities = sortedActivities.slice((currentPageIndex - 1) * pageSize, currentPageIndex * pageSize);
+  const visiblePageNumbers = pageCount <= 5
+    ? Array.from({ length: pageCount }, (_, index) => index + 1)
+    : Array.from(new Set([1, currentPageIndex - 1, currentPageIndex, currentPageIndex + 1, pageCount])).filter(page => page >= 1 && page <= pageCount).sort((a, b) => a - b);
+
+  useEffect(() => {
+    setCurrentPageIndex(1);
+  }, [activeTab, searchQuery, filterType, filterStaff, filterBranch, dateRange, pageSize]);
+
+  useEffect(() => {
+    if (currentPageIndex > Math.max(pageCount, 1)) setCurrentPageIndex(Math.max(pageCount, 1));
+  }, [currentPageIndex, pageCount]);
 
   const todayKey = todayISO();
   const todaysActivities = activities.filter(activity => activity.timestamp.slice(0, 10) === todayKey);
   const activityCount = (type: ActivityRecord['type']) => todaysActivities.filter(activity => activity.type === type).length;
 
-  const activeRecord = activities.find(a => a.id === selectedActId) || activities[0] || defaultShowcaseActivities[0];
+  const activeRecord = selectedActId ? filteredActivities.find(a => a.id === selectedActId) : undefined;
 
   const handleCreateActivity = (e: React.FormEvent) => {
     e.preventDefault();
@@ -680,7 +695,7 @@ export default function ActivityLogPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedActivities.map((act) => {
+                {pagedActivities.map((act) => {
                   const isSelected = selectedActId === act.id;
                   const isChecked = checkedIds.has(act.id);
 
@@ -800,24 +815,22 @@ export default function ActivityLogPage() {
             <div>
               Toplam <strong>{filteredActivities.length}</strong> kayıt | <strong>{checkedIds.size}</strong> kayıt seçili
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className={styles.pagination}>
-                <button type="button" className={styles.pageBtn}>«</button>
-                <button type="button" className={styles.pageBtn}>‹</button>
-                <button type="button" className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-                <button type="button" className={styles.pageBtn}>2</button>
-                <button type="button" className={styles.pageBtn}>3</button>
-                <button type="button" className={styles.pageBtn}>4</button>
-                <button type="button" className={styles.pageBtn}>5</button>
-                <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
-                <button type="button" className={styles.pageBtn}>›</button>
-                <button type="button" className={styles.pageBtn}>»</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {pageCount > 0 && <div className={styles.pagination}>
+                  <button type="button" className={styles.pageBtn} disabled={currentPageIndex === 1} onClick={() => setCurrentPageIndex(1)} aria-label="İlk sayfa">«</button>
+                  <button type="button" className={styles.pageBtn} disabled={currentPageIndex === 1} onClick={() => setCurrentPageIndex(page => Math.max(1, page - 1))} aria-label="Önceki sayfa">‹</button>
+                  {visiblePageNumbers.map((page, index) => <React.Fragment key={page}>
+                    {index > 0 && page - visiblePageNumbers[index - 1] > 1 && <span style={{ padding: '0 4px', color: '#94a3b8' }}>…</span>}
+                    <button type="button" className={`${styles.pageBtn} ${currentPageIndex === page ? styles.pageBtnActive : ''}`} onClick={() => setCurrentPageIndex(page)} aria-current={currentPageIndex === page ? 'page' : undefined}>{page}</button>
+                  </React.Fragment>)}
+                  <button type="button" className={styles.pageBtn} disabled={currentPageIndex === pageCount} onClick={() => setCurrentPageIndex(page => Math.min(pageCount, page + 1))} aria-label="Sonraki sayfa">›</button>
+                  <button type="button" className={styles.pageBtn} disabled={currentPageIndex === pageCount} onClick={() => setCurrentPageIndex(pageCount)} aria-label="Son sayfa">»</button>
+                </div>}
+                <select className={styles.sortSelect} value={pageSize} onChange={event => setPageSize(Number(event.target.value))} aria-label="Sayfa başına kayıt sayısı">
+                  <option value={20}>20 / sayfa</option>
+                  <option value={50}>50 / sayfa</option>
+                </select>
               </div>
-              <select className={styles.sortSelect}>
-                <option value="20">20 / sayfa</option>
-                <option value="50">50 / sayfa</option>
-              </select>
-            </div>
           </div>
         </div>
 
