@@ -195,7 +195,7 @@ const defaultShowcaseSlots: ShowcaseSlot[] = [
 ];
 
 export default function AppointmentsPage() {
-  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointment, updateAppointmentStatus, addToast, currentOrgId } = useApp();
+  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointment, updateAppointmentStatus, addToast, currentOrgId, appointmentCreatePatientId, clearAppointmentCreationRequest } = useApp();
   const { activeBranch } = useBranch();
 
   const appointmentsList = useMemo(() => {
@@ -222,11 +222,19 @@ export default function AppointmentsPage() {
   const [showcaseList, setShowcaseList] = useState<ShowcaseSlot[]>(defaultShowcaseSlots);
   const [updatingAppointmentIds, setUpdatingAppointmentIds] = useState<Set<string>>(() => new Set());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [newAppointmentPatientId, setNewAppointmentPatientId] = useState<string | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<any | null>(null);
   const [selectedDetailSlot, setSelectedDetailSlot] = useState<ShowcaseSlot | null>(null);
   const [activeSlotMenu, setActiveSlotMenu] = useState<{ id: string; top: number; right: number; patientName: string; phone?: string } | null>(null);
   const slotMenuRef = useRef<HTMLDivElement>(null);
   const hasUserSelectedDate = useRef(false);
+
+  useEffect(() => {
+    if (!appointmentCreatePatientId) return;
+    setNewAppointmentPatientId(appointmentCreatePatientId);
+    setShowAddModal(true);
+    clearAppointmentCreationRequest();
+  }, [appointmentCreatePatientId, clearAppointmentCreationRequest]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1399,10 +1407,12 @@ export default function AppointmentsPage() {
 
       {showAddModal && (
         <NewAppointmentModal
-          onClose={() => setShowAddModal(false)}
+          initialPatientId={newAppointmentPatientId}
+          onClose={() => { setShowAddModal(false); setNewAppointmentPatientId(null); }}
           onSave={async (newApt) => {
             await addAppointment(newApt);
             setShowAddModal(false);
+            setNewAppointmentPatientId(null);
           }}
           patientsList={patientsList}
           addToast={addToast}
@@ -1432,13 +1442,15 @@ export function NewAppointmentModal({
   onSave,
   patientsList,
   addToast,
-  initialAppointment
+  initialAppointment,
+  initialPatientId
 }: {
   onClose: () => void;
   onSave: (apt: any) => void | Promise<void>;
   patientsList: any[];
   addToast?: any;
   initialAppointment?: any;
+  initialPatientId?: string | null;
 }) {
   const getNextAppointmentSlot = (from = new Date()) => {
     const slot = new Date(from);
@@ -1454,12 +1466,13 @@ export function NewAppointmentModal({
   };
 
   // Patient Search & Selection State
-  const [patientSearch, setPatientSearch] = useState(initialAppointment?.patientName || '');
+  const initialPatient = patientsList.find(patient => patient.id === initialPatientId);
+  const [patientSearch, setPatientSearch] = useState(initialAppointment?.patientName || (initialPatient ? `${initialPatient.firstName} ${initialPatient.lastName}`.trim() : ''));
   const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string; phone: string } | null>(() => initialAppointment ? {
     id: initialAppointment.patientId,
     name: initialAppointment.patientName,
     phone: patientsList.find(patient => patient.id === initialAppointment.patientId)?.phone || ''
-  } : null);
+  } : initialPatient ? { id: initialPatient.id, name: `${initialPatient.firstName} ${initialPatient.lastName}`.trim(), phone: initialPatient.phone || '' } : null);
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [isAddingNewPatient, setIsAddingNewPatient] = useState(false);
   const [newPatientName, setNewPatientName] = useState('');

@@ -281,7 +281,7 @@ const defaultShowcaseRecalls: ShowcaseRecall[] = [
 ];
 
 export default function RecallPage() {
-  const { recallList, patientsList, appointmentsList, stockList, salesList, branchesList, currentOrgId, addToast, setCurrentPage, setSelectedPatientId, addRecallItem, updateRecallItemStatus } = useApp();
+  const { recallList, patientsList, appointmentsList, stockList, salesList, branchesList, currentOrgId, addToast, setCurrentPage, setSelectedPatientId, requestAppointmentCreation, addRecallItem, updateRecallItemStatus } = useApp();
 
   // Selected tab: 'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi'
   const [activeTab, setActiveTab] = useState<'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi' | 'Tarihi Geçen'>('Tümü');
@@ -463,6 +463,7 @@ export default function RecallPage() {
 
   const handleOpenAppointment = (patientId: string) => {
     setSelectedPatientId(patientId);
+    requestAppointmentCreation(patientId);
     setCurrentPage('appointments');
   };
 

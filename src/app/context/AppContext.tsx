@@ -75,6 +75,9 @@ interface AppContextType {
   setCurrentPage: (page: Page | ((prev: Page) => Page), replace?: boolean) => void;
   selectedPatientId: string | null;
   setSelectedPatientId: (id: string | null) => void;
+  appointmentCreatePatientId: string | null;
+  requestAppointmentCreation: (patientId: string) => void;
+  clearAppointmentCreationRequest: () => void;
   activeDetailTab: string;
   setActiveDetailTab: (tab: string) => void;
   showModal: string | null;
@@ -162,6 +165,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPageState] = useState<Page>('login');
   const currentPageRef = useRef<Page>('login');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [appointmentCreatePatientId, setAppointmentCreatePatientId] = useState<string | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<string>('genel');
   const [showModal, setShowModal] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -183,6 +187,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
   };
+
+  const requestAppointmentCreation = (patientId: string) => setAppointmentCreatePatientId(patientId);
+  const clearAppointmentCreationRequest = () => setAppointmentCreatePatientId(null);
 
   // Tarayıcının Geri (<-) / İleri (->) butonlarına tıklandığında sayfayı değiştir
   useEffect(() => {
@@ -989,6 +996,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCurrentPage,
       selectedPatientId,
       setSelectedPatientId,
+      appointmentCreatePatientId,
+      requestAppointmentCreation,
+      clearAppointmentCreationRequest,
       activeDetailTab,
       setActiveDetailTab,
       showModal,
