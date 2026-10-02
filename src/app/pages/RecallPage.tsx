@@ -965,15 +965,15 @@ export default function RecallPage() {
 
       {/* ── Modal for New Recall ── */}
       {showNewModal && (
-        <div className="modal-overlay" onClick={() => setShowNewModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h3>Yeni Hatırlatma Ekle</h3>
+        <div className={styles.recallModalOverlay} onClick={() => setShowNewModal(false)}>
+          <div className={styles.recallModal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="new-recall-title">
+            <div className={styles.recallModalHeader}>
+              <h3 id="new-recall-title">Yeni Hatırlatma Ekle</h3>
               <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setShowNewModal(false)}>
                 <IconClose size={16} />
               </button>
             </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className={styles.recallModalBody}>
               <div>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
                   Kayıtlı Hasta Seçimi (veya serbest yazın) *
@@ -1051,7 +1051,7 @@ export default function RecallPage() {
                 />
               </div>
             </div>
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <div className={styles.recallModalFooter}>
               <button type="button" className="btn btn-secondary" onClick={() => setShowNewModal(false)}>
                 Vazgeç
               </button>
