@@ -996,7 +996,7 @@ export default function ActivityLogPage() {
       {/* ── Modal for New Activity ── */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
               <h3>Yeni Aktivite Kaydı Gir</h3>
               <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setShowModal(false)}>
