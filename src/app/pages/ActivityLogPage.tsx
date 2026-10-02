@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { createActivity, fetchActivities } from '../repositories/OperationsRepository';
@@ -290,6 +290,8 @@ export default function ActivityLogPage() {
   const [selectedActId, setSelectedActId] = useState<string | null>(null);
   const [showDetailPanel, setShowDetailPanel] = useState<boolean>(false);
   const [panelTab, setPanelTab] = useState<'Genel' | 'Tüm Aktiviteleri'>('Genel');
+  const [activeActionMenu, setActiveActionMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
 
   // Checkbox multi-select
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -309,6 +311,22 @@ export default function ActivityLogPage() {
 
   // Live activities from repository
   const [activities, setActivities] = useState<ActivityRecord[]>([]);
+
+  useEffect(() => {
+    if (!activeActionMenu) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!actionMenuRef.current?.contains(event.target as Node)) setActiveActionMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActiveActionMenu(null);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [activeActionMenu]);
 
   useEffect(() => {
     let cancelled = false;
@@ -840,10 +858,22 @@ export default function ActivityLogPage() {
                         <button
                           type="button"
                           className={styles.actionBtnDots}
-                          title="İşlem Detayları"
-                          onClick={() => {
-                            setSelectedActId(act.id);
-                            setShowDetailPanel(true);
+                          title="İşlem menüsünü aç"
+                          aria-label={`${act.patientName} aktivite işlemleri`}
+                          aria-haspopup="menu"
+                          aria-expanded={activeActionMenu?.id === act.id}
+                          onClick={(event) => {
+                            if (activeActionMenu?.id === act.id) {
+                              setActiveActionMenu(null);
+                              return;
+                            }
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            const menuHeight = 88;
+                            setActiveActionMenu({
+                              id: act.id,
+                              top: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - menuHeight - 8)),
+                              left: Math.max(8, Math.min(rect.right - 184, window.innerWidth - 192)),
+                            });
                           }}
                         >
                           <IconDotsVertical size={14} />
@@ -878,6 +908,32 @@ export default function ActivityLogPage() {
                 </select>
               </div>
           </div>
+
+          {activeActionMenu && (() => {
+            const menuRecord = activities.find(activity => activity.id === activeActionMenu.id);
+            if (!menuRecord) return null;
+            return <div
+              ref={actionMenuRef}
+              className={styles.rowActionMenu}
+              role="menu"
+              aria-label={`${menuRecord.patientName} aktivite işlemleri`}
+              style={{ top: activeActionMenu.top, left: activeActionMenu.left }}
+              onClick={event => event.stopPropagation()}
+            >
+              <button type="button" role="menuitem" onClick={() => {
+                setSelectedActId(menuRecord.id);
+                setShowDetailPanel(true);
+                setActiveActionMenu(null);
+              }}>Aktivite detayını gör</button>
+              <button type="button" role="menuitem" disabled={!menuRecord.patientId} onClick={() => {
+                if (menuRecord.patientId) {
+                  setSelectedPatientId(menuRecord.patientId);
+                  setCurrentPage('patient-detail');
+                }
+                setActiveActionMenu(null);
+              }}>Hasta detayına git</button>
+            </div>;
+          })()}
         </div>
 
         {/* Right Column: Selected Patient Activity Detail Panel */}
