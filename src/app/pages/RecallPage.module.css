@@ -631,6 +631,49 @@
   gap: 4px;
 }
 
+.actionMenuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.actionMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  width: max-content;
+  min-width: 190px;
+  flex-direction: column;
+  padding: 5px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e1e8ec;
+  border-radius: 9px;
+  box-shadow: 0 10px 24px rgba(19, 35, 44, 0.16);
+}
+
+.actionMenu button {
+  width: 100%;
+  padding: 9px 10px;
+  color: #263943;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.actionMenu button:hover,
+.actionMenu button:focus-visible {
+  color: var(--recall-green);
+  background: #f0f7f4;
+  outline: none;
+}
+
 .actionBtn {
   display: inline-flex;
   align-items: center;

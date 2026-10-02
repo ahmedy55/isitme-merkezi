@@ -316,6 +316,25 @@ export default function RecallPage() {
 
   // Dropdown for row action
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!activeActionMenuId) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!actionMenuRef.current?.contains(event.target as Node)) setActiveActionMenuId(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActiveActionMenuId(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeActionMenuId]);
 
   const toggleCheck = (id: string) => {
     setCheckedIds(prev => {
@@ -736,17 +755,54 @@ export default function RecallPage() {
                             <IconWhatsApp size={14} />
                           </button>
                           {/* 4. Üç Nokta */}
-                          <button
-                            type="button"
-                            className={styles.actionBtn}
-                            title="Diğer İşlemler"
-                            onClick={() => {
-                              setSelectedRecallId(recall.id);
-                              setShowDetailPanel(true);
-                            }}
-                          >
-                            <IconDotsVertical size={14} />
-                          </button>
+                          <div className={styles.actionMenuWrap} ref={activeActionMenuId === recall.id ? actionMenuRef : undefined}>
+                            <button
+                              type="button"
+                              className={styles.actionBtn}
+                              title="Diğer İşlemler"
+                              aria-label={`${recall.patientName} için diğer işlemler`}
+                              aria-haspopup="menu"
+                              aria-expanded={activeActionMenuId === recall.id}
+                              onClick={() => setActiveActionMenuId(current => current === recall.id ? null : recall.id)}
+                            >
+                              <IconDotsVertical size={14} />
+                            </button>
+                            {activeActionMenuId === recall.id && (
+                              <div className={styles.actionMenu} role="menu" aria-label={`${recall.patientName} hatırlatma işlemleri`}>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setSelectedRecallId(recall.id);
+                                    setShowDetailPanel(true);
+                                    setActiveActionMenuId(null);
+                                  }}
+                                >Detayları Gör</button>
+                                {recall.status !== 'Gönderildi' && recall.status !== 'Tamamlandı' && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      updateRecallItemStatus(recall.id, 'Gönderildi');
+                                      addToast({ type: 'success', message: `${recall.patientName} için hatırlatma bildirimi başarıyla gönderildi.` });
+                                      setActiveActionMenuId(null);
+                                    }}
+                                  >Hatırlatmayı Gönderildi İşaretle</button>
+                                )}
+                                {recall.status !== 'Tamamlandı' && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      updateRecallItemStatus(recall.id, 'Tamamlandı');
+                                      addToast({ type: 'success', message: `${recall.patientName} hatırlatması tamamlandı olarak işaretlendi.` });
+                                      setActiveActionMenuId(null);
+                                    }}
+                                  >Tamamlandı Olarak İşaretle</button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
