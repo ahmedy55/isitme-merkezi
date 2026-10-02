@@ -2,9 +2,9 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { useBranchScope } from '../hooks/useBranchScope';
 import { getAvatarColor, getInitials, calculateAge, type RecallItem } from '../data/mockData';
 import { IconCalendar, IconCheck, IconSearch, IconClose, IconPlus, IconPhone, IconMail } from '../components/Icons';
+import { getRecallCounts, isRecallOverdue } from '../lib/recallStats';
 import styles from './RecallPage.module.css';
 
 /* ── Inline SVG Icons ── */
@@ -282,16 +282,19 @@ const defaultShowcaseRecalls: ShowcaseRecall[] = [
 
 export default function RecallPage() {
   const { recallList, patientsList, branchesList, currentOrgId, addToast, setCurrentPage, setSelectedPatientId, addRecallItem, updateRecallItemStatus } = useApp();
-  const { matches } = useBranchScope();
 
   // Selected tab: 'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi'
-  const [activeTab, setActiveTab] = useState<'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi'>('Tümü');
+  const [activeTab, setActiveTab] = useState<'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi' | 'Tarihi Geçen'>('Tümü');
 
   // Search & Filter fields
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('Tümü');
   const [filterBranch, setFilterBranch] = useState('Tümü');
   const [filterDateRange, setFilterDateRange] = useState('');
+  const [recallPageNumber, setRecallPageNumber] = useState(1);
+  const pageSize = 10;
+  const todayDate = new Date();
+  const todayDateKey = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
 
   // Selected patient for detail drawer
   const [selectedRecallId, setSelectedRecallId] = useState<string>('rec-1');
@@ -358,7 +361,11 @@ export default function RecallPage() {
     return allRecalls.filter(item => {
       // Tab filter
       if (activeTab !== 'Tümü') {
-        if (item.status !== activeTab) {
+        if (activeTab === 'Tarihi Geçen') {
+          if (!isRecallOverdue(item, todayDateKey)) return false;
+        } else if (activeTab === 'Bekliyor') {
+          if (item.status !== 'Bekliyor' || isRecallOverdue(item, todayDateKey)) return false;
+        } else if (item.status !== activeTab) {
           return false;
         }
       }
@@ -394,7 +401,19 @@ export default function RecallPage() {
 
       return true;
     });
-  }, [allRecalls, activeTab, searchQuery, filterType, filterBranch, filterDateRange]);
+  }, [allRecalls, activeTab, searchQuery, filterType, filterBranch, filterDateRange, todayDateKey]);
+
+  const recallCounts = useMemo(() => getRecallCounts(allRecalls, todayDateKey), [allRecalls, todayDateKey]);
+  const pageCount = Math.max(1, Math.ceil(filteredRecalls.length / pageSize));
+  const paginatedRecalls = filteredRecalls.slice((recallPageNumber - 1) * pageSize, recallPageNumber * pageSize);
+
+  useEffect(() => {
+    setRecallPageNumber(1);
+  }, [activeTab, searchQuery, filterType, filterBranch, filterDateRange]);
+
+  useEffect(() => {
+    if (recallPageNumber > pageCount) setRecallPageNumber(pageCount);
+  }, [recallPageNumber, pageCount]);
 
   const activeRecall = allRecalls.find(r => r.id === selectedRecallId) || allRecalls[0] || (!currentOrgId ? defaultShowcaseRecalls[0] : undefined);
 
@@ -448,7 +467,7 @@ export default function RecallPage() {
           </div>
           <div>
             <span>Toplam Hatırlatma</span>
-            <strong>247</strong>
+            <strong>{recallCounts.total}</strong>
           </div>
         </div>
 
@@ -459,7 +478,7 @@ export default function RecallPage() {
           </div>
           <div>
             <span>Bekleyen</span>
-            <strong>86</strong>
+            <strong>{recallCounts.pending}</strong>
             <small style={{ color: '#d97706', fontWeight: 600 }}>● hatırlatılacak</small>
           </div>
         </div>
@@ -471,19 +490,19 @@ export default function RecallPage() {
           </div>
           <div>
             <span>Gönderildi</span>
-            <strong>152</strong>
-            <small>— son 30 gün</small>
+            <strong>{recallCounts.sent}</strong>
+            <small>Gönderilen kayıtlar</small>
           </div>
         </div>
 
         {/* 4. Tarihi Geçen */}
-        <div className={styles.statCard} onClick={() => setActiveTab('Tümü')}>
+        <div className={styles.statCard} onClick={() => setActiveTab('Tarihi Geçen')}>
           <div className={`${styles.statIcon} ${styles.iconRed}`}>
             <IconAlertTriangle size={22} />
           </div>
           <div>
             <span>Tarihi Geçen</span>
-            <strong style={{ color: '#df4c4c' }}>9</strong>
+            <strong style={{ color: '#df4c4c' }}>{recallCounts.overdue}</strong>
             <small style={{ color: '#ef4444', fontWeight: 600 }}>● acil işlem gerekli</small>
           </div>
         </div>
@@ -494,7 +513,7 @@ export default function RecallPage() {
         {/* Status Tabs */}
         <div className={styles.statusTabsRow}>
           <div className={styles.statusTabs}>
-            {(['Tümü', 'Bekliyor', 'Gönderildi', 'Randevu Alındı', 'Tamamlandı', 'İptal Edildi'] as const).map(tab => (
+            {(['Tümü', 'Bekliyor', 'Gönderildi', 'Randevu Alındı', 'Tamamlandı', 'İptal Edildi', 'Tarihi Geçen'] as const).map(tab => (
               <button
                 key={tab}
                 type="button"
@@ -590,11 +609,18 @@ export default function RecallPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRecalls.map((recall) => {
+                {filteredRecalls.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--text-muted)' }}>
+                      Filtrelere uyan hatırlatma bulunamadı.
+                    </td>
+                  </tr>
+                ) : paginatedRecalls.map((recall) => {
                   const isSelected = selectedRecallId === recall.id;
                   const isChecked = checkedIds.has(recall.id);
+                  const recallIsOverdue = isRecallOverdue(recall, todayDateKey);
 
-                  const statusClass = recall.status === 'Tarihi Geçti' ? styles.statusOverdue
+                  const statusClass = recallIsOverdue ? styles.statusOverdue
                     : recall.status === 'Bekliyor' ? styles.statusBekliyor
                     : recall.status === 'Randevu Alındı' ? styles.statusRandevu
                     : recall.status === 'Tamamlandı' ? styles.statusDone
@@ -653,7 +679,7 @@ export default function RecallPage() {
                       {/* Durum */}
                       <td>
                         <span className={`${styles.statusPill} ${statusClass}`}>
-                          {recall.status}
+                          {recallIsOverdue ? 'Tarihi Geçti' : recall.status}
                         </span>
                       </td>
 
@@ -719,19 +745,15 @@ export default function RecallPage() {
           {/* Bottom Count and Pagination Bar */}
           <div className={styles.tableBottomBar}>
             <div>
-              Toplam <strong>247</strong> kayıt | Sayfada <strong>10</strong> kayıt gösteriliyor
+              Toplam <strong>{filteredRecalls.length}</strong> kayıt | Sayfada <strong>{paginatedRecalls.length}</strong> kayıt gösteriliyor
             </div>
-            <div className={styles.pagination}>
-              <button type="button" className={styles.pageBtn}>&lt;</button>
-              <button type="button" className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-              <button type="button" className={styles.pageBtn}>2</button>
-              <button type="button" className={styles.pageBtn}>3</button>
-              <button type="button" className={styles.pageBtn}>4</button>
-              <button type="button" className={styles.pageBtn}>5</button>
-              <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>
-              <button type="button" className={styles.pageBtn}>25</button>
-              <button type="button" className={styles.pageBtn}>&gt;</button>
-            </div>
+            {pageCount > 1 && <div className={styles.pagination}>
+              <button type="button" className={styles.pageBtn} disabled={recallPageNumber === 1} onClick={() => setRecallPageNumber(page => Math.max(1, page - 1))} aria-label="Önceki sayfa">&lt;</button>
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map(page => (
+                <button key={page} type="button" className={`${styles.pageBtn} ${recallPageNumber === page ? styles.pageBtnActive : ''}`} onClick={() => setRecallPageNumber(page)} aria-current={recallPageNumber === page ? 'page' : undefined}>{page}</button>
+              ))}
+              <button type="button" className={styles.pageBtn} disabled={recallPageNumber === pageCount} onClick={() => setRecallPageNumber(page => Math.min(pageCount, page + 1))} aria-label="Sonraki sayfa">&gt;</button>
+            </div>}
           </div>
         </div>
 
