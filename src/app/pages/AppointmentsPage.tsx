@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { isClosedAppointment, isOpenAppointment } from '../lib/appointmentStatus';
+import { filterAppointmentsForDay } from '../lib/appointmentFilters';
 import { validateAppointmentDateTime } from '../lib/validation';
 import { parseAppointmentDateTime } from '../lib/appointmentDateTime';
 import { getAvatarColor, getInitials } from '../data/mockData';
@@ -460,8 +461,8 @@ export default function AppointmentsPage() {
     return colorsByDate;
   }, [visibleAppointments]);
 
-  const selectedDayAppointments = visibleAppointments.filter(appointment => appointment.date === selectedDateStr);
-  const selectedDateScopedAppointments = scopedAppointments.filter(appointment => appointment.date === selectedDateStr);
+  const selectedDayAppointments = filterAppointmentsForDay(visibleAppointments, selectedDateStr);
+  const selectedDateScopedAppointments = filterAppointmentsForDay(scopedAppointments, selectedDateStr);
   const todayDateStr = formatCalendarDate(getIstanbulDate(serverNow));
   const todaySummaryAppointments = appointmentsList.filter(appointment =>
     appointment.date === todayDateStr &&
@@ -1141,13 +1142,13 @@ export default function AppointmentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleAppointments.length === 0 ? (
+                {selectedDayAppointments.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--text-muted)' }}>
-                      Bu filtrelerle eşleşen randevu bulunamadı. Filtreleri değiştirebilir veya temizleyebilirsiniz.
+                      Seçili tarihte randevu bulunamadı. Başka bir tarih seçebilir veya filtreleri değiştirebilirsiniz.
                     </td>
                   </tr>
-                ) : visibleAppointments.map((apt) => (
+                ) : selectedDayAppointments.map((apt) => (
                   <tr key={apt.id}>
                     <td data-label="Saat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)', fontWeight: 600 }}>
                       {apt.time?.slice(0, 5)}
