@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { createActivity, fetchActivities } from '../repositories/OperationsRepository';
 import { IconSearch, IconPlus, IconCheck, IconClose, IconPhone, IconMail, IconCalendar } from '../components/Icons';
+import { calculateAge, getAvatarColor, getInitials } from '../data/mockData';
 import styles from './ActivityLogPage.module.css';
 
 /* ── Inline SVG Icons ── */
@@ -298,6 +299,9 @@ export default function ActivityLogPage() {
   // Modal for new activity
   const [showModal, setShowModal] = useState(false);
   const [formPatientName, setFormPatientName] = useState('');
+  const [formPatientId, setFormPatientId] = useState<string | null>(null);
+  const [isPatientSuggestionsOpen, setIsPatientSuggestionsOpen] = useState(false);
+  const [activePatientSuggestionIndex, setActivePatientSuggestionIndex] = useState(-1);
   const [formType, setFormType] = useState<ActivityRecord['type']>('Telefon Araması');
   const [formDescription, setFormDescription] = useState('');
   const [formStaffName, setFormStaffName] = useState('Ahmet Yılmaz');
@@ -414,6 +418,21 @@ export default function ActivityLogPage() {
   const activityCount = (type: ActivityRecord['type']) => todaysActivities.filter(activity => activity.type === type).length;
 
   const activeRecord = selectedActId ? filteredActivities.find(a => a.id === selectedActId) : undefined;
+  const patientSuggestions = useMemo(() => {
+    const query = formPatientName.trim().toLocaleLowerCase('tr-TR');
+    if (!query) return [];
+    return patientsList.filter(patient => `${patient.firstName} ${patient.lastName}`.toLocaleLowerCase('tr-TR').includes(query)
+      || (patient.phone || '').includes(query)).slice(0, 7);
+  }, [formPatientName, patientsList]);
+
+  const selectActivityPatient = (patientId: string) => {
+    const patient = patientsList.find(item => item.id === patientId);
+    if (!patient) return;
+    setFormPatientId(patient.id);
+    setFormPatientName(`${patient.firstName} ${patient.lastName}`.trim());
+    setIsPatientSuggestionsOpen(false);
+    setActivePatientSuggestionIndex(-1);
+  };
 
   const handleCreateActivity = (e: React.FormEvent) => {
     e.preventDefault();
@@ -424,17 +443,20 @@ export default function ActivityLogPage() {
 
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const selectedPatient = patientsList.find(patient => patient.id === formPatientId)
+      || patientsList.find(patient => `${patient.firstName} ${patient.lastName}`.trim().toLocaleLowerCase('tr-TR') === formPatientName.trim().toLocaleLowerCase('tr-TR'));
     const newRecord: ActivityRecord = {
       id: `act-${Date.now()}`,
       timestamp: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${timeStr}`,
       dateStr: new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }).format(now),
       timeStr,
       patientName: formPatientName,
-      patientAge: 65,
-      patientGender: 'Kadın',
-      patientAvatarColor: '#8b5cf6',
-      patientInitials: formPatientName.slice(0, 2).toUpperCase(),
-      patientPhone: '+90 532 123 45 67',
+      patientId: selectedPatient?.id,
+      patientAge: selectedPatient ? calculateAge(selectedPatient.birthDate) : 0,
+      patientGender: selectedPatient?.gender || 'Belirtilmemiş',
+      patientAvatarColor: getAvatarColor(formPatientName),
+      patientInitials: selectedPatient ? getInitials(selectedPatient.firstName, selectedPatient.lastName) : getInitials(formPatientName, ''),
+      patientPhone: selectedPatient?.phone || '—',
       type: formType,
       description: formDescription,
       staffName: formStaffName,
@@ -447,6 +469,9 @@ export default function ActivityLogPage() {
     setSelectedActId(newRecord.id);
     setShowModal(false);
     setFormPatientName('');
+    setFormPatientId(null);
+    setIsPatientSuggestionsOpen(false);
+    setActivePatientSuggestionIndex(-1);
     setFormDescription('');
     addToast({ type: 'success', message: 'Yeni aktivite kaydı başarıyla eklendi.' });
   };
@@ -1019,18 +1044,67 @@ export default function ActivityLogPage() {
             <form onSubmit={handleCreateActivity}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                  <label htmlFor="activity-patient-search" style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
                     Hasta Adı Soyadı *
                   </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Örn: Ayşe Yılmaz"
-                    value={formPatientName}
-                    onChange={(e) => setFormPatientName(e.target.value)}
-                    required
-                    style={{ width: '100%', height: 38 }}
-                  />
+                  <div className={styles.activityPatientSearch}>
+                    <input
+                      id="activity-patient-search"
+                      type="text"
+                      className="form-input"
+                      placeholder="Hasta adı veya telefonuyla arayın..."
+                      value={formPatientName}
+                      onChange={(event) => {
+                        setFormPatientName(event.target.value);
+                        setFormPatientId(null);
+                        setActivePatientSuggestionIndex(-1);
+                        setIsPatientSuggestionsOpen(true);
+                      }}
+                      onFocus={() => { if (formPatientName.trim()) setIsPatientSuggestionsOpen(true); }}
+                      onKeyDown={(event) => {
+                        if (!isPatientSuggestionsOpen || patientSuggestions.length === 0) return;
+                        if (event.key === 'ArrowDown') {
+                          event.preventDefault();
+                          setActivePatientSuggestionIndex(index => Math.min(index + 1, patientSuggestions.length - 1));
+                        } else if (event.key === 'ArrowUp') {
+                          event.preventDefault();
+                          setActivePatientSuggestionIndex(index => Math.max(index - 1, 0));
+                        } else if (event.key === 'Enter') {
+                          event.preventDefault();
+                          selectActivityPatient(patientSuggestions[Math.max(activePatientSuggestionIndex, 0)].id);
+                        } else if (event.key === 'Escape') {
+                          setIsPatientSuggestionsOpen(false);
+                        }
+                      }}
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded={isPatientSuggestionsOpen && patientSuggestions.length > 0}
+                      aria-controls="activity-patient-options"
+                      aria-activedescendant={activePatientSuggestionIndex >= 0 && patientSuggestions[activePatientSuggestionIndex] ? `activity-patient-option-${patientSuggestions[activePatientSuggestionIndex].id}` : undefined}
+                      autoComplete="off"
+                      required
+                      style={{ width: '100%', height: 38 }}
+                    />
+                    {isPatientSuggestionsOpen && formPatientName.trim() && <>
+                      {patientSuggestions.length > 0 ? <div id="activity-patient-options" className={styles.activityPatientSuggestions} role="listbox">
+                        {patientSuggestions.map((patient, index) => {
+                          const fullName = `${patient.firstName} ${patient.lastName}`.trim();
+                          return <button
+                            key={patient.id}
+                            id={`activity-patient-option-${patient.id}`}
+                            type="button"
+                            role="option"
+                            aria-selected={activePatientSuggestionIndex === index}
+                            className={`${styles.activityPatientSuggestion} ${activePatientSuggestionIndex === index ? styles.activityPatientSuggestionActive : ''}`}
+                            onClick={() => selectActivityPatient(patient.id)}
+                          >
+                            <span className={styles.activityPatientAvatar} style={{ background: getAvatarColor(fullName) }}>{getInitials(patient.firstName, patient.lastName)}</span>
+                            <span className={styles.activityPatientSuggestionInfo}><strong>{fullName}</strong><small>{patient.phone || 'Telefon bilgisi yok'}</small></span>
+                          </button>;
+                        })}
+                      </div> : <div className={styles.activityPatientNoResults}>Eşleşen kayıtlı hasta bulunamadı. İsterseniz adı serbestçe girebilirsiniz.</div>}
+                    </>}
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
