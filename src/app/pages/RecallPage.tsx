@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { getAvatarColor, getInitials, calculateAge, type RecallItem } from '../data/mockData';
+import { getAvatarColor, getInitials, calculateAge, formatCurrency, formatDate, type RecallItem } from '../data/mockData';
 import { IconCalendar, IconCheck, IconSearch, IconClose, IconPlus, IconPhone, IconMail } from '../components/Icons';
 import { getRecallCounts, isRecallOverdue } from '../lib/recallStats';
 import styles from './RecallPage.module.css';
@@ -281,7 +281,7 @@ const defaultShowcaseRecalls: ShowcaseRecall[] = [
 ];
 
 export default function RecallPage() {
-  const { recallList, patientsList, branchesList, currentOrgId, addToast, setCurrentPage, setSelectedPatientId, addRecallItem, updateRecallItemStatus } = useApp();
+  const { recallList, patientsList, appointmentsList, stockList, salesList, branchesList, currentOrgId, addToast, setCurrentPage, setSelectedPatientId, addRecallItem, updateRecallItemStatus } = useApp();
 
   // Selected tab: 'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi'
   const [activeTab, setActiveTab] = useState<'Tümü' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi' | 'Tarihi Geçen'>('Tümü');
@@ -449,6 +449,17 @@ export default function RecallPage() {
   }, [recallPageNumber, pageCount]);
 
   const activeRecall = allRecalls.find(r => r.id === selectedRecallId) || allRecalls[0] || (!currentOrgId ? defaultShowcaseRecalls[0] : undefined);
+  const activePatient = activeRecall ? patientsList.find(patient => patient.id === activeRecall.patientId) : undefined;
+  const patientDevices = activeRecall ? stockList.filter(item => item.assignedPatientId === activeRecall.patientId) : [];
+  const patientAppointments = activeRecall
+    ? appointmentsList.filter(item => item.patientId === activeRecall.patientId).sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
+    : [];
+  const patientRecalls = activeRecall
+    ? recallList.filter(item => item.patientId === activeRecall.patientId || (!item.patientId && item.patientName === activeRecall.patientName)).sort((a, b) => b.dueDate.localeCompare(a.dueDate))
+    : [];
+  const patientSales = activeRecall
+    ? salesList.filter(item => item.patientId === activeRecall.patientId).sort((a, b) => b.date.localeCompare(a.date))
+    : [];
 
   const handleOpenAppointment = (patientId: string) => {
     setSelectedPatientId(patientId);
@@ -858,11 +869,15 @@ export default function RecallPage() {
             </div>
 
             {/* Tabs */}
-            <nav className={styles.panelTabs}>
+            <nav className={styles.panelTabs} role="tablist" aria-label="Hasta detay sekmeleri">
               {(['Genel', 'Cihazlar', 'Hatırlatmalar', 'Randevular', 'İşlemler'] as const).map(tab => (
                 <button
                   key={tab}
                   type="button"
+                  role="tab"
+                  aria-selected={panelTab === tab}
+                  id={`recall-patient-tab-${tab}`}
+                  aria-controls="recall-patient-tabpanel"
                   className={`${styles.panelTab} ${panelTab === tab ? styles.panelTabActive : ''}`}
                   onClick={() => setPanelTab(tab)}
                 >
@@ -871,6 +886,8 @@ export default function RecallPage() {
               ))}
             </nav>
 
+            <div id="recall-patient-tabpanel" role="tabpanel" aria-labelledby={`recall-patient-tab-${panelTab}`} className={styles.panelTabPanel}>
+            {panelTab === 'Genel' && <>
             {/* 1. İletişim Bilgileri */}
             <div className={styles.panelSection}>
               <div className={styles.panelSectionHeader}>
@@ -893,11 +910,11 @@ export default function RecallPage() {
                 </div>
                 <div className={styles.contactItem}>
                   <IconMail size={13} />
-                  <span>{activeRecall.patientEmail}</span>
+                  <span>{activeRecall.patientEmail || 'E-posta bilgisi yok'}</span>
                 </div>
                 <div className={styles.contactItem}>
                   <span style={{ fontSize: '12px' }}>📍</span>
-                  <span>{activeRecall.patientAddress}</span>
+                  <span>{activeRecall.patientAddress && activeRecall.patientAddress !== '—' ? activeRecall.patientAddress : 'Adres bilgisi yok'}</span>
                 </div>
               </div>
             </div>
@@ -936,7 +953,7 @@ export default function RecallPage() {
             <div className={styles.panelSection}>
               <div className={styles.panelSectionHeader}>
                 <span className={styles.panelSectionTitle}>Yaklaşan Hatırlatma</span>
-                <button type="button" className={styles.panelLinkBtn}>
+                  <button type="button" className={styles.panelLinkBtn} onClick={() => setPanelTab('Hatırlatmalar')}>
                   Detay <IconChevronDown size={11} />
                 </button>
               </div>
@@ -1028,6 +1045,52 @@ export default function RecallPage() {
                   </div>
                 </div>
               </div>
+            </div>
+            </>}
+
+            {panelTab === 'Cihazlar' && <div className={styles.panelSection}>
+              <div className={styles.panelSectionHeader}><span className={styles.panelSectionTitle}>Kayıtlı Cihazlar</span><span className={styles.panelCount}>{patientDevices.length || (activePatient?.currentDevice ? 1 : 0)}</span></div>
+              {patientDevices.length > 0 ? <div className={styles.panelRecordList}>{patientDevices.map(device => (
+                <article key={device.id} className={styles.panelRecordCard}>
+                  <div className={styles.panelRecordHeader}><strong>{device.brand} {device.model || device.name}</strong><span className="badge badge-success">{device.status}</span></div>
+                  <div className={styles.panelRecordMeta}>Seri No: {device.serialNo || '—'} · Kulak: {device.assignedEar || 'Belirtilmemiş'}</div>
+                  <div className={styles.panelRecordMeta}>Şube: {device.branch || '—'}</div>
+                </article>
+              ))}</div> : activePatient?.currentDevice ? <div className={styles.deviceBox}><div className={styles.deviceInfo}><IconHearingDevice size={22}/><div><div className={styles.deviceName}>{activePatient.currentDevice}</div><div className={styles.deviceSn}>Seri No: —</div></div></div><span className="badge badge-success">Aktif</span></div> : <p className={styles.panelEmptyState}>Bu hasta için kayıtlı cihaz bulunmuyor.</p>}
+            </div>}
+
+            {panelTab === 'Hatırlatmalar' && <div className={styles.panelSection}>
+              <div className={styles.panelSectionHeader}><span className={styles.panelSectionTitle}>Hatırlatma Geçmişi</span><span className={styles.panelCount}>{patientRecalls.length}</span></div>
+              {patientRecalls.length ? <div className={styles.panelRecordList}>{patientRecalls.map(item => (
+                <article key={item.id} className={styles.panelRecordCard}>
+                  <div className={styles.panelRecordHeader}><strong>{item.reason}</strong><span className={styles.panelStatus}>{item.status}</span></div>
+                  <div className={styles.panelRecordMeta}>Planlanan: {formatDate(item.dueDate)}</div>
+                  {item.lastContact && <div className={styles.panelRecordMeta}>Son temas: {item.lastContact}</div>}
+                </article>
+              ))}</div> : <p className={styles.panelEmptyState}>Bu hasta için hatırlatma kaydı bulunmuyor.</p>}
+            </div>}
+
+            {panelTab === 'Randevular' && <div className={styles.panelSection}>
+              <div className={styles.panelSectionHeader}><span className={styles.panelSectionTitle}>Randevu Geçmişi</span><span className={styles.panelCount}>{patientAppointments.length}</span></div>
+              {patientAppointments.length ? <div className={styles.panelRecordList}>{patientAppointments.map(item => (
+                <article key={item.id} className={styles.panelRecordCard}>
+                  <div className={styles.panelRecordHeader}><strong>{formatDate(item.date)} · {item.time}</strong><span className={styles.panelStatus}>{item.status}</span></div>
+                  <div className={styles.panelRecordMeta}>{item.type} · {item.audiologist || 'Uzman belirtilmemiş'}</div>
+                  <div className={styles.panelRecordMeta}>Şube: {item.branch || '—'}</div>
+                </article>
+              ))}</div> : <p className={styles.panelEmptyState}>Bu hasta için randevu kaydı bulunmuyor.</p>}
+            </div>}
+
+            {panelTab === 'İşlemler' && <div className={styles.panelSection}>
+              <div className={styles.panelSectionHeader}><span className={styles.panelSectionTitle}>Satış ve Tahsilat İşlemleri</span><span className={styles.panelCount}>{patientSales.length}</span></div>
+              {patientSales.length ? <div className={styles.panelRecordList}>{patientSales.map(sale => (
+                <article key={sale.id} className={styles.panelRecordCard}>
+                  <div className={styles.panelRecordHeader}><strong>{formatDate(sale.date)}</strong><span className={styles.panelMoney}>{formatCurrency(sale.total)}</span></div>
+                  <div className={styles.panelRecordMeta}>{sale.items.map(item => `${item.name}${item.quantity > 1 ? ` ×${item.quantity}` : ''}`).join(', ') || 'Ürün bilgisi yok'}</div>
+                  <div className={styles.panelRecordMeta}>{sale.paymentMethod} · {sale.status}</div>
+                </article>
+              ))}</div> : <p className={styles.panelEmptyState}>Bu hasta için satış veya tahsilat işlemi bulunmuyor.</p>}
+            </div>}
             </div>
           </aside>
         )}
