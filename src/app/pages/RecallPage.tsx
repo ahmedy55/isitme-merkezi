@@ -308,6 +308,8 @@ export default function RecallPage() {
   const [showNewModal, setShowNewModal] = useState<boolean>(false);
   const [newPatientId, setNewPatientId] = useState('');
   const [newPatientName, setNewPatientName] = useState('');
+  const [isPatientSearchOpen, setIsPatientSearchOpen] = useState(false);
+  const [activePatientSuggestionIndex, setActivePatientSuggestionIndex] = useState(-1);
   const [newRecallType, setNewRecallType] = useState('Pil değişimi');
   const [newDueDate, setNewDueDate] = useState('');
   const [newNotes, setNewNotes] = useState('');
@@ -404,6 +406,18 @@ export default function RecallPage() {
   }, [allRecalls, activeTab, searchQuery, filterType, filterBranch, filterDateRange, todayDateKey]);
 
   const recallCounts = useMemo(() => getRecallCounts(allRecalls, todayDateKey), [allRecalls, todayDateKey]);
+  const patientSuggestions = useMemo(() => {
+    const query = newPatientName.trim().toLocaleLowerCase('tr-TR');
+    if (!query) return [];
+    const digits = query.replace(/\D/g, '');
+    return patientsList
+      .filter(patient => {
+        const name = `${patient.firstName} ${patient.lastName}`.toLocaleLowerCase('tr-TR');
+        const phone = (patient.phone || '').replace(/\D/g, '');
+        return name.includes(query) || (digits.length >= 3 && phone.includes(digits));
+      })
+      .slice(0, 8);
+  }, [newPatientName, patientsList]);
   const pageCount = Math.max(1, Math.ceil(filteredRecalls.length / pageSize));
   const paginatedRecalls = filteredRecalls.slice((recallPageNumber - 1) * pageSize, recallPageNumber * pageSize);
 
@@ -975,33 +989,80 @@ export default function RecallPage() {
             </div>
             <div className={styles.recallModalBody}>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
-                  Kayıtlı Hasta Seçimi (veya serbest yazın) *
+                <label htmlFor="recall-patient-search" style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                  Hasta Adı *
                 </label>
-                <select
-                  className="form-select"
-                  style={{ width: '100%', height: 38, marginBottom: 6 }}
-                  value={newPatientId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setNewPatientId(id);
-                    const found = patientsList.find(p => p.id === id);
-                    if (found) setNewPatientName(`${found.firstName} ${found.lastName}`);
-                  }}
-                >
-                  <option value="">-- Kayıtlı Hastalardan Seçin --</option>
-                  {patientsList.map(p => (
-                    <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.phone || p.tc || 'Kayıtlı'})</option>
-                  ))}
-                </select>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Veya serbest hasta adı yazın..."
-                  value={newPatientName}
-                  onChange={(e) => setNewPatientName(e.target.value)}
-                  style={{ width: '100%', height: 38 }}
-                />
+                <div className={styles.patientSearch}>
+                  <input
+                    id="recall-patient-search"
+                    type="text"
+                    className="form-input"
+                    placeholder="Hasta adı yazın veya arayın..."
+                    value={newPatientName}
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={isPatientSearchOpen && patientSuggestions.length > 0}
+                    aria-controls="recall-patient-suggestions"
+                    aria-activedescendant={activePatientSuggestionIndex >= 0 && patientSuggestions[activePatientSuggestionIndex] ? `recall-patient-option-${patientSuggestions[activePatientSuggestionIndex].id}` : undefined}
+                    onFocus={() => setIsPatientSearchOpen(true)}
+                    onChange={(event) => {
+                      setNewPatientName(event.target.value);
+                      setNewPatientId('');
+                      setActivePatientSuggestionIndex(-1);
+                      setIsPatientSearchOpen(true);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowDown' && patientSuggestions.length > 0) {
+                        event.preventDefault();
+                        setIsPatientSearchOpen(true);
+                        setActivePatientSuggestionIndex(index => Math.min(index + 1, patientSuggestions.length - 1));
+                      } else if (event.key === 'ArrowUp' && patientSuggestions.length > 0) {
+                        event.preventDefault();
+                        setActivePatientSuggestionIndex(index => Math.max(index - 1, 0));
+                      } else if (event.key === 'Enter' && isPatientSearchOpen && patientSuggestions.length > 0) {
+                        event.preventDefault();
+                        const patient = patientSuggestions[Math.max(activePatientSuggestionIndex, 0)];
+                        setNewPatientId(patient.id);
+                        setNewPatientName(`${patient.firstName} ${patient.lastName}`);
+                        setIsPatientSearchOpen(false);
+                        setActivePatientSuggestionIndex(-1);
+                      } else if (event.key === 'Escape') {
+                        setIsPatientSearchOpen(false);
+                        setActivePatientSuggestionIndex(-1);
+                      }
+                    }}
+                    style={{ width: '100%', height: 40 }}
+                  />
+                  {isPatientSearchOpen && newPatientName.trim() && (
+                    <div className={styles.patientSuggestions} id="recall-patient-suggestions" role="listbox" aria-label="Hasta arama sonuçları">
+                      {patientSuggestions.length > 0 ? patientSuggestions.map((patient, index) => (
+                        <button
+                          key={patient.id}
+                          id={`recall-patient-option-${patient.id}`}
+                          type="button"
+                          role="option"
+                          aria-selected={activePatientSuggestionIndex === index}
+                          className={`${styles.patientSuggestion} ${activePatientSuggestionIndex === index ? styles.patientSuggestionActive : ''}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setNewPatientId(patient.id);
+                            setNewPatientName(`${patient.firstName} ${patient.lastName}`);
+                            setIsPatientSearchOpen(false);
+                            setActivePatientSuggestionIndex(-1);
+                          }}
+                        >
+                          <span className={styles.patientSuggestionAvatar}>{getInitials(patient.firstName, patient.lastName)}</span>
+                          <span className={styles.patientSuggestionInfo}>
+                            <strong>{patient.firstName} {patient.lastName}</strong>
+                            <small>{patient.phone || 'Telefon bilgisi yok'}</small>
+                          </span>
+                        </button>
+                      )) : (
+                        <div className={styles.patientSuggestionsEmpty}>Eşleşen kayıt bulunamadı. İsterseniz bu adı serbest metin olarak kullanabilirsiniz.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
