@@ -150,7 +150,7 @@ export default function SgkReceivablesPage() {
     .filter(i => i.invoice_month.startsWith(String(new Date().getFullYear())))
     .reduce((sum, i) => sum + i.amount, 0);
   const paidThisYear = scopedList.filter(i => i.status === 'Tahsil Edildi' && i.invoice_month.startsWith(String(new Date().getFullYear())));
-  const collectionRate = totalInvoicedThisYear > 0
+  const collectionRate = paidThisYear.length > 0 && totalInvoicedThisYear > 0
     ? Math.round(paidThisYear.reduce((sum, invoice) => sum + invoice.amount, 0) / totalInvoicedThisYear * 100)
     : null;
 
