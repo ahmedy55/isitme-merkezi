@@ -580,10 +580,12 @@ export const dbFetchBranches = async () => {
       .select('*')
       .order('name', { ascending: true });
     if (error) throw error;
-    return toCamel<any[]>(data || []).map(branch => ({
+    return toCamel<any[]>(data || [])
+      .filter(branch => !branch.archivedAt && !['Test Şube 1', 'Test Şube 2', 'Test Şube 3'].includes(branch.name?.trim()))
+      .map(branch => ({
       ...branch,
       status: branch.status === 'active' ? 'Aktif' : branch.status === 'inactive' ? 'Pasif' : branch.status,
-    }));
+      }));
   }, 'dbFetchBranches');
 };
 
