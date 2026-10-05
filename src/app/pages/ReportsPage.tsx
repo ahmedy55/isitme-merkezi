@@ -6,6 +6,7 @@ import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency } from '../data/mockData';
 import styles from './ReportsPage.module.css';
 import { fetchServiceTickets, type ServiceRecord } from '../repositories/ServiceTicketRepository';
+import { dbFetchCashTransactions } from '../lib/database';
 
 interface DonutSlice {
   value: number;
@@ -134,22 +135,38 @@ export default function ReportsPage() {
   const previousExpenses = scopedExpenses.filter(item => inPreviousRange(item.date));
   const previousPatients = scopedPatients.filter(item => inPreviousRange(item.createdAt));
   const previousAppointments = scopedAppointments.filter(item => inPreviousRange(item.date));
-  const dynamicTotalRevenue = useMemo(() => reportSales.reduce((acc, sale) => acc + (sale.total || 0), 0), [reportSales]);
-
   const dynamicTotalExpenses = useMemo(() => {
     return reportExpenses.reduce((acc, expense) => acc + (expense.amount || 0), 0);
   }, [reportExpenses]);
 
-  const dynamicNetProfit = dynamicTotalRevenue - dynamicTotalExpenses;
   const dynamicPatientCount = reportPatients.length;
   const dynamicAppointmentCount = reportAppointments.length;
   const dynamicDeviceSalesCount = reportSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((count, item) => count + item.quantity, 0), 0);
-  const dynamicServiceRevenue = reportSales.filter(sale => sale.items?.some(item => item.type === 'Servis Geliri')).reduce((acc, sale) => acc + sale.total, 0);
-  const previousRevenue = previousSales.reduce((sum, item) => sum + item.total, 0);
+  const [reportCashTransactions, setReportCashTransactions] = useState<Array<Record<string, any>>>([]);
+  const reportServiceTransactions = reportCashTransactions.filter(row => row.type === 'INCOME'
+    && row.referenceEntity === 'service'
+    && matches(undefined, row.branchId)
+    && inRange(row.createdAt));
+  const previousServiceTransactions = reportCashTransactions.filter(row => row.type === 'INCOME'
+    && row.referenceEntity === 'service'
+    && matches(undefined, row.branchId)
+    && inPreviousRange(row.createdAt));
+  const salesServiceRevenue = reportSales.reduce((sum, sale) => sum + sale.items
+    .filter(item => item.type === 'Servis Geliri')
+    .reduce((lineSum, item) => lineSum + item.price * item.quantity, 0), 0);
+  const previousSalesServiceRevenue = previousSales.reduce((sum, sale) => sum + sale.items
+    .filter(item => item.type === 'Servis Geliri')
+    .reduce((lineSum, item) => lineSum + item.price * item.quantity, 0), 0);
+  const dynamicServiceRevenue = salesServiceRevenue + reportServiceTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const previousServiceRevenue = previousSalesServiceRevenue + previousServiceTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const dynamicTotalRevenue = reportSales.reduce((sum, sale) => sum + (sale.total || 0), 0)
+    + reportServiceTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const dynamicNetProfit = dynamicTotalRevenue - dynamicTotalExpenses;
+  const previousRevenue = previousSales.reduce((sum, item) => sum + item.total, 0)
+    + previousServiceTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
   const previousExpenseTotal = previousExpenses.reduce((sum, item) => sum + item.amount, 0);
   const previousPatientCount = previousPatients.length;
   const previousDeviceCount = previousSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((qty, item) => qty + item.quantity, 0), 0);
-  const previousServiceRevenue = previousSales.filter(sale => sale.items.some(item => item.type === 'Servis Geliri')).reduce((sum, sale) => sum + sale.total, 0);
   const percentageChange = (current: number, previous: number) => previous ? `${current >= previous ? '+' : ''}%${Math.round((current - previous) / previous * 100)}` : 'Önceki dönemde veri yok';
   const compareRows = [
     { label: 'Toplam Ciro', current: dynamicTotalRevenue, previous: previousRevenue, format: formatCurrency },
@@ -160,6 +177,18 @@ export default function ReportsPage() {
   const [chartMetric, setChartMetric] = useState('Ciro');
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  useEffect(() => {
+    let active = true;
+    if (!currentOrgId) { setReportCashTransactions([]); return; }
+    dbFetchCashTransactions().then(rows => { if (active) setReportCashTransactions(rows as Array<Record<string, any>>); }).catch(() => {
+      console.error('Rapor kasa hareketleri yüklenemedi.');
+      if (active) {
+        setReportCashTransactions([]);
+        addToast({ type: 'error', message: 'Finansal rapor verileri yüklenemedi.' });
+      }
+    });
+    return () => { active = false; };
+  }, [currentOrgId]);
   useEffect(() => {
     let active = true;
     if (!currentOrgId) { setServiceRecords([]); return; }
@@ -181,10 +210,13 @@ export default function ReportsPage() {
   const rawMonthlyValues = monthNames.map((_, monthIndex) => {
     const monthKey = `${reportYear}-${String(monthIndex + 1).padStart(2, '0')}`;
     const monthSales = reportSales.filter(sale => dateKey(sale.date).startsWith(monthKey));
+    const monthServiceRevenue = reportCashTransactions.filter(row => row.type === 'INCOME' && row.referenceEntity === 'service'
+      && matches(undefined, row.branchId) && dateKey(row.createdAt).startsWith(monthKey))
+      .reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
     const monthExpenses = reportExpenses.filter(expense => dateKey(expense.date).startsWith(monthKey)).reduce((sum, expense) => sum + expense.amount, 0);
     if (chartMetric === 'Satış Adedi') return monthSales.reduce((sum, sale) => sum + sale.items.reduce((qty, item) => qty + item.quantity, 0), 0);
-    if (chartMetric === 'Karlılık') return monthSales.reduce((sum, sale) => sum + sale.total, 0) - monthExpenses;
-    return monthSales.reduce((sum, sale) => sum + sale.total, 0);
+    if (chartMetric === 'Karlılık') return monthSales.reduce((sum, sale) => sum + sale.total, 0) + monthServiceRevenue - monthExpenses;
+    return monthSales.reduce((sum, sale) => sum + sale.total, 0) + monthServiceRevenue;
   });
   const chartScaleMax = Math.max(...rawMonthlyValues.map(value => Math.max(0, value)), 1);
   const monthlyData = monthNames.map((month, index) => ({ month, value: rawMonthlyValues[index], heightPct: Math.max(0, rawMonthlyValues[index]) / chartScaleMax * 100, isCurrent: index === new Date().getMonth() }));
@@ -204,9 +236,13 @@ export default function ReportsPage() {
         totals.set(label, (totals.get(label) || 0) + allocated);
       });
     });
-    if (!reportSales.some(sale => sale.items.length)) return [];
+    reportServiceTransactions.forEach(row => {
+      totals.set('Teknik Servis', (totals.get('Teknik Servis') || 0) + (Number(row.amount) || 0));
+    });
+    if (!totals.size) return [];
+    if (reportServiceTransactions.length && !totals.has('Teknik Servis')) totals.set('Teknik Servis', reportServiceTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0));
     return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
-  }, [reportSales]);
+  }, [reportSales, reportServiceTransactions]);
   const reportSourceRows = useMemo(() => {
     const totals = new Map<string, number>();
     reportPatients.forEach(patient => {
@@ -241,9 +277,10 @@ export default function ReportsPage() {
     branch: branch.name,
     patients: reportPatients.filter(patient => matches(patient.branch, patient.branchId) && (patient.branchId === branch.id || (!patient.branchId && patient.branch === branch.name))).length,
     appointments: reportAppointments.filter(item => item.branchId === branch.id || (!item.branchId && item.branch === branch.name)).length,
-    revenue: reportSales.filter(sale => sale.branchId === branch.id).reduce((sum, sale) => sum + sale.total, 0),
-    service: reportSales.filter(sale => sale.branchId === branch.id).flatMap(sale => sale.items).filter(item => item.type === 'Servis Geliri').reduce((sum, item) => sum + item.quantity, 0),
-  })), [branchesList, reportPatients, reportAppointments, reportSales, matches]);
+    revenue: reportSales.filter(sale => sale.branchId === branch.id).reduce((sum, sale) => sum + sale.total, 0)
+      + reportServiceTransactions.filter(row => row.branchId === branch.id).reduce((sum, row) => sum + (Number(row.amount) || 0), 0),
+    service: serviceRecords.filter(ticket => ticket.branchId === branch.id && inRange(ticket.receivedDate)).length,
+  })), [branchesList, reportPatients, reportAppointments, reportSales, reportServiceTransactions, serviceRecords, rangeBounds, matches]);
   const reportStock = stockList.filter(item => matches(item.branch, item.branchId));
   const reportSuppliers = suppliersList;
 
