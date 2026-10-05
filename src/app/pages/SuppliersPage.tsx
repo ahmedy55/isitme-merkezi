@@ -28,297 +28,9 @@ export interface SupplierItem {
   payments?: { id: string; date: string; amount: number; method: string }[];
 }
 
-const INITIAL_SUPPLIERS: SupplierItem[] = [
-  {
-    id: 'sup-1',
-    companyName: 'Oticon Türkiye',
-    subtitle: 'Cihaz Tedarikçisi',
-    initials: 'OT',
-    avatarColor: '#475569',
-    category: 'Cihaz',
-    contactPerson: 'Ali Demir',
-    contactTitle: 'Satış Temsilcisi',
-    phone: '0532 123 45 67',
-    email: 'ali.demir@oticon.com',
-    address: 'Maslak Mah. Ahi Evran Cad. No:12 Sarıyer / İstanbul',
-    taxNo: '1234567890',
-    balance: 12500,
-    status: 'Aktif',
-    branch: 'Merkez Şube',
-    notes: '—',
-    totalPurchases: 125000,
-    totalPaid: 112500,
-    invoices: [
-      { id: 'inv-1', invoiceNo: 'OTC-2026-089', date: '25.09.2026', amount: 45000, status: 'Kısmi Ödendi' },
-      { id: 'inv-2', invoiceNo: 'OTC-2026-064', date: '10.09.2026', amount: 80000, status: 'Ödendi' }
-    ],
-    payments: [
-      { id: 'pay-1', date: '26.09.2026', amount: 32500, method: 'Banka Transferi' },
-      { id: 'pay-2', date: '12.09.2026', amount: 80000, method: 'Havale / EFT' }
-    ]
-  },
-  {
-    id: 'sup-2',
-    companyName: 'Phonak Türkiye',
-    subtitle: 'Cihaz Tedarikçisi',
-    initials: 'PH',
-    avatarColor: '#94a3b8',
-    category: 'Cihaz',
-    contactPerson: 'Zeynep Kaya',
-    contactTitle: 'Bölge Sorumlusu',
-    phone: '0533 987 65 43',
-    email: 'zeynep.kaya@phonak.com',
-    address: 'Ataşehir Bulvarı No:48 Kadıköy / İstanbul',
-    taxNo: '9876543210',
-    balance: 0,
-    status: 'Aktif',
-    branch: 'Merkez Şube',
-    notes: 'Yetkili distribütör sözleşmesi mevcut.',
-    totalPurchases: 95000,
-    totalPaid: 95000,
-    invoices: [
-      { id: 'inv-3', invoiceNo: 'PHN-2026-112', date: '18.09.2026', amount: 95000, status: 'Ödendi' }
-    ],
-    payments: [
-      { id: 'pay-3', date: '20.09.2026', amount: 95000, method: 'Havale / EFT' }
-    ]
-  },
-  {
-    id: 'sup-3',
-    companyName: 'Widex Türkiye',
-    subtitle: 'Cihaz Tedarikçisi',
-    initials: 'WD',
-    avatarColor: '#64748b',
-    category: 'Cihaz',
-    contactPerson: 'Mehmet Arslan',
-    contactTitle: 'Kurumsal İletişim',
-    phone: '0505 111 22 33',
-    email: 'mehmet.arslan@widex.com',
-    address: 'Kavaklıdere Mah. Atatürk Bulvarı No:89 Çankaya / Ankara',
-    taxNo: '4567891234',
-    balance: 8750,
-    status: 'Aktif',
-    branch: 'Çankaya Şube',
-    notes: 'Vade: 30 gün açık hesap.',
-    totalPurchases: 68750,
-    totalPaid: 60000,
-    invoices: [
-      { id: 'inv-4', invoiceNo: 'WDX-2026-031', date: '22.09.2026', amount: 35000, status: 'Kısmi Ödendi' }
-    ],
-    payments: [
-      { id: 'pay-4', date: '24.09.2026', amount: 26250, method: 'Banka Transferi' }
-    ]
-  },
-  {
-    id: 'sup-4',
-    companyName: 'Rayovac',
-    subtitle: 'Pil Tedarikçisi',
-    initials: 'RA',
-    avatarColor: '#0d9488',
-    category: 'Pil',
-    contactPerson: 'Burcu Yılmaz',
-    contactTitle: 'Satış Müdürü',
-    phone: '0532 222 11 44',
-    email: 'burcu@rayovac.com',
-    address: 'İkitelli OSB Triko Dokumacılar Sit. Başakşehir / İstanbul',
-    taxNo: '3216549870',
-    balance: 2200,
-    status: 'Aktif',
-    branch: 'Merkez Şube',
-    notes: 'Koli bazında toplu pil alımı.',
-    totalPurchases: 18200,
-    totalPaid: 16000,
-    invoices: [
-      { id: 'inv-5', invoiceNo: 'RYV-2026-554', date: '15.09.2026', amount: 8200, status: 'Kısmi Ödendi' }
-    ],
-    payments: [
-      { id: 'pay-5', date: '16.09.2026', amount: 6000, method: 'Nakit' }
-    ]
-  },
-  {
-    id: 'sup-5',
-    companyName: 'Cedis',
-    subtitle: 'Aksesuar Tedarikçisi',
-    initials: 'CE',
-    avatarColor: '#0284c7',
-    category: 'Aksesuar',
-    contactPerson: 'Emre Çetin',
-    contactTitle: 'Lojistik Sorumlusu',
-    phone: '0544 333 22 11',
-    email: 'emre@cedis.com',
-    address: 'Perpa Ticaret Merkezi B Blok Kat:8 Şişli / İstanbul',
-    taxNo: '6549873210',
-    balance: 1050,
-    status: 'Aktif',
-    branch: 'Kadıköy Şube',
-    notes: 'Temizlik mendili, nem kapsülü ve kurutma kutuları.',
-    totalPurchases: 14050,
-    totalPaid: 13000,
-    invoices: [
-      { id: 'inv-6', invoiceNo: 'CDS-2026-012', date: '12.09.2026', amount: 4050, status: 'Kısmi Ödendi' }
-    ],
-    payments: [
-      { id: 'pay-6', date: '14.09.2026', amount: 3000, method: 'Havale / EFT' }
-    ]
-  },
-  {
-    id: 'sup-6',
-    companyName: 'MN Teknoloji',
-    subtitle: 'Teknik Servis',
-    initials: 'MN',
-    avatarColor: '#64748b',
-    category: 'Servis',
-    contactPerson: 'Selin Ak',
-    contactTitle: 'Servis Şefi',
-    phone: '0536 444 77 88',
-    email: 'selin@mnteknoloji.com',
-    address: 'Halil Rıfat Paşa Mah. Yüzer Havuz Sok. Şişli / İstanbul',
-    taxNo: '7894561230',
-    balance: 0,
-    status: 'Pasif',
-    branch: 'Merkez Şube',
-    notes: 'Dış laboratuvar kalıp ve montaj hizmeti.',
-    totalPurchases: 12000,
-    totalPaid: 12000,
-    invoices: [],
-    payments: []
-  },
-  {
-    id: 'sup-7',
-    companyName: 'Demo Medikal',
-    subtitle: 'Genel',
-    initials: 'DM',
-    avatarColor: '#2563eb',
-    category: 'Diğer',
-    contactPerson: 'Ahmet Polat',
-    contactTitle: 'Şirket Ortağı',
-    phone: '0507 555 33 22',
-    email: 'ahmet@demomedikal.com',
-    address: 'Ostim OSB 1234. Cad. Yenimahalle / Ankara',
-    taxNo: '1472583690',
-    balance: 950,
-    status: 'Aktif',
-    branch: 'Test Şube 1',
-    notes: 'Odyoloji sarf malzemeleri ve hijyen kitleri.',
-    totalPurchases: 15950,
-    totalPaid: 15000,
-    invoices: [],
-    payments: []
-  },
-  {
-    id: 'sup-8',
-    companyName: 'İstMed',
-    subtitle: 'Aksesuar Tedarikçisi',
-    initials: 'İS',
-    avatarColor: '#1e293b',
-    category: 'Aksesuar',
-    contactPerson: 'Kadir Bulut',
-    contactTitle: 'Satış Danışmanı',
-    phone: '0538 666 11 22',
-    email: 'kadir@istmed.com',
-    address: 'Şirinevler Mah. Mareşal Fevzi Çakmak Cad. Bahçelievler / İstanbul',
-    taxNo: '3698521470',
-    balance: 0,
-    status: 'Aktif',
-    branch: 'Merkez Şube',
-    notes: 'Kulak kalıbı ve hortum tedariği.',
-    totalPurchases: 22000,
-    totalPaid: 22000,
-    invoices: [],
-    payments: []
-  },
-  {
-    id: 'sup-9',
-    companyName: 'ReSound Türkiye',
-    subtitle: 'Cihaz Tedarikçisi',
-    initials: 'RS',
-    avatarColor: '#059669',
-    category: 'Cihaz',
-    contactPerson: 'Volkan Çetin',
-    contactTitle: 'Satış Temsilcisi',
-    phone: '0531 222 33 44',
-    email: 'volkan@resound.com',
-    address: 'Barbaros Bulvarı No:102 Beşiktaş / İstanbul',
-    taxNo: '9517534862',
-    balance: 0,
-    status: 'Aktif',
-    branch: 'Merkez Şube',
-    notes: 'GN Hearing resmi Türkiye ofisi.',
-    totalPurchases: 45000,
-    totalPaid: 45000,
-    invoices: [],
-    payments: []
-  },
-  {
-    id: 'sup-10',
-    companyName: 'Signia Türkiye',
-    subtitle: 'Cihaz Tedarikçisi',
-    initials: 'SG',
-    avatarColor: '#d97706',
-    category: 'Cihaz',
-    contactPerson: 'Caner Yıldız',
-    contactTitle: 'Ürün Müdürü',
-    phone: '0534 888 99 00',
-    email: 'caner@signia.com',
-    address: 'Kozyatağı Mah. Değirmen Sok. Kadıköy / İstanbul',
-    taxNo: '7531594862',
-    balance: 0,
-    status: 'Aktif',
-    branch: 'Kadıköy Şube',
-    notes: 'WS Audiology Signia grubu.',
-    totalPurchases: 54000,
-    totalPaid: 54000,
-    invoices: [],
-    payments: []
-  },
-  {
-    id: 'sup-11',
-    companyName: 'PowerOne Pil',
-    subtitle: 'Pil Tedarikçisi',
-    initials: 'PO',
-    avatarColor: '#dc2626',
-    category: 'Pil',
-    contactPerson: 'Murat Şen',
-    contactTitle: 'Temsilci',
-    phone: '0537 111 44 77',
-    email: 'murat@powerone.de',
-    address: 'VARTA Microbattery İthalat Ofisi Şişli / İstanbul',
-    taxNo: '3571594862',
-    balance: 0,
-    status: 'Pasif',
-    branch: 'Merkez Şube',
-    notes: 'Geçici olarak alımlar durduruldu.',
-    totalPurchases: 8000,
-    totalPaid: 8000,
-    invoices: [],
-    payments: []
-  },
-  {
-    id: 'sup-12',
-    companyName: 'Egger Kalıp',
-    subtitle: 'Aksesuar Tedarikçisi',
-    initials: 'EG',
-    avatarColor: '#7c3aed',
-    category: 'Aksesuar',
-    contactPerson: 'Hakan Koç',
-    contactTitle: 'Üretim Sorumlusu',
-    phone: '0539 444 88 22',
-    email: 'hakan@egger.com',
-    address: 'Giyim Sanatkarları Sitesi 2. Ada Başakşehir / İstanbul',
-    taxNo: '8521479630',
-    balance: 0,
-    status: 'Aktif',
-    branch: 'Test Şube 1',
-    notes: 'UV reçine ve silikon kalıp ham maddeleri.',
-    totalPurchases: 16500,
-    totalPaid: 16500,
-    invoices: [],
-    payments: []
-  }
-];
 
 export default function SuppliersPage() {
-  const { addToast, addSupplier, updateSupplier, suppliersList, branchesList, currentOrgId } = useApp();
+  const { addToast, addSupplier, updateSupplier, suppliersList, currentOrgId } = useApp();
 
   const suppliers = useMemo<SupplierItem[]>(() => suppliersList.map((supplier, index) => {
     const category: SupplierItem['category'] = supplier.category === 'İşitme Cihazı' ? 'Cihaz'
@@ -346,7 +58,6 @@ export default function SuppliersPage() {
   const [filterPill, setFilterPill] = useState<'Tümü' | 'Aktif' | 'Pasif'>('Tümü');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
-  const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
   const [selectedStatusDropdown, setSelectedStatusDropdown] = useState('Tüm Durumlar');
 
   // Selected item for right detail drawer
@@ -408,7 +119,7 @@ export default function SuppliersPage() {
       const isoDate = invoice.date.includes('.') ? invoice.date.split('.').reverse().join('-') : invoice.date.slice(0, 10);
       return invoiceSum + (isoDate.startsWith(monthKey) ? Number(invoice.amount || 0) : 0);
     }, 0), 0);
-    const balanceOwed = suppliers.reduce((sum, supplier) => sum + Math.max(0, -supplier.balance), 0);
+    const balanceOwed = suppliers.reduce((sum, supplier) => sum + Math.max(0, supplier.balance), 0);
     return { purchasesThisMonth, balanceOwed };
   }, [suppliers]);
 
@@ -732,14 +443,6 @@ export default function SuppliersPage() {
 
         <select
           className={styles.filterSelect}
-          value={selectedBranch}
-          onChange={e => setSelectedBranch(e.target.value)}
-        >
-          <option value="Tüm Şubeler">Tüm Şubeler</option>
-        </select>
-
-        <select
-          className={styles.filterSelect}
           value={selectedStatusDropdown}
           onChange={e => setSelectedStatusDropdown(e.target.value)}
         >
@@ -766,7 +469,6 @@ export default function SuppliersPage() {
             setSearchTerm('');
             setFilterPill('Tümü');
             setSelectedCategory('Tüm Kategoriler');
-            setSelectedBranch('Tüm Şubeler');
             setSelectedStatusDropdown('Tüm Durumlar');
             addToast({ type: 'info', message: 'Filtreler temizlendi.' });
           }}
