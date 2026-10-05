@@ -26,7 +26,7 @@ import {
   dbFetchBranches, dbInsertBranch, dbUpdateBranch,
   dbFetchAuditLogs, dbInsertAuditLog,
   dbFetchMemberships, dbInsertMembership, dbUpdateMembership, dbDeleteMembership,
-  dbInsertCashTransaction, dbInsertStockMovement
+  dbFetchCashTransactions, dbInsertCashTransaction, dbInsertStockMovement
 } from '../lib/database';
 
 type Page = 
@@ -110,7 +110,7 @@ interface AppContextType {
   addSale: (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => Promise<void>;
   addSupplierPurchaseTransaction: (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => Promise<void>;
   approveSGKPrescription: (patientId: string, prescriptionNo: string, reportNo: string) => Promise<void>;
-  completeServiceTicket: (ticketId: string, patientName: string, serviceFee: number, partsUsed?: { stockItemId: string; stockItemName: string; quantity: number; price: number }[], cashRegisterId?: string) => Promise<void>;
+  completeServiceTicket: (ticketId: string, patientName: string, serviceFee: number, partsUsed?: { stockItemId: string; stockItemName: string; quantity: number; price: number }[], cashRegisterId?: string, branchId?: string) => Promise<void>;
   addStockItem: (item: StockItem) => Promise<void>;
   updateStockItem: (item: StockItem) => Promise<void>;
   adjustStockItem: (itemId: string, delta: number, reason: string, notes?: string, isLoss?: boolean) => Promise<void>;
@@ -634,7 +634,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patientName: string,
     serviceFee: number,
     partsUsed: { stockItemId: string; stockItemName: string; quantity: number; price: number }[] = [],
-    cashRegisterId?: string
+    cashRegisterId?: string,
+    branchId?: string
   ) => {
     try {
       const result = await ServiceDomainService.completeServiceTicket(stockList, {
@@ -643,13 +644,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         serviceFee,
         partsUsed,
         cashRegisterId,
+        branchId,
         organizationId: currentOrgId || undefined
       });
+
+      if (currentOrgId && serviceFee > 0) {
+        if (!branchId) throw new Error('Servis kaydının şube bilgisi eksik; tahsilat kaydedilemedi.');
+        const transactions = await dbFetchCashTransactions();
+        const alreadyRecorded = transactions.some((transaction: Record<string, unknown>) => transaction.referenceEntity === 'service' && transaction.referenceId === ticketId && transaction.type === 'INCOME');
+        if (!alreadyRecorded) {
+          await dbInsertCashTransaction({
+            cashRegisterId: cashRegisterId || 'kas-1', type: 'INCOME', amount: serviceFee,
+            category: 'Servis Geliri', referenceEntity: 'service', referenceId: ticketId,
+            branchId, description: `${patientName} — Teknik servis ücreti`,
+            idempotencyKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined,
+          });
+        }
+      }
 
       setStockList(result.updatedStockList);
       addToast({ type: 'success', message: 'Teknik servis işlemi kapatıldı, kullanılan parçalar stoktan düşüldü.' });
     } catch (err: any) {
       addToast({ type: 'error', message: `Teknik servis kapatılamadı: ${err.message}` });
+      throw err;
     }
   };
 

@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency, getAvatarColor, getInitials } from '../data/mockData';
 import { fetchServiceTickets, saveServiceTicket, type ServiceRecord } from '../repositories/ServiceTicketRepository';
+import { dbFetchCashTransactions } from '../lib/database';
 import styles from './ServicePage.module.css';
 
 export interface ServiceItem {
@@ -53,370 +54,6 @@ const toServiceRecord = (item: ServiceItem): ServiceRecord => ({
   accessoriesTaken: [], complaints: [],
 });
 
-const INITIAL_SERVICE_RECORDS: ServiceItem[] = [
-  {
-    id: 'srv-1',
-    patientName: 'Test Hasta Üç',
-    patientPhone: '0532 123 45 67',
-    patientInitials: 'TH',
-    avatarColor: '#0d9488',
-    deviceName: 'Oticon More 1',
-    earSide: 'Sol kulak',
-    serialNo: '1234567890',
-    barcode: 'OT-001',
-    problem: 'Ses kesilmesi',
-    receivedDate: '29.09.2026',
-    estimatedDeliveryDate: '02.10.2026',
-    status: 'Alındı',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Zaman zaman ses kesiliyor.',
-    technician: 'Teknik Servis',
-    branch: 'Test Şube 1',
-    operations: [
-      { description: 'Giriş kontrolü ve akustik test', cost: 0, date: '29.09.2026' }
-    ],
-    files: [
-      { name: 'Giriş_Kabul_Fotoğrafı.jpg', size: '1.8 MB', date: '29.09.2026' }
-    ],
-    history: [
-      { title: 'Servis Kabul Edildi', date: '29.09.2026 14:10', user: 'Ahmet Yılmaz', note: 'Cihaz teslim alındı, genel kontrol başlatıldı.' }
-    ]
-  },
-  {
-    id: 'srv-2',
-    patientName: 'Ayşe Yılmaz',
-    patientPhone: '0533 222 11 44',
-    patientInitials: 'AY',
-    avatarColor: '#2563eb',
-    deviceName: 'Phonak Audeo L',
-    earSide: 'Sağ kulak',
-    serialNo: '9876543210',
-    barcode: 'PH-002',
-    problem: 'Cihaz açılmıyor',
-    receivedDate: '28.09.2026',
-    estimatedDeliveryDate: '04.10.2026',
-    status: 'İnceleniyor',
-    warrantyStatus: 'Garanti Kapsamında',
-    deviceType: 'RIC (Hoparlör Kulak İçi)',
-    notes: 'Şarj ünitesine takıldığında tepki vermiyor.',
-    technician: 'Teknik Servis',
-    branch: 'Merkez Şube',
-    operations: [
-      { description: 'Batarya ve devre kontrolü', cost: 0, date: '28.09.2026' }
-    ],
-    files: [],
-    history: [
-      { title: 'İncelemeye Alındı', date: '28.09.2026 11:30', user: 'Emre Koç', note: 'Elektronik test ünitesine bağlandı.' }
-    ]
-  },
-  {
-    id: 'srv-3',
-    patientName: 'Mehmet Kaya',
-    patientPhone: '0505 111 22 33',
-    patientInitials: 'MK',
-    avatarColor: '#10b981',
-    deviceName: 'Widex Moment',
-    earSide: 'Binaural',
-    serialNo: '4567891234',
-    barcode: 'WD-003',
-    problem: 'Ses cızırtısı',
-    receivedDate: '26.09.2026',
-    estimatedDeliveryDate: '—',
-    status: 'Tamir Ediliyor',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Yüksek frekanslarda parazit ve cızırtı mevcut.',
-    technician: 'Teknik Servis',
-    branch: 'Merkez Şube',
-    operations: [
-      { description: 'Mikrofon filtre değişimi', cost: 450, date: '27.09.2026' },
-      { description: 'Akustik kalibrasyon', cost: 300, date: '28.09.2026' }
-    ],
-    files: [],
-    history: [
-      { title: 'Onarım Başladı', date: '27.09.2026 09:15', user: 'Teknik Servis', note: 'Parça değişimi yapılıyor.' }
-    ]
-  },
-  {
-    id: 'srv-4',
-    patientName: 'Elif Demir',
-    patientPhone: '0532 987 65 43',
-    patientInitials: 'ED',
-    avatarColor: '#b45309',
-    deviceName: 'Signia Pure 312',
-    earSide: 'Sol kulak',
-    serialNo: '3216549870',
-    barcode: 'SG-004',
-    problem: 'Pil problemi',
-    receivedDate: '24.09.2026',
-    estimatedDeliveryDate: '01.10.2026',
-    status: 'Teslime Hazır',
-    warrantyStatus: 'Garanti Kapsamında',
-    deviceType: 'Kulak arkası',
-    notes: 'Pil yuvası korozyonu temizlendi, yeni pil kapağı takıldı.',
-    technician: 'Teknik Servis',
-    branch: 'Kadıköy Şube',
-    operations: [
-      { description: 'Pil yuvası revizyonu', cost: 0, date: '25.09.2026' }
-    ],
-    files: [],
-    history: [
-      { title: 'Tamamlandı & Teslime Hazır', date: '26.09.2026 16:00', user: 'Ahmet Yılmaz', note: 'Hasta bilgilendirme SMS gönderildi.' }
-    ]
-  },
-  {
-    id: 'srv-5',
-    patientName: 'Ahmet Yılmaz',
-    patientPhone: '0530 555 44 33',
-    patientInitials: 'AH',
-    avatarColor: '#0f766e',
-    deviceName: 'Resound Nexia',
-    earSide: 'Sağ kulak',
-    serialNo: '1597534862',
-    barcode: 'RS-005',
-    problem: 'Temizlik bakımı',
-    receivedDate: '22.09.2026',
-    estimatedDeliveryDate: '24.09.2026',
-    status: 'Tamir Ediliyor',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak içi (ITE)',
-    notes: 'Kulak kiri filtresi ve mikrofon portları temizleniyor.',
-    technician: 'Teknik Servis',
-    branch: 'Merkez Şube',
-    operations: [
-      { description: 'Ultrasonik temizlik ve kurutma', cost: 350, date: '23.09.2026' }
-    ],
-    files: [],
-    history: [
-      { title: 'Bakım Başlatıldı', date: '23.09.2026 10:00', user: 'Teknik Servis', note: 'Temizlik havuzuna alındı.' }
-    ]
-  },
-  {
-    id: 'srv-6',
-    patientName: 'Zeynep Güneş',
-    patientPhone: '0531 444 77 11',
-    patientInitials: 'ZG',
-    avatarColor: '#7e22ce',
-    deviceName: 'Starkey Evolv',
-    earSide: 'Binaural',
-    serialNo: '7539514563',
-    barcode: 'ST-006',
-    problem: 'Mikrofon sorunu',
-    receivedDate: '20.09.2026',
-    estimatedDeliveryDate: '—',
-    status: 'Garanti',
-    warrantyStatus: 'Garanti Kapsamında',
-    deviceType: 'RIC (Hoparlör Kulak İçi)',
-    notes: 'Distribütör garantisi kapsamında üreticiye gönderildi.',
-    technician: 'Distribütör Servis',
-    branch: 'Çankaya Şube',
-    operations: [
-      { description: 'Fabrika garantili mikrofon kartı değişimi', cost: 0, date: '22.09.2026' }
-    ],
-    files: [],
-    history: [
-      { title: 'Garanti Kapsamına Alındı', date: '21.09.2026 11:20', user: 'Ahmet Yılmaz', note: 'Merkez distribütöre sevk edildi.' }
-    ]
-  },
-  {
-    id: 'srv-7',
-    patientName: 'Cem Doğan',
-    patientPhone: '0544 333 22 11',
-    patientInitials: 'CD',
-    avatarColor: '#16a34a',
-    deviceName: 'Unitron Moxi',
-    earSide: 'Sol kulak',
-    serialNo: '9513571598',
-    barcode: 'UN-007',
-    problem: 'Parça değişimi',
-    receivedDate: '18.09.2026',
-    estimatedDeliveryDate: '25.09.2026',
-    returnedDate: '25.09.2026',
-    status: 'Teslim Edildi',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Hoparlör kordonu ve boynuz parçası yenilendi.',
-    technician: 'Teknik Servis',
-    branch: 'Kadıköy Şube',
-    operations: [
-      { description: 'Hoparlör değişimi', cost: 1250, date: '20.09.2026' },
-      { description: 'Genel test', cost: 200, date: '24.09.2026' }
-    ],
-    files: [],
-    history: [
-      { title: 'Hastaya Teslim Edildi', date: '25.09.2026 17:30', user: 'Kadıköy Şube', note: 'Ödeme tahsil edildi ve teslim edildi.' }
-    ]
-  },
-  {
-    id: 'srv-8',
-    patientName: 'Seda Yıldız',
-    patientPhone: '0538 999 11 22',
-    patientInitials: 'SY',
-    avatarColor: '#64748b',
-    deviceName: 'Bernafon Alpha',
-    earSide: 'Sağ kulak',
-    serialNo: '6549873210',
-    barcode: 'BE-008',
-    problem: 'Su teması',
-    receivedDate: '15.09.2026',
-    estimatedDeliveryDate: '30.09.2026',
-    status: 'İnceleniyor',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Yağmur suyu teması sonucu nem alma işlemi uygulanıyor.',
-    technician: 'Teknik Servis',
-    branch: 'Merkez Şube',
-    operations: [
-      { description: 'Nem alma ve anakart temizliği', cost: 600, date: '16.09.2026' }
-    ],
-    files: [],
-    history: [
-      { title: 'Nem Fırınına Alındı', date: '16.09.2026 14:00', user: 'Teknik Servis', note: '24 saatlik nem giderme fırınında.' }
-    ]
-  },
-  {
-    id: 'srv-9',
-    patientName: 'Fatma Kaya',
-    patientPhone: '0535 777 88 99',
-    patientInitials: 'FK',
-    avatarColor: '#d97706',
-    deviceName: 'Oticon Real 1',
-    earSide: 'Sağ kulak',
-    serialNo: '8529637410',
-    barcode: 'OT-009',
-    problem: 'Hoparlör arızası',
-    receivedDate: '12.09.2026',
-    estimatedDeliveryDate: '18.09.2026',
-    status: 'Alındı',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'RIC (Hoparlör Kulak İçi)',
-    notes: 'Hoparlör membranı patlak.',
-    technician: 'Teknik Servis',
-    branch: 'Test Şube 1'
-  },
-  {
-    id: 'srv-10',
-    patientName: 'Ali Öztürk',
-    patientPhone: '0542 666 55 44',
-    patientInitials: 'AO',
-    avatarColor: '#4f46e5',
-    deviceName: 'Phonak Lumity 90',
-    earSide: 'Sol kulak',
-    serialNo: '7418529630',
-    barcode: 'PH-010',
-    problem: 'Şarj olmuyor',
-    receivedDate: '10.09.2026',
-    estimatedDeliveryDate: '16.09.2026',
-    status: 'Tamir Ediliyor',
-    warrantyStatus: 'Garanti Kapsamında',
-    deviceType: 'Şarjlı Kulak Arkası',
-    notes: 'Kontak pinleri lehimleniyor.',
-    technician: 'Teknik Servis',
-    branch: 'Merkez Şube'
-  },
-  {
-    id: 'srv-11',
-    patientName: 'Burak Akın',
-    patientPhone: '0532 444 33 22',
-    patientInitials: 'BA',
-    avatarColor: '#059669',
-    deviceName: 'Widex Magnify',
-    earSide: 'Binaural',
-    serialNo: '9638527410',
-    barcode: 'WD-011',
-    problem: 'Filtre tıkanıklığı',
-    receivedDate: '08.09.2026',
-    estimatedDeliveryDate: '10.09.2026',
-    status: 'Teslime Hazır',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Filtreler değiştirildi ve temizlik yapıldı.',
-    technician: 'Teknik Servis',
-    branch: 'Çankaya Şube'
-  },
-  {
-    id: 'srv-12',
-    patientName: 'Ece Çelik',
-    patientPhone: '0533 111 22 33',
-    patientInitials: 'EC',
-    avatarColor: '#db2777',
-    deviceName: 'Signia Styletto',
-    earSide: 'Sağ kulak',
-    serialNo: '1472583690',
-    barcode: 'SG-012',
-    problem: 'Kalıp uyumsuzluğu',
-    receivedDate: '06.09.2026',
-    estimatedDeliveryDate: '12.09.2026',
-    status: 'İnceleniyor',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Yeni kalıp ölçüsü alındı.',
-    technician: 'Teknik Servis',
-    branch: 'Kadıköy Şube'
-  },
-  {
-    id: 'srv-13',
-    patientName: 'Mustafa Arslan',
-    patientPhone: '0555 888 77 66',
-    patientInitials: 'MA',
-    avatarColor: '#475569',
-    deviceName: 'Resound Key 4',
-    earSide: 'Sol kulak',
-    serialNo: '3692581470',
-    barcode: 'RS-013',
-    problem: 'Genel revizyon',
-    receivedDate: '04.09.2026',
-    estimatedDeliveryDate: '08.09.2026',
-    returnedDate: '08.09.2026',
-    status: 'Teslim Edildi',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Yıllık periyodik bakım yapıldı.',
-    technician: 'Teknik Servis',
-    branch: 'Merkez Şube'
-  },
-  {
-    id: 'srv-14',
-    patientName: 'Selin Kurt',
-    patientPhone: '0537 999 44 55',
-    patientInitials: 'SK',
-    avatarColor: '#ea580c',
-    deviceName: 'Oticon Zircon 2',
-    earSide: 'Binaural',
-    serialNo: '2581473690',
-    barcode: 'OT-014',
-    problem: 'Bluetooth kesintisi',
-    receivedDate: '02.09.2026',
-    estimatedDeliveryDate: '07.09.2026',
-    status: 'Alındı',
-    warrantyStatus: 'Garanti Kapsamında',
-    deviceType: 'Kulak arkası',
-    notes: 'Telefon bağlantısında kopmalar yaşanıyor.',
-    technician: 'Teknik Servis',
-    branch: 'Test Şube 1'
-  },
-  {
-    id: 'srv-15',
-    patientName: 'Hakan Yıldırım',
-    patientPhone: '0539 333 55 77',
-    patientInitials: 'HY',
-    avatarColor: '#0284c7',
-    deviceName: 'Phonak Terra+',
-    earSide: 'Sağ kulak',
-    serialNo: '7894561230',
-    barcode: 'PH-015',
-    problem: 'Ses distorsiyonu',
-    receivedDate: '01.09.2026',
-    estimatedDeliveryDate: '05.09.2026',
-    status: 'İnceleniyor',
-    warrantyStatus: 'Garanti Dışı',
-    deviceType: 'Kulak arkası',
-    notes: 'Yüksek frekans kazancı kontrol edilecek.',
-    technician: 'Teknik Servis',
-    branch: 'Merkez Şube'
-  }
-];
 
 export default function ServicePage() {
   const { addToast, stockList, patientsList, branchesList, currentOrgId, completeServiceTicket } = useApp();
@@ -426,6 +63,7 @@ export default function ServicePage() {
 
   // State Management
   const [records, setRecords] = useState<ServiceItem[]>([]);
+  const [serviceRevenue, setServiceRevenue] = useState(0);
   const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
@@ -494,6 +132,19 @@ export default function ServicePage() {
     }).catch(error => { if (!cancelled) { setRecords([]); addToastRef.current({ type: 'error', message: error instanceof Error ? error.message : 'Servis kayıtları yüklenemedi.' }); } });
     return () => { cancelled = true; };
   }, [currentOrgId, patientsList, branchesList]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentOrgId) return;
+    void dbFetchCashTransactions().then(rows => {
+      if (cancelled) return;
+      const branchIds = new Set(branchesList.filter(branch => matches(branch.name)).map(branch => branch.id));
+      setServiceRevenue((rows as Array<Record<string, unknown>>)
+        .filter(row => row.type === 'INCOME' && row.referenceEntity === 'service' && (!row.branchId || branchIds.has(String(row.branchId))))
+        .reduce((sum, row) => sum + (Number(row.amount) || 0), 0));
+    }).catch(() => { if (!cancelled) setServiceRevenue(0); });
+    return () => { cancelled = true; };
+  }, [currentOrgId, branchesList, matches]);
 
   // Pill counts calculation
   const pillCounts = useMemo(() => {
@@ -603,7 +254,7 @@ export default function ServicePage() {
     if (statusUpdateVal === 'Teslim Edildi') {
       const totalServiceCost = (selectedItem.operations || []).reduce((acc, op) => acc + (op.cost || 0), 0);
       try {
-        await completeServiceTicket(selectedItem.id, selectedItem.patientName, totalServiceCost);
+        await completeServiceTicket(selectedItem.id, selectedItem.patientName, totalServiceCost, [], undefined, selectedItem.branchId);
         addToast({ type: 'success', message: `Servis cihazı teslim edildi, ₺${totalServiceCost.toLocaleString('tr-TR')} servis bedeli kasaya işlendi.` });
       } catch {
         addToast({ type: 'error', message: 'Servis durumu güncellendi ancak kasa hareketi oluşturulamadı; kasa kaydı oluşmadı.' });
@@ -814,8 +465,8 @@ export default function ServicePage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Servis Geliri</span>
-            <span className={styles.statValue}>—</span>
-            <div className={styles.statTrend}><span className={styles.trendMuted}>Servis gelir tablosu bağlı değil</span></div>
+            <span className={styles.statValue}>{formatCurrency(currentOrgId ? serviceRevenue : 0)}</span>
+            <div className={styles.statTrend}><span className={styles.trendMuted}>Tahsil edilen servis ücretleri</span></div>
           </div>
         </div>
 

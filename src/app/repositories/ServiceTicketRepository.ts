@@ -12,7 +12,11 @@ export interface ServiceRecord {
 const statusToDb: Record<ServiceRecord['status'], string> = { 'Alındı': 'Bekliyor', 'İnceleniyor': 'İşlemde', 'Tamir Ediliyor': 'İşlemde', 'Hazır': 'Tamamlandı', 'Teslim Edildi': 'Teslim Edildi' };
 const dbToStatus: Record<string, ServiceRecord['status']> = { 'Bekliyor': 'Alındı', 'İşlemde': 'İnceleniyor', 'Tamamlandı': 'Hazır', 'Teslim Edildi': 'Teslim Edildi' };
 export async function fetchServiceTickets(orgId: string): Promise<ServiceRecord[]> {
-  const { data, error } = await supabase.from('service_tickets').select('*').eq('organization_id', orgId).order('received_date', { ascending: false });
+  let { data, error } = await supabase.from('service_tickets').select('*').eq('organization_id', orgId).is('deleted_at', null).order('received_date', { ascending: false });
+  // Stay compatible during deployment while the archive migration is still pending.
+  if (error && (error.code === '42703' || error.message.includes('deleted_at'))) {
+    ({ data, error } = await supabase.from('service_tickets').select('*').eq('organization_id', orgId).order('received_date', { ascending: false }));
+  }
   if (error) throw new Error('Servis kayıtları yüklenemedi.');
   return (data || []).map(row => ({
     ...row.details, id: row.id, patientId: row.patient_id, branchId: row.branch_id, stockItemId: row.stock_item_id,
