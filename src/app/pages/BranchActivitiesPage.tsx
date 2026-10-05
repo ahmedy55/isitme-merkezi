@@ -86,64 +86,6 @@ function SvgDonut({
   );
 }
 
-const INITIAL_TRANSFERS: TransferLogItem[] = [
-  {
-    id: 'trf-1',
-    date: '29.09.2026',
-    patientName: 'Ayşe Yılmaz',
-    fromBranch: 'Merkez',
-    toBranch: 'Çankaya',
-    transferredBy: 'Ahmet Yılmaz',
-    status: 'Tamamlandı',
-    transferType: 'Cihaz Satışı',
-    notes: 'Hasta Ankara ikametine taşındı, cihaz takip dosyası aktarıldı.'
-  },
-  {
-    id: 'trf-2',
-    date: '26.09.2026',
-    patientName: 'Mehmet Kaya',
-    fromBranch: 'Kadıköy',
-    toBranch: 'Merkez',
-    transferredBy: 'Zeynep Kaya',
-    status: 'Tamamlandı',
-    transferType: 'Randevu Transferi',
-    notes: 'Kapsamlı odyometrik test için merkez laboratuvarına yönlendirildi.'
-  },
-  {
-    id: 'trf-3',
-    date: '24.09.2026',
-    patientName: 'Elif Demir',
-    fromBranch: 'Çankaya',
-    toBranch: 'Kadıköy',
-    transferredBy: 'Mehmet Arslan',
-    status: 'Tamamlandı',
-    transferType: 'Teknik Servis',
-    notes: 'Kalıp revizyonu ve teknik servis bakımı için şube transferi.'
-  },
-  {
-    id: 'trf-4',
-    date: '21.09.2026',
-    patientName: 'Ali Veli',
-    fromBranch: 'Merkez',
-    toBranch: 'Çankaya',
-    transferredBy: 'Ahmet Yılmaz',
-    status: 'İptal Edildi',
-    transferType: 'Cihaz Satışı',
-    notes: 'Hasta talebi üzerine transfer işlemi iptal edildi.'
-  },
-  {
-    id: 'trf-5',
-    date: '18.09.2026',
-    patientName: 'Zeynep Güneş',
-    fromBranch: 'Kadıköy',
-    toBranch: 'Merkez',
-    transferredBy: 'Selin Ak',
-    status: 'Tamamlandı',
-    transferType: 'Diğer',
-    notes: 'SGK reçete takibi ve evrak tamamlama.'
-  }
-];
-
 export default function BranchActivitiesPage() {
   const { addToast, currentOrgId, branchesList, patientsList, salesList, appointmentsList, currentUser, refreshOrganizationData } = useApp();
   const { matches } = useBranchScope();
@@ -227,9 +169,11 @@ export default function BranchActivitiesPage() {
     return tr ? `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}` : '';
   };
   const [rangeStart, rangeEnd] = dateRange.split(' - ').map(normalizeDateKey);
+  const testBranchNames = ['Test Şube 1', 'Test Şube 2', 'Test Şube 3'];
   const visibleTransfers = transfers.filter(item => {
     const key = normalizeDateKey(item.date);
-    return (matches(item.fromBranch) || matches(item.toBranch)) && (!rangeStart || key >= rangeStart) && (!rangeEnd || key <= rangeEnd);
+    return !testBranchNames.includes(item.fromBranch.trim()) && !testBranchNames.includes(item.toBranch.trim())
+      && (matches(item.fromBranch) || matches(item.toBranch)) && (!rangeStart || key >= rangeStart) && (!rangeEnd || key <= rangeEnd);
   });
   const filteredTransfers = visibleTransfers.filter(item => transferStatusFilter === 'Tümünü Gör' || (transferStatusFilter === 'Tamamlananlar' && item.status === 'Tamamlandı') || (transferStatusFilter === 'İptal Edilenler' && item.status === 'İptal Edildi'));
   const transferTypeColors = ['#0d9488', '#0284c7', '#f59e0b', '#94a3b8'];
