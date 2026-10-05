@@ -20,6 +20,7 @@ interface DisplayStockItem extends StockItem {
 export default function StockPage() {
   const { stockList, addStockItem, updateStockItem, deleteStockItem, adjustStockItem, addToast, branchesList, currentOrgId, currentUser } = useApp();
   const { activeBranch } = useBranch();
+  const activeBranches = useMemo(() => branchesList.filter(branch => branch.status === 'Aktif' || (branch.status as string) === 'active'), [branchesList]);
   const addToastRef = useRef(addToast);
   useEffect(() => { addToastRef.current = addToast; }, [addToast]);
   const [stockMovements, setStockMovements] = useState<Array<{id: string; type: string; quantityChange: number; createdAt: string; notes?: string; branchName?: string}>>([]);
@@ -94,8 +95,11 @@ export default function StockPage() {
     description: ''
   });
   useEffect(() => {
-    if (!newItemForm.branch && branchesList.length) setNewItemForm(form => ({ ...form, branch: branchesList[0].id }));
-  }, [branchesList, newItemForm.branch]);
+    if (activeBranches.some(branch => branch.id === newItemForm.branch)) return;
+    const singleBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
+    const preferred = activeBranches.find(branch => branch.id === singleBranchId) || (activeBranches.length === 1 ? activeBranches[0] : undefined);
+    setNewItemForm(form => ({ ...form, branch: preferred?.id || '' }));
+  }, [activeBranches, activeBranch, newItemForm.branch]);
 
   // Filter logic
   const filteredItems = useMemo(() => {
@@ -330,7 +334,14 @@ export default function StockPage() {
     const newQty = activeItem.quantity + change;
     try {
       await adjustStockItem(activeItem.id, change, adjustmentReason, 'Manuel işlem');
-      setActiveItem({ ...activeItem, quantity: newQty });
+      setActiveItem({
+        ...activeItem,
+        quantity: newQty,
+        branchStockBreakdown: {
+          ...(activeItem.branchStockBreakdown || {}),
+          [activeItem.branch]: newQty,
+        },
+      });
       setShowAdjustmentModal(false);
       addToast({ type: 'success', message: `${activeItem.name} stok adedi ${newQty} olarak güncellendi.` });
     } catch {
@@ -560,7 +571,7 @@ export default function StockPage() {
           onChange={e => setSelectedBranch(e.target.value)}
         >
           <option value="Tüm Şubeler">Tüm Şubeler</option>
-          {branchesList.map(b => (
+          {activeBranches.map(b => (
             <option key={b.id} value={b.name}>{b.name}</option>
           ))}
         </select>
@@ -955,7 +966,7 @@ export default function StockPage() {
                     </div>
 
                     <div className={styles.branchStockBox}>
-                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => (
+                      {activeBranches.map(branch => (
                         <div className={styles.branchStockRow} key={branch.id}>
                           <span>{branch.name}</span>
                           <strong>{activeItem.branchStockBreakdown?.[branch.name] ?? 0}</strong>
@@ -1222,7 +1233,7 @@ export default function StockPage() {
                       onChange={e => setNewItemForm({ ...newItemForm, branch: e.target.value })}
                     >
                       <option value="" disabled>Şube seçin</option>
-                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                      {activeBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1493,7 +1504,7 @@ export default function StockPage() {
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kaynak Şube</label>
                   <select className={styles.filterSelect} style={{ width: '100%' }} defaultValue={activeItem.branch}>
-                    {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                    {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                   </select>
                 </div>
                 <div>

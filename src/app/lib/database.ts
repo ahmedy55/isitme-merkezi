@@ -207,7 +207,7 @@ export const dbFetchAppointments = async () => {
       .order('time', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to));
-    
+
     const mapped = (data || []).map((app: any) => {
       const firstName = app.patients?.first_name || '';
       const lastName = app.patients?.last_name || '';
@@ -277,7 +277,7 @@ export const dbFetchStockItems = async () => {
       .order('name', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to));
-    
+
     const mapped = (data || []).map((item: any) => {
       const firstName = item.patients?.first_name || '';
       const lastName = item.patients?.last_name || '';
@@ -462,13 +462,22 @@ export const dbFetchRecallItems = async () => {
       .order('due_date', { ascending: true })
       .order('id', { ascending: true })
       .range(from, to));
+
+    const patientIds = [...new Set((data || []).map((item: any) => item.patient_id).filter(Boolean))];
+    const patientTCs = new Map<string, string>();
+    for (const batch of inBatches(patientIds, 250)) {
+      const { data: tcRows, error } = await supabase.rpc('decrypt_patient_tcs', { p_patient_ids: batch });
+      if (error) throw error;
+      for (const row of tcRows || []) patientTCs.set(row.patient_id, row.tc || '');
+    }
     
     const mapped = (data || []).map((item: any) => {
       const firstName = item.patients?.first_name || '';
       const lastName = item.patients?.last_name || '';
       return {
         ...item,
-        patientName: `${firstName} ${lastName}`.trim() || 'Bilinmeyen Hasta'
+        patientName: `${firstName} ${lastName}`.trim() || 'Bilinmeyen Hasta',
+        patientTC: patientTCs.get(item.patient_id) || '',
       };
     });
     return toCamel(mapped);

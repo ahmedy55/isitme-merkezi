@@ -39,6 +39,61 @@ export async function archiveAsset(id: string): Promise<void> {
   if (error) throw new Error('Demirbaş arşivlenemedi.');
 }
 
+export interface AssetMaintenanceRecord {
+  id: string;
+  assetId: string;
+  recordType: 'Bakım' | 'Onarım' | 'Kalibrasyon';
+  maintenanceDate: string;
+  provider: string;
+  reportNumber?: string;
+  notes: string;
+  createdAt: string;
+}
+
+const maintenanceFromDb = (row: any): AssetMaintenanceRecord => ({
+  id: row.id,
+  assetId: row.asset_id,
+  recordType: row.record_type,
+  maintenanceDate: row.maintenance_date,
+  provider: row.provider || '',
+  reportNumber: row.report_number || '',
+  notes: row.notes || '',
+  createdAt: row.created_at,
+});
+
+export async function fetchAssetMaintenance(assetId: string): Promise<AssetMaintenanceRecord[]> {
+  const { data, error } = await supabase
+    .from('asset_maintenance_records')
+    .select('*')
+    .eq('asset_id', assetId)
+    .order('maintenance_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message || 'Demirbaş işlem geçmişi yüklenemedi.');
+  return (data || []).map(maintenanceFromDb);
+}
+
+export async function createAssetMaintenance(input: {
+  assetId: string; branchId: string; recordType: AssetMaintenanceRecord['recordType'];
+  maintenanceDate: string; provider: string; reportNumber: string; notes: string;
+}): Promise<AssetMaintenanceRecord> {
+  const organizationId = await getActiveOrgId();
+  if (!organizationId || !input.branchId) throw new Error('Firma ve demirbaş şubesi seçimi gerekli.');
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data, error } = await supabase.from('asset_maintenance_records').insert({
+    organization_id: organizationId,
+    branch_id: input.branchId,
+    asset_id: input.assetId,
+    record_type: input.recordType,
+    maintenance_date: input.maintenanceDate,
+    provider: input.provider.trim(),
+    report_number: input.reportNumber.trim() || null,
+    notes: input.notes.trim(),
+    created_by: user?.id || null,
+  }).select('*').single();
+  if (error || !data) throw new Error(error?.message || 'Demirbaş işlem kaydı doğrulanamadı.');
+  return maintenanceFromDb(data);
+}
+
 export interface ActivityRecord {
   id: string; timestamp: string; userName: string; userRole: string; type: string;
   patientName: string; description: string; duration?: string; branchId?: string;

@@ -164,6 +164,7 @@ export interface RecallItem {
   id: string;
   patientId: string;
   patientName: string;
+  patientTC?: string;
   reason: 'SGK Yenileme' | 'Yıllık Kontrol' | 'Pil Siparişi' | 'Garanti Süresi' | 'Cihaz Denedi Almadı' | 'Teklif Verildi' | 'Pil değişimi' | 'Cihaz kontrolü' | 'Temizlik & Bakım' | 'Kontrol muayenesi' | 'Cihaz ayarı' | 'Teknik servis';
   dueDate: string;
   status: 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı';

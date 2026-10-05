@@ -26,6 +26,7 @@ interface InvoiceRecord {
 export default function SgkReceivablesPage() {
   const { currentOrgId, branchesList, addToast } = useApp();
   const { activeBranchId, matches } = useBranchScope();
+  const activeBranches = useMemo(() => branchesList.filter(item => item.status === 'Aktif' || (item.status as string) === 'active'), [branchesList]);
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'schedule' | 'records' | 'history' | 'reports'>('schedule');
@@ -40,7 +41,7 @@ export default function SgkReceivablesPage() {
   const [periodYearMonth, setPeriodYearMonth] = useState(() => monthKey());
   const [invoiceNo, setInvoiceNo] = useState('');
   const [amount, setAmount] = useState('');
-  const [branch, setBranch] = useState(activeBranchId || (branchesList.length > 0 ? branchesList[0].id : ''));
+  const [branch, setBranch] = useState(activeBranchId || '');
   const [notes, setNotes] = useState('');
 
   // Table filter states
@@ -54,12 +55,12 @@ export default function SgkReceivablesPage() {
 
   // Sync branch with activeBranchId
   useEffect(() => {
-    if (activeBranchId) {
+    if (activeBranchId && activeBranches.some(item => item.id === activeBranchId)) {
       setBranch(activeBranchId);
-    } else if (branchesList.length > 0 && !branch) {
-      setBranch(branchesList[0].id);
+    } else if (!activeBranches.some(item => item.id === branch)) {
+      setBranch(activeBranches.length === 1 ? activeBranches[0].id : '');
     }
-  }, [activeBranchId, branchesList, branch]);
+  }, [activeBranchId, activeBranches, branch]);
 
   // Load from Supabase if connected
   useEffect(() => {
@@ -174,7 +175,7 @@ export default function SgkReceivablesPage() {
     setSaving(true);
     try {
       const expMonth = expectedPaymentMonth(periodYearMonth);
-      const selectedBranchObj = branchesList.find(b => b.id === branch);
+      const selectedBranchObj = activeBranches.find(b => b.id === branch);
       if (!currentOrgId || !selectedBranchObj) throw new Error('Geçerli firma ve şube seçin.');
       const branchName = selectedBranchObj.name;
       const invoicePayload = {
@@ -461,7 +462,7 @@ export default function SgkReceivablesPage() {
                       onChange={e => setBranch(e.target.value)}
                     >
                       <option value="">Şube seçin</option>
-                      {branchesList.map(b => (
+                      {activeBranches.map(b => (
                         <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
                     </select>

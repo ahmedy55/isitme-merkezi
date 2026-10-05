@@ -42,6 +42,7 @@ interface ExpenseItem {
 export default function CashPage() {
   const { addToast, branchesList, patientsList, stockList, addSale, addExpense, updateExpense, deleteExpense, expensesList, salesList, currentOrgId } = useApp();
   const { matches, activeBranch } = useBranchScope();
+  const activeBranches = useMemo(() => branchesList.filter(branch => branch.status === 'Aktif' || (branch.status as string) === 'active'), [branchesList]);
 
   // Active Main Sub-Tab: 'cash' (Kasa & Tahsilat) or 'expenses' (Masraflar)
   const [mainTab, setMainTab] = useState<'cash' | 'expenses' | 'transfers' | 'reports'>('cash');
@@ -90,6 +91,7 @@ export default function CashPage() {
   // Deposit/Withdrawal Form State
   const [depositForm, setDepositForm] = useState({
     type: 'Giriş' as 'Giriş' | 'Çıkış',
+    branchId: '',
     account: '',
     amount: 0,
     category: 'Diğer Gelir',
@@ -107,6 +109,16 @@ export default function CashPage() {
     branch: '',
     notes: ''
   });
+
+  useEffect(() => {
+    const validBranchId = (id: string) => activeBranches.some(branch => branch.id === id);
+    const singleBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
+    const defaultBranch = activeBranches.find(branch => branch.id === singleBranchId) || (activeBranches.length === 1 ? activeBranches[0] : undefined);
+    if (!validBranchId(depositForm.branchId)) setDepositForm(form => ({ ...form, branchId: defaultBranch?.id || '' }));
+    if (!activeBranches.some(branch => branch.name === newExpForm.branch)) {
+      setNewExpForm(form => ({ ...form, branch: defaultBranch?.name || '' }));
+    }
+  }, [activeBranches, activeBranch, depositForm.branchId, newExpForm.branch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,8 +232,8 @@ export default function CashPage() {
   const handleCreateDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = Number(depositForm.amount);
-    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : branchesList.length === 1 ? branchesList[0].id : '';
-    const branchName = branchesList.find(branch => branch.id === branchId)?.name;
+    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : depositForm.branchId;
+    const branchName = activeBranches.find(branch => branch.id === branchId)?.name;
     if (!currentOrgId || !branchId || !branchName || !depositForm.account.trim() || amount <= 0) {
       addToast({ type: 'error', message: 'Firma, şube, kasa hesabı ve sıfırdan büyük tutar gerekli.' });
       return;
@@ -650,7 +662,7 @@ export default function CashPage() {
                 </div>
                 <select className={styles.filterSelect} style={{ height: 30, minWidth: 100 }} value={summaryBranch} onChange={event => setSummaryBranch(event.target.value)}>
                   <option value="Tüm Şubeler">Tüm Şubeler</option>
-                  {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                  {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                 </select>
               </div>
 
@@ -986,7 +998,7 @@ export default function CashPage() {
               onChange={e => setExpenseSelectedBranch(e.target.value)}
             >
               <option value="Tüm Şubeler">Tüm Şubeler</option>
-              {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+              {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
             </select>
 
             <button className={styles.btnFilter} onClick={() => addToast({ type: 'info', message: 'Gider filtreleri uygulandı.' })}>
@@ -1366,6 +1378,21 @@ export default function CashPage() {
                   </button>
                 </div>
                 <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Şube</label>
+                  <select
+                    className={styles.filterSelect}
+                    style={{ width: '100%' }}
+                    value={activeBranch.mode === 'single' ? activeBranch.branchId : depositForm.branchId}
+                    disabled={activeBranch.mode === 'single'}
+                    onChange={e => setDepositForm({ ...depositForm, branchId: e.target.value })}
+                    required
+                  >
+                    <option value="">Şube seçin</option>
+                    {activeBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                  </select>
+                  {activeBranches.length === 0 && <small style={{ color: '#b91c1c' }}>İşlem yapabilmek için önce aktif bir şube oluşturun.</small>}
+                </div>
+                <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hesap</label>
                   <input
                     type="text"
@@ -1623,7 +1650,7 @@ export default function CashPage() {
                       onChange={e => setNewExpForm({ ...newExpForm, branch: e.target.value })}
                     >
                       <option value="">Şube seçin</option>
-                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                      {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                 </div>

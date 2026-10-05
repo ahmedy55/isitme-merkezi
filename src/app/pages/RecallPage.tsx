@@ -100,6 +100,7 @@ interface ShowcaseRecall {
   patientAge: number;
   patientGender: string;
   patientPhone: string;
+  patientTC: string;
   patientEmail: string;
   patientAddress: string;
   patientDevice: string;
@@ -197,6 +198,7 @@ export default function RecallPage() {
         patientAge: p?.birthDate ? calculateAge(p.birthDate) : 0,
         patientGender: p?.gender || 'Belirtilmemiş',
         patientPhone: p?.phone || '—',
+        patientTC: p?.tc || item.patientTC || '',
         patientEmail: p?.email || '',
         patientAddress: p?.address || '—',
         patientDevice: p?.currentDevice || '—',
@@ -234,8 +236,10 @@ export default function RecallPage() {
         const q = searchQuery.toLowerCase();
         const matchName = item.patientName.toLowerCase().includes(q);
         const matchPhone = item.patientPhone.includes(q);
+        const normalizedQuery = q.replace(/\D/g, '');
+        const matchTC = normalizedQuery.length > 0 && item.patientTC.replace(/\D/g, '').includes(normalizedQuery);
         const matchDevice = item.patientDevice.toLowerCase().includes(q) || item.patientDeviceSn.toLowerCase().includes(q);
-        if (!matchName && !matchPhone && !matchDevice) return false;
+        if (!matchName && !matchPhone && !matchTC && !matchDevice) return false;
       }
 
       // Type filter

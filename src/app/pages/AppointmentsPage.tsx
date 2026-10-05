@@ -1379,6 +1379,25 @@ export function NewAppointmentModal({
   ])];
   const { activeBranch } = useBranch();
   const [branch, setBranch] = useState(initialAppointment?.branchId || (activeBranch.mode === 'single' ? activeBranch.branchId : ''));
+  const activeBranches = useMemo(() => branchesList.filter(item => item.status === 'Aktif' || (item.status as string) === 'active'), [branchesList]);
+
+  // Branch data can arrive after this modal mounts. Keep a valid selectable
+  // branch in state without ever falling back to an inactive/archived row.
+  useEffect(() => {
+    const singleBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
+    const currentId = initialAppointment?.branchId || singleBranchId || branch;
+    if (activeBranches.some(item => item.id === currentId)) {
+      if (branch !== currentId) setBranch(currentId);
+      return;
+    }
+    if (singleBranchId && activeBranches.some(item => item.id === singleBranchId)) {
+      setBranch(singleBranchId);
+    } else if (activeBranches.length === 1) {
+      setBranch(activeBranches[0].id);
+    } else if (branch && !activeBranches.some(item => item.id === branch)) {
+      setBranch('');
+    }
+  }, [activeBranches, activeBranch, initialAppointment?.branchId, branch]);
 
   // Notes
   const [notes, setNotes] = useState(initialAppointment?.notes || '');
@@ -1514,12 +1533,14 @@ export function NewAppointmentModal({
     const timeStr = `${hourStr}:${minStr}`;
 
     const linkedPatient = patientsList.find(p => p.id === patientIdFinal);
-    const defaultBranch = branchesList.find(b => b.status === 'Aktif') || branchesList[0];
-    const assignedBranchId = activeBranch.mode === 'single'
+    const defaultBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
+    const defaultBranch = activeBranches.find(item => item.id === defaultBranchId) || activeBranches[0];
+    const requestedBranchId = activeBranch.mode === 'single'
       ? activeBranch.branchId
-      : (initialAppointment ? (branch || initialAppointment.branchId || defaultBranch?.id) : (linkedPatient?.branchId || branch || defaultBranch?.id));
-    const assignedBranch = branchesList.find(item => item.id === assignedBranchId) || defaultBranch;
+      : (initialAppointment ? (branch || initialAppointment.branchId) : (linkedPatient?.branchId || branch));
+    const assignedBranch = activeBranches.find(item => item.id === requestedBranchId) || defaultBranch;
     if (!assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için geçerli bir şube bulunamadı.' }); return; }
+    const assignedBranchId = assignedBranch.id;
     const newApt = {
       ...(initialAppointment || {}),
       id: initialAppointment?.id || `apt-${Date.now().toString().slice(-6)}`,
@@ -1938,7 +1959,7 @@ export function NewAppointmentModal({
             </label>
           )}
 
-          {activeBranch.mode === 'all' && branchesList.filter(item => item.status === 'Aktif').length > 1 && <label className="form-group">Kayıt şubesi<select className="form-select" value={initialAppointment ? branch : (patientsList.find(patient => patient.id === selectedPatient?.id)?.branchId || branch)} disabled={Boolean(selectedPatient) && !initialAppointment} onChange={event => setBranch(event.target.value)}><option value="">Şube seçin</option>{branchesList.filter(item => item.status === 'Aktif').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+          {activeBranch.mode === 'all' && activeBranches.length > 1 && <label className="form-group">Kayıt şubesi<select className="form-select" value={branch} onChange={event => setBranch(event.target.value)}><option value="">Şube seçin</option>{activeBranches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
 
           {/* Notlar */}
           <div>

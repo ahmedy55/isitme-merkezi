@@ -13,10 +13,16 @@ const corsHeaders = {
 
 type ExtraFixtures = {
   stockRows?: Record<string, unknown>[];
+  patientRows?: Record<string, unknown>[];
+  recallRows?: Record<string, unknown>[];
+  appointmentRows?: Record<string, unknown>[];
+  maintenanceRows?: Record<string, unknown>[];
   serviceRows?: Record<string, unknown>[];
   invoiceRows?: Record<string, unknown>[];
   failStockInsert?: boolean;
   cashBranchIds?: string[];
+  expenseBranchIds?: string[];
+  invoiceBranchIds?: string[];
 };
 
 function base64Url(value: unknown) {
@@ -98,11 +104,35 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         rows = fixtures.stockRows || [];
       }
     }
+    if (table === 'appointments' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>[];
+      const row = { ...body[0], id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' };
+      fixtures.appointmentRows = [...(fixtures.appointmentRows || []), row];
+      rows = [row];
+    }
+    if (table === 'asset_maintenance_records') {
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON() as Record<string, unknown>;
+        const row = { ...body, id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', created_at: new Date().toISOString() };
+        fixtures.maintenanceRows = [...(fixtures.maintenanceRows || []), row];
+        rows = [row];
+      } else rows = fixtures.maintenanceRows || [];
+    }
     if (table === 'cash_transactions' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as Record<string, unknown>[];
       const transaction = body[0];
       if (typeof transaction.branch_id === 'string') fixtures.cashBranchIds?.push(transaction.branch_id);
       rows = [{ ...transaction, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', created_at: new Date().toISOString() }];
+    }
+    if (table === 'expenses' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>[];
+      if (typeof body[0].branch_id === 'string') fixtures.expenseBranchIds?.push(body[0].branch_id);
+      rows = [{ ...body[0], id: 'abababab-abab-4bab-8bab-abababababab', created_at: new Date().toISOString() }];
+    }
+    if (table === 'sgk_period_invoices' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      if (typeof body.branch_id === 'string') fixtures.invoiceBranchIds?.push(body.branch_id);
+      rows = [{ ...body, id: 'acacacac-acac-4cac-8cac-acacacacacac', created_at: new Date().toISOString() }];
     }
 
     if (table === 'memberships') {
@@ -131,6 +161,15 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       rows = fixtures.serviceRows || [];
     } else if (table === 'sgk_period_invoices') {
       rows = fixtures.invoiceRows || [];
+    } else if (table === 'patients') {
+      rows = fixtures.patientRows || [];
+    } else if (table === 'recall_items') {
+      rows = fixtures.recallRows || [];
+    } else if (table === 'appointments') {
+      rows = fixtures.appointmentRows || [];
+    } else if (table === 'decrypt_patient_tcs') {
+      const patientIds = (route.request().postDataJSON() as { p_patient_ids?: string[] }).p_patient_ids || [];
+      rows = (fixtures.patientRows || []).filter(patient => patientIds.includes(String(patient.id))).map(patient => ({ patient_id: patient.id, tc: patient.decrypted_tc || '' }));
     }
 
     await route.fulfill({
@@ -211,6 +250,36 @@ test('stok hareketi delta olarak kaydedilir ve satır/drawer miktarı anında g�
   await expect(row).toBeVisible();
 });
 
+test('randevu formu gecikmeli yüklenen tek aktif şubeyi seçip kaydı takvime ekler', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const appointmentFixture: ExtraFixtures = {
+    patientRows: [{ id: patientId, organization_id: orgId, branch_id: branchId, first_name: 'E2E', last_name: 'Hasta', phone: '05000000001', tc: '0000000001', patient_status: 'Aktif', deleted_at: null }],
+    appointmentRows: [],
+  };
+  await mockTenantData(page, false, appointmentFixture);
+  await signIn(page);
+  await page.getByRole('button', { name: 'Randevular' }).click();
+  await page.getByRole('button', { name: /Yeni Randevu/ }).click();
+  await page.getByPlaceholder('Hasta seçin veya arayın...').fill('E2E Hasta');
+  await page.getByText('E2E Hasta - 05000000001', { exact: true }).click();
+  await page.getByRole('button', { name: 'Randevu Oluştur' }).click();
+  await expect.poll(() => appointmentFixture.appointmentRows?.length).toBe(1);
+  expect(appointmentFixture.appointmentRows?.[0].branch_id).toBe(branchId);
+  await expect(page.getByText('E2E Hasta').first()).toBeVisible();
+});
+
+test('hatırlatma araması kayıtlı hastanın TC kimlik numarasını eşleştirir', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  await mockTenantData(page, false, {
+    patientRows: [{ id: patientId, organization_id: orgId, branch_id: branchId, first_name: 'E2E', last_name: 'Hasta', phone: '05000000001', tc: 'ENC:v2:test', decrypted_tc: '0000000001', patient_status: 'Aktif', deleted_at: null }],
+    recallRows: [{ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', organization_id: orgId, patient_id: patientId, patients: { first_name: 'E2E', last_name: 'Hasta' }, reason: 'Pil değişimi', due_date: '2026-12-01', status: 'Bekliyor', last_contact: null, estimated_revenue: 0, probability: null }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Recall' }).click();
+  await page.getByPlaceholder('Hasta adı, telefon, TC veya cihaz seri no...').fill('0000000001');
+  await expect(page.getByText('E2E Hasta').first()).toBeVisible();
+});
+
 test('SGK ödeme zaman çizelgesi, seçilen dönem için hesaplanır', async ({ page }) => {
   await mockTenantData(page, false, {
     invoiceRows: [{
@@ -251,7 +320,9 @@ test('servis raporu dışa aktarma gerçek, yazdırılabilir rapor görüntüley
 
 test('demirbaş, SGK fatura ve kasa tahsilat akışları gerçek aktif şubeyi kullanır', async ({ page }) => {
   const cashBranchIds: string[] = [];
-  await mockTenantData(page, false, { cashBranchIds });
+  const expenseBranchIds: string[] = [];
+  const invoiceBranchIds: string[] = [];
+  await mockTenantData(page, false, { cashBranchIds, expenseBranchIds, invoiceBranchIds });
   await signIn(page);
 
   await page.getByRole('button', { name: 'Demirbaşlar' }).click();
@@ -267,6 +338,10 @@ test('demirbaş, SGK fatura ve kasa tahsilat akışları gerçek aktif şubeyi k
   await expect(sgkBranch).toContainText('QA Şube');
   await sgkBranch.selectOption({ label: 'QA Şube' });
   await expect(sgkBranch).toHaveValue(branchId);
+  await page.getByPlaceholder('Örn: QA-SGK-3B-202609').fill('E2E-SGK-202609');
+  await page.locator('form').filter({ has: page.getByPlaceholder('Örn: QA-SGK-3B-202609') }).locator('input[type="number"]').fill('1000');
+  await page.getByRole('button', { name: 'Faturayı Kaydet' }).click();
+  await expect.poll(() => invoiceBranchIds).toContain(branchId);
 
   await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
   await page.getByRole('button', { name: 'Para Giriş/Çıkış' }).click();
@@ -274,6 +349,13 @@ test('demirbaş, SGK fatura ve kasa tahsilat akışları gerçek aktif şubeyi k
   await page.locator('form').last().locator('input[type="number"]').fill('150');
   await page.getByRole('button', { name: 'İşlemi Kaydet' }).click();
   await expect.poll(() => cashBranchIds).toContain(branchId);
+
+  await page.getByRole('button', { name: 'Masraflar' }).last().click();
+  await page.getByRole('button', { name: 'Yeni Gider Kaydet' }).click();
+  await page.getByPlaceholder('Örn: Elektrik faturası, kira, bakım hizmeti').fill('E2E Gider');
+  await page.locator('form').last().locator('input[type="number"]').fill('250');
+  await page.getByRole('button', { name: 'Gideri Kaydet' }).click();
+  await expect.poll(() => expenseBranchIds).toContain(branchId);
 });
 
 test('boş demirbaş verisinde seçim paneli ve pagination görünmez', async ({ page }) => {
@@ -286,7 +368,11 @@ test('boş demirbaş verisinde seçim paneli ve pagination görünmez', async ({
 });
 
 test('satır üç nokta menüsü drawer açmadan görüntülenir; satır tıklaması drawer açar', async ({ page }) => {
-  await openAssets(page, true);
+  await mockTenantData(page, true, { maintenanceRows: [] });
+  await signIn(page);
+  await expect(page.getByRole('button', { name: 'Demirbaşlar' })).toBeVisible();
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await expect(page.getByRole('heading', { name: 'Demirbaş & Klinik Cihaz Yönetimi' })).toBeVisible();
   const row = page.getByRole('row').filter({ hasText: assetName });
   await expect(row).toBeVisible();
 
@@ -294,7 +380,12 @@ test('satır üç nokta menüsü drawer açmadan görüntülenir; satır tıklam
   await expect(page.getByRole('button', { name: 'Bakım Kaydı Ekle' })).toBeVisible();
   await expect(page.getByText('Demirbaş Bilgileri')).toHaveCount(0);
 
-  await row.click();
+  await page.getByRole('button', { name: /Bakım Kaydı Ekle/ }).click();
+  await expect(page.getByRole('heading', { name: 'Yeni Bakım Kaydı Gir' })).toBeVisible();
+  await page.getByPlaceholder('Servis / yetkili kuruluş').fill('E2E Bakım Servisi');
+  await page.getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByText('Demirbaş Bilgileri')).toBeVisible();
-  await expect(page.getByText(assetName).last()).toBeVisible();
+  await expect(page.getByText('Bakım · E2E Bakım Servisi')).toBeVisible();
+  await page.getByRole('button', { name: 'Genel' }).click();
+  await expect(page.getByText('10.01.2027')).toHaveCount(2);
 });

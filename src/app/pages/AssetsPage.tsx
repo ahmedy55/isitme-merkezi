@@ -6,7 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { formatCurrency, formatDate } from '../data/mockData';
 import { getNextMaintenanceDate } from '../lib/assetMaintenance';
-import { archiveAsset, AssetRecord, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
+import { archiveAsset, AssetMaintenanceRecord, AssetRecord, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
 import styles from './AssetsPage.module.css';
 
 interface DisplayAsset {
@@ -38,6 +38,7 @@ const toIsoDate = (value: string) => {
 export default function AssetsPage() {
   const { addToast, currentOrgId, branchesList } = useApp();
   const { activeBranch } = useBranch();
+  const activeBranches = useMemo(() => branchesList.filter(branch => branch.status === 'Aktif' || (branch.status as string) === 'active'), [branchesList]);
 
   // Asset list state
   const [assetList, setAssetList] = useState<DisplayAsset[]>([]);
@@ -54,6 +55,8 @@ export default function AssetsPage() {
   // Table selection & active detail item
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeItem, setActiveItem] = useState<DisplayAsset | null>(null);
+  const [maintenanceHistory, setMaintenanceHistory] = useState<AssetMaintenanceRecord[]>([]);
+  const [maintenanceForm, setMaintenanceForm] = useState({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '', notes: '' });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'bakim' | 'dosyalar' | 'gecmis'>('genel');
@@ -85,8 +88,11 @@ export default function AssetsPage() {
   });
 
   useEffect(() => {
-    if (!newAssetForm.branch && branchesList[0]) setNewAssetForm(form => ({ ...form, branch: branchesList[0].name }));
-  }, [branchesList, newAssetForm.branch]);
+    if (activeBranches.some(branch => branch.name === newAssetForm.branch)) return;
+    const singleBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
+    const preferred = activeBranches.find(branch => branch.id === singleBranchId) || (activeBranches.length === 1 ? activeBranches[0] : undefined);
+    setNewAssetForm(form => ({ ...form, branch: preferred?.name || '' }));
+  }, [activeBranches, activeBranch, newAssetForm.branch]);
 
   // Sync Supabase operations repository if configured
   useEffect(() => {
@@ -104,7 +110,7 @@ export default function AssetsPage() {
               branchId: r.branchId,
               serialNo: r.serialNo || '—',
               purchaseDate: formatDate(r.purchaseDate || ''),
-              warrantyExpiry: r.warrantyExpiry || '—',
+              warrantyExpiry: formatDate(r.warrantyExpiry || ''),
               cost: Number(r.cost) || 0,
               status: r.status === 'Arızalı' ? 'Onarımda' : r.status || 'Aktif',
               calibrationIntervalMonths: r.maintenanceIntervalMonths || 12,
@@ -182,6 +188,23 @@ export default function AssetsPage() {
   useEffect(() => {
     if (activeItem && !filteredAssets.some(asset => asset.id === activeItem.id)) setActiveItem(null);
   }, [activeItem, filteredAssets]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentOrgId || !activeItem?.id || drawerTab !== 'gecmis') {
+      setMaintenanceHistory([]);
+      return;
+    }
+    void fetchAssetMaintenance(activeItem.id)
+      .then(rows => { if (!cancelled) setMaintenanceHistory(rows); })
+      .catch(error => {
+        if (!cancelled) {
+          setMaintenanceHistory([]);
+          addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş işlem geçmişi yüklenemedi.' });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [currentOrgId, activeItem?.id, drawerTab, addToast]);
 
   // Metric counts matching the mockup
   const totalAssetsCount = filteredAssets.length;
@@ -297,7 +320,7 @@ export default function AssetsPage() {
       return;
     }
 
-    const branchRecord = branchesList.find(branch => branch.name === newAssetForm.branch);
+    const branchRecord = activeBranches.find(branch => branch.name === newAssetForm.branch);
     if (currentOrgId && !branchRecord) {
       addToast({ type: 'error', message: 'Demirbaş için geçerli bir şube seçin.' });
       return;
@@ -360,6 +383,38 @@ export default function AssetsPage() {
     setSelectedIds(prev => prev.filter(x => x !== id));
     setActiveActionMenuId(null);
     addToast({ type: 'success', message: 'Demirbaş kaydı arşivlendi.' });
+  };
+
+  const handleSaveMaintenance = async () => {
+    if (!activeItem?.branchId) {
+      addToast({ type: 'error', message: 'Demirbaşın kayıtlı aktif şubesi bulunamadı.' });
+      return;
+    }
+    const recordType: AssetMaintenanceRecord['recordType'] = showCalibrationModal ? 'Kalibrasyon' : 'Bakım';
+    try {
+      const record = await createAssetMaintenance({
+        assetId: activeItem.id,
+        branchId: activeItem.branchId,
+        recordType,
+        maintenanceDate: maintenanceForm.date,
+        provider: maintenanceForm.provider,
+        reportNumber: maintenanceForm.reportNumber,
+        notes: maintenanceForm.notes,
+      });
+      setMaintenanceHistory(previous => [record, ...previous]);
+      if (recordType !== 'Kalibrasyon') {
+        const updatedItem = { ...activeItem, lastCalibrationDate: formatDate(record.maintenanceDate), maintenanceStatus: 'Bakım kaydı var' };
+        setActiveItem(updatedItem);
+        setAssetList(previous => previous.map(item => item.id === updatedItem.id ? updatedItem : item));
+      }
+      setDrawerTab('gecmis');
+      setShowMaintenanceModal(false);
+      setShowCalibrationModal(false);
+      setMaintenanceForm({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '', notes: '' });
+      addToast({ type: 'success', message: `${recordType} kaydı demirbaş geçmişine eklendi.` });
+    } catch (error) {
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş işlem kaydı kaydedilemedi.' });
+    }
   };
 
   return (
@@ -536,7 +591,7 @@ export default function AssetsPage() {
           onChange={e => setSelectedBranch(e.target.value)}
         >
           <option value="Tüm Şubeler">Tüm Şubeler</option>
-          {branchesList.map(b => (
+          {activeBranches.map(b => (
             <option key={b.id} value={b.name}>{b.name}</option>
           ))}
         </select>
@@ -714,6 +769,7 @@ export default function AssetsPage() {
                                     onClick={event => {
                                       event.stopPropagation();
                                       setActiveActionMenuId(null);
+                                      setActiveItem(item);
                                       setShowMaintenanceModal(true);
                                     }}
                                   >
@@ -724,6 +780,7 @@ export default function AssetsPage() {
                                     onClick={event => {
                                       event.stopPropagation();
                                       setActiveActionMenuId(null);
+                                      setActiveItem(item);
                                       setShowCalibrationModal(true);
                                     }}
                                   >
@@ -1009,15 +1066,14 @@ export default function AssetsPage() {
 
               {drawerTab === 'gecmis' && (
                 <div style={{ display: 'grid', gap: 8, fontSize: 12 }}>
-                  {[
-                    ...([] as { text: string; date: string; user: string }[])
-                  ].map((log, idx) => (
-                    <div key={idx} style={{ padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                      <div style={{ color: '#0f172a', fontWeight: 600 }}>{log.text}</div>
-                      <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>{log.date} · {log.user}</div>
+                  {maintenanceHistory.map(record => (
+                    <div key={record.id} style={{ padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <div style={{ color: '#0f172a', fontWeight: 600 }}>{record.recordType}{record.provider ? ` · ${record.provider}` : ''}</div>
+                      <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>{formatDate(record.maintenanceDate)}{record.reportNumber ? ` · Rapor: ${record.reportNumber}` : ''}</div>
+                      {record.notes && <div style={{ color: '#334155', marginTop: 5 }}>{record.notes}</div>}
                     </div>
                   ))}
-                  <div style={{ padding: 12, color: '#64748b' }}>İşlem geçmişi kaydı bulunmuyor.</div>
+                  {maintenanceHistory.length === 0 && <div style={{ padding: 12, color: '#64748b' }}>Kayıtlı bakım, onarım veya kalibrasyon geçmişi bulunmuyor.</div>}
                 </div>
               )}
             </div>
@@ -1098,7 +1154,7 @@ export default function AssetsPage() {
                       onChange={e => setNewAssetForm({ ...newAssetForm, branch: e.target.value })}
                     >
                       <option value="">Şube seçin</option>
-                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                      {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1305,26 +1361,26 @@ export default function AssetsPage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>İşlem Tarihi</label>
-                <input type="date" defaultValue={new Date().toISOString().split('T')[0]} className={styles.filterSelect} style={{ width: '100%' }} />
+                <input type="date" value={maintenanceForm.date} onChange={event => setMaintenanceForm(form => ({ ...form, date: event.target.value }))} className={styles.filterSelect} style={{ width: '100%' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Yetkili Kuruluş / Servis</label>
-                <input placeholder="Örn: Meditest Akustik Kalibrasyon Laboratuvarı" className={styles.filterSelect} style={{ width: '100%' }} />
+                <input placeholder="Servis / yetkili kuruluş" value={maintenanceForm.provider} onChange={event => setMaintenanceForm(form => ({ ...form, provider: event.target.value }))} className={styles.filterSelect} style={{ width: '100%' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Sertifika / Rapor No</label>
-                <input placeholder="CAL-2025-XXXX" className={styles.filterSelect} style={{ width: '100%' }} />
+                <input placeholder="Sertifika / rapor numarası" value={maintenanceForm.reportNumber} onChange={event => setMaintenanceForm(form => ({ ...form, reportNumber: event.target.value }))} className={styles.filterSelect} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Not</label>
+                <textarea value={maintenanceForm.notes} onChange={event => setMaintenanceForm(form => ({ ...form, notes: event.target.value }))} className={styles.filterSelect} style={{ width: '100%', minHeight: 72 }} />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
               <button className={styles.btnClear} onClick={() => { setShowMaintenanceModal(false); setShowCalibrationModal(false); }}>Vazgeç</button>
               <button
                 className={styles.btnNewAsset}
-                onClick={() => {
-                  setShowMaintenanceModal(false);
-                  setShowCalibrationModal(false);
-                  addToast({ type: 'error', message: 'Bakım/kalibrasyon hareketleri için ilişkili kayıt tablosu bağlı değil; işlem kaydedilmedi.' });
-                }}
+                onClick={() => void handleSaveMaintenance()}
               >
                 Kaydet
               </button>
@@ -1350,7 +1406,7 @@ export default function AssetsPage() {
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hedef Şube</label>
                 <select className={styles.filterSelect} style={{ width: '100%' }} defaultValue="">
                   <option value="" disabled>Şube seçin</option>
-                  {branchesList.filter(branch => branch.status === 'Aktif' && branch.name !== activeItem.branch).map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                  {activeBranches.filter(branch => branch.name !== activeItem.branch).map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                 </select>
               </div>
               <div>
