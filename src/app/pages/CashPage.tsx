@@ -20,6 +20,7 @@ interface CashMovement {
   paymentMethod: string;
   status: 'Tahsil Edildi' | 'Bekleyen' | 'Bekliyor' | 'Taksitli';
   branch: string;
+  referenceEntity?: string;
 }
 
 interface ExpenseItem {
@@ -115,7 +116,7 @@ export default function CashPage() {
           account: row.cashRegisterId || '—', type: isOutgoing ? 'Çıkış' : 'Giriş', category: row.category || '—',
           description: row.description || '—', patientOrEntity: sale?.patientName || expense?.createdBy || '—',
           amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || '—',
-          status: 'Tahsil Edildi', branch: branch?.name || '—',
+          status: 'Tahsil Edildi', branch: branch?.name || '—', referenceEntity: row.referenceEntity,
         };
       });
       const mappedExpenses: ExpenseItem[] = actualExpenses.map(expense => ({
@@ -157,6 +158,9 @@ export default function CashPage() {
   const currentMonthNet = currentMonthMovements.reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
   const currentMonthSales = salesList.filter(sale => sale.date?.startsWith(currentMonthKey)).reduce((sum, sale) => sum + Number(sale.total || 0), 0);
   const currentMonthCollected = currentMonthMovements.filter(item => item.type === 'Giriş').reduce((sum, item) => sum + item.amount, 0);
+  const currentMonthSalesCollected = currentMonthMovements
+    .filter(item => item.type === 'Giriş' && item.referenceEntity === 'sale')
+    .reduce((sum, item) => sum + item.amount, 0);
   const currentMonthExpenses = expensesList.filter(expense => expense.date?.startsWith(currentMonthKey)).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const currentYearExpenses = expensesList.filter(expense => expense.date?.startsWith(String(new Date().getFullYear()))).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   const recentMonths = Array.from({ length: 3 }, (_, index) => {
@@ -169,7 +173,7 @@ export default function CashPage() {
     return total > highest.total ? { category: expense.category, total } : highest;
   }, { category: '—', total: 0 });
   const pendingCollections = salesList.filter(sale => sale.status !== 'Tahsil Edildi').reduce((sum, sale) => sum + Number(sale.patientAmount || sale.total || 0), 0);
-  const monthlyCollectionRate = currentMonthSales > 0 ? Math.round(currentMonthCollected / currentMonthSales * 100) : null;
+  const monthlyCollectionRate = currentMonthSales > 0 ? Math.round(currentMonthSalesCollected / currentMonthSales * 100) : null;
   const cashChartMonths = Array.from({ length: 12 }, (_, index) => {
     const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - 11 + index);
     const key = date.toISOString().slice(0, 7);
