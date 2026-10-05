@@ -3,7 +3,20 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
+import { supabase } from '../lib/supabase';
 import styles from './SGKPage.module.css';
+
+interface SGKPeriodInvoice {
+  id: string;
+  branch_id: string;
+  invoice_month: string;
+  expected_month: string;
+  invoice_no: string;
+  amount: number;
+  notes: string;
+  created_at: string;
+  branchName: string;
+}
 
 interface SGKPrescriptionItem {
   id: string;
@@ -228,8 +241,44 @@ const INITIAL_SGK_LIST: SGKPrescriptionItem[] = [
 ];
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, currentOrgId } = useApp();
+  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, currentOrgId, approveSGKPrescription } = useApp();
   const { matches } = useBranchScope();
+
+  const items = useMemo<SGKPrescriptionItem[]>(() => allPatients
+    .filter(patient => Boolean(patient.prescriptionNo?.trim()) || ['Reçete Yazıldı', 'SGK Onaylı'].includes(patient.prescriptionStatus || ''))
+    .map(patient => {
+      const name = `${patient.firstName} ${patient.lastName}`.trim();
+      const status: SGKPrescriptionItem['status'] = patient.prescriptionStatus === 'SGK Onaylı' ? 'Onaylandı' : 'İşlemde';
+      const birthDate = patient.birthDate ? new Date(`${patient.birthDate.slice(0, 10)}T12:00:00`) : null;
+      const age = birthDate && !Number.isNaN(birthDate.getTime())
+        ? Math.max(0, new Date().getFullYear() - birthDate.getFullYear() - (new Date().getMonth() < birthDate.getMonth() || (new Date().getMonth() === birthDate.getMonth() && new Date().getDate() < birthDate.getDate()) ? 1 : 0))
+        : 0;
+      return {
+        id: patient.id,
+        patientId: patient.id,
+        patientName: name,
+        avatarInitials: name.split(/\s+/).map(part => part[0] || '').join('').slice(0, 2).toUpperCase(),
+        avatarColor: styles.avatarTeal,
+        age,
+        gender: patient.gender,
+        tc: patient.tc,
+        phone: patient.phone,
+        email: patient.email || '',
+        address: patient.address || '',
+        birthDate: patient.birthDate || '',
+        prescriptionNo: patient.prescriptionNo || '—',
+        reportNo: patient.reportNo || '—',
+        date: '—',
+        deviceOperation: patient.currentDevice || '—',
+        status,
+        period: '—',
+        branch: branchesList.find(branch => branch.id === patient.branchId)?.name || patient.branch || '—',
+        doctorName: patient.doctorName || '—',
+        hospitalName: '—',
+        icdCode: patient.hearingLoss || '—',
+        provisionNo: '—',
+      };
+    }), [allPatients, branchesList]);
 
   // Navigation tab states
   const [mainTab, setMainTab] = useState<'records' | 'invoices' | 'documents' | 'medula'>('records');
@@ -243,7 +292,9 @@ export default function SGKPage() {
   const tablePageSize = 10;
 
   // Items list
-  const [items, setItems] = useState<SGKPrescriptionItem[]>([]);
+  const [periodInvoices, setPeriodInvoices] = useState<SGKPeriodInvoice[]>([]);
+  const [periodInvoicesLoading, setPeriodInvoicesLoading] = useState(false);
+  const [periodInvoicesError, setPeriodInvoicesError] = useState('');
 
   // Selection states
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -257,10 +308,59 @@ export default function SGKPage() {
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   useEffect(() => {
-    setItems([]);
     setSelectedIds([]);
     setActiveItem(null);
   }, [currentOrgId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentOrgId) {
+      setPeriodInvoices([]);
+      setPeriodInvoicesError('');
+      setPeriodInvoicesLoading(false);
+      return;
+    }
+
+    setPeriodInvoicesLoading(true);
+    setPeriodInvoicesError('');
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('sgk_period_invoices')
+          .select('id, branch_id, invoice_month, expected_month, invoice_no, amount, notes, created_at')
+          .eq('organization_id', currentOrgId)
+          .order('invoice_month', { ascending: false });
+        if (cancelled) return;
+        if (error) {
+          setPeriodInvoices([]);
+          setPeriodInvoicesError('SGK fatura kayıtları yüklenemedi. Veritabanı bağlantısını kontrol edin.');
+          return;
+        }
+
+        const rows = (data || []).filter(row => matches(undefined, row.branch_id)).map(row => ({
+          id: row.id,
+          branch_id: row.branch_id,
+          invoice_month: row.invoice_month,
+          expected_month: row.expected_month,
+          invoice_no: row.invoice_no,
+          amount: Number(row.amount) || 0,
+          notes: row.notes || '',
+          created_at: row.created_at,
+          branchName: branchesList.find(branch => branch.id === row.branch_id)?.name || '—',
+        }));
+        setPeriodInvoices(rows);
+      } catch {
+        if (!cancelled) {
+          setPeriodInvoices([]);
+          setPeriodInvoicesError('SGK fatura kayıtları yüklenemedi. Veritabanı bağlantısını kontrol edin.');
+        }
+      } finally {
+        if (!cancelled) setPeriodInvoicesLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentOrgId, branchesList, matches]);
 
   // New Prescription Form state
   const [formData, setFormData] = useState({
@@ -356,11 +456,23 @@ export default function SGKPage() {
   // Submit new prescription
   const handleCreatePrescription = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentOrgId) {
-      addToast({ type: 'error', message: 'Aktif firma oturumu gerekli; kayıt oluşturulmadı.' });
+    if (!formData.patientName.trim() || !formData.tc.trim() || !formData.prescriptionNo.trim() || !formData.reportNo.trim()) {
+      addToast({ type: 'warning', message: 'Hasta adı, T.C. kimlik no, reçete no ve rapor no zorunludur.' });
       return;
     }
-    addToast({ type: 'error', message: 'SGK reçeteleri için kalıcı hasta/şube ilişkili bir tablo henüz yapılandırılmamış. Sahte kayıt oluşturmamak için işlem kaydedilmedi.' });
+    const matchedPatient = allPatients.find(patient => patient.tc === formData.tc.trim());
+    if (!matchedPatient || `${matchedPatient.firstName} ${matchedPatient.lastName}`.trim().toLocaleLowerCase('tr-TR') !== formData.patientName.trim().toLocaleLowerCase('tr-TR')) {
+      addToast({ type: 'error', message: 'Girilen T.C. kimlik no ve ad soyad ile eşleşen kayıtlı hasta bulunamadı. Önce hastayı Hasta kayıtlarından ekleyin.' });
+      return;
+    }
+    try {
+      await approveSGKPrescription(matchedPatient.id, formData.prescriptionNo.trim(), formData.reportNo.trim());
+      setSelectedPatientId(matchedPatient.id);
+      setIsNewModalOpen(false);
+      setFormData({ patientName: '', tc: '', phone: '', prescriptionNo: '', reportNo: '', deviceOperation: '', period: '', status: 'İşlemde', branch: '', notes: '' });
+    } catch (error) {
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Reçete bilgileri hasta kaydına yazılamadı.' });
+    }
   };
 
   const handleUpdateStatus = (id: string, newStatus: SGKPrescriptionItem['status']) => {
@@ -457,7 +569,7 @@ export default function SGKPage() {
             <span>Toplam Reçete</span>
             <strong>{totalCount}</strong>
             <div className={styles.statTrend}>
-              <span className={styles.statSubtext}>Kayıtlı dönem toplamı</span>
+              <span className={styles.statSubtext}>Hasta kartı reçete kayıtları</span>
             </div>
           </div>
         </div>
@@ -683,7 +795,7 @@ export default function SGKPage() {
                     {filteredList.length === 0 ? (
                       <tr>
                         <td colSpan={9} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
-                          Aradığınız kriterlere uygun SGK reçete kaydı bulunamadı.
+                          Eşleşen filtrelerde reçete numarası veya SGK durumu bulunan hasta kaydı yok.
                         </td>
                       </tr>
                     ) : (
@@ -1197,7 +1309,7 @@ export default function SGKPage() {
             <div>
               <h3 style={{ margin: 0, fontSize: 18, color: '#0f172a' }}>SGK Dönem İcmal & Fatura Listesi</h3>
               <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>
-                Aylık SGK faturalandırma dönemleri ve hak ediş tahsilat takibi.
+                Kaydedilmiş SGK dönem faturaları ve beklenen ödeme ayları.
               </p>
             </div>
             <button
@@ -1212,17 +1324,31 @@ export default function SGKPage() {
             <table className={styles.sgkTable}>
               <thead>
                 <tr>
-                  <th>Dönem</th>
-                  <th>Reçete Sayısı</th>
-                  <th>Toplam Cihaz Bedeli</th>
-                  <th>SGK Katkı Payı</th>
-                  <th>Hasta Katkı Payı</th>
-                  <th>Tahmini Tahsilat Tarihi</th>
-                  <th>Fatura Durumu</th>
+                  <th>Fatura Dönemi</th>
+                  <th>Fatura No</th>
+                  <th>Fatura Tutarı</th>
+                  <th>Beklenen Ödeme</th>
+                  <th>Şube</th>
+                  <th>Kayıt Tarihi</th>
                 </tr>
               </thead>
               <tbody>
-                <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>SGK dönem fatura verisi bağlı bir tablo bulunmadığı için burada kayıt gösterilemiyor.</td></tr>
+                {periodInvoicesLoading ? (
+                  <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>SGK fatura kayıtları yükleniyor…</td></tr>
+                ) : periodInvoicesError ? (
+                  <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#b91c1c' }}>{periodInvoicesError}</td></tr>
+                ) : periodInvoices.length === 0 ? (
+                  <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>Bu firma ve şube kapsamı için kayıtlı SGK dönem faturası bulunamadı.</td></tr>
+                ) : periodInvoices.map(invoice => (
+                  <tr key={invoice.id}>
+                    <td>{new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(new Date(`${invoice.invoice_month.slice(0, 10)}T12:00:00`))}</td>
+                    <td>{invoice.invoice_no}</td>
+                    <td>{new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(invoice.amount)}</td>
+                    <td>{new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(new Date(`${invoice.expected_month.slice(0, 10)}T12:00:00`))}</td>
+                    <td>{invoice.branchName}</td>
+                    <td>{invoice.created_at ? new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(invoice.created_at)) : '—'}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

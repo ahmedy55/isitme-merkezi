@@ -23,23 +23,6 @@ interface InvoiceRecord {
   notes?: string;
 }
 
-const INITIAL_MOCK_INVOICES: InvoiceRecord[] = [
-  {
-    id: 'inv-1',
-    branch_id: 'b-1',
-    branchName: 'Test Şube 1',
-    invoice_month: '2026-09',
-    invoice_period_label: 'Eylül 2026',
-    expected_month: '2026-11',
-    expected_month_label: 'Kasım 2026',
-    invoice_no: 'QA-SGK-3B-202609',
-    amount: 25000,
-    status: 'Bekliyor',
-    created_at: '12.09.2025 14:30',
-    notes: '2026 Eylül SGK İcmal faturası'
-  }
-];
-
 export default function SgkReceivablesPage() {
   const { currentOrgId, branchesList, addToast } = useApp();
   const { activeBranchId, matches } = useBranchScope();
@@ -185,47 +168,40 @@ export default function SgkReceivablesPage() {
       const selectedBranchObj = branchesList.find(b => b.id === branch);
       if (!currentOrgId || !selectedBranchObj) throw new Error('Geçerli firma ve şube seçin.');
       const branchName = selectedBranchObj.name;
+      const invoicePayload = {
+        branch_id: branch,
+        invoice_month: `${periodYearMonth}-01`,
+        invoice_no: invoiceNo.trim(),
+        amount: Number(amount),
+        notes: notes.trim(),
+      };
+      const result = editingId
+        ? await supabase.from('sgk_period_invoices').update(invoicePayload).eq('id', editingId).eq('organization_id', currentOrgId).select('*').single()
+        : await supabase.from('sgk_period_invoices').insert({ ...invoicePayload, organization_id: currentOrgId }).select('*').single();
+      if (result.error || !result.data) throw result.error || new Error('Fatura kaydı veritabanından doğrulanamadı.');
 
-      if (editingId) {
-        // Edit existing
-        setInvoices(prev => prev.map(inv => {
-          if (inv.id === editingId) {
-            return {
-              ...inv,
-              branch_id: branch,
-              branchName,
-              invoice_month: periodYearMonth,
-              invoice_period_label: monthLabel(periodYearMonth),
-              expected_month: expMonth,
-              expected_month_label: monthLabel(expMonth),
-              invoice_no: invoiceNo.trim(),
-              amount: Number(amount),
-              notes
-            };
-          }
-          return inv;
-        }));
-        setEditingId(null);
-        addToast({ type: 'success', message: 'Fatura bilgileri başarıyla güncellendi.' });
-      } else {
-        // Create new
-        const newRecord: InvoiceRecord = {
-          id: `inv-${Date.now()}`,
-          branch_id: branch,
-          branchName,
-          invoice_month: periodYearMonth,
-          invoice_period_label: monthLabel(periodYearMonth),
-          expected_month: expMonth,
-          expected_month_label: monthLabel(expMonth),
-          invoice_no: invoiceNo.trim(),
-          amount: Number(amount),
-          status: 'Bekliyor',
-          created_at: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-          notes
-        };
-        setInvoices(prev => [newRecord, ...prev]);
-        addToast({ type: 'success', message: `${newRecord.invoice_no} dönem faturası kaydedildi.` });
-      }
+      const saved = result.data as any;
+      const savedPeriod = String(saved.invoice_month).slice(0, 7);
+      const savedExpected = String(saved.expected_month).slice(0, 7) || expMonth;
+      const savedRecord: InvoiceRecord = {
+        id: saved.id,
+        branch_id: saved.branch_id,
+        branchName,
+        invoice_month: savedPeriod,
+        invoice_period_label: monthLabel(savedPeriod),
+        expected_month: savedExpected,
+        expected_month_label: monthLabel(savedExpected),
+        invoice_no: saved.invoice_no,
+        amount: Number(saved.amount),
+        status: saved.status || 'Bekliyor',
+        created_at: saved.created_at ? new Date(saved.created_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        notes: saved.notes || '',
+      };
+      setInvoices(prev => editingId
+        ? prev.map(inv => inv.id === editingId ? savedRecord : inv)
+        : [savedRecord, ...prev]);
+      setEditingId(null);
+      addToast({ type: 'success', message: editingId ? 'Fatura bilgileri veritabanında güncellendi.' : `${savedRecord.invoice_no} dönem faturası veritabanına kaydedildi.` });
 
       // Reset form
       setInvoiceNo('');
@@ -249,15 +225,15 @@ export default function SgkReceivablesPage() {
   };
 
   const handleDelete = (id: string) => {
-    setInvoices(prev => prev.filter(x => x.id !== id));
+    void id;
     setActiveActionMenuId(null);
-    addToast({ type: 'success', message: 'Fatura kaydı silindi.' });
+    addToast({ type: 'error', message: 'SGK fatura tablosunda güvenli silme işlemi yapılandırılmadı; kayıt silinmedi.' });
   };
 
   const handleMarkPaid = (id: string) => {
-    setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, status: 'Tahsil Edildi' } : inv));
+    void id;
     setActiveActionMenuId(null);
-    addToast({ type: 'success', message: 'Fatura "Tahsil Edildi" olarak işaretlendi.' });
+    addToast({ type: 'error', message: 'SGK fatura tablosunda tahsilat durumu alanı yapılandırılmadı; değişiklik kaydedilmedi.' });
   };
 
   return (
