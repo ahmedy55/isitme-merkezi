@@ -15,218 +15,7 @@ interface DisplayStockItem extends StockItem {
   thumbnail?: string;
 }
 
-const DEFAULT_MOCK_ITEMS: DisplayStockItem[] = [
-  {
-    id: 'stk-1',
-    name: 'Oticon More 1',
-    category: 'Cihaz',
-    brand: 'Oticon',
-    model: 'More 1',
-    serialNo: '1234567890',
-    barcode: 'OT-001',
-    quantity: 2,
-    criticalLevel: 1,
-    price: 12500,
-    purchasePrice: 9000,
-    sgkPrice: 6200,
-    warrantyExpiry: '2028-09-15',
-    location: 'A-Rafı, Kutu 1',
-    status: 'Stokta',
-    utsStatus: 'Bildirildi',
-    branch: 'Merkez',
-    description: 'RITE, şarjlı, BT özellikli işitme cihazı.',
-    branchStockBreakdown: { 'Merkez': 1, 'Çankaya': 1, 'Kadıköy': 0 }
-  },
-  {
-    id: 'stk-2',
-    name: 'Phonak Audéo L',
-    category: 'Cihaz',
-    brand: 'Phonak',
-    model: 'Audéo L',
-    serialNo: '9876543210',
-    barcode: 'PH-002',
-    quantity: 1,
-    criticalLevel: 1,
-    price: 13750,
-    purchasePrice: 9800,
-    sgkPrice: 6200,
-    warrantyExpiry: '2028-08-20',
-    location: 'A-Rafı, Kutu 2',
-    status: 'Stokta',
-    utsStatus: 'Bildirildi',
-    branch: 'Merkez',
-    description: 'RIC tipi, Bluetooth özellikli şarjlı işitme cihazı.',
-    branchStockBreakdown: { 'Merkez': 1, 'Çankaya': 0, 'Kadıköy': 0 }
-  },
-  {
-    id: 'stk-3',
-    name: 'Widex Moment',
-    category: 'Cihaz',
-    brand: 'Widex',
-    model: 'Moment',
-    serialNo: '4567891234',
-    barcode: 'WD-003',
-    quantity: 0,
-    criticalLevel: 1,
-    price: 11900,
-    purchasePrice: 8500,
-    sgkPrice: 6200,
-    warrantyExpiry: '2028-06-10',
-    location: 'B-Rafı, Kutu 1',
-    status: 'Satıldı',
-    utsStatus: 'Bekliyor',
-    branch: 'Çankaya',
-    description: 'Doğal ses deneyimi sunan PureSound teknolojisi.',
-    branchStockBreakdown: { 'Merkez': 0, 'Çankaya': 0, 'Kadıköy': 0 }
-  },
-  {
-    id: 'stk-4',
-    name: 'Signia Pure 312',
-    category: 'Cihaz',
-    brand: 'Signia',
-    model: 'Pure 312',
-    serialNo: '3216549870',
-    barcode: 'SG-004',
-    quantity: 3,
-    criticalLevel: 1,
-    price: 12800,
-    purchasePrice: 9100,
-    sgkPrice: 6200,
-    warrantyExpiry: '2028-07-05',
-    location: 'A-Rafı, Kutu 3',
-    status: 'Stokta',
-    utsStatus: 'Bildirildi',
-    branch: 'Merkez',
-    description: 'Kompakt RIC tipi, 312 pilli işitme cihazı.',
-    branchStockBreakdown: { 'Merkez': 2, 'Çankaya': 1, 'Kadıköy': 0 }
-  },
-  {
-    id: 'stk-5',
-    name: '312 Numara Pil',
-    category: 'Pil',
-    brand: 'Rayovac',
-    model: 'Extra 312',
-    serialNo: '—',
-    barcode: 'RV-312',
-    quantity: 45,
-    criticalLevel: 10,
-    price: 250,
-    purchasePrice: 140,
-    sgkPrice: 0,
-    warrantyExpiry: '2027-12-31',
-    location: 'Çekmece 1',
-    status: 'Stokta',
-    utsStatus: 'Gerekli Değil',
-    branch: 'Merkez',
-    description: 'Uzun ömürlü çinko-hava 312 numara işitme cihazı pili (6\'lı paket).',
-    branchStockBreakdown: { 'Merkez': 25, 'Çankaya': 15, 'Kadıköy': 5 }
-  },
-  {
-    id: 'stk-6',
-    name: '13 Numara Pil',
-    category: 'Pil',
-    brand: 'Duracell',
-    model: 'Hearing Aid 13',
-    serialNo: '—',
-    barcode: 'DC-013',
-    quantity: 8,
-    criticalLevel: 10,
-    price: 250,
-    purchasePrice: 145,
-    sgkPrice: 0,
-    warrantyExpiry: '2027-11-30',
-    location: 'Çekmece 1',
-    status: 'Stokta',
-    utsStatus: 'Gerekli Değil',
-    branch: 'Çankaya',
-    description: '13 numara turuncu renk kodlu işitme cihazı pili (6\'lı paket).',
-    branchStockBreakdown: { 'Merkez': 4, 'Çankaya': 3, 'Kadıköy': 1 }
-  },
-  {
-    id: 'stk-7',
-    name: 'Kulak Kalıbı - Akrilik',
-    category: 'Kalıp',
-    brand: 'Kişiye Özel',
-    model: 'Akrilik',
-    serialNo: 'KK-2025-001',
-    barcode: '—',
-    quantity: 4,
-    criticalLevel: 2,
-    price: 1200,
-    purchasePrice: 600,
-    sgkPrice: 0,
-    warrantyExpiry: '2026-09-01',
-    location: 'Laboratuvar',
-    status: 'Stokta',
-    utsStatus: 'Gerekli Değil',
-    branch: 'Merkez',
-    description: 'BTE cihazlar için kişiye özel sert akrilik kulak kalıbı.',
-    branchStockBreakdown: { 'Merkez': 2, 'Çankaya': 2, 'Kadıköy': 0 }
-  },
-  {
-    id: 'stk-8',
-    name: 'Oticon Temizlik Kiti',
-    category: 'Aksesuar',
-    brand: 'Oticon',
-    model: 'Care Kit',
-    serialNo: '—',
-    barcode: 'OT-AKS-01',
-    quantity: 10,
-    criticalLevel: 3,
-    price: 450,
-    purchasePrice: 220,
-    sgkPrice: 0,
-    warrantyExpiry: '2028-01-01',
-    location: 'Aksesuar Dolabı',
-    status: 'Stokta',
-    utsStatus: 'Gerekli Değil',
-    branch: 'Merkez',
-    description: 'Filtre, fırça ve nem alıcı tablet içeren kapsamlı bakım seti.',
-    branchStockBreakdown: { 'Merkez': 6, 'Çankaya': 4, 'Kadıköy': 0 }
-  },
-  {
-    id: 'stk-9',
-    name: 'Dry&Store Kurutucu',
-    category: 'Aksesuar',
-    brand: 'Cedis',
-    model: 'Dry&Store',
-    serialNo: '—',
-    barcode: 'CD-DS-01',
-    quantity: 2,
-    criticalLevel: 3,
-    price: 2900,
-    purchasePrice: 1800,
-    sgkPrice: 0,
-    warrantyExpiry: '2027-05-15',
-    location: 'Aksesuar Dolabı',
-    status: 'Stokta',
-    utsStatus: 'Gerekli Değil',
-    branch: 'Merkez',
-    description: 'UV-C ışınlı elektrikli işitme cihazı kurutma ve dezenfeksiyon kutusu.',
-    branchStockBreakdown: { 'Merkez': 1, 'Çankaya': 1, 'Kadıköy': 0 }
-  },
-  {
-    id: 'stk-10',
-    name: 'Widex Temizlik Fırçası',
-    category: 'Aksesuar',
-    brand: 'Widex',
-    model: 'Cleaning Brush',
-    serialNo: '—',
-    barcode: 'WD-CB-01',
-    quantity: 0,
-    criticalLevel: 5,
-    price: 120,
-    purchasePrice: 45,
-    sgkPrice: 0,
-    warrantyExpiry: '2028-01-01',
-    location: 'Aksesuar Dolabı',
-    status: 'Satıldı',
-    utsStatus: 'Gerekli Değil',
-    branch: 'Çankaya',
-    description: 'Manyetik uçlu, havalandırma kanalı temizleme misinası olan fırça.',
-    branchStockBreakdown: { 'Merkez': 0, 'Çankaya': 0, 'Kadıköy': 0 }
-  }
-];
+
 
 export default function StockPage() {
   const { stockList, addStockItem, updateStockItem, deleteStockItem, adjustStockItem, addToast, branchesList, currentOrgId, currentUser } = useApp();
@@ -283,6 +72,7 @@ export default function StockPage() {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [addProductError, setAddProductError] = useState('');
 
   // Adjustment Form
   const [adjustmentQty, setAdjustmentQty] = useState(1);
@@ -304,7 +94,7 @@ export default function StockPage() {
     description: ''
   });
   useEffect(() => {
-    if (!newItemForm.branch && branchesList.length) setNewItemForm(form => ({ ...form, branch: branchesList[0].name }));
+    if (!newItemForm.branch && branchesList.length) setNewItemForm(form => ({ ...form, branch: branchesList[0].id }));
   }, [branchesList, newItemForm.branch]);
 
   // Filter logic
@@ -346,7 +136,8 @@ export default function StockPage() {
         const matchModel = (item.model || '').toLowerCase().includes(q);
         const matchSerial = (item.serialNo || '').toLowerCase().includes(q);
         const matchBarcode = (item.barcode || '').toLowerCase().includes(q);
-        if (!matchName && !matchBrand && !matchModel && !matchSerial && !matchBarcode) return false;
+        const matchQuantity = `${item.quantity} adet`.includes(q);
+        if (!matchName && !matchBrand && !matchModel && !matchSerial && !matchBarcode && !matchQuantity) return false;
       }
 
       return true;
@@ -482,7 +273,14 @@ export default function StockPage() {
   const handleAddNewProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemForm.name.trim()) {
-      addToast({ type: 'warning', message: 'Lütfen ürün adını giriniz.' });
+      setAddProductError('Lütfen ürün adını giriniz.');
+      return;
+    }
+    setAddProductError('');
+
+    const selectedBranch = branchesList.find(branch => branch.id === newItemForm.branch);
+    if (!selectedBranch) {
+      setAddProductError('Lütfen erişiminiz olan geçerli bir şube seçin.');
       return;
     }
 
@@ -503,20 +301,21 @@ export default function StockPage() {
       location: 'Depo',
       status: 'Stokta',
       utsStatus: 'Bekliyor',
-      branch: newItemForm.branch
+      branch: selectedBranch.name,
+      branchId: selectedBranch.id,
     };
 
     try {
-      await addStockItem(itemToAdd);
+      const savedItem = await addStockItem(itemToAdd);
       addToast({ type: 'success', message: `${itemToAdd.name} stoğa başarıyla eklendi.` });
       setShowAddModal(false);
       setActiveItem({
-        ...itemToAdd,
-        branchStockBreakdown: { [newItemForm.branch]: Number(newItemForm.quantity) },
+        ...savedItem,
+        branchStockBreakdown: { [selectedBranch.name]: Number(newItemForm.quantity) },
         description: newItemForm.description || `${itemToAdd.brand} ${itemToAdd.model}`
       });
-    } catch {
-      // gracefully handled
+    } catch (error) {
+      setAddProductError(error instanceof Error ? error.message : 'Ürün kaydedilemedi. Lütfen tekrar deneyin.');
     }
   };
 
@@ -524,9 +323,13 @@ export default function StockPage() {
   const handleStockAdjustment = async () => {
     if (!activeItem) return;
     const change = adjustmentType === 'artir' ? adjustmentQty : -adjustmentQty;
-    const newQty = Math.max(0, activeItem.quantity + change);
+    if (change < 0 && activeItem.quantity + change < 0) {
+      addToast({ type: 'error', message: 'Stok miktarı sıfırın altına düşemez.' });
+      return;
+    }
+    const newQty = activeItem.quantity + change;
     try {
-      await adjustStockItem(activeItem.id, newQty, adjustmentReason, 'Manuel işlem');
+      await adjustStockItem(activeItem.id, change, adjustmentReason, 'Manuel işlem');
       setActiveItem({ ...activeItem, quantity: newQty });
       setShowAdjustmentModal(false);
       addToast({ type: 'success', message: `${activeItem.name} stok adedi ${newQty} olarak güncellendi.` });
@@ -598,7 +401,7 @@ export default function StockPage() {
           {/* 4. Yeni Ürün Ekle */}
           <button
             className={styles.btnPrimaryAction}
-            onClick={() => setShowAddModal(true)}
+            onClick={() => { setAddProductError(''); setShowAddModal(true); }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="12" y1="5" x2="12" y2="19" />
@@ -930,7 +733,8 @@ export default function StockPage() {
                               <button
                                 className={styles.btnActionIcon}
                                 title="İşlemler"
-                                onClick={() => setActiveActionMenuId(activeActionMenuId === item.id ? null : item.id)}
+                                aria-expanded={activeActionMenuId === item.id}
+                                onClick={event => { event.stopPropagation(); setActiveActionMenuId(activeActionMenuId === item.id ? null : item.id); }}
                               >
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <circle cx="12" cy="12" r="1" />
@@ -943,7 +747,8 @@ export default function StockPage() {
                                 <div className={styles.dropdownMenu}>
                                   <button
                                     className={styles.dropdownItem}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       setActiveItem(item);
                                       setShowAdjustmentModal(true);
@@ -953,7 +758,8 @@ export default function StockPage() {
                                   </button>
                                   <button
                                     className={styles.dropdownItem}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       setShowQuickSaleModal(true);
                                     }}
@@ -962,7 +768,8 @@ export default function StockPage() {
                                   </button>
                                   <button
                                     className={styles.dropdownItem}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       addToast({ type: 'info', message: `${item.name} (${item.serialNo}) için ÜTS durumu: ${item.utsStatus}` });
                                     }}
@@ -971,7 +778,8 @@ export default function StockPage() {
                                   </button>
                                   <button
                                     className={styles.dropdownItem}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       setShowTransferModal(true);
                                     }}
@@ -981,7 +789,8 @@ export default function StockPage() {
                                   <hr style={{ margin: '4px 0', border: 'none', borderTop: '1px solid #e2e8f0' }} />
                                   <button
                                     className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       deleteStockItem(item.id);
                                       addToast({ type: 'success', message: `${item.name} ürünü silindi.` });
@@ -1009,7 +818,7 @@ export default function StockPage() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div className={styles.pagination}>
+              {filteredItems.length > 0 && <><div className={styles.pagination}>
                 <button type="button" className={styles.pageBtn} aria-label="Önceki sayfa" disabled={currentTablePage <= 1} onClick={() => setCurrentTablePage(page => Math.max(1, page - 1))}>‹</button>
                 {Array.from({ length: tablePageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${currentTablePage === page ? styles.pageBtnActive : ''}`} aria-current={currentTablePage === page ? 'page' : undefined} onClick={() => setCurrentTablePage(page)}>{page}</button>)}
                 <button type="button" className={styles.pageBtn} aria-label="Sonraki sayfa" disabled={currentTablePage >= tablePageCount} onClick={() => setCurrentTablePage(page => Math.min(tablePageCount, page + 1))}>›</button>
@@ -1019,7 +828,7 @@ export default function StockPage() {
                 <option value={10}>10 / sayfa</option>
                 <option value={25}>25 / sayfa</option>
                 <option value={50}>50 / sayfa</option>
-              </select>
+              </select></>}
             </div>
           </div>
         </div>
@@ -1313,7 +1122,7 @@ export default function StockPage() {
                       className={styles.filterSelect}
                       style={{ width: '100%' }}
                       required
-                      placeholder="Örn: Oticon More 1"
+                      placeholder="Örn: İşitme cihazı"
                       value={newItemForm.name}
                       onChange={e => setNewItemForm({ ...newItemForm, name: e.target.value })}
                     />
@@ -1413,10 +1222,12 @@ export default function StockPage() {
                       onChange={e => setNewItemForm({ ...newItemForm, branch: e.target.value })}
                     >
                       <option value="" disabled>Şube seçin</option>
-                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                     </select>
                   </div>
                 </div>
+
+                {addProductError && <div role="alert" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}>{addProductError}</div>}
 
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>Açıklama</label>
@@ -1582,7 +1393,7 @@ export default function StockPage() {
             <div style={{ padding: 20, display: 'grid', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Müşteri / Hasta Adı</label>
-                <input className={styles.filterSelect} style={{ width: '100%' }} placeholder="Örn: Ayşe Yılmaz (veya Boş: Perakende)" />
+                <input className={styles.filterSelect} style={{ width: '100%' }} placeholder="Hasta adı (veya perakende satış)" />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satılacak Ürün</label>

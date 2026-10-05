@@ -46,6 +46,8 @@ export default function SgkReceivablesPage() {
   // Table filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [periodFilter, setPeriodFilter] = useState('Tüm Dönemler');
+  const [tablePage, setTablePage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [selectedDetailInvoice, setSelectedDetailInvoice] = useState<InvoiceRecord | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
@@ -128,6 +130,13 @@ export default function SgkReceivablesPage() {
       return true;
     });
   }, [scopedList, searchTerm, periodFilter]);
+  // The payment timeline is a preview of the invoice period selected in the
+  // schedule form. Do not keep showing a different period's expected payments.
+  const timelineInvoices = scopedList.filter(invoice => invoice.invoice_month === (periodYearMonth || monthKey()));
+  const pageCount = Math.max(1, Math.ceil(filteredList.length / pageSize));
+  const pagedInvoices = filteredList.slice((tablePage - 1) * pageSize, tablePage * pageSize);
+  useEffect(() => setTablePage(1), [searchTerm, periodFilter, pageSize]);
+  useEffect(() => setTablePage(page => Math.min(page, pageCount)), [pageCount]);
 
   // Dynamic statistics
   const currentMonthKey = monthKey();
@@ -525,16 +534,17 @@ export default function SgkReceivablesPage() {
 
                 <div className={styles.timelineList}>
                   {Array.from({ length: 4 }, (_, index) => {
-                    const [year, month] = currentMonthKey.split('-').map(Number);
+                    const startMonthKey = expectedPaymentMonth(periodYearMonth || currentMonthKey);
+                    const [year, month] = startMonthKey.split('-').map(Number);
                     const date = new Date(Date.UTC(year, month - 1 + index, 1));
                     const key = date.toISOString().slice(0, 7);
-                    const amount = scopedList.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi').reduce((sum, invoice) => sum + invoice.amount, 0);
+                    const amount = timelineInvoices.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi').reduce((sum, invoice) => sum + invoice.amount, 0);
                     return (
                       <div className={styles.timelineItem} key={key}>
                         <div className={`${styles.timelineDot} ${index === 0 ? styles.timelineDotActive : ''}`} />
                         <div className={styles.timelineMonth}>
                           <span className={styles.timelineMonthName}>{monthLabel(key)}</span>
-                          <span className={styles.timelineMonthSub}>Beklenen ödeme · {scopedList.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi').length} fatura</span>
+                          <span className={styles.timelineMonthSub}>Beklenen ödeme · {timelineInvoices.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi').length} fatura</span>
                         </div>
                         <div className={styles.timelineAmountGroup}>
                           <span className={styles.timelineAmount}>{formatCurrency(amount)}</span>
@@ -623,7 +633,7 @@ export default function SgkReceivablesPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredList.map(row => (
+                    pagedInvoices.map(row => (
                       <tr key={row.id}>
                         <td>{row.invoice_period_label}</td>
                         <td className={styles.invoiceNoCell}>{row.invoice_no}</td>
@@ -715,22 +725,19 @@ export default function SgkReceivablesPage() {
             {/* Table Footer */}
             <div className={styles.tableFooter}>
               <div>
-                {filteredList.length > 0 ? `1 kayıttan 1 - ${filteredList.length} arası gösteriliyor` : 'Kayıt bulunamadı'}
+                {filteredList.length > 0 ? `Toplam ${filteredList.length} kayıt | ${(tablePage - 1) * pageSize + 1}–${Math.min(tablePage * pageSize, filteredList.length)} arası gösteriliyor` : 'Kayıt bulunamadı'}
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {filteredList.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className={styles.pagination}>
-                  <button className={styles.pageBtn}>‹</button>
-                  <button className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-                  <button className={styles.pageBtn}>›</button>
+                  <button type="button" className={styles.pageBtn} disabled={tablePage <= 1} onClick={() => setTablePage(page => Math.max(1, page - 1))} aria-label="Önceki sayfa">‹</button>
+                  {Array.from({ length: pageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${tablePage === page ? styles.pageBtnActive : ''}`} aria-current={tablePage === page ? 'page' : undefined} onClick={() => setTablePage(page)}>{page}</button>)}
+                  <button type="button" className={styles.pageBtn} disabled={tablePage >= pageCount} onClick={() => setTablePage(page => Math.min(pageCount, page + 1))} aria-label="Sonraki sayfa">›</button>
                 </div>
-
-                <select className={styles.pageSizeSelect}>
-                  <option>10 / sayfa</option>
-                  <option>25 / sayfa</option>
-                  <option>50 / sayfa</option>
+                <select aria-label="Sayfa başına fatura" className={styles.pageSizeSelect} value={pageSize} onChange={event => setPageSize(Number(event.target.value))}>
+                  <option value={10}>10 / sayfa</option><option value={25}>25 / sayfa</option><option value={50}>50 / sayfa</option>
                 </select>
-              </div>
+              </div>}
             </div>
           </div>
 
@@ -908,7 +915,7 @@ export default function SgkReceivablesPage() {
                   const key = `${year}-${String(idx + 1).padStart(2, '0')}`;
                   const expectedKey = expectedPaymentMonth(key);
                   const isSelectedMonth = expectedKey === currentMonthKey;
-                  const monthInvoices = scopedList.filter(invoice => invoice.expected_month === expectedKey && invoice.status !== 'Tahsil Edildi');
+                  const monthInvoices = timelineInvoices.filter(invoice => invoice.expected_month === expectedKey && invoice.status !== 'Tahsil Edildi');
                   const amount = monthInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
                   return (
                     <div

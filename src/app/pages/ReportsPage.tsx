@@ -175,6 +175,7 @@ export default function ReportsPage() {
     { label: 'Teknik Servis Geliri', current: dynamicServiceRevenue, previous: previousServiceRevenue, format: formatCurrency },
   ];
   const [chartMetric, setChartMetric] = useState('Ciro');
+  const [showMonthlyTable, setShowMonthlyTable] = useState(false);
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   useEffect(() => {
@@ -570,7 +571,7 @@ export default function ReportsPage() {
                 <option value="Satış Adedi">Satış Adedi</option>
                 <option value="Karlılık">Karlılık</option>
               </select>
-              <button type="button" className={styles.btnMiniIcon} title="Grafik Görünümü">
+              <button type="button" className={styles.btnMiniIcon} title={showMonthlyTable ? 'Grafik Görünümü' : 'Tablo Görünümü'} aria-label={showMonthlyTable ? 'Grafik görünümüne geç' : 'Tablo görünümüne geç'} aria-pressed={showMonthlyTable} onClick={() => setShowMonthlyTable(value => !value)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="18" y1="20" x2="18" y2="10"></line>
                   <line x1="12" y1="20" x2="12" y2="4"></line>
@@ -580,7 +581,10 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className={styles.barChartContainer}>
+          {showMonthlyTable ? <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead><tr><th style={{ padding: 10 }}>Ay</th><th style={{ padding: 10 }}>{chartTitle}</th></tr></thead>
+            <tbody>{monthlyData.map(item => <tr key={item.month} style={{ borderTop: '1px solid #e2e8f0' }}><td style={{ padding: 10 }}>{item.month} {reportYear}</td><td style={{ padding: 10 }}>{chartUnit === '₺' ? formatCurrency(item.value) : `${item.value.toLocaleString('tr-TR')} adet`}</td></tr>)}</tbody>
+          </table></div> : <div className={styles.barChartContainer}>
             {/* Y Axis Ticks */}
             <div className={styles.chartAxisY}>
               {chartTickValues.map((tick, index) => <span key={index}>{chartUnit === '₺' ? formatCurrency(tick) : `${tick} adet`}</span>)}
@@ -626,7 +630,7 @@ export default function ReportsPage() {
                 );
               })}
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Right: Gelir Dağılımı Donut */}

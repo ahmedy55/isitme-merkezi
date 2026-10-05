@@ -7,20 +7,17 @@ import {
 } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
-import { SaleDomainService } from '../services/SaleDomainService';
 import { StockDomainService } from '../services/StockDomainService';
-import { CashDomainService } from '../services/CashDomainService';
-import { PurchaseDomainService } from '../services/PurchaseDomainService';
 import { ServiceDomainService } from '../services/ServiceDomainService';
 import { EventBus } from '../services/EventBus';
 import { validateAppointmentDateTime } from '../lib/validation';
 import {
-  dbFetchPatients, dbInsertPatient, dbUpdatePatient, dbDeletePatient,
+  dbFetchPatients, dbFetchPatientTimeline, dbInsertPatientTimeline, dbInsertPatient, dbUpdatePatient, dbDeletePatient,
   dbFetchAppointments, dbInsertAppointment, dbUpdateAppointment, dbUpdateAppointmentStatus,
   dbFetchStockItems, dbInsertStockItem, dbUpdateStockItem, dbDeleteStockItem,
   dbAdjustStockItem,
   dbFetchSales, dbInsertSale,
-  dbFetchRecallItems, dbUpdateRecallStatus,
+  dbFetchRecallItems, dbInsertRecallItem, dbUpdateRecallStatus,
   dbFetchSuppliers, dbInsertSupplier, dbUpdateSupplier, dbDeleteSupplier,
   dbFetchExpenses, dbInsertExpense, dbUpdateExpense, dbDeleteExpense,
   dbFetchBranches, dbInsertBranch, dbUpdateBranch,
@@ -90,6 +87,7 @@ interface AppContextType {
   
   // Dinamik Veri Eyaletleri
   patientsList: Patient[];
+  loadPatientTimeline: (patientId: string) => Promise<void>;
   appointmentsList: Appointment[];
   stockList: StockItem[];
   salesList: SaleRecord[];
@@ -111,7 +109,7 @@ interface AppContextType {
   addSupplierPurchaseTransaction: (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => Promise<void>;
   approveSGKPrescription: (patientId: string, prescriptionNo: string, reportNo: string) => Promise<void>;
   completeServiceTicket: (ticketId: string, patientName: string, serviceFee: number, partsUsed?: { stockItemId: string; stockItemName: string; quantity: number; price: number }[], cashRegisterId?: string, branchId?: string) => Promise<void>;
-  addStockItem: (item: StockItem) => Promise<void>;
+  addStockItem: (item: StockItem) => Promise<StockItem>;
   updateStockItem: (item: StockItem) => Promise<void>;
   adjustStockItem: (itemId: string, delta: number, reason: string, notes?: string, isLoss?: boolean) => Promise<void>;
   deleteStockItem: (id: string) => void;
@@ -138,7 +136,6 @@ interface AppContextType {
   updateBranch: (branch: Branch) => void;
   
   // Ayarlar Parametreleri
-  demoModeActive: boolean;
   commissionRate: number;
   setCommissionRate: (rate: number) => void;
 }
@@ -195,7 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Veri Listeleri State
-  // Fix #1: State boş başlar, mock data sadece demo modda (orgId yoksa) yüklenir
+  // Tenant data starts empty and is populated only after an authenticated organization is selected.
   const [patientsList, setPatientsList] = useState<Patient[]>([]);
   const [appointmentsList, setAppointmentsList] = useState<Appointment[]>([]);
   const [stockList, setStockList] = useState<StockItem[]>([]);
@@ -214,8 +211,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataLoading, setDataLoading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Kullanıcıya örnek/demo veri gösterilmez. Ekranlar yalnızca aktif firmadan yüklenen veriyi kullanır.
-  const demoModeActive = false;
   const dataGeneration = useRef(0);
   const identityRef = useRef('');
   const clearTenantData = () => {
@@ -296,12 +291,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrgId, currentUser?.membership?.branch_id, JSON.stringify(currentUser?.membership?.roles)]);
 
-  // Fix #1: İlk yüklemede Auth kontrolü yap (mock data yukarıda orgId yoksa yüklenir)
+  // Resolve the authenticated user and active organization before loading tenant data.
   useEffect(() => {
     let disposed = false;
     let authVersion = 0;
     const applySession = async (user: any) => {
-      if (demoModeActive && !user) return;
       const version = ++authVersion;
       let membership = null;
       const orgId = user?.app_metadata?.organization_id;
@@ -357,7 +351,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
   const addToast = (toast: Omit<Toast, 'id'>) => {
-    const id = Date.now().toString();
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts(prev => [...prev, { ...toast, id }]);
     setTimeout(() => removeToast(id), 4000);
   };
@@ -366,10 +362,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  const requireActiveOrganization = () => {
+    if (!currentOrgId) throw new Error('Veri kaydetmek için oturum açıp aktif bir firma seçin.');
+  };
+
 
 
   // Metotlar
   const addPatient = async (patient: Patient) => {
+    requireActiveOrganization();
     if (currentOrg && currentOrg.plan_type === 'trial' && patientsList.length >= 50) {
       addToast({
         type: 'warning',
@@ -389,62 +390,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       try { await dbInsertAuditLog({ action: 'Hasta Ekleme', module: 'Hastalar', description: `${patient.firstName} ${patient.lastName} eklendi.` }); }
       catch (auditError: any) { logger.warn(`Hasta denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext'); }
-    } else {
-      setPatientsList(prev => [patient, ...prev]);
-      addToast({ type: 'success', message: `${patient.firstName} ${patient.lastName} hasta kaydı oluşturuldu.` });
-      setAuditLogList(prev => [
-        {
-          id: `audit-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          userId: currentUser?.id || 'usr-admin',
-          userName: currentUser?.user_metadata?.full_name || 'Ahmet Yılmaz',
-          action: 'Ekleme',
-          module: 'Hasta',
-          description: `Yeni hasta eklendi: ${patient.firstName} ${patient.lastName}`,
-          branchId: patient.branchId || 'merkez'
-        },
-        ...prev
-      ]);
     }
   };
 
   const updatePatient = async (updatedPatient: Patient) => {
-    if (currentOrgId && updatedPatient.id) {
-      try {
-        await dbUpdatePatient(updatedPatient.id, updatedPatient);
-        setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
-        addToast({ type: 'success', message: 'Hasta bilgileri güncellendi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Hasta bilgileri kaydedilemedi: ${err.message}` });
-        return;
-      }
-      try { await dbInsertAuditLog({ action: 'Hasta Güncelleme', module: 'Hastalar', description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.` }); }
-      catch (err: any) { logger.warn(`Hasta güncelleme denetim kaydı yazılamadı: ${err.message}`, 'AppContext'); }
-    } else {
-      setPatientsList(prev => prev.map(p => p.id === updatedPatient.id ? updatedPatient : p));
-      addToast({ type: 'success', message: `${updatedPatient.firstName} ${updatedPatient.lastName} bilgileri güncellendi.` });
+    requireActiveOrganization();
+    if (!updatedPatient.id) throw new Error('Hasta kaydı kimliği zorunludur.');
+    const existingTimeline = patientsList.find(patient => patient.id === updatedPatient.id)?.timeline || [];
+    const existingTimelineKeys = new Set(existingTimeline.map(event => `${event.id || ''}|${event.date}|${event.icon}|${event.action}`));
+    const newEvents = (updatedPatient.timeline || []).filter(event =>
+      !existingTimelineKeys.has(`${event.id || ''}|${event.date}|${event.icon}|${event.action}`),
+    );
+    try {
+      const saved = await dbUpdatePatient(updatedPatient.id, updatedPatient);
+      const insertedEvents = [];
+      for (const event of newEvents) insertedEvents.push(await dbInsertPatientTimeline(updatedPatient.id, event));
+      const savedPatient = { ...saved, timeline: [...insertedEvents, ...existingTimeline] } as Patient;
+      setPatientsList(prev => prev.map(patient => patient.id === savedPatient.id ? savedPatient : patient));
+      addToast({ type: 'success', message: 'Hasta bilgileri güncellendi.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Hasta bilgileri kaydedilemedi: ${err.message}` });
+      return;
+    }
+    try { await dbInsertAuditLog({ action: 'Hasta Güncelleme', module: 'Hastalar', description: `${updatedPatient.firstName} ${updatedPatient.lastName} güncellendi.` }); }
+    catch (err: any) { logger.warn(`Hasta güncelleme denetim kaydı yazılamadı: ${err.message}`, 'AppContext'); }
+  };
+
+  const loadPatientTimeline = async (patientId: string) => {
+    requireActiveOrganization();
+    try {
+      const timeline = await dbFetchPatientTimeline(patientId);
+      const serverKeys = new Set(timeline.map(event => `${event.id || ''}|${event.date}|${event.icon}|${event.action}`));
+      setPatientsList(prev => prev.map(patient => {
+        if (patient.id !== patientId) return patient;
+        const localOnly = (patient.timeline || []).filter(event =>
+          !serverKeys.has(`${event.id || ''}|${event.date}|${event.icon}|${event.action}`),
+        );
+        return { ...patient, timeline: [...localOnly, ...timeline] };
+      }));
+    } catch (err: any) {
+      addToast({ type: 'error', message: 'Hasta işlem geçmişi yüklenemedi.' });
+      logger.warn(`Hasta zaman çizelgesi yüklenemedi: ${err.message}`, 'AppContext');
     }
   };
 
   const deletePatient = async (id: string) => {
+    requireActiveOrganization();
     const patient = patientsList.find(item => item.id === id);
     if (!patient) {
       addToast({ type: 'error', message: 'Hasta kaydı bulunamadı.' });
       return false;
     }
 
-    if (currentOrgId) {
+    try {
+      await dbDeletePatient(id);
       try {
-        await dbDeletePatient(id);
-        try {
-          await dbInsertAuditLog({ action: 'Hasta Silme', module: 'Hastalar', description: `${patient.firstName} ${patient.lastName} silindi.` });
-        } catch (auditError: any) {
-          logger.warn(`Hasta silme denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext');
-        }
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Hasta silinemedi: ${err.message}` });
-        return false;
+        await dbInsertAuditLog({ action: 'Hasta Silme', module: 'Hastalar', description: `${patient.firstName} ${patient.lastName} silindi.` });
+      } catch (auditError: any) {
+        logger.warn(`Hasta silme denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext');
       }
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Hasta silinemedi: ${err.message}` });
+      return false;
     }
 
     setPatientsList(prev => prev.filter(item => item.id !== id));
@@ -454,14 +461,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addAppointment = async (appointment: Appointment) => {
+    requireActiveOrganization();
     const appointmentValidation = validateAppointmentDateTime(appointment.date, appointment.time);
     if (!appointmentValidation.isValid) {
       const message = appointmentValidation.error || 'Geçmiş bir saate randevu oluşturulamaz.';
       addToast({ type: 'error', message });
       throw new Error(message);
     }
-    if (currentOrgId) {
-      try {
+    try {
         const created = await dbInsertAppointment(appointment);
         const pat = patientsList.find(p => p.id === appointment.patientId);
         const patientName = pat ? `${pat.firstName} ${pat.lastName}` : 'Bilinmeyen Hasta';
@@ -474,30 +481,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (err: any) {
         addToast({ type: 'error', message: `Randevu eklenemedi: ${err.message}` });
         throw err;
-      }
-    } else {
-      const pat = patientsList.find(p => p.id === appointment.patientId);
-      const patientName = pat ? `${pat.firstName} ${pat.lastName}` : (appointment.patientName || 'Hasta');
-      const createdWithPatName = { ...appointment, patientName };
-      setAppointmentsList(prev => [createdWithPatName, ...prev]);
-      addToast({ type: 'success', message: `${patientName} için randevu oluşturuldu.` });
-      setAuditLogList(prev => [
-        {
-          id: `audit-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          userId: currentUser?.id || 'usr-admin',
-          userName: currentUser?.user_metadata?.full_name || 'Ahmet Yılmaz',
-          action: 'Ekleme',
-          module: 'Randevu',
-          description: `Randevu planlandı: ${patientName} (${appointment.date} ${appointment.time})`,
-          branchId: appointment.branchId || 'merkez'
-        },
-        ...prev
-      ]);
     }
   };
 
   const updateAppointment = async (appointment: Appointment) => {
+    requireActiveOrganization();
     const existing = appointmentsList.find(item => item.id === appointment.id);
     if (!existing) {
       addToast({ type: 'error', message: 'Düzenlenecek randevu bulunamadı.' });
@@ -509,7 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addToast({ type: 'error', message: appointmentValidation.error || 'Geçmiş bir saate randevu oluşturulamaz.' });
       return false;
     }
-    if (currentOrgId) {
+    {
       try {
         const updated = await dbUpdateAppointment(appointment);
         setAppointmentsList(prev => prev.map(item => item.id === appointment.id ? { ...item, ...updated, patientName: appointment.patientName } : item));
@@ -518,17 +506,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addToast({ type: 'error', message: 'Randevu güncellenemedi. Lütfen tekrar deneyin.' });
         return false;
       }
-    } else {
-      setAppointmentsList(prev => prev.map(item => item.id === appointment.id ? { ...item, ...appointment } : item));
     }
     addToast({ type: 'success', message: 'Randevu başarıyla güncellendi.' });
     return true;
   };
 
   const updateAppointmentStatus = async (id: string, status: Appointment['status']) => {
+    requireActiveOrganization();
     const targetApt = appointmentsList.find(appointment => appointment.id === id);
     if (!targetApt || targetApt.status === status) return false;
-    if (currentOrgId) {
+    {
       try {
         await dbUpdateAppointmentStatus(id, status);
         setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
@@ -539,56 +526,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addToast({ type: 'error', message: 'Randevu durumu kaydedilemedi. Lütfen tekrar deneyin.' });
         return false;
       }
-    } else {
-      setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-      addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
-
-      // If status changed to 'Geldi', automatically spawn a 6-month recall opportunity
-      if (status === 'Geldi' && targetApt) {
-        const newRecall: RecallItem = {
-          id: `rec-${Date.now()}`,
-          patientId: targetApt.patientId,
-          patientName: targetApt.patientName,
-          reason: 'Yıllık Kontrol',
-          dueDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          status: 'Bekliyor',
-          lastContact: new Date().toISOString().split('T')[0],
-          estimatedRevenue: 1500,
-          probability: 'Yüksek Olasılık'
-        };
-        setRecallList(prev => [newRecall, ...prev]);
-      }
-      return true;
     }
   };
 
   const addSale = async (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => {
     try {
-      if (currentOrgId) {
-        sale.idempotencyKey ||= crypto.randomUUID();
-        const created=await dbInsertSale(sale,stockItemId,cashRegisterId);
-        setSalesList(prev=>[created,...prev.filter(s=>s.id!==created.id)]);
-        setStockList(await dbFetchStockItems());
-      } else {
-        const result=await SaleDomainService.executeSaleTransaction(stockList,{sale,stockItemId,cashRegisterId});
-        setStockList(result.updatedStockList);
-        setSalesList(prev=>[result.createdSale,...prev]);
-
-        // Record Audit Log for the sale
-        setAuditLogList(prev => [
-          {
-            id: `audit-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            userId: currentUser?.id || 'usr-admin',
-            userName: currentUser?.user_metadata?.full_name || 'Ahmet Yılmaz',
-            action: 'Satış',
-            module: 'Kasa',
-            description: `Satış: ${sale.patientName} adına ₺${sale.total.toLocaleString('tr-TR')} tahsilat yapıldı.`,
-            branchId: sale.branchId || 'merkez'
-          },
-          ...prev
-        ]);
-      }
+      requireActiveOrganization();
+      sale.idempotencyKey ||= crypto.randomUUID();
+      const created = await dbInsertSale(sale, stockItemId, cashRegisterId);
+      setSalesList(prev => [created, ...prev.filter(item => item.id !== created.id)]);
+      setStockList(await dbFetchStockItems());
       addToast({type:'success',message:'Satış başarıyla kaydedildi ve stoktan düşüldü.'});
     } catch (err: any) {
       addToast({type:'error',message:err.message || 'Satış kaydedilemedi.'});
@@ -600,19 +547,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       // Purchases currently have no server-side transaction/RPC. Never simulate
       // stock, supplier debt, or cash changes against a live organization.
-      if (currentOrgId) {
-        throw new Error('Canlı alış faturası kaydı için atomik Supabase işlemi henüz hazır değil. Kayıt yapılmadı.');
-      }
-      if (!demoModeActive) throw new Error('Alış faturası için demo veya aktif firma gerekli.');
-      const result = await PurchaseDomainService.executePurchaseTransaction(suppliersList, stockList, {
-        supplierId,
-        purchase,
-        cashRegisterId,
-      });
-
-      setSuppliersList(result.updatedSuppliers);
-      setStockList(result.updatedStockList);
-      addToast({ type: 'success', message: 'Alış faturası kaydedildi, tedarikçi borcu ve stoklar güncellendi.' });
+      requireActiveOrganization();
+      void supplierId;
+      void purchase;
+      void cashRegisterId;
+      throw new Error('Tedarikçi alış faturası için atomik veritabanı işlemi henüz uygulanmadı. Kayıt yapılmadı.');
     } catch (err: any) {
       addToast({ type: 'error', message: `Alış faturası işlenemedi: ${err.message}` });
       throw err;
@@ -620,6 +559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const approveSGKPrescription = async (patientId: string, prescriptionNo: string, reportNo: string) => {
+    requireActiveOrganization();
     const patient = patientsList.find(item => item.id === patientId);
     if (!patient) throw new Error('Hasta kaydı bulunamadı.');
     if (!prescriptionNo.trim() || !reportNo.trim()) throw new Error('Reçete ve rapor numarası zorunludur.');
@@ -638,6 +578,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     branchId?: string
   ) => {
     try {
+      requireActiveOrganization();
       const result = await ServiceDomainService.completeServiceTicket(stockList, {
         ticketId,
         patientName,
@@ -670,141 +611,124 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addStockItem = async (item: StockItem) => {
-    if (currentOrgId) {
-      try {
-        const created = await dbInsertStockItem(item);
-        setStockList(prev => [created, ...prev]);
-        addToast({ type: 'success', message: 'Ürün envantere eklendi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Ürün eklenemedi: ${err.message}` });
-        throw err;
-      }
-    } else {
-      setStockList(prev => [item, ...prev]);
+  const addStockItem = async (item: StockItem): Promise<StockItem> => {
+    requireActiveOrganization();
+    try {
+      const created = await dbInsertStockItem(item);
+      if (!created?.id) throw new Error('Ürün kaydı veritabanından doğrulanamadı.');
+      setStockList(prev => [created, ...prev]);
+      addToast({ type: 'success', message: 'Ürün envantere eklendi.' });
+      return created;
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Ürün eklenemedi: ${err.message}` });
+      throw err;
     }
   };
 
   const updateStockItem = async (updatedItem: StockItem) => {
-    if (currentOrgId && updatedItem.id) {
-      try {
-        const saved = await dbUpdateStockItem(updatedItem.id, updatedItem);
-        setStockList(prev => prev.map(s => s.id === saved.id ? saved : s));
-        addToast({ type: 'success', message: 'Ürün bilgileri güncellendi.' });
-      } catch (err: any) {
-        logger.warn(`dbUpdateStockItem background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'error', message: 'Stok ürünü kaydedilemedi.' });
-        throw err;
-      }
-    } else if (demoModeActive) setStockList(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s));
+    requireActiveOrganization();
+    if (!updatedItem.id) throw new Error('Stok kaydı kimliği zorunludur.');
+    try {
+      const saved = await dbUpdateStockItem(updatedItem.id, updatedItem);
+      setStockList(prev => prev.map(s => s.id === saved.id ? saved : s));
+      addToast({ type: 'success', message: 'Ürün bilgileri güncellendi.' });
+    } catch (err: any) {
+      logger.warn(`dbUpdateStockItem background sync error: ${err.message}`, 'AppContext');
+      addToast({ type: 'error', message: 'Stok ürünü kaydedilemedi.' });
+      throw err;
+    }
   };
 
   const adjustStockItem = async (itemId: string, delta: number, reason: string, notes = '', isLoss = false) => {
+    requireActiveOrganization();
     if (!Number.isInteger(delta) || delta === 0) throw new Error('Stok değişimi sıfırdan farklı tam sayı olmalıdır.');
-    if (currentOrgId) {
-      const saved = await dbAdjustStockItem(itemId, delta, reason, notes, isLoss);
-      setStockList(previous => previous.map(item => item.id === itemId ? { ...item, quantity: saved.quantity, status: saved.status } : item));
-    } else if (demoModeActive) {
-      setStockList(previous => previous.map(item => item.id === itemId ? { ...item, quantity: item.quantity + delta } : item));
-    } else throw new Error('Aktif firma gerekli.');
+    const saved = await dbAdjustStockItem(itemId, delta, reason, notes, isLoss);
+    setStockList(previous => previous.map(item => item.id === itemId ? { ...item, quantity: saved.quantity, status: saved.status } : item));
   };
 
   // Fix #2: Stok silme artık DB'ye de yazılıyor
   const deleteStockItem = async (id: string) => {
-    if (currentOrgId) {
-      try {
-        await dbDeleteStockItem(id);
-        setStockList(prev => prev.filter(s => s.id !== id));
-        addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
-        await dbInsertAuditLog({
-          action: 'Stok Silme',
-          module: 'Stok',
-          description: `Stok ürünü (${id}) envanterden silindi.`
-        });
-      } catch (err: any) {
-        logger.warn(`dbDeleteStockItem background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'error', message: 'Ürün silinemedi. Kayıt listede tutuldu.' });
-        throw err;
-      }
-    } else if (demoModeActive) {
+    requireActiveOrganization();
+    try {
+      await dbDeleteStockItem(id);
       setStockList(prev => prev.filter(s => s.id !== id));
-      addToast({ type: 'success', message: 'Demo ürün envanterden silindi.' });
+      addToast({ type: 'success', message: 'Ürün envanterden silindi.' });
+      await dbInsertAuditLog({
+        action: 'Stok Silme',
+        module: 'Stok',
+        description: `Stok ürünü (${id}) envanterden silindi.`
+      });
+    } catch (err: any) {
+      logger.warn(`dbDeleteStockItem background sync error: ${err.message}`, 'AppContext');
+      addToast({ type: 'error', message: 'Ürün silinemedi. Kayıt listede tutuldu.' });
+      throw err;
     }
   };
 
   const updateRecallItemStatus = async (id: string, status: RecallItem['status']) => {
-    if (currentOrgId) {
-      try {
-        await dbUpdateRecallStatus(id, status);
-        setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: new Date().toISOString().split('T')[0] } : r));
-        addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
-      } catch (err: any) {
-        logger.warn(`dbUpdateRecallStatus background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'error', message: 'Hatırlatma kaydedilemedi. Lütfen tekrar deneyin.' });
-      }
-    } else if (demoModeActive) {
+    requireActiveOrganization();
+    try {
+      await dbUpdateRecallStatus(id, status);
       setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: new Date().toISOString().split('T')[0] } : r));
-      addToast({ type: 'success', message: 'Demo hatırlatma durumu güncellendi.' });
-    } else {
-      addToast({ type: 'error', message: 'Hatırlatma güncellemek için aktif firma gerekli.' });
+      addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
+    } catch (err: any) {
+      logger.warn(`dbUpdateRecallStatus background sync error: ${err.message}`, 'AppContext');
+      addToast({ type: 'error', message: 'Hatırlatma kaydedilemedi. Lütfen tekrar deneyin.' });
+      throw err;
     }
   };
 
   const addRecallItem = async (item: RecallItem) => {
-    setRecallList(prev => [item, ...prev]);
-    const auditEntry: AuditLogEntry = {
-      id: `aud-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-      userId: currentUser?.id || 'usr-admin',
-      userName: currentUser?.name || 'Sistem Yöneticisi',
-      module: 'Hasta',
-      action: 'Ekleme',
-      description: `${item.patientName} için ${item.reason} hatırlatması planlandı (Vade: ${item.dueDate}).`,
-      details: `Vade: ${item.dueDate}`
-    };
-    setAuditLogList(prev => [auditEntry, ...prev]);
-    addToast({ type: 'success', message: `${item.patientName} için hatırlatma kaydı oluşturuldu.` });
+    if (!currentOrgId) throw new Error('Hatırlatma oluşturmak için aktif firma oturumu gerekli.');
+    try {
+      const created = await dbInsertRecallItem(item);
+      setRecallList(prev => [created, ...prev.filter(recall => recall.id !== created.id)]);
+      addToast({ type: 'success', message: `${created.patientName} için hatırlatma kaydedildi.` });
+      try {
+        await dbInsertAuditLog({ action: 'Hatırlatma Ekleme', module: 'Recall', description: `${created.patientName} için ${created.reason} hatırlatması planlandı (${created.dueDate}).` });
+      } catch (auditError: any) {
+        logger.warn(`Hatırlatma denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext');
+      }
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Hatırlatma kaydedilemedi: ${err.message}` });
+      throw err;
+    }
   };
 
   // P0 — Tedarikçi CRUD
   const addSupplier = async (supplier: Supplier) => {
-    if (currentOrgId) {
-      try {
-        const created = await dbInsertSupplier(supplier);
-        setSuppliersList(prev => [created, ...prev]);
-        addToast({ type: 'success', message: 'Tedarikçi başarıyla eklendi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Tedarikçi eklenemedi: ${err.message}` });
-      }
-    } else {
-      setSuppliersList(prev => [supplier, ...prev]);
+    requireActiveOrganization();
+    try {
+      const created = await dbInsertSupplier(supplier);
+      setSuppliersList(prev => [created, ...prev]);
+      addToast({ type: 'success', message: 'Tedarikçi başarıyla eklendi.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Tedarikçi eklenemedi: ${err.message}` });
+      throw err;
     }
   };
   const updateSupplier = async (updatedSupplier: Supplier) => {
-    if (currentOrgId && updatedSupplier.id) {
-      try {
-        const saved = await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
-        if (!saved) throw new Error('Kayıt bulunamadı veya erişim yetkisi yok.');
-        setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? saved : s));
-        addToast({ type: 'success', message: 'Tedarikçi bilgileri güncellendi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Tedarikçi güncellenemedi: ${err.message}` });
-      }
-    } else if (demoModeActive) {
-      setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
+    requireActiveOrganization();
+    if (!updatedSupplier.id) throw new Error('Tedarikçi kaydı kimliği zorunludur.');
+    try {
+      const saved = await dbUpdateSupplier(updatedSupplier.id, updatedSupplier);
+      if (!saved) throw new Error('Kayıt bulunamadı veya erişim yetkisi yok.');
+      setSuppliersList(prev => prev.map(s => s.id === updatedSupplier.id ? saved : s));
+      addToast({ type: 'success', message: 'Tedarikçi bilgileri güncellendi.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Tedarikçi güncellenemedi: ${err.message}` });
+      throw err;
     }
   };
   const deleteSupplier = async (id: string) => {
-    if (currentOrgId) {
-      try {
-        await dbDeleteSupplier(id);
-        setSuppliersList(prev => prev.filter(s => s.id !== id));
-        addToast({ type: 'success', message: 'Tedarikçi silindi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Tedarikçi silinemedi: ${err.message}` });
-      }
-    } else {
+    requireActiveOrganization();
+    try {
+      await dbDeleteSupplier(id);
       setSuppliersList(prev => prev.filter(s => s.id !== id));
+      addToast({ type: 'success', message: 'Tedarikçi silindi.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Tedarikçi silinemedi: ${err.message}` });
+      throw err;
     }
   };
 
@@ -812,32 +736,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Fix #12: Interface artık cashRegisterId parametresini de kabul ediyor
   const addExpense = async (expense: Expense & { idempotencyKey?: string }, cashRegisterId?: string) => {
     try {
-      if (currentOrgId) {
-        const created = await dbInsertExpense({
-          ...expense,
-          idempotency_key: expense.idempotencyKey
-        });
-        setExpensesList(prev => [created, ...prev.filter(e => e.id !== created.id)]);
-        addToast({ type: 'success', message: 'Gider ve kasa hareketi kaydedildi.' });
-        return;
-      }
-      CashDomainService.recordTransaction({
-        cashRegisterId: cashRegisterId || 'kas-1',
-        type: 'EXPENSE',
-        amount: expense.amount,
-        category: expense.category,
-        referenceEntity: 'expense',
-        referenceId: expense.id,
-        organizationId: currentOrgId || undefined,
-        description: expense.description,
-        idempotencyKey: expense.idempotencyKey
+      requireActiveOrganization();
+      const created = await dbInsertExpense({
+        ...expense,
+        idempotency_key: expense.idempotencyKey
       });
-      setExpensesList(prev => [expense, ...prev]);
-      addToast({ type: 'success', message: 'Gider başarıyla kaydedildi ve kasadan düşüldü.' });
-
+      setExpensesList(prev => [created, ...prev.filter(e => e.id !== created.id)]);
+      addToast({ type: 'success', message: 'Gider ve kasa hareketi kaydedildi.' });
       await EventBus.publish({
         type: 'EXPENSE_CREATED',
-        payload: expense,
+        payload: created,
         timestamp: new Date().toISOString(),
         organizationId: currentOrgId || undefined
       });
@@ -847,36 +755,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
   const updateExpense = async (updatedExpense: Expense) => {
-    if (currentOrgId && updatedExpense.id) {
-      try {
-        const saved = await dbUpdateExpense(updatedExpense.id, updatedExpense);
-        if (!saved) throw new Error('Kayıt bulunamadı.');
-        setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? saved : e));
-        addToast({ type: 'success', message: 'Gider ve kasa hareketi güncellendi.' });
-      } catch (err: any) {
-        logger.warn(`dbUpdateExpense background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'error', message: 'Gider güncellenemedi; kayıt değiştirilmedi.' });
-        throw err;
-      }
+    requireActiveOrganization();
+    if (!updatedExpense.id) throw new Error('Gider kaydı kimliği zorunludur.');
+    try {
+      const saved = await dbUpdateExpense(updatedExpense.id, updatedExpense);
+      if (!saved) throw new Error('Kayıt bulunamadı.');
+      setExpensesList(prev => prev.map(e => e.id === updatedExpense.id ? saved : e));
+      addToast({ type: 'success', message: 'Gider ve kasa hareketi güncellendi.' });
+    } catch (err: any) {
+      logger.warn(`dbUpdateExpense background sync error: ${err.message}`, 'AppContext');
+      addToast({ type: 'error', message: 'Gider güncellenemedi; kayıt değiştirilmedi.' });
+      throw err;
     }
   };
 
   const deleteExpense = async (id: string) => {
-    if (currentOrgId) {
-      try {
-        await dbDeleteExpense(id);
-        setExpensesList(prev => prev.filter(e => e.id !== id));
-        addToast({ type: 'success', message: 'Gider iptal edildi ve kasa düzeltildi.' });
-      } catch (err: any) {
-        logger.warn(`dbDeleteExpense background sync error: ${err.message}`, 'AppContext');
-        addToast({ type: 'error', message: 'Gider iptal edilemedi; kayıt değiştirilmedi.' });
-        throw err;
-      }
+    requireActiveOrganization();
+    try {
+      await dbDeleteExpense(id);
+      setExpensesList(prev => prev.filter(e => e.id !== id));
+      addToast({ type: 'success', message: 'Gider iptal edildi ve kasa düzeltildi.' });
+    } catch (err: any) {
+      logger.warn(`dbDeleteExpense background sync error: ${err.message}`, 'AppContext');
+      addToast({ type: 'error', message: 'Gider iptal edilemedi; kayıt değiştirilmedi.' });
+      throw err;
     }
   };
 
   // P0 — Kullanıcı / Üyelik (Memberships) CRUD
   const addUser = async (user: SystemUser) => {
+    requireActiveOrganization();
     if (currentOrg && usersList.length >= (currentOrg.max_users || 5)) {
       addToast({
         type: 'warning',
@@ -884,44 +792,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    if (currentOrgId) {
-      try {
-        const created = await dbInsertMembership(user);
-        setUsersList(prev => [created, ...prev]);
-        addToast({ type: 'success', message: 'Personel / Üye başarıyla davet edildi.' });
-        await dbInsertAuditLog({
-          action: 'Kullanıcı Ekledi',
-          module: 'Kullanıcı Yönetimi',
-          description: `${user.firstName} ${user.lastName} (${user.roles.join(', ')}) ekleme işlemi yapıldı.`
-        });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Kullanıcı eklenemedi: ${err.message}` });
-        throw err;
-      }
-    } else {
-      setUsersList(prev => [user, ...prev]);
+    try {
+      const created = await dbInsertMembership(user);
+      setUsersList(prev => [created, ...prev]);
+      addToast({ type: 'success', message: 'Personel / Üye başarıyla davet edildi.' });
+      await dbInsertAuditLog({
+        action: 'Kullanıcı Ekledi',
+        module: 'Kullanıcı Yönetimi',
+        description: `${user.firstName} ${user.lastName} (${user.roles.join(', ')}) ekleme işlemi yapıldı.`
+      });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Kullanıcı eklenemedi: ${err.message}` });
+      throw err;
     }
   };
 
   const updateUser = async (updatedUser: SystemUser) => {
+    requireActiveOrganization();
     try {
-      if(currentOrgId) await dbUpdateMembership(updatedUser.id,updatedUser);
-      else if(!demoModeActive) throw new Error('Aktif firma gerekli.');
+      await dbUpdateMembership(updatedUser.id,updatedUser);
       setUsersList(prev=>prev.map(u=>u.id===updatedUser.id?updatedUser:u));
       addToast({type:'success',message:'Kullanıcı güncellendi.'});
     } catch(err: any){addToast({type:'error',message:err.message});throw err;}
   };
   const deleteUser = async (id: string) => {
+    requireActiveOrganization();
     try {
-      if(currentOrgId) await dbDeleteMembership(id);
-      else if(!demoModeActive) throw new Error('Aktif firma gerekli.');
+      await dbDeleteMembership(id);
       setUsersList(prev=>prev.filter(u=>u.id!==id));
       addToast({type:'success',message:'Üyelik kaldırıldı.'});
-    } catch(err: any){addToast({type:'error',message:err.message});}
+    } catch(err: any){addToast({type:'error',message:err.message});throw err;}
   };
 
   // Şube CRUD
   const addBranch = async (branch: Branch) => {
+    requireActiveOrganization();
     if (currentOrg && branchesList.length >= (currentOrg.max_branches || 2)) {
       addToast({
         type: 'warning',
@@ -929,33 +834,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       return;
     }
-    if (currentOrgId) {
-      try {
-        const created = await dbInsertBranch(branch);
-        setBranchesList(prev => [...prev, created]);
-        addToast({ type: 'success', message: 'Şube başarıyla oluşturuldu.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Şube oluşturulamadı: ${err.message}` });
-        throw err;
-      }
-    } else {
-      setBranchesList(prev => [...prev, branch]);
+    try {
+      const created = await dbInsertBranch(branch);
+      setBranchesList(prev => [...prev, created]);
+      addToast({ type: 'success', message: 'Şube başarıyla oluşturuldu.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Şube oluşturulamadı: ${err.message}` });
+      throw err;
     }
   };
 
   const updateBranch = async (updatedBranch: Branch) => {
-    if (currentOrgId && updatedBranch.id) {
-      try {
-        const saved = await dbUpdateBranch(updatedBranch.id, updatedBranch);
-        if (!saved) throw new Error('Kayıt bulunamadı veya erişim yetkisi yok.');
-        setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? saved : b));
-        addToast({ type: 'success', message: 'Şube bilgileri güncellendi.' });
-      } catch (err: any) {
-        addToast({ type: 'error', message: `Şube bilgileri kaydedilemedi: ${err.message}` });
-      }
-    } else if (demoModeActive) {
-      setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? updatedBranch : b));
-      addToast({ type: 'success', message: 'Demo şube bilgileri güncellendi.' });
+    requireActiveOrganization();
+    if (!updatedBranch.id) throw new Error('Şube kaydı kimliği zorunludur.');
+    try {
+      const saved = await dbUpdateBranch(updatedBranch.id, updatedBranch);
+      if (!saved) throw new Error('Kayıt bulunamadı veya erişim yetkisi yok.');
+      setBranchesList(prev => prev.map(b => b.id === updatedBranch.id ? saved : b));
+      addToast({ type: 'success', message: 'Şube bilgileri güncellendi.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Şube bilgileri kaydedilemedi: ${err.message}` });
+      throw err;
     }
   };
 
@@ -988,6 +887,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refreshOrganizationData,
       
       patientsList,
+      loadPatientTimeline,
       appointmentsList,
       stockList,
       salesList,
@@ -1027,7 +927,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addBranch,
       updateBranch,
       
-      demoModeActive,
       commissionRate,
       setCommissionRate
     }}>

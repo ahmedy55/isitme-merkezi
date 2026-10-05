@@ -80,7 +80,7 @@ export default function PatientsPage() {
   const [filterAppointment, setFilterAppointment] = useState('Tümü');
   const [quickFilter, setQuickFilter] = useState('Tümü');
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [showPatientPanel, setShowPatientPanel] = useState(true);
+  const [showPatientPanel, setShowPatientPanel] = useState(false);
   const [patientPanelTab, setPatientPanelTab] = useState<'Genel' | 'Cihazlar' | 'Randevular' | 'İşlemler' | 'Ödemeler'>('Genel');
   const [checkedRows, setCheckedRows] = useState<Set<string>>(new Set());
   const [showMoreFilters, setShowMoreFilters] = useState(false);
@@ -622,7 +622,16 @@ export default function PatientsPage() {
     setCurrentPage('patient-detail');
   };
 
-  const activePatient = sorted.find(patient => patient.id === selectedRowId) || sorted[0] || null;
+  React.useEffect(() => {
+    const visibleIds = new Set(sorted.map(patient => patient.id));
+    setCheckedRows(previous => new Set([...previous].filter(id => visibleIds.has(id))));
+    if (selectedRowId && !visibleIds.has(selectedRowId)) {
+      setSelectedRowId(null);
+      setShowPatientPanel(false);
+    }
+  }, [sorted, selectedRowId]);
+
+  const activePatient = sorted.find(patient => patient.id === selectedRowId) || null;
   const activePatientAppointments = activePatient
     ? branchAppointments.filter(appointment => appointment.patientId === activePatient.id).sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
     : [];
@@ -690,7 +699,7 @@ export default function PatientsPage() {
               </div>
             )}
           </div>
-          <button className={`btn btn-ghost ${styles.actionButton}`} style={{ width: 42, padding: 0, minWidth: 42, border: '1px solid var(--patient-border)', borderRadius: 10, background: '#fff' }}>
+          <button type="button" aria-label="Hasta ekleme seçeneklerini aç" aria-expanded={showAddDropdown} className={`btn btn-ghost ${styles.actionButton}`} style={{ width: 42, padding: 0, minWidth: 42, border: '1px solid var(--patient-border)', borderRadius: 10, background: '#fff' }} onClick={() => setShowAddDropdown(value => !value)}>
             <IconDotsVertical size={18} />
           </button>
         </div>

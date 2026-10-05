@@ -54,6 +54,10 @@ const toServiceRecord = (item: ServiceItem): ServiceRecord => ({
   accessoriesTaken: [], complaints: [],
 });
 
+const escapeHtml = (value: unknown) => String(value ?? '—').replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[character]!));
+
 
 export default function ServicePage() {
   const { addToast, stockList, patientsList, branchesList, currentOrgId, completeServiceTicket } = useApp();
@@ -73,6 +77,8 @@ export default function ServicePage() {
 
   // Selected item for right detail drawer
   const [selectedItem, setSelectedItem] = useState<ServiceItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [drawerTab, setDrawerTab] = useState<'Genel' | 'İşlem Geçmişi' | 'Parça & Maliyet' | 'Dosyalar'>('Genel');
 
@@ -84,6 +90,34 @@ export default function ServicePage() {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+
+  const exportServiceReport = () => {
+    const item = selectedItem;
+    const reportTitle = item ? `Servis Raporu - ${item.deviceName}` : 'Aylık Servis Faaliyet Raporu';
+    const reportRows = item
+      ? [
+          ['Hasta', item.patientName], ['Cihaz', item.deviceName], ['Seri No', item.serialNo],
+          ['Arıza / Sorun', item.problem], ['Durum', item.status], ['Şube', item.branch],
+          ['Teslim Alınma', item.receivedDate], ['Tahmini Teslim', item.estimatedDeliveryDate],
+          ['Garanti', item.warrantyStatus], ['Teknisyen', item.technician], ['Notlar', item.notes],
+        ]
+      : [
+          ['Toplam Kayıt', `${records.length} adet`],
+          ['Başarı ile Teslim Edilen', `${records.filter(record => record.status === 'Teslim Edildi').length} adet`],
+          ['Garanti Kapsamı Oranı', `%${warrantyRate}`],
+        ];
+    const content = reportRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('');
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      addToast({ type: 'error', message: 'Rapor penceresi açılamadı. Tarayıcı açılır pencere iznini etkinleştirip tekrar deneyin.' });
+      return;
+    }
+    popup.opener = null;
+    popup.document.open();
+    popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(reportTitle)}</title><style>body{font:14px Arial,sans-serif;color:#172033;margin:40px auto;max-width:800px;padding:0 24px}h1{font-size:22px;border-bottom:2px solid #08785b;padding-bottom:12px}p{color:#64748b}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{text-align:left;border-bottom:1px solid #dbe3ea;padding:12px;vertical-align:top}th{width:30%;color:#475569}.actions{margin:20px 0}@media print{body{margin:0;max-width:none}.actions{display:none}}</style></head><body><div class="actions"><button onclick="window.print()">Yazdır / PDF olarak kaydet</button></div><h1>${escapeHtml(reportTitle)}</h1><p>Oluşturulma: ${escapeHtml(new Date().toLocaleString('tr-TR'))}</p><table><tbody>${content}</tbody></table></body></html>`);
+    popup.document.close();
+    popup.focus();
+  };
 
   // Form states
   const [statusUpdateVal, setStatusUpdateVal] = useState<ServiceItem['status']>('Alındı');
@@ -169,7 +203,7 @@ export default function ServicePage() {
   // Filtered rows
   const filteredRecords = useMemo(() => {
     return records.filter(item => {
-      if (!matches(item.branch)) return false;
+      if (!matches(item.branch, item.branchId)) return false;
 
       // Status pill filter
       if (filterStatus.startsWith('Alındı') && item.status !== 'Alındı') return false;
@@ -196,6 +230,11 @@ export default function ServicePage() {
       return true;
     });
   }, [records, filterStatus, selectedBranch, selectedStatusDropdown, selectedDeviceType, selectedWarranty, searchTerm, matches]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
+  const pagedRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => setCurrentPage(1), [filterStatus, selectedBranch, selectedStatusDropdown, selectedDeviceType, selectedWarranty, searchTerm, pageSize]);
+  useEffect(() => setCurrentPage(page => Math.min(page, pageCount)), [pageCount]);
 
   // Toggle selection
   const handleToggleRow = (id: string, e: React.MouseEvent) => {
@@ -655,7 +694,7 @@ export default function ServicePage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRecords.map(item => {
+                  pagedRecords.map(item => {
                     const isSelected = selectedRowIds.includes(item.id);
                     const isCurrentDetail = selectedItem?.id === item.id;
                     return (
@@ -782,20 +821,14 @@ export default function ServicePage() {
               <span className={styles.selectedCount}>{selectedRowIds.length} kayıt seçili</span>
             </div>
 
-            <div className={styles.pageControls}>
-              <button type="button" className={styles.pageBtn} title="İlk Sayfa">«</button>
-              <button type="button" className={styles.pageBtn} title="Önceki Sayfa">‹</button>
-              <button type="button" className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-              <button type="button" className={styles.pageBtn}>2</button>
-              <button type="button" className={styles.pageBtn} title="Sonraki Sayfa">›</button>
-              <button type="button" className={styles.pageBtn} title="Son Sayfa">»</button>
-
-              <select className={styles.pageSizeSelect} defaultValue="10">
-                <option value="10">10 / sayfa</option>
-                <option value="25">25 / sayfa</option>
-                <option value="50">50 / sayfa</option>
+            {filteredRecords.length > 0 && <div className={styles.pageControls}>
+              <button type="button" className={styles.pageBtn} title="Önceki Sayfa" aria-label="Önceki sayfa" disabled={currentPage <= 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))}>‹</button>
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${currentPage === page ? styles.pageBtnActive : ''}`} aria-current={currentPage === page ? 'page' : undefined} onClick={() => setCurrentPage(page)}>{page}</button>)}
+              <button type="button" className={styles.pageBtn} title="Sonraki Sayfa" aria-label="Sonraki sayfa" disabled={currentPage >= pageCount} onClick={() => setCurrentPage(page => Math.min(pageCount, page + 1))}>›</button>
+              <select className={styles.pageSizeSelect} value={pageSize} onChange={event => setPageSize(Number(event.target.value))} aria-label="Sayfa başına servis kaydı">
+                <option value="10">10 / sayfa</option><option value="25">25 / sayfa</option><option value="50">50 / sayfa</option>
               </select>
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -1310,10 +1343,7 @@ export default function ServicePage() {
               <button
                 type="button"
                 className={styles.btnPrimaryAction}
-                onClick={() => {
-                  addToast({ type: 'error', message: 'Servis raporu PDF dışa aktarma henüz bağlı değil; dosya oluşturulmadı.' });
-                  setShowReportModal(false);
-                }}
+                onClick={exportServiceReport}
               >
                 Raporu Dışa Aktar
               </button>

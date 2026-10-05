@@ -99,10 +99,50 @@ export async function validateBody<T>(
   request: NextRequest,
   schema: ZodSchema<T>
 ): Promise<{ data: T; error: null } | { data: null; error: NextResponse }> {
-  let body: unknown;
+  const maxBodyBytes = 16 * 1024;
+  const contentLength = Number(request.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > maxBodyBytes) {
+    return {
+      data: null,
+      error: NextResponse.json({ success: false, error: 'İstek gövdesi izin verilen boyutu aşıyor.' }, { status: 413 }),
+    };
+  }
 
   try {
-    body = await request.json();
+    if (!request.body) throw new Error('Empty request body');
+    const reader = request.body.getReader();
+    const decoder = new TextDecoder();
+    let rawBody = '';
+    let bytesRead = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytesRead += value.byteLength;
+      if (bytesRead > maxBodyBytes) {
+        await reader.cancel();
+        return {
+          data: null,
+          error: NextResponse.json({ success: false, error: 'İstek gövdesi izin verilen boyutu aşıyor.' }, { status: 413 }),
+        };
+      }
+      rawBody += decoder.decode(value, { stream: true });
+    }
+    rawBody += decoder.decode();
+    const body: unknown = JSON.parse(rawBody);
+    const result = schema.safeParse(body);
+
+    if (!result.success) {
+      const details = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+      return {
+        data: null,
+        error: NextResponse.json(
+          { success: false, error: 'Geçersiz veri formatı.', details },
+          { status: 400 }
+        ),
+      };
+    }
+
+    return { data: result.data, error: null };
   } catch {
     return {
       data: null,
@@ -112,21 +152,6 @@ export async function validateBody<T>(
       ),
     };
   }
-
-  const result = schema.safeParse(body);
-
-  if (!result.success) {
-    const details = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
-    return {
-      data: null,
-      error: NextResponse.json(
-        { success: false, error: 'Geçersiz veri formatı.', details },
-        { status: 400 }
-      ),
-    };
-  }
-
-  return { data: result.data, error: null };
 }
 
 // ─────────────────────────────────────────────────────────────────

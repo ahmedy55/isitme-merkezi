@@ -169,11 +169,9 @@ export default function BranchActivitiesPage() {
     return tr ? `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}` : '';
   };
   const [rangeStart, rangeEnd] = dateRange.split(' - ').map(normalizeDateKey);
-  const testBranchNames = ['Test Şube 1', 'Test Şube 2', 'Test Şube 3'];
   const visibleTransfers = transfers.filter(item => {
     const key = normalizeDateKey(item.date);
-    return !testBranchNames.includes(item.fromBranch.trim()) && !testBranchNames.includes(item.toBranch.trim())
-      && (matches(item.fromBranch) || matches(item.toBranch)) && (!rangeStart || key >= rangeStart) && (!rangeEnd || key <= rangeEnd);
+    return (matches(item.fromBranch) || matches(item.toBranch)) && (!rangeStart || key >= rangeStart) && (!rangeEnd || key <= rangeEnd);
   });
   const filteredTransfers = visibleTransfers.filter(item => transferStatusFilter === 'Tümünü Gör' || (transferStatusFilter === 'Tamamlananlar' && item.status === 'Tamamlandı') || (transferStatusFilter === 'İptal Edilenler' && item.status === 'İptal Edildi'));
   const transferTypeColors = ['#0d9488', '#0284c7', '#f59e0b', '#94a3b8'];

@@ -73,9 +73,18 @@ describe('Enterprise ERP Architecture Domain Services', () => {
     ).toThrow('Yetersiz stok!');
   });
 
-  it('CashDomainService should derive exact balance from ledger transactions', () => {
-    const balance = CashDomainService.deriveBalance('kas-1');
-    expect(typeof balance).toBe('number');
+  it('CashDomainService never invents balances when no ledger rows are supplied', () => {
+    expect(CashDomainService.deriveBalance('kas-1')).toBe(0);
+    expect(CashDomainService.deriveBalance('kas-1', 500)).toBe(500);
+  });
+
+  it('CashDomainService derives a balance only from supplied ledger rows', () => {
+    const balance = CashDomainService.deriveBalance('kas-1', 100, [
+      { id: '1', cashRegisterId: 'kas-1', type: 'INCOME', amount: 750, category: 'Satış', createdAt: '2026-01-01' },
+      { id: '2', cashRegisterId: 'kas-1', type: 'EXPENSE', amount: 250, category: 'Gider', createdAt: '2026-01-02' },
+      { id: '3', cashRegisterId: 'kas-2', type: 'INCOME', amount: 9000, category: 'Satış', createdAt: '2026-01-03' },
+    ]);
+    expect(balance).toBe(600);
   });
 
   it('SGKDomainService should approve prescription and return 5-year renewal date', async () => {

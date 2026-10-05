@@ -81,175 +81,7 @@ export interface ActivityRecord {
 }
 const todayISO = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(new Date());
 
-const defaultShowcaseActivities: ActivityRecord[] = [
-  {
-    id: 'act-1',
-    timestamp: '2025-09-12 15:42',
-    dateStr: '12 Eyl 2025',
-    timeStr: '15:42',
-    patientId: 'p1',
-    patientName: 'Ayşe Yılmaz',
-    patientAge: 62,
-    patientGender: 'Kadın',
-    patientAvatarColor: '#8b5cf6',
-    patientInitials: 'AY',
-    patientPhone: '+90 532 123 45 67',
-    type: 'Telefon Araması',
-    description: 'Cihaz kullanımı hakkında bilgilendirme yapıldı. Kontrol randevusu oluşturuldu.',
-    staffName: 'Ahmet Yılmaz',
-    staffInitials: 'AH',
-    staffAvatarColor: '#0f766e',
-    branchName: 'Merkez',
-    relatedAppointment: {
-      date: '20 Eyl 2025, 15:00',
-      type: 'Kontrol',
-      branch: 'Merkez'
-    }
-  },
-  {
-    id: 'act-2',
-    timestamp: '2025-09-12 14:30',
-    dateStr: '12 Eyl 2025',
-    timeStr: '14:30',
-    patientId: 'p2',
-    patientName: 'Mehmet Demir',
-    patientAge: 75,
-    patientGender: 'Erkek',
-    patientAvatarColor: '#3b82f6',
-    patientInitials: 'MD',
-    patientPhone: '+90 545 987 65 43',
-    type: 'Yüz Yüze Görüşme',
-    description: 'Sol kulak için kalıp ölçüsü alındı. Cihaz denemesi yapıldı.',
-    staffName: 'Fatma Kaya',
-    staffInitials: 'FK',
-    staffAvatarColor: '#db2777',
-    branchName: 'Merkez',
-    relatedAppointment: {
-      date: '18 Eyl 2025, 11:00',
-      type: 'Kalıp Deneme',
-      branch: 'Merkez'
-    }
-  },
-  {
-    id: 'act-3',
-    timestamp: '2025-09-12 13:15',
-    dateStr: '12 Eyl 2025',
-    timeStr: '13:15',
-    patientId: 'p3',
-    patientName: 'Fatma Kaya',
-    patientAge: 68,
-    patientGender: 'Kadın',
-    patientAvatarColor: '#ec4899',
-    patientInitials: 'FK',
-    patientPhone: '+90 533 444 22 11',
-    type: 'Not Ekleme',
-    description: 'Pil değişimi konusunda bilgi verildi. Hasta 1 hafta sonra aradı.',
-    staffName: 'Ahmet Yılmaz',
-    staffInitials: 'AH',
-    staffAvatarColor: '#0f766e',
-    branchName: 'Çankaya'
-  },
-  {
-    id: 'act-4',
-    timestamp: '2025-09-12 11:10',
-    dateStr: '12 Eyl 2025',
-    timeStr: '11:10',
-    patientId: 'p4',
-    patientName: 'Ali Çetin',
-    patientAge: 70,
-    patientGender: 'Erkek',
-    patientAvatarColor: '#f59e0b',
-    patientInitials: 'AÇ',
-    patientPhone: '+90 505 333 21 09',
-    type: 'Randevu İşlemi',
-    description: '20 Eyl 2025 11:30 için randevu oluşturuldu. Kontrol muayenesi.',
-    staffName: 'Zeynep Arslan',
-    staffInitials: 'ZE',
-    staffAvatarColor: '#a855f7',
-    branchName: 'Merkez',
-    relatedAppointment: {
-      date: '20 Eyl 2025, 11:30',
-      type: 'Kontrol Muayenesi',
-      branch: 'Merkez'
-    }
-  },
-  {
-    id: 'act-5',
-    timestamp: '2025-09-12 10:45',
-    dateStr: '12 Eyl 2025',
-    timeStr: '10:45',
-    patientId: 'p5',
-    patientName: 'Hasan Yıldız',
-    patientAge: 66,
-    patientGender: 'Erkek',
-    patientAvatarColor: '#6366f1',
-    patientInitials: 'HY',
-    patientPhone: '+90 530 777 88 99',
-    type: 'Cihaz İşlemi',
-    description: 'Widex Moment cihaz programı güncellendi.',
-    staffName: 'Teknik Servis',
-    staffInitials: 'TK',
-    staffAvatarColor: '#e11d48',
-    branchName: 'Merkez'
-  },
-  {
-    id: 'act-6',
-    timestamp: '2025-09-12 09:20',
-    dateStr: '12 Eyl 2025',
-    timeStr: '09:20',
-    patientId: 'p6',
-    patientName: 'Emine Doğan',
-    patientAge: 72,
-    patientGender: 'Kadın',
-    patientAvatarColor: '#10b981',
-    patientInitials: 'ED',
-    patientPhone: '+90 536 999 00 11',
-    type: 'Telefon Araması',
-    description: 'Recall kapsamında arandı. Randevu hatırlatıldı.',
-    staffName: 'Zeynep Arslan',
-    staffInitials: 'ZE',
-    staffAvatarColor: '#a855f7',
-    branchName: 'Çankaya'
-  },
-  {
-    id: 'act-7',
-    timestamp: '2025-09-12 09:05',
-    dateStr: '12 Eyl 2025',
-    timeStr: '09:05',
-    patientId: 'p7',
-    patientName: 'Mustafa Acar',
-    patientAge: 59,
-    patientGender: 'Erkek',
-    patientAvatarColor: '#8b5cf6',
-    patientInitials: 'MA',
-    patientPhone: '+90 533 123 67 89',
-    type: 'Yüz Yüze Görüşme',
-    description: 'Cihaz temizliği yapıldı. Filtre değişimi gerçekleştirildi.',
-    staffName: 'Fatma Kaya',
-    staffInitials: 'FK',
-    staffAvatarColor: '#db2777',
-    branchName: 'Merkez'
-  },
-  {
-    id: 'act-8',
-    timestamp: '2025-09-12 08:50',
-    dateStr: '12 Eyl 2025',
-    timeStr: '08:50',
-    patientId: 'p8',
-    patientName: 'Zeynep Arslan',
-    patientAge: 55,
-    patientGender: 'Kadın',
-    patientAvatarColor: '#ef4444',
-    patientInitials: 'ZA',
-    patientPhone: '+90 542 222 11 00',
-    type: 'Yeni Hasta',
-    description: 'Yeni hasta kaydı oluşturuldu.',
-    staffName: 'Ahmet Yılmaz',
-    staffInitials: 'AH',
-    staffAvatarColor: '#0f766e',
-    branchName: 'Merkez'
-  },
-];
+
 
 export default function ActivityLogPage() {
   const { addToast, currentOrgId, currentUser, dataLoading, branchesList, usersList, patientsList, setCurrentPage, setSelectedPatientId } = useApp();
@@ -410,6 +242,16 @@ export default function ActivityLogPage() {
   useEffect(() => {
     if (currentPageIndex > Math.max(pageCount, 1)) setCurrentPageIndex(Math.max(pageCount, 1));
   }, [currentPageIndex, pageCount]);
+
+  useEffect(() => {
+    const visibleIds = new Set(filteredActivities.map(activity => activity.id));
+    setCheckedIds(previous => new Set([...previous].filter(id => visibleIds.has(id))));
+    if (selectedActId && !visibleIds.has(selectedActId)) {
+      setSelectedActId(null);
+      setShowDetailPanel(false);
+      setActiveActionMenu(null);
+    }
+  }, [filteredActivities, selectedActId]);
 
   const todayKey = todayISO();
   const todaysActivities = activities.filter(activity => activity.timestamp.slice(0, 10) === todayKey);
@@ -892,10 +734,10 @@ export default function ActivityLogPage() {
                   <button type="button" className={styles.pageBtn} disabled={currentPageIndex === pageCount} onClick={() => setCurrentPageIndex(page => Math.min(pageCount, page + 1))} aria-label="Sonraki sayfa">›</button>
                   <button type="button" className={styles.pageBtn} disabled={currentPageIndex === pageCount} onClick={() => setCurrentPageIndex(pageCount)} aria-label="Son sayfa">»</button>
                 </div>}
-                <select className={styles.sortSelect} value={pageSize} onChange={event => setPageSize(Number(event.target.value))} aria-label="Sayfa başına kayıt sayısı">
+                {filteredActivities.length > 0 && <select className={styles.sortSelect} value={pageSize} onChange={event => setPageSize(Number(event.target.value))} aria-label="Sayfa başına kayıt sayısı">
                   <option value={20}>20 / sayfa</option>
                   <option value={50}>50 / sayfa</option>
-                </select>
+                </select>}
               </div>
           </div>
 

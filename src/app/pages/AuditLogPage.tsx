@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import styles from './AuditLogPage.module.css';
@@ -137,6 +137,14 @@ export default function AuditLogPage() {
       return matchesSearch && matchesModule && matchesAction && matchesUser && matchesResult && matchesDate;
     });
   }, [auditLogList, usersList, searchTerm, moduleFilter, actionFilter, userFilter, resultFilter, dateRange]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
+  const pagedLogs = filteredLogs.slice((currentPageNum - 1) * pageSize, currentPageNum * pageSize);
+  const visiblePageNumbers = pageCount <= 5
+    ? Array.from({ length: pageCount }, (_, index) => index + 1)
+    : Array.from(new Set([1, currentPageNum - 1, currentPageNum, currentPageNum + 1, pageCount])).filter(page => page >= 1 && page <= pageCount).sort((a, b) => a - b);
+  useEffect(() => setCurrentPageNum(1), [searchTerm, moduleFilter, actionFilter, userFilter, resultFilter, dateRange, pageSize]);
+  useEffect(() => setCurrentPageNum(page => Math.min(page, pageCount)), [pageCount]);
 
   // Selected Log Object for Drawer
   const activeLog = useMemo(() => {
@@ -574,7 +582,7 @@ export default function AuditLogPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map(item => {
+                  pagedLogs.map(item => {
                     const isSelected = selectedRowId === item.id;
                     const isChecked = checkedIds.includes(item.id);
 
@@ -662,88 +670,20 @@ export default function AuditLogPage() {
           {/* Table Footer */}
           <div className={styles.tableFooter}>
             <div className={styles.footerSelectionInfo}>
-              <span>Toplam 156 kayıt</span>
+              <span>Toplam {filteredLogs.length} kayıt</span>
               <span>|</span>
               <span className={styles.footerSelectedBadge}>{checkedIds.length} kayıt seçili</span>
             </div>
 
-            <div className={styles.paginationControls}>
-              <button 
-                type="button" 
-                className={styles.pageBtn} 
-                disabled={currentPageNum === 1}
-                onClick={() => setCurrentPageNum(1)}
-              >
-                «
-              </button>
-              <button 
-                type="button" 
-                className={styles.pageBtn} 
-                disabled={currentPageNum === 1}
-                onClick={() => setCurrentPageNum(prev => Math.max(1, prev - 1))}
-              >
-                ‹
-              </button>
-              <button 
-                type="button" 
-                className={`${styles.pageBtn} ${currentPageNum === 1 ? styles.pageBtnActive : ''}`}
-                onClick={() => setCurrentPageNum(1)}
-              >
-                1
-              </button>
-              <button 
-                type="button" 
-                className={`${styles.pageBtn} ${currentPageNum === 2 ? styles.pageBtnActive : ''}`}
-                onClick={() => setCurrentPageNum(2)}
-              >
-                2
-              </button>
-              <button 
-                type="button" 
-                className={`${styles.pageBtn} ${currentPageNum === 3 ? styles.pageBtnActive : ''}`}
-                onClick={() => setCurrentPageNum(3)}
-              >
-                3
-              </button>
-              <button 
-                type="button" 
-                className={`${styles.pageBtn} ${currentPageNum === 4 ? styles.pageBtnActive : ''}`}
-                onClick={() => setCurrentPageNum(4)}
-              >
-                4
-              </button>
-              <button 
-                type="button" 
-                className={`${styles.pageBtn} ${currentPageNum === 5 ? styles.pageBtnActive : ''}`}
-                onClick={() => setCurrentPageNum(5)}
-              >
-                5
-              </button>
-              <span className={styles.pageEllipsis}>...</span>
-              <button 
-                type="button" 
-                className={`${styles.pageBtn} ${currentPageNum === 16 ? styles.pageBtnActive : ''}`}
-                onClick={() => setCurrentPageNum(16)}
-              >
-                16
-              </button>
-              <button 
-                type="button" 
-                className={styles.pageBtn} 
-                disabled={currentPageNum === 16}
-                onClick={() => setCurrentPageNum(prev => Math.min(16, prev + 1))}
-              >
-                ›
-              </button>
-              <button 
-                type="button" 
-                className={styles.pageBtn} 
-                disabled={currentPageNum === 16}
-                onClick={() => setCurrentPageNum(16)}
-              >
-                »
-              </button>
-
+            {filteredLogs.length > 0 && <div className={styles.paginationControls}>
+              <button type="button" className={styles.pageBtn} disabled={currentPageNum <= 1} onClick={() => setCurrentPageNum(1)} aria-label="İlk sayfa">«</button>
+              <button type="button" className={styles.pageBtn} disabled={currentPageNum <= 1} onClick={() => setCurrentPageNum(page => Math.max(1, page - 1))} aria-label="Önceki sayfa">‹</button>
+              {visiblePageNumbers.map((page, index) => <React.Fragment key={page}>
+                {index > 0 && page - visiblePageNumbers[index - 1] > 1 && <span className={styles.pageEllipsis}>…</span>}
+                <button type="button" className={`${styles.pageBtn} ${currentPageNum === page ? styles.pageBtnActive : ''}`} aria-current={currentPageNum === page ? 'page' : undefined} onClick={() => setCurrentPageNum(page)}>{page}</button>
+              </React.Fragment>)}
+              <button type="button" className={styles.pageBtn} disabled={currentPageNum >= pageCount} onClick={() => setCurrentPageNum(page => Math.min(pageCount, page + 1))} aria-label="Sonraki sayfa">›</button>
+              <button type="button" className={styles.pageBtn} disabled={currentPageNum >= pageCount} onClick={() => setCurrentPageNum(pageCount)} aria-label="Son sayfa">»</button>
               <select 
                 className={styles.perPageSelect}
                 value={pageSize}
@@ -753,7 +693,7 @@ export default function AuditLogPage() {
                 <option value={25}>25 / sayfa</option>
                 <option value={50}>50 / sayfa</option>
               </select>
-            </div>
+            </div>}
           </div>
         </div>
 

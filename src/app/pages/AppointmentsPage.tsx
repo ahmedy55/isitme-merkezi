@@ -63,7 +63,6 @@ const getIstanbulDate = (date = new Date()) => {
   return new Date(part('year'), part('month') - 1, part('day'), 12);
 };
 
-// Default Showcase Schedule items for the screenshot design
 interface ShowcaseSlot {
   id: string;
   date?: string;
@@ -80,118 +79,7 @@ interface ShowcaseSlot {
   status?: 'Geldi' | 'Bekliyor' | 'Tamamlandı' | 'Randevu Onayı' | 'İptal';
 }
 
-const defaultShowcaseSlots: ShowcaseSlot[] = [
-  {
-    id: 's1',
-    hour: '09:00',
-    timeRange: '09:00-09:30',
-    patientName: 'Ayşe Yılmaz',
-    patientInitials: 'AY',
-    avatarColor: '#8b5cf6',
-    type: 'Kontrol',
-    duration: '30 dk',
-    phone: '+90 532 123 45 67',
-    device: 'Oticon More 1',
-    status: 'Geldi',
-  },
-  {
-    id: 's2',
-    hour: '10:00',
-    timeRange: '09:30-10:15',
-    patientName: 'Mehmet Demir',
-    patientInitials: 'MD',
-    avatarColor: '#3b82f6',
-    type: 'Cihaz Teslimi',
-    duration: '45 dk',
-    phone: '+90 545 987 65 43',
-    device: 'Phonak Audeo L',
-    status: 'Bekliyor',
-  },
-  {
-    id: 's3',
-    hour: '11:00',
-    timeRange: '10:30-11:00',
-    patientName: 'Fatma Kaya',
-    patientInitials: 'FK',
-    avatarColor: '#ec4899',
-    type: 'İlk Muayene',
-    duration: '30 dk',
-    phone: '+90 533 444 22 11',
-    device: '—',
-    status: 'Bekliyor',
-  },
-  {
-    id: 's4',
-    hour: '12:00',
-    timeRange: '11:00-11:30',
-    patientName: 'Ali Çetin',
-    patientInitials: 'AÇ',
-    avatarColor: '#f59e0b',
-    type: 'Cihaz Ayarı',
-    duration: '30 dk',
-    phone: '+90 505 333 21 09',
-    device: 'Signia Pure 312',
-    status: 'Tamamlandı',
-  },
-  {
-    id: 'break',
-    hour: '13:00',
-    timeRange: '12:00-13:00',
-    isBreak: true,
-  },
-  {
-    id: 's5',
-    hour: '14:00',
-    timeRange: '13:00-13:30',
-    patientName: 'Zeynep Arslan',
-    patientInitials: 'ZA',
-    avatarColor: '#ef4444',
-    type: 'Kontrol',
-    duration: '30 dk',
-    phone: '+90 542 222 11 00',
-    device: '—',
-    status: 'Bekliyor',
-  },
-  {
-    id: 's6',
-    hour: '15:00',
-    timeRange: '14:00-14:45',
-    patientName: 'Hasan Yıldız',
-    patientInitials: 'HY',
-    avatarColor: '#6366f1',
-    type: 'Pil Değişimi',
-    duration: '45 dk',
-    phone: '+90 530 777 88 99',
-    device: 'Widex Moment',
-    status: 'Bekliyor',
-  },
-  {
-    id: 's7',
-    hour: '16:00',
-    timeRange: '15:00-15:30',
-    patientName: 'Emine Doğan',
-    patientInitials: 'ED',
-    avatarColor: '#10b981',
-    type: 'Kontrol',
-    duration: '30 dk',
-    phone: '+90 536 999 00 11',
-    device: 'Resound Nexia',
-    status: 'Randevu Onayı',
-  },
-  {
-    id: 's8',
-    hour: '17:00',
-    timeRange: '16:00-16:30',
-    patientName: 'Mustafa Acar',
-    patientInitials: 'MA',
-    avatarColor: '#8b5cf6',
-    type: 'Teknik Servis',
-    duration: '30 dk',
-    phone: '+90 533 123 67 89',
-    device: 'Starkey Evolv AI',
-    status: 'İptal',
-  },
-];
+
 
 export default function AppointmentsPage() {
   const { appointmentsList: rawAppointmentsList, patientsList, branchesList, usersList, addAppointment, updateAppointment, updateAppointmentStatus, addToast, currentOrgId, appointmentCreatePatientId, clearAppointmentCreationRequest } = useApp();

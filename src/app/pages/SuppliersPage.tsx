@@ -62,6 +62,8 @@ export default function SuppliersPage() {
 
   // Selected item for right detail drawer
   const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [drawerTab, setDrawerTab] = useState<'Genel' | 'Alış Faturaları' | 'Ödeme Geçmişi' | 'Notlar'>('Genel');
 
@@ -103,8 +105,8 @@ export default function SuppliersPage() {
   });
 
   useEffect(() => {
-    if (selectedSupplier && !suppliers.some(item => item.id === selectedSupplier.id)) setSelectedSupplier(null);
-  }, [selectedSupplier, suppliers]);
+    setSelectedSupplier(current => current ? suppliers.find(item => item.id === current.id) || null : null);
+  }, [suppliers]);
 
   // Pill counts calculation
   const pillCounts = useMemo(() => {
@@ -148,6 +150,11 @@ export default function SuppliersPage() {
       return true;
     });
   }, [suppliers, filterPill, selectedCategory, selectedStatusDropdown, searchTerm]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredSuppliers.length / pageSize));
+  const pagedSuppliers = filteredSuppliers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => setCurrentPage(1), [filterPill, selectedCategory, selectedStatusDropdown, searchTerm, pageSize]);
+  useEffect(() => setCurrentPage(page => Math.min(page, pageCount)), [pageCount]);
 
   // Toggle selection
   const handleToggleRow = (id: string, e: React.MouseEvent) => {
@@ -516,7 +523,7 @@ export default function SuppliersPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSuppliers.map(item => {
+                  pagedSuppliers.map(item => {
                     const isSelected = selectedRowIds.includes(item.id);
                     const isCurrentDetail = selectedSupplier?.id === item.id;
                     return (
@@ -640,21 +647,14 @@ export default function SuppliersPage() {
               <span className={styles.selectedCount}>{selectedRowIds.length} kayıt seçili</span>
             </div>
 
-            <div className={styles.pageControls}>
-              <button type="button" className={styles.pageBtn} title="İlk Sayfa">«</button>
-              <button type="button" className={styles.pageBtn} title="Önceki Sayfa">‹</button>
-              <button type="button" className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-              <button type="button" className={styles.pageBtn}>2</button>
-              <button type="button" className={styles.pageBtn}>3</button>
-              <button type="button" className={styles.pageBtn} title="Sonraki Sayfa">›</button>
-              <button type="button" className={styles.pageBtn} title="Son Sayfa">»</button>
-
-              <select className={styles.pageSizeSelect} defaultValue="10">
-                <option value="10">10 / sayfa</option>
-                <option value="25">25 / sayfa</option>
-                <option value="50">50 / sayfa</option>
+            {filteredSuppliers.length > 0 && <div className={styles.pageControls}>
+              <button type="button" className={styles.pageBtn} title="Önceki Sayfa" aria-label="Önceki sayfa" disabled={currentPage <= 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))}>‹</button>
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${currentPage === page ? styles.pageBtnActive : ''}`} aria-current={currentPage === page ? 'page' : undefined} onClick={() => setCurrentPage(page)}>{page}</button>)}
+              <button type="button" className={styles.pageBtn} title="Sonraki Sayfa" aria-label="Sonraki sayfa" disabled={currentPage >= pageCount} onClick={() => setCurrentPage(page => Math.min(pageCount, page + 1))}>›</button>
+              <select className={styles.pageSizeSelect} value={pageSize} onChange={event => setPageSize(Number(event.target.value))} aria-label="Sayfa başına tedarikçi">
+                <option value="10">10 / sayfa</option><option value="25">25 / sayfa</option><option value="50">50 / sayfa</option>
               </select>
-            </div>
+            </div>}
           </div>
         </div>
 
@@ -1172,7 +1172,7 @@ export default function SuppliersPage() {
                   <label className={styles.formLabel}>Açıklama / Kalem Özeti</label>
                   <textarea
                     rows={2}
-                    placeholder="Örn: 5 adet Oticon More 1 ve sarf malzemeleri alımı"
+                      placeholder="Örn: 2 cihaz ve sarf malzemeleri alımı"
                     className={styles.formTextarea}
                     value={invoiceForm.description}
                     onChange={e => setInvoiceForm({ ...invoiceForm, description: e.target.value })}

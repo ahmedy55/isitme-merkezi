@@ -54,6 +54,8 @@ export default function AssetsPage() {
   // Table selection & active detail item
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeItem, setActiveItem] = useState<DisplayAsset | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'bakim' | 'dosyalar' | 'gecmis'>('genel');
 
   // Action menu dropdown
@@ -172,11 +174,13 @@ export default function AssetsPage() {
     });
   }, [assetList, activeBranch, categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm]);
 
+  const pageCount = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
+  const pagedAssets = filteredAssets.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => setCurrentPage(1), [categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm, pageSize]);
+  useEffect(() => setCurrentPage(page => Math.min(page, pageCount)), [pageCount]);
+
   useEffect(() => {
-    if (!activeItem || !filteredAssets.some(asset => asset.id === activeItem.id)) {
-      setActiveItem(filteredAssets[0] ?? null);
-      setSelectedIds(filteredAssets[0] ? [filteredAssets[0].id] : []);
-    }
+    if (activeItem && !filteredAssets.some(asset => asset.id === activeItem.id)) setActiveItem(null);
   }, [activeItem, filteredAssets]);
 
   // Metric counts matching the mockup
@@ -624,7 +628,7 @@ export default function AssetsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredAssets.map(item => {
+                  pagedAssets.map(item => {
                     const isSelected = selectedIds.includes(item.id);
                     const isActive = activeItem?.id === item.id;
                     return (
@@ -693,7 +697,8 @@ export default function AssetsPage() {
                               <button
                                 className={styles.btnActionIcon}
                                 title="İşlemler"
-                                onClick={() => setActiveActionMenuId(activeActionMenuId === item.id ? null : item.id)}
+                                aria-expanded={activeActionMenuId === item.id}
+                                onClick={event => { event.stopPropagation(); setActiveActionMenuId(activeActionMenuId === item.id ? null : item.id); }}
                               >
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <circle cx="12" cy="12" r="1" />
@@ -706,7 +711,8 @@ export default function AssetsPage() {
                                 <div className={styles.dropdownMenu}>
                                   <button
                                     className={styles.dropdownItem}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       setShowMaintenanceModal(true);
                                     }}
@@ -715,7 +721,8 @@ export default function AssetsPage() {
                                   </button>
                                   <button
                                     className={styles.dropdownItem}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       setShowCalibrationModal(true);
                                     }}
@@ -724,7 +731,8 @@ export default function AssetsPage() {
                                   </button>
                                   <button
                                     className={styles.dropdownItem}
-                                    onClick={() => {
+                                    onClick={event => {
+                                      event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       setShowTransferModal(true);
                                     }}
@@ -734,7 +742,7 @@ export default function AssetsPage() {
                                   <hr style={{ margin: '4px 0', border: 'none', borderTop: '1px solid #e2e8f0' }} />
                                   <button
                                     className={`${styles.dropdownItem} ${styles.dropdownItemDanger}`}
-                                    onClick={() => handleDeleteAsset(item.id)}
+                                    onClick={event => { event.stopPropagation(); handleDeleteAsset(item.id); }}
                                   >
                                     🗑 Demirbaşı Sil
                                   </button>
@@ -758,22 +766,18 @@ export default function AssetsPage() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div className={styles.pagination}>
-                <button className={styles.pageBtn}>‹</button>
-                <button className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-                <button className={styles.pageBtn}>2</button>
-                <button className={styles.pageBtn}>3</button>
-                <button className={styles.pageBtn}>4</button>
-                <button className={styles.pageBtn}>5</button>
-                <button className={styles.pageBtn}>›</button>
-                <button className={styles.pageBtn}>»</button>
-              </div>
-
-              <select className={styles.filterSelect} style={{ height: 32, minWidth: 90, padding: '0 8px' }}>
-                <option>10 / sayfa</option>
-                <option>25 / sayfa</option>
-                <option>50 / sayfa</option>
-              </select>
+              {filteredAssets.length > 0 && <>
+                <div className={styles.pagination}>
+                  <button type="button" className={styles.pageBtn} disabled={currentPage <= 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))} aria-label="Önceki sayfa">‹</button>
+                  {Array.from({ length: pageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${currentPage === page ? styles.pageBtnActive : ''}`} aria-current={currentPage === page ? 'page' : undefined} onClick={() => setCurrentPage(page)}>{page}</button>)}
+                  <button type="button" className={styles.pageBtn} disabled={currentPage >= pageCount} onClick={() => setCurrentPage(page => Math.min(pageCount, page + 1))} aria-label="Sonraki sayfa">›</button>
+                </div>
+                <select aria-label="Sayfa başına demirbaş" className={styles.filterSelect} style={{ height: 32, minWidth: 90, padding: '0 8px' }} value={pageSize} onChange={event => setPageSize(Number(event.target.value))}>
+                  <option value={10}>10 / sayfa</option>
+                  <option value={25}>25 / sayfa</option>
+                  <option value={50}>50 / sayfa</option>
+                </select>
+              </>}
             </div>
           </div>
         </div>

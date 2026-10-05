@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { NewAppointmentModal } from './AppointmentsPage';
 import {
-  patients, appointments, sales,
   getAvatarColor, getInitials, formatDate, formatCurrency, calculateAge,
   type Patient, type Appointment
 } from '../data/mockData';
@@ -32,6 +31,7 @@ export default function PatientDetailPage() {
     activeDetailTab, 
     setActiveDetailTab, 
     patientsList, 
+    loadPatientTimeline,
     updatePatient,
     stockList,
     updateStockItem,
@@ -49,7 +49,6 @@ export default function PatientDetailPage() {
   const [audiogramFiles, setAudiogramFiles] = useState<{ name: string; created_at?: string | null }[]>([]);
   const audiogramFileInputRef = useRef<HTMLInputElement>(null);
   const patientPhotoInputRef = useRef<HTMLInputElement>(null);
-  const [saleStockId, setSaleStockId] = useState('');
   const [saleEarSide, setSaleEarSide] = useState<'Sağ' | 'Sol'>('Sağ');
   const [trialStockId, setTrialStockId] = useState('');
   const [activeDeviceTrials, setActiveDeviceTrials] = useState<{ id: string; stock_item_id: string; serial_no: string; barcode: string; due_at: string }[]>([]);
@@ -141,6 +140,16 @@ export default function PatientDetailPage() {
   });
 
   const patient = patientsList.find(p => p.id === selectedPatientId && matches(p.branch, p.branchId));
+  const timelineLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!patient?.id || !currentOrgId) return;
+    const requestKey = `${currentOrgId}:${patient.id}`;
+    if (timelineLoadedFor.current === requestKey) return;
+    timelineLoadedFor.current = requestKey;
+    void loadPatientTimeline(patient.id);
+  // loadPatientTimeline is a context action; only reload when the tenant/patient identity changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrgId, patient?.id]);
   const handlePatientPhotoChange = async (file?: File) => {
     if (!file || !patient) return;
     if (!isSupportedPatientPhoto(file)) {
@@ -325,15 +334,17 @@ export default function PatientDetailPage() {
     );
   }
 
-  const handleStartSale = async (deviceName: string, price: number, stockId: string) => {
-    const matchedStockItem = stockList.find(s => s.id === stockId && isSaleEligible(s)) ||
-                             stockList.find(s => s.name.toLowerCase().includes(deviceName.toLowerCase()) && isSaleEligible(s));
+  const handleStartSale = async (stockId: string) => {
+    const matchedStockItem = stockList.find(s => s.id === stockId && s.category === 'Cihaz' && isSaleEligible(s));
     if (!matchedStockItem) {
       addToast({ type: 'error', message: 'Seçilen cihaz için stokta yeterli adet bulunamadı.' });
       return;
     }
+    const price = matchedStockItem.price;
     const effectiveBranchId = patient.branchId || matchedStockItem.branchId || 'merkez';
-    const sgkAmount = Math.min(price, patient.sgkStatus === 'Yenileme Hakkı Var' ? 6200 : 0);
+    const sgkAmount = patient.sgkStatus === 'Yenileme Hakkı Var'
+      ? Math.min(price, Math.max(0, matchedStockItem.sgkPrice || 0))
+      : 0;
     try {
       await addSale({
         id: crypto.randomUUID(),
@@ -1271,35 +1282,7 @@ export default function PatientDetailPage() {
           const leftAvg = leftAudio.length > 0 ? leftAudio.reduce((s,v) => s+v, 0) / leftAudio.length : 0;
           const rightAvg = rightAudio.length > 0 ? rightAudio.reduce((s,v) => s+v, 0) / rightAudio.length : 0;
           const worstAvg = Math.max(leftAvg, rightAvg);
-          const age = calculateAge(patient.birthDate);
-
-          // Build suggestions logic
-          let suggestedPower = 'M (Standard)';
-          let suggestedType = 'RIC (Hoparlör Kulak İçi)';
-          let matchingBrands: { name: string; matchPct: number; features: string[]; price: number; reason: string }[] = [];
-
-          if (worstAvg > 80) {
-            suggestedPower = 'UP (Ultra Power)';
-            suggestedType = 'BTE (Kulak Arkası)';
-            matchingBrands = [
-              { name: 'Phonak Naída P70 UP', matchPct: 98, price: 72000, features: ['Maksimum kazanç', 'Suya dayanıklılık', 'Yüksek pil ömrü (675)'], reason: 'İleri derece kayıp için güçlü çıkış gücü ve dayanıklı BTE kasa tipi gereklidir.' },
-              { name: 'Oticon Xceed 1', matchPct: 92, price: 88000, features: ['BrainHearing™ teknolojisi', '360° ses deneyimi', 'Süper yönlülük'], reason: 'Beyin öncelikli işleme sayesinde çok ileri kayıplarda dahi konuşma anlaşılırlığını korur.' }
-            ];
-          } else if (worstAvg > 60) {
-            suggestedPower = 'P (Power)';
-            suggestedType = 'RIC (Hoparlör Kulak İçi) veya BTE';
-            matchingBrands = [
-              { name: 'Oticon More 1 (P Alıcı)', matchPct: 96, price: 92000, features: ['DNN (Derin Yapay Sinir Ağı)', 'Bluetooth streaming', 'Şarj Edilebilir'], reason: 'Derin Yapay Sinir Ağı, ileri derece kayıplarda gürültü baskılamayı en doğal şekilde yapar.' },
-              { name: 'Phonak Audéo P90-R', matchPct: 94, price: 85000, features: ['AutoSense OS 4.0', 'Çift Bluetooth bağlantısı', 'Tap Control'], reason: 'Otomatik ortam adaptasyonu yaşlı hastalarda manuel ayar ihtiyacını ortadan kaldırır.' }
-            ];
-          } else {
-            suggestedPower = 'S (Standard) veya M';
-            suggestedType = 'RIC veya IIC (Kanal İçi Görünmez)';
-            matchingBrands = [
-              { name: 'Signia Pure 7Nx', matchPct: 95, price: 68000, features: ['Kendi sesini doğal işitme (OVP)', 'Ultra küçük tasarım', 'Uzaktan ayar desteği'], reason: 'Hafif-orta kayıplarda hastanın kendi sesinden rahatsız olmasını engelleyen OVP teknolojisine sahiptir.' },
-              { name: 'Phonak Audéo P70', matchPct: 91, price: 64000, features: ['Hafif gövde', 'Yüksek konfor', 'Net konuşma sesi'], reason: 'Estetik kaygısı olan ve hafif/orta düzeyde kayba sahip hastalar için konforlu kullanım sağlar.' }
-            ];
-          }
+          const availableDevices = stockList.filter(item => item.category === 'Cihaz' && isSaleEligible(item));
 
           return (
             <div className="responsive-grid-1-2">
@@ -1319,12 +1302,14 @@ export default function PatientDetailPage() {
                       <div style={{ fontWeight: 700, color: 'var(--danger-600)' }}>{rightAvg.toFixed(1)} dB</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Önerilen Alıcı Gücü (Receiver)</div>
-                      <span className="badge badge-warning" style={{ fontWeight: 600 }}>{suggestedPower}</span>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Odyogram ortalaması</div>
+                      <span className="badge badge-warning" style={{ fontWeight: 600 }}>
+                        {leftAudio.length || rightAudio.length ? `${worstAvg.toFixed(1)} dB` : 'Odyogram verisi yok'}
+                      </span>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Önerilen Kasa Tipi</div>
-                      <span className="badge badge-info" style={{ fontWeight: 600 }}>{suggestedType}</span>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Cihaz uygunluğu</div>
+                      <span className="badge badge-info" style={{ fontWeight: 600 }}>Uzman değerlendirmesi gerekir</span>
                     </div>
                     <div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>SGK Geri Ödeme Hakkı</div>
@@ -1337,9 +1322,9 @@ export default function PatientDetailPage() {
 
                 <div className="card" style={{ background: 'var(--primary-50)', border: '1px solid var(--primary-100)' }}>
                   <div className="card-body">
-                    <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-700)', marginBottom: 6 }}>💡 Odyolog Tavsiye Notu</h4>
+                    <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-700)', marginBottom: 6 }}>Bilgilendirme</h4>
                     <p style={{ fontSize: '0.78rem', color: 'var(--primary-600)', lineHeight: 1.5 }}>
-                      Hastanın yaş grubu ({age} yaş) ve el motor becerileri göz önüne alındığında, pil değişimi gerektirmeyen <strong>şarj edilebilir (rechargeable)</strong> modeller ve otomatik ortam algılama özellikli (AutoSense/BrainHearing) cihazlar önceliklendirilmelidir.
+                      Odyogram değerleri tek başına cihaz modeli veya gücü belirlemek için yeterli değildir. Cihaz seçimi ve ayarı odyolog değerlendirmesiyle yapılmalıdır.
                     </p>
                   </div>
                 </div>
@@ -1349,9 +1334,10 @@ export default function PatientDetailPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div className="card">
                   <div className="card-header">
-                    <span className="card-title">Uyuşan En İyi Modeller</span>
+                    <span className="card-title">Şubede Müsait Cihazlar</span>
                   </div>
                   <div className="card-body" style={{ display: 'grid', gap: 14 }}>
+                    {availableDevices.length === 0 && <div className="empty-state">Bu hastanın şubesinde satışa uygun cihaz stoku bulunmuyor.</div>}
                     {patient.hearingLossSide === 'Her İki Kulak' && (
                       <div className="form-group">
                         <label className="form-label" htmlFor="sale-ear-side">Bu satışın cihaz kulağı</label>
@@ -1361,51 +1347,24 @@ export default function PatientDetailPage() {
                         </select>
                       </div>
                     )}
-                    {matchingBrands.map((brand, idx) => (
-                      <div key={idx} style={{
+                    {availableDevices.map(device => (
+                      <div key={device.id} style={{
                         padding: 16,
                         border: '1px solid var(--gray-200)',
                         borderRadius: 'var(--radius-lg)',
-                        background: idx === 0 ? 'linear-gradient(to right, white, var(--success-50))' : 'white',
-                        position: 'relative'
+                        background: 'white'
                       }}>
-                        {idx === 0 && (
-                          <span className="badge badge-success" style={{ position: 'absolute', top: 12, right: 12 }}>
-                            En Yüksek Eşleşme
-                          </span>
-                        )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                          <h4 style={{ fontSize: '1rem', fontWeight: 700 }}>{brand.name}</h4>
-                          <span style={{ color: 'var(--success-600)', fontWeight: 700, fontSize: '1.1rem' }}>%{brand.matchPct} Uyum</span>
-                        </div>
-                        <p style={{ fontSize: '0.82rem', color: 'var(--gray-600)', marginBottom: 12 }}>
-                          {brand.reason}
-                        </p>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-                          {brand.features.map(f => (
-                            <span key={f} className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>✓ {f}</span>
-                          ))}
+                          <h4 style={{ fontSize: '1rem', fontWeight: 700 }}>{device.name}</h4>
+                          <span style={{ color: 'var(--gray-600)', fontWeight: 600 }}>Mevcut stok: {device.quantity}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--gray-100)', paddingTop: 10, flexWrap: 'wrap', gap: 12 }}>
-                          <div style={{ display: 'flex', gap: 16 }}>
-                            <div>
-                              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Brüt: </span>
-                              <span style={{ fontWeight: 600 }}>{formatCurrency(brand.price)}</span>
-                            </div>
-                            <div>
-                              <span style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>SGK Sonrası Hasta Payı: </span>
-                              <span style={{ fontWeight: 700, color: 'var(--primary-600)', fontSize: '1.05rem' }}>
-                                {patient.sgkStatus === 'Yenileme Hakkı Var' ? formatCurrency(brand.price - 6200) : formatCurrency(brand.price)}
-                              </span>
-                            </div>
-                          </div>
-                        <DevicePicker items={stockList.filter(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && isSaleEligible(s))} value={saleStockId} onChange={item => setSaleStockId(item.id)} />
+                          <strong>{formatCurrency(device.price)}</strong>
                         <button
                           className="btn btn-sm btn-primary"
-                          disabled={!stockList.some(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && isSaleEligible(s))}
+                          disabled={!isSaleEligible(device)}
                           onClick={() => {
-                            const effectiveStock = stockList.find(s => s.id === saleStockId && isSaleEligible(s)) || stockList.find(s => (s.name === brand.name || s.name.toLowerCase().includes(brand.name.toLowerCase().split(' ')[0])) && isSaleEligible(s));
-                            handleStartSale(brand.name, brand.price, effectiveStock?.id || saleStockId);
+                            handleStartSale(device.id);
                           }}
                         >
                           Satışı Başlat

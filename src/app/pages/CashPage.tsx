@@ -21,6 +21,7 @@ interface CashMovement {
   status: 'Tahsil Edildi' | 'Bekleyen' | 'Bekliyor' | 'Taksitli';
   branch: string;
   referenceEntity?: string;
+  referenceId?: string;
 }
 
 interface ExpenseItem {
@@ -51,6 +52,9 @@ export default function CashPage() {
   const [cashSelectedAccount, setCashSelectedAccount] = useState('Tüm Hesaplar');
   const [summaryBranch, setSummaryBranch] = useState('Tüm Şubeler');
   const [cashSelectedIds, setCashSelectedIds] = useState<string[]>([]);
+  const [cashPage, setCashPage] = useState(1);
+  const [cashPageSize, setCashPageSize] = useState(10);
+  const [selectedCashMovement, setSelectedCashMovement] = useState<CashMovement | null>(null);
 
   // ── MASRAFLAR STATES ──
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
@@ -59,7 +63,10 @@ export default function CashPage() {
   const [expenseSelectedCategory, setExpenseSelectedCategory] = useState('Tüm Kategoriler');
   const [expenseSelectedBranch, setExpenseSelectedBranch] = useState('Tüm Şubeler');
   const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
+  const [expenseDrawerTab, setExpenseDrawerTab] = useState<'general' | 'payments'>('general');
   const [expenseSelectedIds, setExpenseSelectedIds] = useState<string[]>([]);
+  const [expensePage, setExpensePage] = useState(1);
+  const [expensePageSize, setExpensePageSize] = useState(10);
 
   // Modals state
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -116,7 +123,7 @@ export default function CashPage() {
           account: row.cashRegisterId || '—', type: isOutgoing ? 'Çıkış' : 'Giriş', category: row.category || '—',
           description: row.description || '—', patientOrEntity: sale?.patientName || expense?.createdBy || '—',
           amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || '—',
-          status: 'Tahsil Edildi', branch: branch?.name || '—', referenceEntity: row.referenceEntity,
+          status: 'Tahsil Edildi', branch: branch?.name || '—', referenceEntity: row.referenceEntity, referenceId: row.referenceId,
         };
       });
       const mappedExpenses: ExpenseItem[] = actualExpenses.map(expense => ({
@@ -199,6 +206,15 @@ export default function CashPage() {
       return true;
     });
   }, [expenses, expenseFilterPill, expenseSelectedCategory, expenseSelectedBranch, expenseSearchTerm, matches]);
+
+  const cashPageCount = Math.max(1, Math.ceil(filteredCashMovements.length / cashPageSize));
+  const pagedCashMovements = filteredCashMovements.slice((cashPage - 1) * cashPageSize, cashPage * cashPageSize);
+  const expensePageCount = Math.max(1, Math.ceil(filteredExpenses.length / expensePageSize));
+  const pagedExpenses = filteredExpenses.slice((expensePage - 1) * expensePageSize, expensePage * expensePageSize);
+  useEffect(() => setCashPage(1), [cashFilterPill, cashSelectedAccount, cashPageSize]);
+  useEffect(() => setExpensePage(1), [expenseFilterPill, expenseSelectedCategory, expenseSelectedBranch, expenseSearchTerm, expensePageSize]);
+  useEffect(() => setCashPage(page => Math.min(page, cashPageCount)), [cashPageCount]);
+  useEffect(() => setExpensePage(page => Math.min(page, expensePageCount)), [expensePageCount]);
 
   // Handle Create Deposit/Withdrawal
   const handleCreateDeposit = async (e: React.FormEvent) => {
@@ -753,7 +769,7 @@ export default function CashPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCashMovements.map(row => {
+                  {pagedCashMovements.length === 0 ? <tr><td colSpan={11} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Kriterlere uygun kasa hareketi bulunamadı.</td></tr> : pagedCashMovements.map(row => {
                     const isSelected = cashSelectedIds.includes(row.id);
                     return (
                       <tr key={row.id} className={isSelected ? styles.selectedRow : ''}>
@@ -787,25 +803,41 @@ export default function CashPage() {
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <div className={styles.actionBtns} style={{ justifyContent: 'center' }}>
-                            <button className={styles.btnActionIcon} title="Görüntüle" onClick={() => addToast({ type: 'info', message: `${row.description} işlemi detayı açılıyor...` })}>
+                            <button type="button" className={styles.btnActionIcon} title="Görüntüle" onClick={event => { event.stopPropagation(); setSelectedCashMovement(row); }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                                 <circle cx="12" cy="12" r="3" />
                               </svg>
                             </button>
-                            <button className={styles.btnActionIcon} title="Düzenle">
+                            <button type="button" className={styles.btnActionIcon} title="Düzenle" onClick={event => {
+                              event.stopPropagation();
+                              const mappedExpense = row.referenceEntity === 'expense' ? expenses.find(item => item.id === row.referenceId) : undefined;
+                              if (mappedExpense) { setSelectedExpense(mappedExpense); setShowEditExpenseModal(true); }
+                              else addToast({ type: 'info', message: 'Bu hareketin kaynağı satış veya tahsilat kaydıdır; doğrudan kasa hareketinden düzenlenemez.' });
+                            }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M12 20h9" />
                                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                               </svg>
                             </button>
-                            <button className={styles.btnActionIcon} title="Menü">
+                            <div style={{ position: 'relative' }}>
+                            <button type="button" className={styles.btnActionIcon} title="Menü" aria-expanded={activeMenuId === row.id} onClick={event => { event.stopPropagation(); setActiveMenuId(activeMenuId === row.id ? null : row.id); }}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                 <circle cx="12" cy="12" r="1" />
                                 <circle cx="12" cy="5" r="1" />
                                 <circle cx="12" cy="19" r="1" />
                               </svg>
                             </button>
+                            {activeMenuId === row.id && <div role="menu" style={{ position: 'absolute', right: 0, top: '100%', zIndex: 30, minWidth: 170, padding: 5, border: '1px solid #dbe4ea', borderRadius: 8, background: '#fff', boxShadow: '0 8px 22px rgba(15,23,42,.14)' }}>
+                              <button type="button" role="menuitem" className={styles.btnClear} style={{ width: '100%', textAlign: 'left' }} onClick={event => { event.stopPropagation(); setSelectedCashMovement(row); setActiveMenuId(null); }}>İşlem detayını gör</button>
+                              <button type="button" role="menuitem" className={styles.btnClear} style={{ width: '100%', textAlign: 'left' }} onClick={event => {
+                                event.stopPropagation(); setActiveMenuId(null);
+                                const mappedExpense = row.referenceEntity === 'expense' ? expenses.find(item => item.id === row.referenceId) : undefined;
+                                if (mappedExpense) { setSelectedExpense(mappedExpense); setShowEditExpenseModal(true); }
+                                else addToast({ type: 'info', message: 'Bu hareketin kaynağı satış veya tahsilat kaydıdır; doğrudan kasa hareketinden düzenlenemez.' });
+                              }}>Düzenleme seçenekleri</button>
+                            </div>}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -816,22 +848,18 @@ export default function CashPage() {
             </div>
 
             <div className={styles.tableFooter}>
-              <div>Toplam 24 kayıt | {cashSelectedIds.length} kayıt seçili</div>
+              <div>Toplam {filteredCashMovements.length} kayıt | {cashSelectedIds.length} kayıt seçili</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className={styles.pagination}>
-                  <button className={styles.pageBtn}>‹</button>
-                  <button className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-                  <button className={styles.pageBtn}>2</button>
-                  <button className={styles.pageBtn}>3</button>
-                  <button className={styles.pageBtn}>4</button>
-                  <button className={styles.pageBtn}>5</button>
-                  <button className={styles.pageBtn}>›</button>
-                  <button className={styles.pageBtn}>»</button>
-                </div>
-                <select className={styles.filterSelect} style={{ height: 30, minWidth: 90 }}>
-                  <option>10 / sayfa</option>
-                  <option>25 / sayfa</option>
-                </select>
+                {filteredCashMovements.length > 0 && <>
+                  <div className={styles.pagination}>
+                    <button type="button" className={styles.pageBtn} disabled={cashPage <= 1} onClick={() => setCashPage(page => Math.max(1, page - 1))} aria-label="Önceki sayfa">‹</button>
+                    {Array.from({ length: cashPageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${cashPage === page ? styles.pageBtnActive : ''}`} aria-current={cashPage === page ? 'page' : undefined} onClick={() => setCashPage(page)}>{page}</button>)}
+                    <button type="button" className={styles.pageBtn} disabled={cashPage >= cashPageCount} onClick={() => setCashPage(page => Math.min(cashPageCount, page + 1))} aria-label="Sonraki sayfa">›</button>
+                  </div>
+                  <select aria-label="Sayfa başına kasa hareketi" className={styles.filterSelect} style={{ height: 30, minWidth: 90 }} value={cashPageSize} onChange={event => setCashPageSize(Number(event.target.value))}>
+                    <option value={10}>10 / sayfa</option><option value={25}>25 / sayfa</option><option value={50}>50 / sayfa</option>
+                  </select>
+                </>}
               </div>
             </div>
           </div>
@@ -1008,7 +1036,7 @@ export default function CashPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredExpenses.map(row => {
+                    {pagedExpenses.length === 0 ? <tr><td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>Kriterlere uygun gider kaydı bulunamadı.</td></tr> : pagedExpenses.map(row => {
                       const isSelected = expenseSelectedIds.includes(row.id);
                       const isActive = selectedExpense?.id === row.id;
                       return (
@@ -1067,13 +1095,19 @@ export default function CashPage() {
                                   <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                                 </svg>
                               </button>
-                              <button className={styles.btnActionIcon} title="Menü">
+                              <div style={{ position: 'relative' }}>
+                              <button type="button" className={styles.btnActionIcon} title="Menü" aria-expanded={activeMenuId === row.id} onClick={event => { event.stopPropagation(); setActiveMenuId(activeMenuId === row.id ? null : row.id); }}>
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                   <circle cx="12" cy="12" r="1" />
                                   <circle cx="12" cy="5" r="1" />
                                   <circle cx="12" cy="19" r="1" />
                                 </svg>
                               </button>
+                              {activeMenuId === row.id && <div role="menu" style={{ position: 'absolute', right: 0, top: '100%', zIndex: 30, minWidth: 170, padding: 5, border: '1px solid #dbe4ea', borderRadius: 8, background: '#fff', boxShadow: '0 8px 22px rgba(15,23,42,.14)' }}>
+                                <button type="button" role="menuitem" className={styles.btnClear} style={{ width: '100%', textAlign: 'left' }} onClick={event => { event.stopPropagation(); setSelectedExpense(row); setActiveMenuId(null); }}>Gider detayını gör</button>
+                                <button type="button" role="menuitem" className={styles.btnClear} style={{ width: '100%', textAlign: 'left' }} onClick={event => { event.stopPropagation(); setSelectedExpense(row); setShowEditExpenseModal(true); setActiveMenuId(null); }}>Gideri düzenle</button>
+                              </div>}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -1084,21 +1118,23 @@ export default function CashPage() {
               </div>
 
               <div className={styles.tableFooter}>
-                <div>Toplam 7 kayıt | {expenseSelectedIds.length} kayıt seçili</div>
+                <div>Toplam {filteredExpenses.length} kayıt | {expenseSelectedIds.length} kayıt seçili</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div className={styles.pagination}>
-                    <button className={styles.pageBtn}>‹</button>
-                    <button className={`${styles.pageBtn} ${styles.pageBtnActive}`}>1</button>
-                    <button className={styles.pageBtn}>›</button>
-                  </div>
-                  <select className={styles.filterSelect} style={{ height: 30, minWidth: 90 }}>
-                    <option>10 / sayfa</option>
-                  </select>
+                  {filteredExpenses.length > 0 && <>
+                    <div className={styles.pagination}>
+                      <button type="button" className={styles.pageBtn} disabled={expensePage <= 1} onClick={() => setExpensePage(page => Math.max(1, page - 1))} aria-label="Önceki sayfa">‹</button>
+                      {Array.from({ length: expensePageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${expensePage === page ? styles.pageBtnActive : ''}`} aria-current={expensePage === page ? 'page' : undefined} onClick={() => setExpensePage(page)}>{page}</button>)}
+                      <button type="button" className={styles.pageBtn} disabled={expensePage >= expensePageCount} onClick={() => setExpensePage(page => Math.min(expensePageCount, page + 1))} aria-label="Sonraki sayfa">›</button>
+                    </div>
+                    <select aria-label="Sayfa başına gider" className={styles.filterSelect} style={{ height: 30, minWidth: 90 }} value={expensePageSize} onChange={event => setExpensePageSize(Number(event.target.value))}>
+                      <option value={10}>10 / sayfa</option><option value={25}>25 / sayfa</option><option value={50}>50 / sayfa</option>
+                    </select>
+                  </>}
                 </div>
               </div>
             </div>
 
-            {/* Right Drawer: QA test gideri */}
+            {/* Gider detay paneli */}
             {selectedExpense && (
               <div className={styles.detailDrawer}>
                 <div className={styles.drawerHeader}>
@@ -1122,11 +1158,12 @@ export default function CashPage() {
                 </div>
 
                 <div className={styles.drawerTabs}>
-                  <button className={`${styles.drawerTabBtn} ${styles.drawerTabBtnActive}`}>Genel</button>
-                  <button className={styles.drawerTabBtn}>Ödeme Geçmişi</button>
+                  <button type="button" aria-selected={expenseDrawerTab === 'general'} className={`${styles.drawerTabBtn} ${expenseDrawerTab === 'general' ? styles.drawerTabBtnActive : ''}`} onClick={() => setExpenseDrawerTab('general')}>Genel</button>
+                  <button type="button" aria-selected={expenseDrawerTab === 'payments'} className={`${styles.drawerTabBtn} ${expenseDrawerTab === 'payments' ? styles.drawerTabBtnActive : ''}`} onClick={() => setExpenseDrawerTab('payments')}>Ödeme Geçmişi</button>
                 </div>
 
                 <div className={styles.drawerBody}>
+                  {expenseDrawerTab === 'general' ? <>
                   <div className={styles.drawerSection}>
                     <div className={styles.sectionHeader}>
                       <span className={styles.sectionTitle}>Genel Bilgiler</span>
@@ -1243,6 +1280,17 @@ export default function CashPage() {
                       </button>
                     </div>
                   </div>
+                  </> : <div className={styles.drawerSection}>
+                    <span className={styles.sectionTitle}>Ödeme Geçmişi</span>
+                    {cashMovements.filter(item => item.referenceEntity === 'expense' && item.referenceId === selectedExpense.id).length ? (
+                      cashMovements.filter(item => item.referenceEntity === 'expense' && item.referenceId === selectedExpense.id).map(item => <div key={item.id} className={styles.infoGrid}>
+                        <div className={styles.infoRow}><span>Tarih</span><strong>{item.date}</strong></div>
+                        <div className={styles.infoRow}><span>Tutar</span><strong>{formatCurrency(item.amount)}</strong></div>
+                        <div className={styles.infoRow}><span>Yöntem</span><strong>{item.paymentMethod}</strong></div>
+                        <div className={styles.infoRow}><span>Durum</span><strong>{item.status}</strong></div>
+                      </div>)
+                    ) : <p>Bu gider için kayıtlı ödeme hareketi bulunmuyor.</p>}
+                  </div>}
                 </div>
               </div>
             )}
@@ -1490,7 +1538,7 @@ export default function CashPage() {
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Gider Açıklaması *</label>
                   <input
-                    placeholder="Örn: QA test gideri / Elektrik faturası"
+                    placeholder="Örn: Elektrik faturası, kira, bakım hizmeti"
                     className={styles.filterSelect}
                     style={{ width: '100%' }}
                     required
@@ -1648,6 +1696,25 @@ export default function CashPage() {
           </div>
         </div>
       )}
+
+      {selectedCashMovement && <div role="presentation" onClick={() => setSelectedCashMovement(null)} style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(15,23,42,.55)' }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="cash-movement-title" onClick={event => event.stopPropagation()} style={{ width: 'min(100%, 480px)', borderRadius: 14, background: '#fff', boxShadow: '0 20px 48px rgba(0,0,0,.22)', overflow: 'hidden' }}>
+          <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+            <h2 id="cash-movement-title" style={{ margin: 0, fontSize: 17 }}>Kasa hareketi detayı</h2>
+            <button type="button" className={styles.btnClear} aria-label="Detayı kapat" onClick={() => setSelectedCashMovement(null)}>✕</button>
+          </header>
+          <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: 20, margin: 0 }}>
+            <dt>Tarih</dt><dd>{selectedCashMovement.date}</dd>
+            <dt>İşlem</dt><dd>{selectedCashMovement.type} · {selectedCashMovement.category}</dd>
+            <dt>Açıklama</dt><dd>{selectedCashMovement.description}</dd>
+            <dt>Hasta / Cari</dt><dd>{selectedCashMovement.patientOrEntity}</dd>
+            <dt>Tutar</dt><dd>{formatCurrency(selectedCashMovement.amount)}</dd>
+            <dt>Ödeme şekli</dt><dd>{selectedCashMovement.paymentMethod}</dd>
+            <dt>Şube</dt><dd>{selectedCashMovement.branch}</dd>
+            <dt>Durum</dt><dd>{selectedCashMovement.status}</dd>
+          </dl>
+        </section>
+      </div>}
     </div>
   );
 }

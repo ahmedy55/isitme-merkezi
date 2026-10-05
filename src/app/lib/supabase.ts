@@ -11,7 +11,9 @@ const isConfigured = Boolean(
   supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY'
 );
 
-if (!isConfigured) {
+// Report missing client configuration in the browser, not while Next statically
+// evaluates this module during production builds or server-side rendering.
+if (!isConfigured && typeof window !== 'undefined') {
   logger.warn(
     'Supabase URL veya Anon Key environment variables eksik. Lütfen .env.local dosyasını yapılandırın.',
     'SupabaseClient'

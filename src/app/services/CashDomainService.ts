@@ -1,4 +1,4 @@
-import { CashTransaction, CashTransactionType } from '../data/mockData';
+import type { CashTransaction, CashTransactionType } from '../data/mockData';
 
 export interface RecordCashTransactionPayload {
   cashRegisterId: string;
@@ -17,52 +17,13 @@ export interface RecordCashTransactionPayload {
 /**
  * CashDomainService — Immutable Kasa Defteri (Ledger) Servisi
  *
- * In-memory ledger YALNIZCA demo/offline modda kullanılır.
- * Production'da (currentOrgId varsa) gerçek bakiye ve hareketler
- * Supabase cash_transactions tablosundan çekilir (dbFetchCashTransactions).
- * Bu servis, yeni kayıt oluşturma ve local (demo) bakiye türetme için kullanılır.
+ * Pure helpers for constructing cash-ledger entries and deriving balances.
+ * Persisted production balances must come from the Supabase cash_transactions table.
  */
 export class CashDomainService {
-  // Demo mod için başlangıç hareketleri — production'da Supabase'den gelir
-  private static demoTransactions: CashTransaction[] = [
-    {
-      id: 'tx-1',
-      cashRegisterId: 'kas-1',
-      type: 'INCOME',
-      amount: 48000,
-      category: 'Cihaz Satışı',
-      referenceEntity: 'sale',
-      referenceId: 'sal-1',
-      createdAt: '2026-07-10T10:30:00Z',
-      description: 'Ayşe Yılmaz — Phonak Audéo P90 peşin satış'
-    },
-    {
-      id: 'tx-2',
-      cashRegisterId: 'kas-2',
-      type: 'INCOME',
-      amount: 36000,
-      category: 'Cihaz Satışı',
-      referenceEntity: 'sale',
-      referenceId: 'sal-2',
-      createdAt: '2026-07-11T14:15:00Z',
-      description: 'Mehmet Kaya — Oticon More 1 cihaz satışı'
-    },
-    {
-      id: 'tx-3',
-      cashRegisterId: 'kas-1',
-      type: 'EXPENSE',
-      amount: 8500,
-      category: 'Reklam & Pazarlama',
-      referenceEntity: 'expense',
-      referenceId: 'exp-6',
-      createdAt: '2026-07-10T16:00:00Z',
-      description: 'Google Ads Temmuz kampanya ödemesi'
-    }
-  ];
-
   /**
-   * Record an immutable cash transaction in the local ledger (demo/offline mode)
-   * In production, the actual DB persist is handled by dbInsertCashTransaction in database.ts
+   * Construct an immutable cash transaction. Persistence is performed separately
+   * by the database transaction workflow; this helper never keeps local ledger state.
    */
   static recordTransaction(payload: RecordCashTransactionPayload): CashTransaction {
     if (payload.amount <= 0) {
@@ -84,21 +45,20 @@ export class CashDomainService {
       description: payload.description
     };
 
-    this.demoTransactions.unshift(tx);
     return tx;
   }
 
   /**
    * Derive real-time balance for a given cash register.
-   * Accepts an external transaction list (from Supabase DB) for production mode.
-   * Falls back to in-memory demo ledger if no external list is provided.
+   * Accepts an explicit transaction list (normally loaded from Supabase).
+   * No synthetic fallback data is used when the list is absent.
    */
   static deriveBalance(
     cashRegisterId: string,
     initialBalance: number = 0,
     externalTransactions?: CashTransaction[]
   ): number {
-    const txList = externalTransactions || this.demoTransactions;
+    const txList = externalTransactions || [];
     return txList
       .filter(tx => tx.cashRegisterId === cashRegisterId)
       .reduce((sum, tx) => {
@@ -106,12 +66,5 @@ export class CashDomainService {
         if (tx.type === 'EXPENSE' || tx.type === 'PAYOUT' || tx.type === 'REFUND') return sum - tx.amount;
         return sum;
       }, initialBalance);
-  }
-
-  /**
-   * Get all transactions. In production, prefer dbFetchCashTransactions() from database.ts instead.
-   */
-  static getTransactions(): CashTransaction[] {
-    return this.demoTransactions;
   }
 }

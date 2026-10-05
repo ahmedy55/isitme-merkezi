@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { fetchAllPages } from '../lib/database';
 
 export interface ServiceRecord {
   id: string; patientId?: string; branchId?: string; stockItemId?: string;
@@ -12,13 +13,22 @@ export interface ServiceRecord {
 const statusToDb: Record<ServiceRecord['status'], string> = { 'Alındı': 'Bekliyor', 'İnceleniyor': 'İşlemde', 'Tamir Ediliyor': 'İşlemde', 'Hazır': 'Tamamlandı', 'Teslim Edildi': 'Teslim Edildi' };
 const dbToStatus: Record<string, ServiceRecord['status']> = { 'Bekliyor': 'Alındı', 'İşlemde': 'İnceleniyor', 'Tamamlandı': 'Hazır', 'Teslim Edildi': 'Teslim Edildi' };
 export async function fetchServiceTickets(orgId: string): Promise<ServiceRecord[]> {
-  let { data, error } = await supabase.from('service_tickets').select('*').eq('organization_id', orgId).is('deleted_at', null).order('received_date', { ascending: false });
-  // Stay compatible during deployment while the archive migration is still pending.
-  if (error && (error.code === '42703' || error.message.includes('deleted_at'))) {
-    ({ data, error } = await supabase.from('service_tickets').select('*').eq('organization_id', orgId).order('received_date', { ascending: false }));
+  let data;
+  try {
+    data = await fetchAllPages((from, to) => supabase.from('service_tickets').select('*').eq('organization_id', orgId).is('deleted_at', null).order('received_date', { ascending: false }).order('id', { ascending: true }).range(from, to));
+  } catch (error: any) {
+    // Stay compatible during deployment while the archive migration is still pending.
+    if (error?.code === '42703' || error?.message?.includes('deleted_at')) {
+      try {
+        data = await fetchAllPages((from, to) => supabase.from('service_tickets').select('*').eq('organization_id', orgId).order('received_date', { ascending: false }).order('id', { ascending: true }).range(from, to));
+      } catch {
+        throw new Error('Servis kayıtları yüklenemedi.');
+      }
+    } else {
+      throw new Error('Servis kayıtları yüklenemedi.');
+    }
   }
-  if (error) throw new Error('Servis kayıtları yüklenemedi.');
-  return (data || []).map(row => ({
+  return data.map(row => ({
     ...row.details, id: row.id, patientId: row.patient_id, branchId: row.branch_id, stockItemId: row.stock_item_id,
     patientName: row.patient_name, deviceName: row.device_name, serialNo: row.device_serial || '', barcode: row.barcode || '',
     receivedDate: row.received_date, returnedDate: row.delivered_date, problem: row.complaint,

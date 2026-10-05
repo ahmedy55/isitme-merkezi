@@ -83,7 +83,9 @@ export class StockDomainService {
         criticalLevel: 2,
         price: payload.unitPrice * 1.3,
         purchasePrice: payload.unitPrice,
-        sgkPrice: 6200,
+        // Do not assume an SGK tariff; reimbursement must come from an
+        // authoritative, current value recorded for this product.
+        sgkPrice: 0,
         warrantyExpiry: new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         location: 'Ana Depo',
         status: 'Stokta',

@@ -45,200 +45,7 @@ interface SGKPrescriptionItem {
   provisionNo?: string;
 }
 
-const INITIAL_SGK_LIST: SGKPrescriptionItem[] = [
-  {
-    id: 'sgk-1',
-    patientName: 'Ayşe Yılmaz',
-    avatarInitials: 'AY',
-    avatarColor: styles.avatarPurple,
-    age: 62,
-    gender: 'Kadın',
-    tc: '12345678901',
-    phone: '+90 532 123 45 67',
-    email: 'ayse.yilmaz@email.com',
-    address: 'Atatürk Bulvarı No: 123, Çankaya / Ankara',
-    birthDate: '01.03.1963',
-    prescriptionNo: 'R-2025-1024',
-    reportNo: 'RAP-2025-8821',
-    date: '12 Eyl 2025',
-    deviceOperation: 'Oticon More 1 (2 adet)',
-    status: 'Onaylandı',
-    period: '2025/09',
-    branch: 'Merkez',
-    doctorName: 'Prof. Dr. Haluk Özcan',
-    hospitalName: 'Ankara Şehir Hastanesi',
-    icdCode: 'H90.3 - Sensorinöral İşitme Kaybı (Bilateral)',
-    provisionNo: 'PRV-982341'
-  },
-  {
-    id: 'sgk-2',
-    patientName: 'Mehmet Demir',
-    avatarInitials: 'MD',
-    avatarColor: styles.avatarBlue,
-    age: 75,
-    gender: 'Erkek',
-    tc: '98765432109',
-    phone: '+90 533 234 56 78',
-    email: 'mehmet.demir@email.com',
-    address: 'Tunalı Hilmi Cad. No: 45, Çankaya / Ankara',
-    birthDate: '15.06.1950',
-    prescriptionNo: 'R-2025-1023',
-    reportNo: 'RAP-2025-8815',
-    date: '10 Eyl 2025',
-    deviceOperation: 'Phonak Audeo L (2 adet)',
-    status: 'İşlemde',
-    period: '2025/09',
-    branch: 'Merkez',
-    doctorName: 'Doç. Dr. Serkan Aksoy',
-    hospitalName: 'Hacettepe Tıp Fakültesi',
-    icdCode: 'H90.0 - İletim Tipi İşitme Kaybı',
-    provisionNo: 'PRV-982312'
-  },
-  {
-    id: 'sgk-3',
-    patientName: 'Fatma Kaya',
-    avatarInitials: 'FK',
-    avatarColor: styles.avatarPink,
-    age: 68,
-    gender: 'Kadın',
-    tc: '45678912345',
-    phone: '+90 535 345 67 89',
-    email: 'fatma.kaya@email.com',
-    address: 'Mithatpaşa Cad. No: 88, Kızılay / Ankara',
-    birthDate: '20.08.1957',
-    prescriptionNo: 'R-2025-1022',
-    reportNo: 'RAP-2025-8801',
-    date: '08 Eyl 2025',
-    deviceOperation: 'Widex Moment (1 adet)',
-    status: 'Reddedildi',
-    period: '2025/09',
-    branch: 'Çankaya',
-    doctorName: 'Uzm. Dr. Burak Keskin',
-    hospitalName: 'Gazi Hastanesi',
-    icdCode: 'H91.1 - Presbiakuzi',
-    provisionNo: 'PRV-982190'
-  },
-  {
-    id: 'sgk-4',
-    patientName: 'Ali Çetin',
-    avatarInitials: 'AÇ',
-    avatarColor: styles.avatarOrange,
-    age: 70,
-    gender: 'Erkek',
-    tc: '32165498701',
-    phone: '+90 536 456 78 90',
-    email: 'ali.cetin@email.com',
-    address: 'Bağdat Cad. No: 12, Kadıköy / İstanbul',
-    birthDate: '11.02.1955',
-    prescriptionNo: 'R-2025-1021',
-    reportNo: 'RAP-2025-8794',
-    date: '05 Eyl 2025',
-    deviceOperation: 'Signia Pure 312 (2 adet)',
-    status: 'Onaylandı',
-    period: '2025/08',
-    branch: 'Merkez',
-    doctorName: 'Prof. Dr. Nermin Şahin',
-    hospitalName: 'İbni Sina Hastanesi',
-    icdCode: 'H90.3 - Sensorinöral İşitme Kaybı',
-    provisionNo: 'PRV-981944'
-  },
-  {
-    id: 'sgk-5',
-    patientName: 'Zeynep Arslan',
-    avatarInitials: 'ZA',
-    avatarColor: styles.avatarTeal,
-    age: 55,
-    gender: 'Kadın',
-    tc: '65432198706',
-    phone: '+90 537 567 89 01',
-    email: 'zeynep.arslan@email.com',
-    address: 'Gazi Mustafa Kemal Bulv. No: 76, Maltepe / Ankara',
-    birthDate: '05.09.1970',
-    prescriptionNo: 'R-2025-1020',
-    reportNo: 'RAP-2025-8772',
-    date: '02 Eyl 2025',
-    deviceOperation: 'Cochlear Aksesuar (1 adet)',
-    status: 'İşlemde',
-    period: '2025/08',
-    branch: 'Çankaya',
-    doctorName: 'Doç. Dr. Emre Erdem',
-    hospitalName: 'Başkent Üniversitesi Hastanesi',
-    icdCode: 'H90.5 - Sensorinöral İşitme Kaybı, Tanımlanmamış',
-    provisionNo: 'PRV-981801'
-  },
-  {
-    id: 'sgk-6',
-    patientName: 'Hasan Yıldız',
-    avatarInitials: 'HY',
-    avatarColor: styles.avatarIndigo,
-    age: 66,
-    gender: 'Erkek',
-    tc: '78912345603',
-    phone: '+90 538 678 90 12',
-    email: 'hasan.yildiz@email.com',
-    address: 'İnönü Cad. No: 23, Konak / İzmir',
-    birthDate: '18.04.1959',
-    prescriptionNo: 'R-2025-1019',
-    reportNo: 'RAP-2025-8750',
-    date: '28 Ağu 2025',
-    deviceOperation: 'Bakım / Pil (4 adet)',
-    status: 'Onaylandı',
-    period: '2025/08',
-    branch: 'Merkez',
-    doctorName: 'Uzm. Dr. Kemal Vural',
-    hospitalName: 'Ankara Eğitim ve Araştırma Hastanesi',
-    icdCode: 'Z97.4 - İşitme Cihazı Varlığı / Bakımı',
-    provisionNo: 'PRV-981655'
-  },
-  {
-    id: 'sgk-7',
-    patientName: 'Emine Doğan',
-    avatarInitials: 'ED',
-    avatarColor: styles.avatarGreen,
-    age: 72,
-    gender: 'Kadın',
-    tc: '15935748620',
-    phone: '+90 539 789 01 23',
-    email: 'emine.dogan@email.com',
-    address: 'Dikmen Cad. No: 104, Çankaya / Ankara',
-    birthDate: '24.11.1953',
-    prescriptionNo: 'R-2025-1018',
-    reportNo: 'RAP-2025-8720',
-    date: '25 Ağu 2025',
-    deviceOperation: 'Oticon Real (2 adet)',
-    status: 'Reddedildi',
-    period: '2025/08',
-    branch: 'Çankaya',
-    doctorName: 'Prof. Dr. Metin Yücel',
-    hospitalName: 'Numune Hastanesi',
-    icdCode: 'H90.3 - Sensorinöral İşitme Kaybı',
-    provisionNo: 'PRV-981504'
-  },
-  {
-    id: 'sgk-8',
-    patientName: 'Mustafa Acar',
-    avatarInitials: 'MA',
-    avatarColor: styles.avatarViolet,
-    age: 59,
-    gender: 'Erkek',
-    tc: '75395148629',
-    phone: '+90 540 890 12 34',
-    email: 'mustafa.acar@email.com',
-    address: 'Esat Cad. No: 56, Çankaya / Ankara',
-    birthDate: '14.07.1966',
-    prescriptionNo: 'R-2025-1017',
-    reportNo: 'RAP-2025-8702',
-    date: '21 Ağu 2025',
-    deviceOperation: 'Cihaz Tamir (1 adet)',
-    status: 'Onaylandı',
-    period: '2025/07',
-    branch: 'Merkez',
-    doctorName: 'Doç. Dr. Selin Doğan',
-    hospitalName: 'Şehir Hastanesi',
-    icdCode: 'H90.8 - Mikst İletim ve Sensorinöral İşitme Kaybı',
-    provisionNo: 'PRV-981410'
-  }
-];
+
 
 export default function SGKPage() {
   const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, currentOrgId, approveSGKPrescription } = useApp();
@@ -947,11 +754,11 @@ export default function SGKPage() {
                   Toplam {totalCount} kayıt | {selectedIds.length} kayıt seçili
                 </div>
 
-                <div className={styles.pagination}>
+                {filteredList.length > 0 && <div className={styles.pagination}>
                   <button type="button" className={styles.pageBtn} aria-label="Önceki sayfa" disabled={tablePage <= 1} onClick={() => setTablePage(page => Math.max(1, page - 1))}>‹</button>
                   {Array.from({ length: tablePageCount }, (_, index) => index + 1).map(page => <button type="button" key={page} className={`${styles.pageBtn} ${tablePage === page ? styles.pageBtnActive : ''}`} aria-current={tablePage === page ? 'page' : undefined} onClick={() => setTablePage(page)}>{page}</button>)}
                   <button type="button" className={styles.pageBtn} aria-label="Sonraki sayfa" disabled={tablePage >= tablePageCount} onClick={() => setTablePage(page => Math.min(tablePageCount, page + 1))}>›</button>
-                </div>
+                </div>}
               </div>
             </div>
 
@@ -1441,7 +1248,7 @@ export default function SGKPage() {
                       className={styles.searchBox}
                       style={{ width: '100%' }}
                       required
-                      placeholder="Örn: Ayşe Yılmaz"
+                      placeholder="Hasta adı soyadı"
                       value={formData.patientName}
                       onChange={e => setFormData({ ...formData, patientName: e.target.value })}
                     />
@@ -1531,7 +1338,7 @@ export default function SGKPage() {
                     <input
                       className={styles.searchBox}
                       style={{ width: '100%' }}
-                      placeholder="Örn: Oticon More 1 (2 adet)"
+                      placeholder="Ürün adı ve adedi"
                       value={formData.deviceOperation}
                       onChange={e => setFormData({ ...formData, deviceOperation: e.target.value })}
                     />

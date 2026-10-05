@@ -28,8 +28,41 @@ export const executeDbQuery = async <T>(queryFn: () => Promise<T>, queryName: st
   } catch (error: any) {
     logger.error(`[DatabaseError in ${queryName}]`, undefined, 'Database');
     if (error instanceof DatabaseError) throw error;
-    throw new DatabaseError(`Veritabanı işlem hatası (${queryName}).`);
+    // Keep the actionable PostgREST/Postgres validation message for the UI.
+    // The query name remains in logs; surfacing only the database message avoids
+    // hiding constraint and permission failures behind an unhelpful generic error.
+    const message = typeof error?.message === 'string' && error.message.trim()
+      ? error.message.trim()
+      : `Veritabanı işlemi başarısız oldu (${queryName}).`;
+    throw new DatabaseError(message, error);
   }
+};
+
+type PageResult<T> = { data: T[] | null; error: unknown };
+
+/** Read every row in bounded PostgREST pages instead of silently stopping at max_rows. */
+export async function fetchAllPages<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
+  pageSize = 500,
+): Promise<T[]> {
+  if (!Number.isInteger(pageSize) || pageSize < 1) throw new RangeError('Sayfa boyutu pozitif bir tam sayı olmalıdır.');
+
+  const rows: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await fetchPage(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
+const inBatches = <T>(items: T[], batchSize: number): T[][] => {
+  const batches: T[][] = [];
+  for (let index = 0; index < items.length; index += batchSize) {
+    batches.push(items.slice(index, index + batchSize));
+  }
+  return batches;
 };
 
 // Aktif kullanıcının organizasyon ID'sini JWT oturumundan çeker
@@ -45,21 +78,70 @@ export const getActiveOrgId = async (): Promise<string | null> => {
 // ═══════════════════════════════════════════════
 export const dbFetchPatients = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const rows = await fetchAllPages((from, to) => supabase
       .from('patients')
-      .select('*, patient_timeline(*)')
+      .select('*')
       .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    const rows = data || [];
-    const { data: tcRows, error: tcError } = await supabase.rpc('decrypt_patient_tcs', {
-      p_patient_ids: rows.map((patient: any) => patient.id)
-    });
-    if (tcError) throw tcError;
-    const tcByPatientId = new Map((tcRows || []).map((row: any) => [row.patient_id, row.tc]));
-    const items = toCamel<any[]>(data || []);
-    return items.map(p => ({ ...p, tc: tcByPatientId.get(p.id) || '' }));
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
+
+    const tcByPatientId = new Map<string, string>();
+    for (const batch of inBatches(rows.map(patient => patient.id), 250)) {
+      const { data: tcRows, error } = await supabase.rpc('decrypt_patient_tcs', { p_patient_ids: batch });
+      if (error) throw error;
+      for (const row of tcRows || []) tcByPatientId.set(row.patient_id, row.tc);
+    }
+    const items = toCamel<any[]>(rows);
+    return items.map(p => ({ ...p, tc: tcByPatientId.get(p.id) || '', timeline: [] }));
   }, 'dbFetchPatients');
+};
+
+export const dbFetchPatientTimeline = async (patientId: string) => {
+  return executeDbQuery(async () => {
+    if (!patientId) throw new DatabaseError('Hasta kimliği zorunludur.');
+    const rows = await fetchAllPages((from, to) => supabase
+      .from('patient_timeline')
+      .select('id,date,action,icon,created_at')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
+    return toCamel<any[]>(rows).map(event => ({
+      id: event.id,
+      date: event.date || '',
+      action: event.action || '',
+      icon: event.icon || 'Plus',
+    }));
+  }, 'dbFetchPatientTimeline');
+};
+
+export const dbInsertPatientTimeline = async (
+  patientId: string,
+  event: { date: string; action: string; icon: string },
+) => {
+  return executeDbQuery(async () => {
+    const orgId = await getActiveOrgId();
+    if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
+    if (!patientId || !event.action.trim()) throw new DatabaseError('Hasta ve zaman çizelgesi açıklaması zorunludur.');
+    const { data, error } = await supabase.from('patient_timeline')
+      .insert({
+        organization_id: orgId,
+        patient_id: patientId,
+        date: event.date,
+        action: event.action.trim(),
+        icon: event.icon || 'Plus',
+      })
+      .select('id,date,action,icon,created_at')
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      date: data.date || '',
+      action: data.action || '',
+      icon: data.icon || 'Plus',
+    };
+  }, 'dbInsertPatientTimeline');
 };
 
 export const dbInsertPatient = async (patient: any) => {
@@ -118,12 +200,13 @@ export const dbDeletePatient = async (id: string) => {
 // ═══════════════════════════════════════════════
 export const dbFetchAppointments = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('appointments')
       .select('*, patients(first_name, last_name)')
       .order('date', { ascending: true })
-      .order('time', { ascending: true });
-    if (error) throw error;
+      .order('time', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to));
     
     const mapped = (data || []).map((app: any) => {
       const firstName = app.patients?.first_name || '';
@@ -188,11 +271,12 @@ export const dbUpdateAppointment = async (appointment: any) => {
 // ═══════════════════════════════════════════════
 export const dbFetchStockItems = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('stock_items')
       .select('*, patients(first_name, last_name)')
-      .order('name', { ascending: true });
-    if (error) throw error;
+      .order('name', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to));
     
     const mapped = (data || []).map((item: any) => {
       const firstName = item.patients?.first_name || '';
@@ -217,7 +301,8 @@ export const dbInsertStockItem = async (item: any) => {
       .insert([{ ...await writePayload('stock_items',payload), organization_id: orgId }])
       .select();
     if (error) throw error;
-    return toCamel(data?.[0]);
+    if (!data?.[0]) throw new DatabaseError('Ürün kaydedilemedi: veritabanı kayıt oluşturdu ancak ürünü geri döndürmedi. Şube yetkinizi ve zorunlu alanları kontrol edin.');
+    return toCamel(data[0]);
   }, 'dbInsertStockItem');
 };
 
@@ -246,13 +331,14 @@ export const dbDeleteStockItem = async (id: string) => {
 
 export const dbFetchStockMovements = async (stockItemId: string) => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('stock_movements')
       .select('*, branches(name)')
       .eq('stock_item_id', stockItemId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return toCamel<Array<Record<string, any>>>(data || []).map(row => ({ ...row, branchName: row.branches?.name || '' }));
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
+    return toCamel<Array<Record<string, any>>>(data).map(row => ({ ...row, branchName: row.branches?.name || '' }));
   }, 'dbFetchStockMovements');
 };
 
@@ -261,12 +347,13 @@ export const dbFetchStockMovements = async (stockItemId: string) => {
 // ═══════════════════════════════════════════════
 export const dbFetchCashTransactions = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('cash_transactions')
       .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return toCamel(data || []);
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
+    return toCamel(data);
   }, 'dbFetchCashTransactions');
 };
 
@@ -330,11 +417,12 @@ export const dbAdjustStockItem = async (itemId: string, delta: number, reason: s
 // ═══════════════════════════════════════════════
 export const dbFetchSales = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('sales')
       .select('*, patients(first_name, last_name), sale_items(*), sale_installments(*)')
-      .order('date', { ascending: false });
-    if (error) throw error;
+      .order('date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
     
     const mapped = (data || []).map((sale: any) => {
       const firstName = sale.patients?.first_name || '';
@@ -368,11 +456,12 @@ export const dbInsertSale = async (sale: any, stockItemId?: string, cashRegister
 // ═══════════════════════════════════════════════
 export const dbFetchRecallItems = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('recall_items')
       .select('*, patients(first_name, last_name)')
-      .order('due_date', { ascending: true });
-    if (error) throw error;
+      .order('due_date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to));
     
     const mapped = (data || []).map((item: any) => {
       const firstName = item.patients?.first_name || '';
@@ -384,6 +473,25 @@ export const dbFetchRecallItems = async () => {
     });
     return toCamel(mapped);
   }, 'dbFetchRecallItems');
+};
+
+export const dbInsertRecallItem = async (item: any) => {
+  return executeDbQuery(async () => {
+    const organizationId = await getActiveOrgId();
+    if (!organizationId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
+    if (!item.patientId) throw new DatabaseError('Hatırlatma gerçek bir hasta kaydına bağlanmalıdır.');
+
+    const { id: _id, patientName: _patientName, ...payload } = toSnake(item);
+    const { data, error } = await supabase
+      .from('recall_items')
+      .insert({ ...payload, organization_id: organizationId })
+      .select('*, patients(first_name,last_name)')
+      .single();
+    if (error) throw error;
+    const mapped = toCamel<any>(data);
+    const patientName = [data.patients?.first_name, data.patients?.last_name].filter(Boolean).join(' ');
+    return { ...mapped, patientName };
+  }, 'dbInsertRecallItem');
 };
 
 export const dbUpdateRecallStatus = async (id: string, status: string) => {
@@ -405,11 +513,12 @@ export const dbUpdateRecallStatus = async (id: string, status: string) => {
 // ═══════════════════════════════════════════════
 export const dbFetchSuppliers = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('suppliers')
       .select('*, supplier_purchases(*, supplier_purchase_items(*))')
-      .order('company_name', { ascending: true });
-    if (error) throw error;
+      .order('company_name', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to));
     
     const mapped = (data || []).map((sup: any) => {
       const camelSup = toCamel(sup);
@@ -471,12 +580,13 @@ export const dbDeleteSupplier = async (id: string) => {
 // ═══════════════════════════════════════════════
 export const dbFetchExpenses = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('expenses')
       .select('*')
-      .order('date', { ascending: false });
-    if (error) throw error;
-    return toCamel(data || []);
+      .order('date', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
+    return toCamel(data);
   }, 'dbFetchExpenses');
 };
 
@@ -531,16 +641,19 @@ export const dbDeleteExpense = async (id: string) => {
 // ═══════════════════════════════════════════════
 export const dbFetchAuditLogs = async (): Promise<any[]> => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('audit_log')
       .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    const rawList = toCamel(data || []);
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
+    const rawList = toCamel(data);
     const userIds = [...new Set(rawList.map((item: any) => item.userId).filter(Boolean))];
-    const { data: memberships } = userIds.length
-      ? await supabase.from('memberships').select('user_id,first_name,last_name').in('user_id', userIds)
-      : { data: [] };
+    const memberships = (await Promise.all(inBatches(userIds, 100).map(async userIdBatch => {
+      const { data: rows, error } = await supabase.from('memberships').select('user_id,first_name,last_name').in('user_id', userIdBatch);
+      if (error) throw error;
+      return rows || [];
+    }))).flat();
     const namesByUserId = new Map((memberships || []).map((membership: any) => [
       membership.user_id,
       [membership.first_name, membership.last_name].filter(Boolean).join(' ').trim(),
@@ -575,13 +688,14 @@ export const dbInsertAuditLog = async (log: any) => {
 // ═══════════════════════════════════════════════
 export const dbFetchBranches = async () => {
   return executeDbQuery(async () => {
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('branches')
       .select('*')
-      .order('name', { ascending: true });
-    if (error) throw error;
-    return toCamel<any[]>(data || [])
-      .filter(branch => !branch.archivedAt && !['Test Şube 1', 'Test Şube 2', 'Test Şube 3'].includes(branch.name?.trim()))
+      .order('name', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to));
+    return toCamel<any[]>(data)
+      .filter(branch => !branch.archivedAt)
       .map(branch => ({
       ...branch,
       status: branch.status === 'active' ? 'Aktif' : branch.status === 'inactive' ? 'Pasif' : branch.status,
@@ -629,13 +743,13 @@ export const dbFetchMemberships = async (): Promise<SystemUser[]> => {
     const orgId = await getActiveOrgId();
     if (!orgId) return [];
 
-    const { data, error } = await supabase
+    const data = await fetchAllPages((from, to) => supabase
       .from('memberships')
       .select('*, branches(name)')
       .eq('organization_id', orgId)
-      .order('joined_at', { ascending: false });
-
-    if (error) throw error;
+      .order('joined_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to));
 
     return (data || []).map((m: any) => ({
       id: m.id,
