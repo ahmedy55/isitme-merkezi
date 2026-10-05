@@ -53,235 +53,6 @@ const formatDetailValue = (key: string, value: unknown) => {
   return String(value);
 };
 
-const INITIAL_AUDIT_LOGS: AuditItem[] = [
-  {
-    id: 'audit-1',
-    date: '29.09.2026 13:47:22',
-    userName: 'Ahmet Yılmaz',
-    userRole: 'Firma Yöneticisi',
-    userInitials: 'AY',
-    userAvatarBg: '#D1E7DD',
-    userAvatarColor: '#0F5132',
-    action: 'Satış Ekleme',
-    actionTypeKey: 'sale_add',
-    module: 'Kasa',
-    description: 'Satış: 559fecee-c123-4220-88bb-00edc98873fc',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.45',
-    device: 'Chrome / Windows',
-    detailsJson: {
-      sale_id: '559fecee-c123-4220-88bb-00edc98873fc',
-      patient_id: '123a4567-e89b-12d3',
-      amount: 12500,
-      payment_method: 'nakit',
-      branch_id: 'merkez',
-      created_at: '2026-09-29T13:47:22Z'
-    }
-  },
-  {
-    id: 'audit-2',
-    date: '29.09.2026 12:11:08',
-    userName: 'Zeynep Kaya',
-    userRole: 'Sekreter',
-    userInitials: 'ZK',
-    userAvatarBg: '#E0E7FF',
-    userAvatarColor: '#3730A3',
-    action: 'Randevu Güncelleme',
-    actionTypeKey: 'appointment_update',
-    module: 'Randevu',
-    description: 'Randevu #1245 tarihi değiştirildi',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.52',
-    device: 'Firefox / Windows',
-    detailsJson: {
-      appointment_id: '1245',
-      old_date: '2026-09-29T10:00:00Z',
-      new_date: '2026-09-30T14:30:00Z',
-      patient_name: 'Mustafa Öztürk',
-      branch_id: 'cankaya'
-    }
-  },
-  {
-    id: 'audit-3',
-    date: '28.09.2026 17:06:33',
-    userName: 'Mehmet Kaya',
-    userRole: 'Odyometrist',
-    userInitials: 'MK',
-    userAvatarBg: '#E5E7EB',
-    userAvatarColor: '#374151',
-    action: 'Hasta Güncelleme',
-    actionTypeKey: 'patient_update',
-    module: 'Hastalar',
-    description: 'Hasta bilgileri güncellendi (TC: 123******90)',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.61',
-    device: 'Chrome / Windows',
-    detailsJson: {
-      patient_id: 'pat-883',
-      tc_no: '123******90',
-      fields_updated: ['phone', 'address'],
-      updated_at: '2026-09-28T17:06:33Z'
-    }
-  },
-  {
-    id: 'audit-4',
-    date: '28.09.2026 15:22:14',
-    userName: 'Elif Demir',
-    userRole: 'Muhasebe',
-    userInitials: 'ED',
-    userAvatarBg: '#E7E5E4',
-    userAvatarColor: '#44403C',
-    action: 'Ödeme Ekleme',
-    actionTypeKey: 'payment_add',
-    module: 'Kasa',
-    description: 'Tahsilat #785 - ₺2.500 (Nakit)',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.33',
-    device: 'Safari / macOS',
-    detailsJson: {
-      receipt_no: '#785',
-      amount: 2500,
-      currency: 'TRY',
-      type: 'nakit',
-      patient: 'Hülya Aslan',
-      created_at: '2026-09-28T15:22:14Z'
-    }
-  },
-  {
-    id: 'audit-5',
-    date: '27.09.2026 11:45:09',
-    userName: 'Ahmet Yılmaz',
-    userRole: 'Firma Yöneticisi',
-    userInitials: 'AY',
-    userAvatarBg: '#D1E7DD',
-    userAvatarColor: '#0F5132',
-    action: 'Cihaz Ekleme',
-    actionTypeKey: 'device_add',
-    module: 'Stok',
-    description: 'Cihaz: Oticon More 1 (SN: 9876543210)',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.45',
-    device: 'Chrome / Windows',
-    detailsJson: {
-      brand: 'Oticon',
-      model: 'More 1',
-      serial_no: '9876543210',
-      stock_id: 'stk-092',
-      branch: 'Merkez'
-    }
-  },
-  {
-    id: 'audit-6',
-    date: '26.09.2026 16:18:27',
-    userName: 'Zeynep Güneş',
-    userRole: 'Teknik Servis',
-    userInitials: 'ZG',
-    userAvatarBg: '#CCFBF1',
-    userAvatarColor: '#115E59',
-    action: 'Servis Kaydı Ekleme',
-    actionTypeKey: 'service_add',
-    module: 'Teknik Servis',
-    description: 'Servis #2026-015 oluşturuldu',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.78',
-    device: 'Chrome / Windows',
-    detailsJson: {
-      service_no: '2026-015',
-      device: 'Phonak Audeo Paradise P90',
-      issue: 'Mikrofon arızası ve filtre değişimi',
-      technician: 'Zeynep Güneş'
-    }
-  },
-  {
-    id: 'audit-7',
-    date: '26.09.2026 14:03:11',
-    userName: 'Mehmet Kaya',
-    userRole: 'Odyometrist',
-    userInitials: 'MK',
-    userAvatarBg: '#E5E7EB',
-    userAvatarColor: '#374151',
-    action: 'Muayene Kaydı Ekleme',
-    actionTypeKey: 'exam_add',
-    module: 'Hastalar',
-    description: 'Muayene kaydı eklendi - Test Hasta Üç',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.61',
-    device: 'Chrome / Windows',
-    detailsJson: {
-      patient_name: 'Test Hasta Üç',
-      audiometry_score_r: '45 dB',
-      audiometry_score_l: '40 dB',
-      recommendation: 'Bilateral RIC işitme cihazı'
-    }
-  },
-  {
-    id: 'audit-8',
-    date: '25.09.2026 10:25:46',
-    userName: 'Ahmet Yılmaz',
-    userRole: 'Firma Yöneticisi',
-    userInitials: 'AY',
-    userAvatarBg: '#D1E7DD',
-    userAvatarColor: '#0F5132',
-    action: 'Personel Ekleme',
-    actionTypeKey: 'staff_add',
-    module: 'Şube & Yetki',
-    description: 'Yeni personel eklendi: Selin Ak (Teknik Servis)',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.45',
-    device: 'Chrome / Windows',
-    detailsJson: {
-      personnel_name: 'Selin Ak',
-      role: 'Teknik Servis',
-      branch: 'Kadıköy',
-      added_by: 'Ahmet Yılmaz'
-    }
-  },
-  {
-    id: 'audit-9',
-    date: '24.09.2026 18:12:03',
-    userName: 'Cem Doğan',
-    userRole: 'Sekreter',
-    userInitials: 'CD',
-    userAvatarBg: '#DBEAFE',
-    userAvatarColor: '#1E40AF',
-    action: 'Fatura Silme',
-    actionTypeKey: 'invoice_delete',
-    module: 'Kasa',
-    description: 'Fatura #F-2026-442 silindi',
-    status: 'Hatalı',
-    ipAddress: '192.168.1.88',
-    device: 'Chrome / Windows',
-    detailsJson: {
-      invoice_no: 'F-2026-442',
-      error_code: 'ERR_AUTH_DENIED',
-      error_message: 'Sekreter rolü ile kesilmiş fatura silinemez. Firma Yöneticisi onayı gerekir.',
-      attempted_at: '2026-09-24T18:12:03Z'
-    }
-  },
-  {
-    id: 'audit-10',
-    date: '24.09.2026 16:45:10',
-    userName: 'Zeynep Kaya',
-    userRole: 'Sekreter',
-    userInitials: 'ZK',
-    userAvatarBg: '#E0E7FF',
-    userAvatarColor: '#3730A3',
-    action: 'Hasta Ekleme',
-    actionTypeKey: 'patient_add',
-    module: 'Hastalar',
-    description: 'Yeni hasta eklendi: Ali Demir',
-    status: 'Başarılı',
-    ipAddress: '192.168.1.52',
-    device: 'Firefox / Windows',
-    detailsJson: {
-      patient_name: 'Ali Demir',
-      phone: '0532 555 12 34',
-      branch: 'Çankaya',
-      registration_date: '2026-09-24T16:45:10Z'
-    }
-  }
-];
-
 export default function AuditLogPage() {
   const { addToast, auditLogList, usersList } = useApp();
   const { activeBranch } = useBranchScope();
@@ -337,7 +108,7 @@ export default function AuditLogPage() {
         module: item.module,
         description: item.description,
         status: '—',
-        ipAddress: '—', device: '—', detailsJson,
+        ipAddress: item.clientIp || '—', device: '—', detailsJson,
       };
     });
     return liveLogs.filter(item => {
@@ -859,7 +630,7 @@ export default function AuditLogPage() {
                           {item.description}
                         </td>
                         <td>
-                          <span className={`${styles.statusPill} ${item.status === 'Başarılı' ? styles.statusSuccess : styles.statusError}`}>
+                          <span className={`${styles.statusPill} ${item.status === 'Başarılı' ? styles.statusSuccess : item.status === 'Hatalı' ? styles.statusError : styles.statusUnknown}`}>
                             {item.status}
                           </span>
                         </td>
@@ -1023,7 +794,7 @@ export default function AuditLogPage() {
                   </div>
                 </div>
                 <div>
-                  <span className={`${styles.statusPill} ${activeLog.status === 'Başarılı' ? styles.statusSuccess : styles.statusError}`}>
+                  <span className={`${styles.statusPill} ${activeLog.status === 'Başarılı' ? styles.statusSuccess : activeLog.status === 'Hatalı' ? styles.statusError : styles.statusUnknown}`}>
                     {activeLog.status}
                   </span>
                 </div>

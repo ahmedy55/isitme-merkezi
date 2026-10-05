@@ -822,76 +822,9 @@ export interface AuditLogEntry {
   module: 'Hasta' | 'Randevu' | 'Stok' | 'Satış' | 'Kasa' | 'Tedarikçi' | 'Masraf' | 'Kullanıcı' | 'Ayarlar' | 'Sistem';
   description: string;
   details?: string;
+  clientIp?: string | null;
   branchId?: string | null;
 }
-
-export const auditLog: AuditLogEntry[] = (process.env.NEXT_PUBLIC_DEMO_MODE === 'true' && !process.env.NEXT_PUBLIC_SUPABASE_URL ? [
-  {
-    id: 'log-1',
-    timestamp: '2026-07-20T14:35:00',
-    userId: 'usr-1',
-    userName: 'Dr. Elif Arslan',
-    action: 'Giriş',
-    module: 'Sistem',
-    description: 'Sisteme giriş yapıldı.',
-    details: 'IP: 85.107.xx.xx · Tarayıcı: Chrome 126'
-  },
-  {
-    id: 'log-2',
-    timestamp: '2026-07-20T14:40:00',
-    userId: 'usr-1',
-    userName: 'Dr. Elif Arslan',
-    action: 'Ekleme',
-    module: 'Hasta',
-    description: 'Yeni hasta kaydı oluşturuldu: Kemal Deniz',
-  },
-  {
-    id: 'log-3',
-    timestamp: '2026-07-20T10:15:00',
-    userId: 'usr-2',
-    userName: 'Ody. Hasan Kaya',
-    action: 'Satış',
-    module: 'Satış',
-    description: 'Cihaz satışı tamamlandı: Ahmet Yılmaz — Phonak Audéo L90',
-    details: 'Toplam: 95.000 TL · SGK: 5.621 TL · Hasta Payı: 89.379 TL'
-  },
-  {
-    id: 'log-4',
-    timestamp: '2026-07-19T16:20:00',
-    userId: 'usr-4',
-    userName: 'Murat Özkan',
-    action: 'Ekleme',
-    module: 'Masraf',
-    description: 'Yeni masraf kaydı: Google Ads Temmuz kampanya ödemesi — 8.500 TL',
-  },
-  {
-    id: 'log-5',
-    timestamp: '2026-07-19T14:50:00',
-    userId: 'usr-3',
-    userName: 'Zeynep Acar',
-    action: 'Ekleme',
-    module: 'Randevu',
-    description: 'Yeni randevu oluşturuldu: Fatma Kaya — 21.07.2026 11:00',
-  },
-  {
-    id: 'log-6',
-    timestamp: '2026-07-18T09:30:00',
-    userId: 'usr-1',
-    userName: 'Dr. Elif Arslan',
-    action: 'Stok Hareketi',
-    module: 'Stok',
-    description: 'Yeni ürün eklendi: Phonak Slim L70 — SN: PH-SL70-2026-005',
-  },
-  {
-    id: 'log-7',
-    timestamp: '2026-07-17T11:00:00',
-    userId: 'usr-5',
-    userName: 'Ayşe Yılmaz',
-    action: 'Düzenleme',
-    module: 'Hasta',
-    description: 'Hasta bilgileri güncellendi: Mehmet Demir — Adres ve telefon değişikliği',
-  }
-] : []);
 
 // ─── Şube Tanımı ─────────────────
 export interface Branch {

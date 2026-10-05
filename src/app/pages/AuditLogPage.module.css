@@ -553,6 +553,11 @@
   color: #dc2626;
 }
 
+.statusUnknown {
+  background: #f3f4f6;
+  color: #64748b;
+}
+
 /* Action View Details */
 .btnViewDetails {
   width: 28px;
