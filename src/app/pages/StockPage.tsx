@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { useDebounce } from '../hooks/useDebounce';
+import { dbFetchStockMovements } from '../lib/database';
 import styles from './StockPage.module.css';
 
 interface DisplayStockItem extends StockItem {
@@ -228,10 +229,13 @@ const DEFAULT_MOCK_ITEMS: DisplayStockItem[] = [
 ];
 
 export default function StockPage() {
-  const { stockList, updateStockItem, addStockItem, deleteStockItem, adjustStockItem, addToast, branchesList, currentOrgId } = useApp();
+  const { stockList, addStockItem, updateStockItem, deleteStockItem, adjustStockItem, addToast, branchesList, currentOrgId, currentUser } = useApp();
   const { activeBranch } = useBranch();
+  const addToastRef = useRef(addToast);
+  useEffect(() => { addToastRef.current = addToast; }, [addToast]);
+  const [stockMovements, setStockMovements] = useState<Array<{id: string; type: string; quantityChange: number; createdAt: string; notes?: string; branchName?: string}>>([]);
 
-  // Combine demo / app stock items seamlessly
+  // Envanter yalnızca aktif firmadan yüklenen kayıtları kullanır.
   const allStockItems = useMemo(() => {
     if (stockList && stockList.length > 0) {
       return stockList.map(item => ({
@@ -240,8 +244,8 @@ export default function StockPage() {
         description: item.brand && item.model ? `${item.brand} ${item.model} ${item.category}` : item.name
       }));
     }
-    return currentOrgId ? [] : DEFAULT_MOCK_ITEMS;
-  }, [stockList, currentOrgId]);
+    return [];
+  }, [stockList]);
 
   // Pill tab filter (Tümü, Cihaz, Pil, Kalıp, Aksesuar)
   const [categoryPill, setCategoryPill] = useState('Tümü');
@@ -258,6 +262,15 @@ export default function StockPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeItem, setActiveItem] = useState<DisplayStockItem | null>(null);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'stok' | 'uts' | 'hareketler' | 'iliskili'>('genel');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentOrgId || !activeItem?.id || drawerTab !== 'hareketler') { setStockMovements([]); return; }
+    dbFetchStockMovements(activeItem.id)
+      .then(rows => { if (!cancelled) setStockMovements(rows as typeof stockMovements); })
+      .catch(error => { if (!cancelled) { setStockMovements([]); addToastRef.current({ type: 'error', message: error instanceof Error ? error.message : 'Stok hareketleri yüklenemedi.' }); } });
+    return () => { cancelled = true; };
+  }, [currentOrgId, activeItem?.id, drawerTab]);
 
   // Action Menu dropdown state
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
@@ -285,11 +298,14 @@ export default function StockPage() {
     serialNo: '',
     barcode: '',
     quantity: 1,
-    price: 10000,
-    purchasePrice: 7000,
-    branch: 'Merkez',
+    price: 0,
+    purchasePrice: 0,
+    branch: '',
     description: ''
   });
+  useEffect(() => {
+    if (!newItemForm.branch && branchesList.length) setNewItemForm(form => ({ ...form, branch: branchesList[0].name }));
+  }, [branchesList, newItemForm.branch]);
 
   // Filter logic
   const filteredItems = useMemo(() => {
@@ -358,6 +374,7 @@ export default function StockPage() {
   const totalStockQty = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
   const totalStockValue = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0) * (Number(item.purchasePrice) || Number(item.price) || 0), 0);
   const utsRegisteredCount = scopedStockItems.filter(item => item.utsStatus === 'Bildirildi').length;
+  const utsRate = totalProducts ? Math.round((utsRegisteredCount / totalProducts) * 100) : 0;
   const criticalStockCount = scopedStockItems.filter(item => item.quantity <= item.criticalLevel).length;
 
   const handleSelectAll = (checked: boolean) => {
@@ -471,16 +488,16 @@ export default function StockPage() {
       id: `stk-${Date.now()}`,
       name: newItemForm.name,
       category: newItemForm.category,
-      brand: newItemForm.brand || 'Genel',
-      model: newItemForm.model || 'Standart',
+      brand: newItemForm.brand.trim(),
+      model: newItemForm.model.trim(),
       serialNo: newItemForm.serialNo,
       barcode: newItemForm.barcode,
       quantity: Number(newItemForm.quantity) || 1,
       criticalLevel: 1,
       price: Number(newItemForm.price) || 0,
       purchasePrice: Number(newItemForm.purchasePrice) || 0,
-      sgkPrice: 6200,
-      warrantyExpiry: '2028-12-31',
+      sgkPrice: 0,
+      warrantyExpiry: '',
       location: 'Depo',
       status: 'Stokta',
       utsStatus: 'Bekliyor',
@@ -602,10 +619,6 @@ export default function StockPage() {
           <div>
             <span>Toplam Ürün</span>
             <strong>{totalProducts}</strong>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %12</span>
-              <span className={styles.statSubtext}>geçen aya göre</span>
-            </div>
           </div>
         </div>
 
@@ -621,10 +634,6 @@ export default function StockPage() {
           <div>
             <span>Toplam Stok Adedi</span>
             <strong>{totalStockQty}</strong>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %8</span>
-              <span className={styles.statSubtext}>geçen aya göre</span>
-            </div>
           </div>
         </div>
 
@@ -640,10 +649,6 @@ export default function StockPage() {
           <div>
             <span>Stok Değeri</span>
             <strong>{formatCurrency(totalStockValue)}</strong>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %15</span>
-              <span className={styles.statSubtext}>geçen aya göre</span>
-            </div>
           </div>
         </div>
 
@@ -659,10 +664,10 @@ export default function StockPage() {
             <span>ÜTS Durumu</span>
             <strong>{utsRegisteredCount} Ürün</strong>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, color: '#08785b', fontWeight: 650 }}>%82 kayıtlı</span>
+              <span style={{ fontSize: 11, color: '#08785b', fontWeight: 650 }}>%{utsRate} kayıtlı</span>
             </div>
             <div className={styles.progressBarContainer}>
-              <div className={styles.progressBarFill} style={{ width: '82%' }} />
+              <div className={styles.progressBarFill} style={{ width: `${utsRate}%` }} />
             </div>
           </div>
         </div>
@@ -753,13 +758,6 @@ export default function StockPage() {
           {branchesList.map(b => (
             <option key={b.id} value={b.name}>{b.name}</option>
           ))}
-          {branchesList.length === 0 && (
-            <>
-              <option value="Merkez">Merkez</option>
-              <option value="Çankaya">Çankaya</option>
-              <option value="Kadıköy">Kadıköy</option>
-            </>
-          )}
         </select>
 
         <select
@@ -1190,7 +1188,7 @@ export default function StockPage() {
 
                       <button
                         className={styles.quickActionBtn}
-                        onClick={() => addToast({ type: 'success', message: `${activeItem.name} ÜTS sorgusu: Ürün kaydı geçerli ve tekil bildirimi aktiftir.` })}
+                        onClick={() => addToast({ type: 'error', message: 'ÜTS bağlantısı yapılandırılmadı; ürün doğrulanmadı.' })}
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -1247,20 +1245,20 @@ export default function StockPage() {
                 <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
                   <div style={{ padding: 14, background: '#f0fdf8', borderRadius: 10, border: '1px solid #bbf7d0' }}>
                     <div style={{ fontWeight: 700, color: '#08785b', marginBottom: 4 }}>ÜTS Durumu: {activeItem.utsStatus}</div>
-                    <div style={{ fontSize: 12, color: '#065f46' }}>T.C. Sağlık Bakanlığı Ürün Takip Sistemi bildirim durumu aktiftir.</div>
+                    <div style={{ fontSize: 12, color: '#065f46' }}>Kayıtlı durum: {activeItem.utsStatus || '—'}</div>
                   </div>
                   <div className={styles.branchStockBox}>
                     <div className={styles.branchStockRow}>
                       <span>UIK Kurum No:</span>
-                      <strong style={{ fontFamily: 'monospace' }}>954201</strong>
+                      <strong style={{ fontFamily: 'monospace' }}>{activeItem.utsKurumNo || '—'}</strong>
                     </div>
                     <div className={styles.branchStockRow}>
                       <span>GLN Numarası:</span>
-                      <strong style={{ fontFamily: 'monospace' }}>8680001234567</strong>
+                      <strong style={{ fontFamily: 'monospace' }}>{activeItem.gln || '—'}</strong>
                     </div>
                     <div className={styles.branchStockRow}>
                       <span>Barkod:</span>
-                      <strong style={{ fontFamily: 'monospace' }}>{activeItem.barcode || 'OT-001'}</strong>
+                      <strong style={{ fontFamily: 'monospace' }}>{activeItem.barcode || '—'}</strong>
                     </div>
                   </div>
                 </div>
@@ -1268,19 +1266,15 @@ export default function StockPage() {
 
               {drawerTab === 'hareketler' && (
                 <div style={{ display: 'grid', gap: 8, fontSize: 12.5 }}>
-                  {[
-                    { action: 'Giriş Yapıldı (Satın Alma)', qty: '+5 Adet', date: '10 Eyl 2025', user: 'Ahmet Yılmaz' },
-                    { action: 'Satış Çıkışı', qty: '-1 Adet', date: '12 Eyl 2025', user: 'Fatma Kaya' },
-                    { action: 'Şube Transferi (Merkez → Çankaya)', qty: '1 Adet', date: '14 Eyl 2025', user: 'Ahmet Yılmaz' }
-                  ].map((h, idx) => (
-                    <div key={idx} style={{ padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                  {stockMovements.length ? stockMovements.map(movement => (
+                    <div key={movement.id} style={{ padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 650, color: '#0f172a' }}>
-                        <span>{h.action}</span>
-                        <span style={{ color: h.qty.startsWith('+') ? '#08785b' : '#dc2626' }}>{h.qty}</span>
+                        <span>{movement.notes || movement.type}</span>
+                        <span style={{ color: movement.quantityChange >= 0 ? '#08785b' : '#dc2626' }}>{movement.quantityChange > 0 ? '+' : ''}{movement.quantityChange} Adet</span>
                       </div>
-                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>{h.date} · {h.user}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>{new Date(movement.createdAt).toLocaleString('tr-TR')}{movement.branchName ? ` · ${movement.branchName}` : ''}</div>
                     </div>
-                  ))}
+                  )) : <div style={{ padding: 12, color: '#64748b' }}>Bu ürün için kaydedilmiş stok hareketi bulunmuyor.</div>}
                 </div>
               )}
 
@@ -1415,9 +1409,8 @@ export default function StockPage() {
                       value={newItemForm.branch}
                       onChange={e => setNewItemForm({ ...newItemForm, branch: e.target.value })}
                     >
-                      <option value="Merkez">Merkez</option>
-                      <option value="Çankaya">Çankaya</option>
-                      <option value="Kadıköy">Kadıköy</option>
+                      <option value="" disabled>Şube seçin</option>
+                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1607,10 +1600,7 @@ export default function StockPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kasa Seçimi</label>
-                  <select className={styles.filterSelect} style={{ width: '100%' }}>
-                    <option>Ana Kasa (Merkez)</option>
-                    <option>POS Kasası</option>
-                  </select>
+                  <div className={styles.filterSelect} style={{ width: '100%', color: '#64748b' }}>Kasa seçimi mevcut değil</div>
                 </div>
               </div>
             </div>
@@ -1619,8 +1609,7 @@ export default function StockPage() {
               <button
                 className={styles.btnPrimaryAction}
                 onClick={() => {
-                  setShowQuickSaleModal(false);
-                  addToast({ type: 'success', message: 'Hızlı satış fişi oluşturuldu, stoktan düşüldü ve kasaya işlendi.' });
+                  addToast({ type: 'error', message: 'Hızlı satış formu hasta, ödeme ve kasa kayıtlarını ilişkili tablolarla kaydetmiyor. Kayıt oluşturulmadı; satış için Satış modülünü kullanın.' });
                 }}
               >
                 Satışı Onayla
@@ -1640,21 +1629,21 @@ export default function StockPage() {
             </div>
             <div style={{ padding: 20, display: 'grid', gap: 12 }}>
               <div style={{ padding: 14, background: '#f0fdf8', borderRadius: 10, border: '1px solid #bbf7d0', fontSize: 13 }}>
-                <div style={{ fontWeight: 700, color: '#08785b' }}>ÜTS Servis Durumu: Aktif</div>
-                <div style={{ color: '#065f46', marginTop: 4 }}>120 adet kayıtlı cihaz senkronize durumdadır.</div>
+                <div style={{ fontWeight: 700, color: '#08785b' }}>Kayıtlı ÜTS Bilgisi</div>
+                <div style={{ color: '#065f46', marginTop: 4 }}>{utsRegisteredCount} / {totalProducts} üründe ÜTS bildirildi durumu kayıtlı.</div>
               </div>
               <div className={styles.branchStockBox}>
                 <div className={styles.branchStockRow}>
                   <span>Firma Tanımlayıcı Kodu:</span>
-                  <strong>954201</strong>
+                  <strong>{stockList.find(item => item.utsKurumNo)?.utsKurumNo || '—'}</strong>
                 </div>
                 <div className={styles.branchStockRow}>
                   <span>Yetkili Kimlik:</span>
-                  <strong>Ahmet Yılmaz (Firma Yöneticisi)</strong>
+                  <strong>{currentUser?.name || '—'}</strong>
                 </div>
                 <div className={styles.branchStockRow}>
                   <span>Son Eşitleme:</span>
-                  <span>Bugün 14:15</span>
+                  <span>—</span>
                 </div>
               </div>
             </div>
@@ -1663,7 +1652,7 @@ export default function StockPage() {
                 className={styles.btnPrimaryAction}
                 onClick={() => {
                   setShowUtsModal(false);
-                  addToast({ type: 'success', message: 'ÜTS cihaz alma/verme bildirimleri başarıyla eşitlendi.' });
+                  addToast({ type: 'error', message: 'Harici ÜTS bağlantısı yapılandırılmamış. Eşitleme yapılmadı.' });
                 }}
               >
                 ÜTS Bildirimlerini Eşitle
@@ -1689,17 +1678,14 @@ export default function StockPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kaynak Şube</label>
-                  <select className={styles.filterSelect} style={{ width: '100%' }}>
-                    <option>Merkez</option>
-                    <option>Çankaya</option>
+                  <select className={styles.filterSelect} style={{ width: '100%' }} defaultValue={activeItem.branch}>
+                    {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hedef Şube</label>
-                  <select className={styles.filterSelect} style={{ width: '100%' }}>
-                    <option>Çankaya</option>
-                    <option>Kadıköy</option>
-                    <option>Merkez</option>
+                  <select className={styles.filterSelect} style={{ width: '100%' }} defaultValue={branchesList.find(branch => branch.name !== activeItem.branch)?.name || ''}>
+                    {branchesList.filter(branch => branch.status === 'Aktif' && branch.name !== activeItem.branch).map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -1714,7 +1700,7 @@ export default function StockPage() {
                 className={styles.btnPrimaryAction}
                 onClick={() => {
                   setShowTransferModal(false);
-                  addToast({ type: 'success', message: 'Stok şube transfer fişi oluşturuldu.' });
+                  addToast({ type: 'error', message: 'Stok transferi için şube bazlı stok miktarı ve atomik hareket kaydı veritabanında desteklenmiyor. Kayıt oluşturulmadı.' });
                 }}
               >
                 Transferi Başlat
@@ -1736,22 +1722,22 @@ export default function StockPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                 <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Çeşit</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>148</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{scopedStockItems.length}</div>
                 </div>
                 <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Fiziksel Adet</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>320</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0)}</div>
                 </div>
                 <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Değer</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#08785b', marginTop: 4 }}>₺1.285.000</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{formatCurrency(totalStockValue)}</div>
                 </div>
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
               <button
                 className={styles.btnClear}
-                onClick={() => addToast({ type: 'success', message: 'Stok raporu PDF olarak indiriliyor...' })}
+                onClick={() => addToast({ type: 'error', message: 'PDF dışa aktarma henüz bağlı değil; dosya oluşturulmadı.' })}
               >
                 📥 PDF İndir
               </button>

@@ -244,6 +244,18 @@ export const dbDeleteStockItem = async (id: string) => {
   }, 'dbDeleteStockItem');
 };
 
+export const dbFetchStockMovements = async (stockItemId: string) => {
+  return executeDbQuery(async () => {
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .select('*, branches(name)')
+      .eq('stock_item_id', stockItemId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return toCamel<Array<Record<string, any>>>(data || []).map(row => ({ ...row, branchName: row.branches?.name || '' }));
+  }, 'dbFetchStockMovements');
+};
+
 // ═══════════════════════════════════════════════
 // 3b. Cash Transactions (Kasa Hareketleri)
 // ═══════════════════════════════════════════════

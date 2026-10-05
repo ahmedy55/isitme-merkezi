@@ -228,7 +228,7 @@ const INITIAL_SGK_LIST: SGKPrescriptionItem[] = [
 ];
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, approveSGKPrescription, updatePatient, currentOrgId } = useApp();
+  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, currentOrgId } = useApp();
   const { matches } = useBranchScope();
 
   // Navigation tab states
@@ -243,11 +243,11 @@ export default function SGKPage() {
   const tablePageSize = 10;
 
   // Items list
-  const [items, setItems] = useState<SGKPrescriptionItem[]>(currentOrgId ? [] : INITIAL_SGK_LIST);
+  const [items, setItems] = useState<SGKPrescriptionItem[]>([]);
 
   // Selection states
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [activeItem, setActiveItem] = useState<SGKPrescriptionItem | null>(currentOrgId ? null : INITIAL_SGK_LIST[0]);
+  const [activeItem, setActiveItem] = useState<SGKPrescriptionItem | null>(null);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'recete' | 'surec' | 'evrak' | 'islemler'>('genel');
 
   // Modals & Menu states
@@ -257,9 +257,9 @@ export default function SGKPage() {
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   useEffect(() => {
-    setItems(currentOrgId ? [] : INITIAL_SGK_LIST);
+    setItems([]);
     setSelectedIds([]);
-    setActiveItem(currentOrgId ? null : INITIAL_SGK_LIST[0]);
+    setActiveItem(null);
   }, [currentOrgId]);
 
   // New Prescription Form state
@@ -269,10 +269,10 @@ export default function SGKPage() {
     phone: '',
     prescriptionNo: '',
     reportNo: '',
-    deviceOperation: 'Oticon More 1 (2 adet)',
-    period: '2025/09',
+    deviceOperation: '',
+    period: '',
     status: 'İşlemde' as 'Onaylandı' | 'İşlemde' | 'Reddedildi',
-    branch: 'Merkez',
+    branch: '',
     notes: ''
   });
 
@@ -356,98 +356,24 @@ export default function SGKPage() {
   // Submit new prescription
   const handleCreatePrescription = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.patientName.trim() || !formData.tc.trim() || !formData.prescriptionNo.trim()) {
-      addToast({ type: 'error', message: 'Lütfen zorunlu alanları (Hasta adı, TC, Reçete no) doldurun.' });
+    if (!currentOrgId) {
+      addToast({ type: 'error', message: 'Aktif firma oturumu gerekli; kayıt oluşturulmadı.' });
       return;
     }
-
-    const matchedPat = allPatients.find(p => p.tc === formData.tc || `${p.firstName} ${p.lastName}`.toLowerCase() === formData.patientName.toLowerCase());
-    const reportNoGenerated = formData.reportNo || `RAP-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const newItem: SGKPrescriptionItem = {
-      id: `sgk-${Date.now()}`,
-      patientId: matchedPat?.id,
-      patientName: formData.patientName,
-      avatarInitials: formData.patientName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
-      avatarColor: styles.avatarTeal,
-      age: 60,
-      gender: 'Kadın',
-      tc: formData.tc,
-      phone: formData.phone || '+90 555 000 00 00',
-      email: `${formData.patientName.toLowerCase().replace(/\s+/g, '.')}@email.com`,
-      address: 'Merkez Mah. No: 1, Ankara',
-      birthDate: '01.01.1965',
-      prescriptionNo: formData.prescriptionNo,
-      reportNo: reportNoGenerated,
-      date: 'Bugün',
-      deviceOperation: formData.deviceOperation,
-      status: formData.status,
-      period: formData.period,
-      branch: formData.branch,
-      notes: formData.notes,
-      doctorName: 'Uzm. Dr. Odyolog',
-      hospitalName: 'Devlet Hastanesi',
-      icdCode: 'H90.3 - Sensorinöral İşitme Kaybı',
-      provisionNo: `PRV-${Math.floor(100000 + Math.random() * 900000)}`
-    };
-
-    if (matchedPat && formData.prescriptionNo) {
-      try {
-        await approveSGKPrescription(matchedPat.id, formData.prescriptionNo, reportNoGenerated);
-      } catch {
-        // Fallback silently if offline
-      }
-    }
-
-    setItems(prev => [newItem, ...prev]);
-    setActiveItem(newItem);
-    setSelectedIds([newItem.id]);
-    setIsNewModalOpen(false);
-    setFormData({
-      patientName: '',
-      tc: '',
-      phone: '',
-      prescriptionNo: '',
-      reportNo: '',
-      deviceOperation: 'Oticon More 1 (2 adet)',
-      period: '2025/09',
-      status: 'İşlemde',
-      branch: 'Merkez',
-      notes: ''
-    });
-    addToast({ type: 'success', message: `${newItem.prescriptionNo} numaralı reçete başarıyla kaydedildi.` });
+    addToast({ type: 'error', message: 'SGK reçeteleri için kalıcı hasta/şube ilişkili bir tablo henüz yapılandırılmamış. Sahte kayıt oluşturmamak için işlem kaydedilmedi.' });
   };
 
   const handleUpdateStatus = (id: string, newStatus: SGKPrescriptionItem['status']) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
-    const targetItem = items.find(i => i.id === id);
-    if (activeItem && activeItem.id === id) {
-      setActiveItem({ ...activeItem, status: newStatus });
-    }
-    if (targetItem && newStatus === 'Onaylandı') {
-      const pat = allPatients.find(p => p.tc === targetItem.tc || `${p.firstName} ${p.lastName}`.toLowerCase() === targetItem.patientName.toLowerCase());
-      if (pat) {
-        updatePatient({
-          ...pat,
-          prescriptionStatus: 'SGK Onaylı',
-          sgkStatus: 'Yenileme Hakkı Var',
-          prescriptionNo: targetItem.prescriptionNo,
-          reportNo: targetItem.reportNo
-        });
-      }
-    }
+    void id;
+    void newStatus;
     setActiveActionMenuId(null);
-    addToast({ type: 'success', message: `Reçete durumu "${newStatus}" olarak güncellendi ve hasta kaydıyla senkronize edildi.` });
+    addToast({ type: 'error', message: 'SGK reçete tablosu yapılandırılmadığı için durum değişikliği kaydedilmedi.' });
   };
 
   const handleDeleteItem = (id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
-    if (activeItem && activeItem.id === id) {
-      setActiveItem(null);
-    }
-    setSelectedIds(prev => prev.filter(x => x !== id));
+    void id;
     setActiveActionMenuId(null);
-    addToast({ type: 'success', message: 'Reçete kaydı silindi.' });
+    addToast({ type: 'error', message: 'SGK reçete tablosu yapılandırılmadığı için kayıt silinmedi.' });
   };
 
   const handleQueryMedula = (item: SGKPrescriptionItem) => {
@@ -455,7 +381,7 @@ export default function SGKPage() {
       type: 'warning',
       message: currentOrgId
         ? 'Medula bağlantısı yapılandırılmadı; provizyon durumu doğrulanamadı.'
-        : `Demo ortamı: ${item.prescriptionNo} için gerçek Medula sorgusu yapılmadı.`
+        : 'Aktif firma oturumu yok; Medula sorgusu yapılmadı.'
     });
   };
 
@@ -531,8 +457,7 @@ export default function SGKPage() {
             <span>Toplam Reçete</span>
             <strong>{totalCount}</strong>
             <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↗ %12</span>
-              <span className={styles.statSubtext}>bu ay</span>
+              <span className={styles.statSubtext}>Kayıtlı dönem toplamı</span>
             </div>
           </div>
         </div>
@@ -552,8 +477,7 @@ export default function SGKPage() {
             <span>SGK Onaylandı</span>
             <strong>{approvedCount}</strong>
             <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↗ %28</span>
-              <span className={styles.statSubtext}>bu ay</span>
+              <span className={styles.statSubtext}>Onaylı kayıt</span>
             </div>
           </div>
         </div>
@@ -573,8 +497,7 @@ export default function SGKPage() {
             <span>İşlemde</span>
             <strong>{pendingCount}</strong>
             <div className={styles.statTrend}>
-              <span className={styles.trendDownGreen}>↘ %5</span>
-              <span className={styles.statSubtext}>bu ay</span>
+              <span className={styles.statSubtext}>İşlem bekleyen kayıt</span>
             </div>
           </div>
         </div>
@@ -595,8 +518,7 @@ export default function SGKPage() {
             <span>Reddedildi</span>
             <strong>{rejectedCount}</strong>
             <div className={styles.statTrend}>
-              <span className={styles.trendUpRed}>↗ %22</span>
-              <span className={styles.statSubtext}>bu ay</span>
+              <span className={styles.statSubtext}>Reddedilen kayıt</span>
             </div>
           </div>
         </div>
@@ -1209,7 +1131,7 @@ export default function SGKPage() {
                           </div>
                           <button
                             className={styles.btnDetailLink}
-                            onClick={() => addToast({ type: 'success', message: `${doc.name} indiriliyor...` })}
+                onClick={() => addToast({ type: 'error', message: 'Bu evrak için kayıtlı dosya bulunmuyor; indirme başlatılmadı.' })}
                           >
                             İndir
                           </button>
@@ -1300,26 +1222,7 @@ export default function SGKPage() {
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { period: '2025/09', count: 48, total: '₺428.000', sgk: '₺164.200', patient: '₺263.800', date: '15 Kasım 2025', status: 'Hazırlanıyor' },
-                  { period: '2025/08', count: 52, total: '₺468.000', sgk: '₺178.500', patient: '₺289.500', date: '15 Ekim 2025', status: 'SGK İncelemede' },
-                  { period: '2025/07', count: 41, total: '₺365.000', sgk: '₺139.000', patient: '₺226.000', date: '15 Eylül 2025', status: 'Ödendi' },
-                  { period: '2025/06', count: 39, total: '₺342.000', sgk: '₺131.000', patient: '₺211.000', date: '15 Ağustos 2025', status: 'Ödendi' }
-                ].map((row, idx) => (
-                  <tr key={idx}>
-                    <td style={{ fontWeight: 700, color: '#0f172a' }}>{row.period}</td>
-                    <td>{row.count} adet</td>
-                    <td style={{ fontWeight: 600 }}>{row.total}</td>
-                    <td style={{ color: '#08785b', fontWeight: 650 }}>{row.sgk}</td>
-                    <td>{row.patient}</td>
-                    <td>{row.date}</td>
-                    <td>
-                      <span className={`${styles.badgeStatus} ${row.status === 'Ödendi' ? styles.badgeApproved : styles.badgePending}`}>
-                        {row.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>SGK dönem fatura verisi bağlı bir tablo bulunmadığı için burada kayıt gösterilemiyor.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1341,27 +1244,8 @@ export default function SGKPage() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-            {[
-              { type: 'Sağlık Kurulu Raporu', patient: 'Ayşe Yılmaz', date: '12 Eyl 2025', daysLeft: 164, status: 'Geçerli' },
-              { type: 'Odyogram Raporu', patient: 'Mehmet Demir', date: '10 Eyl 2025', daysLeft: 158, status: 'Geçerli' },
-              { type: 'KBB Uzman Reçetesi', patient: 'Fatma Kaya', date: '08 Eyl 2025', daysLeft: 8, status: 'Süresi Yaklaşıyor' },
-              { type: 'SGK Cihaz Teslim Belgesi', patient: 'Ali Çetin', date: '05 Eyl 2025', daysLeft: 0, status: 'Tamamlandı' }
-            ].map((card, i) => (
-              <div key={i} style={{ padding: 16, border: '1px solid #e2e8f0', borderRadius: 12, background: '#fafbfc' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#08785b' }}>{card.type}</span>
-                  <span className={`${styles.badgeStatus} ${card.status === 'Geçerli' ? styles.badgeApproved : card.status === 'Tamamlandı' ? styles.badgePending : styles.badgeRejected}`}>
-                    {card.status}
-                  </span>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 650, color: '#0f172a' }}>{card.patient}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Kayıt Tarihi: {card.date}</div>
-                <div style={{ fontSize: 12, color: card.daysLeft < 15 ? '#dc2626' : '#08785b', fontWeight: 600, marginTop: 6 }}>
-                  {card.daysLeft > 0 ? `Kalan Geçerlilik: ${card.daysLeft} gün` : 'Arşivlendi'}
-                </div>
-              </div>
-            ))}
+          <div style={{ padding: 24, textAlign: 'center', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 12 }}>
+            Evrak ve rapor verisi bağlı bir tablo bulunmadığı için kayıt listesi gösterilemiyor.
           </div>
         </div>
       )}
@@ -1709,7 +1593,7 @@ export default function SGKPage() {
                 className={styles.btnNewPrescription}
                 onClick={() => {
                   setIsUploadModalOpen(false);
-                  addToast({ type: 'success', message: 'Evrak başarıyla yüklendi ve hasta dosyasına eklendi.' });
+                  addToast({ type: 'error', message: 'Hasta evrakları için dosya saklama altyapısı yapılandırılmadı; yükleme kaydedilmedi.' });
                 }}
               >
                 Yüklemeyi Tamamla

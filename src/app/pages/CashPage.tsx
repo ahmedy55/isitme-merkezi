@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency, SaleRecord, Expense } from '../data/mockData';
+import { dbFetchCashTransactions, dbInsertCashTransaction } from '../lib/database';
 import styles from './CashPage.module.css';
 
 interface CashMovement {
   id: string;
   date: string;
+  dateKey?: string;
   account: string;
   type: 'Giriş' | 'Çıkış';
   category: string;
@@ -22,6 +24,7 @@ interface CashMovement {
 
 interface ExpenseItem {
   id: string;
+  branchId?: string;
   date: string;
   description: string;
   category: 'Kira' | 'Fatura' | 'Maaş' | 'Ofis Gideri' | 'Bakım & Onarım' | 'Hizmet Alımı' | 'Diğer';
@@ -197,26 +200,27 @@ const INITIAL_EXPENSES: ExpenseItem[] = [
 ];
 
 export default function CashPage() {
-  const { addToast, branchesList, patientsList, stockList, addSale } = useApp();
+  const { addToast, branchesList, patientsList, stockList, addSale, addExpense, updateExpense, deleteExpense, expensesList, salesList, currentOrgId } = useApp();
   const { matches, activeBranch } = useBranchScope();
 
   // Active Main Sub-Tab: 'cash' (Kasa & Tahsilat) or 'expenses' (Masraflar)
   const [mainTab, setMainTab] = useState<'cash' | 'expenses' | 'transfers' | 'reports'>('cash');
 
   // ── KASA & TAHSİLAT STATES ──
-  const [cashMovements, setCashMovements] = useState<CashMovement[]>(INITIAL_CASH_MOVEMENTS);
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [cashFilterPill, setCashFilterPill] = useState('Tümü');
   const [cashSelectedAccount, setCashSelectedAccount] = useState('Tüm Hesaplar');
-  const [cashSelectedIds, setCashSelectedIds] = useState<string[]>(['csh-1']);
+  const [summaryBranch, setSummaryBranch] = useState('Tüm Şubeler');
+  const [cashSelectedIds, setCashSelectedIds] = useState<string[]>([]);
 
   // ── MASRAFLAR STATES ──
-  const [expenses, setExpenses] = useState<ExpenseItem[]>(INITIAL_EXPENSES);
+  const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [expenseFilterPill, setExpenseFilterPill] = useState('Tümü');
   const [expenseSearchTerm, setExpenseSearchTerm] = useState('');
   const [expenseSelectedCategory, setExpenseSelectedCategory] = useState('Tüm Kategoriler');
   const [expenseSelectedBranch, setExpenseSelectedBranch] = useState('Tüm Şubeler');
-  const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(INITIAL_EXPENSES[0]);
-  const [expenseSelectedIds, setExpenseSelectedIds] = useState<string[]>(['exp-1']);
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
+  const [expenseSelectedIds, setExpenseSelectedIds] = useState<string[]>([]);
 
   // Modals state
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -232,16 +236,16 @@ export default function CashPage() {
     productId: '',
     deviceEarSide: 'Sağ' as 'Sağ' | 'Sol',
     paymentMethod: 'Nakit' as 'Nakit' | 'Kredi Kartı' | 'Havale' | 'Taksit',
-    amount: 12500,
-    account: 'Ana Kasa'
+    amount: 0,
+    account: ''
   });
   const salePatient = patientsList.find(patient => patient.id === saleForm.patientId);
 
   // Deposit/Withdrawal Form State
   const [depositForm, setDepositForm] = useState({
     type: 'Giriş' as 'Giriş' | 'Çıkış',
-    account: 'Ana Kasa',
-    amount: 1000,
+    account: '',
+    amount: 0,
     category: 'Diğer Gelir',
     description: ''
   });
@@ -249,14 +253,46 @@ export default function CashPage() {
   // New Expense Form State
   const [newExpForm, setNewExpForm] = useState({
     description: '',
-    category: 'Kira' as ExpenseItem['category'],
-    amount: 1000,
+    category: 'Kira' as Expense['category'],
+    amount: 0,
     supplier: '',
     invoiceNo: '',
     paymentMethod: 'Nakit',
-    branch: 'Test Şube 1',
+    branch: '',
     notes: ''
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentOrgId) { setCashMovements([]); setExpenses([]); setSelectedExpense(null); return; }
+    void Promise.all([dbFetchCashTransactions(), Promise.resolve(expensesList)]).then(([transactions, actualExpenses]) => {
+      if (cancelled) return;
+      const mappedMovements: CashMovement[] = (transactions as any[]).map(row => {
+        const sale = row.referenceEntity === 'sale' ? (salesList.find(item => item.id === row.referenceId) as SaleRecord | undefined) : undefined;
+        const expense = row.referenceEntity === 'expense' ? actualExpenses.find(item => item.id === row.referenceId) : undefined;
+        const branch = branchesList.find(item => item.id === row.branchId);
+        const isOutgoing = ['EXPENSE', 'PAYOUT'].includes(row.type);
+        return {
+          id: row.id, date: row.createdAt ? new Date(row.createdAt).toLocaleString('tr-TR') : '—', dateKey: row.createdAt?.slice(0, 10),
+          account: row.cashRegisterId || '—', type: isOutgoing ? 'Çıkış' : 'Giriş', category: row.category || '—',
+          description: row.description || '—', patientOrEntity: sale?.patientName || expense?.createdBy || '—',
+          amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || '—',
+          status: 'Tahsil Edildi', branch: branch?.name || '—',
+        };
+      });
+      const mappedExpenses: ExpenseItem[] = actualExpenses.map(expense => ({
+        id: expense.id, branchId: expense.branchId, date: expense.date, description: expense.description,
+        category: expense.category as ExpenseItem['category'], supplier: '—', invoiceNo: expense.receiptNo || '—',
+        paymentMethod: expense.paymentMethod, amount: expense.amount,
+        branch: branchesList.find(item => item.id === expense.branchId)?.name || expense.branch || '—',
+        status: 'Ödendi', notes: expense.notes,
+      }));
+      setCashMovements(mappedMovements);
+      setExpenses(mappedExpenses);
+      setSelectedExpense(current => current ? mappedExpenses.find(item => item.id === current.id) || null : null);
+    }).catch(() => { if (!cancelled) { setCashMovements([]); setExpenses([]); } });
+    return () => { cancelled = true; };
+  }, [currentOrgId, branchesList, expensesList, salesList]);
 
   // Filtered Cash Movements
   const filteredCashMovements = useMemo(() => {
@@ -271,6 +307,38 @@ export default function CashPage() {
       return true;
     });
   }, [cashMovements, cashFilterPill, cashSelectedAccount, matches]);
+
+  const getMethodNet = (method: string) => cashMovements
+    .filter(item => (summaryBranch === 'Tüm Şubeler' || item.branch === summaryBranch) && item.paymentMethod === method)
+    .reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
+  const cashNetTotal = cashMovements
+    .filter(item => summaryBranch === 'Tüm Şubeler' || item.branch === summaryBranch)
+    .reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const currentMonthMovements = cashMovements.filter(item => item.dateKey?.startsWith(currentMonthKey));
+  const currentMonthNet = currentMonthMovements.reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
+  const currentMonthSales = salesList.filter(sale => sale.date?.startsWith(currentMonthKey)).reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const currentMonthCollected = currentMonthMovements.filter(item => item.type === 'Giriş').reduce((sum, item) => sum + item.amount, 0);
+  const currentMonthExpenses = expensesList.filter(expense => expense.date?.startsWith(currentMonthKey)).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const currentYearExpenses = expensesList.filter(expense => expense.date?.startsWith(String(new Date().getFullYear()))).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const recentMonths = Array.from({ length: 3 }, (_, index) => {
+    const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - index);
+    return date.toISOString().slice(0, 7);
+  });
+  const averageRecentMonthlyExpenses = recentMonths.reduce((total, month) => total + expensesList.filter(expense => expense.date?.startsWith(month)).reduce((sum, expense) => sum + Number(expense.amount || 0), 0), 0) / recentMonths.length;
+  const highestExpenseCategory = expensesList.reduce<{category: string; total: number}>((highest, expense) => {
+    const total = expensesList.filter(item => item.category === expense.category && item.date?.startsWith(currentMonthKey)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    return total > highest.total ? { category: expense.category, total } : highest;
+  }, { category: '—', total: 0 });
+  const pendingCollections = salesList.filter(sale => sale.status !== 'Tahsil Edildi').reduce((sum, sale) => sum + Number(sale.patientAmount || sale.total || 0), 0);
+  const monthlyCollectionRate = currentMonthSales > 0 ? Math.round(currentMonthCollected / currentMonthSales * 100) : null;
+  const cashChartMonths = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(); date.setDate(1); date.setMonth(date.getMonth() - 11 + index);
+    const key = date.toISOString().slice(0, 7);
+    const rows = cashMovements.filter(item => item.dateKey?.startsWith(key));
+    return { month: date.toLocaleDateString('tr-TR', { month: 'short' }), income: rows.filter(item => item.type === 'Giriş').reduce((sum, row) => sum + row.amount, 0), expense: rows.filter(item => item.type === 'Çıkış').reduce((sum, row) => sum + row.amount, 0) };
+  });
+  const cashChartMax = Math.max(1, ...cashChartMonths.flatMap(month => [month.income, month.expense]));
 
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
@@ -291,25 +359,42 @@ export default function CashPage() {
   }, [expenses, expenseFilterPill, expenseSelectedCategory, expenseSelectedBranch, expenseSearchTerm, matches]);
 
   // Handle Create Deposit/Withdrawal
-  const handleCreateDeposit = (e: React.FormEvent) => {
+  const handleCreateDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newMovement: CashMovement = {
-      id: `csh-${Date.now()}`,
+    const amount = Number(depositForm.amount);
+    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : branchesList.length === 1 ? branchesList[0].id : '';
+    const branchName = branchesList.find(branch => branch.id === branchId)?.name;
+    if (!currentOrgId || !branchId || !branchName || !depositForm.account.trim() || amount <= 0) {
+      addToast({ type: 'error', message: 'Firma, şube, kasa hesabı ve sıfırdan büyük tutar gerekli.' });
+      return;
+    }
+    try {
+      const saved = await dbInsertCashTransaction({
+        branchId, cashRegisterId: depositForm.account,
+        type: depositForm.type === 'Giriş' ? 'INCOME' : 'EXPENSE', amount,
+        category: depositForm.category,
+        description: depositForm.description.trim() || (depositForm.type === 'Giriş' ? 'Kasa para girişi' : 'Kasa para çıkışı'),
+      });
+      const newMovement: CashMovement = {
+      id: saved.id,
       date: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       account: depositForm.account,
       type: depositForm.type,
       category: depositForm.category,
       description: depositForm.description || (depositForm.type === 'Giriş' ? 'Kasa Para Girişi' : 'Kasa Para Çıkışı'),
       patientOrEntity: '—',
-      amount: Number(depositForm.amount) || 0,
+      amount,
       paymentMethod: depositForm.account.includes('Banka') ? 'Banka' : 'Nakit',
       status: 'Tahsil Edildi',
-      branch: 'Merkez'
+      branch: branchName
     };
 
     setCashMovements(prev => [newMovement, ...prev]);
     setShowDepositModal(false);
     addToast({ type: 'success', message: `${formatCurrency(newMovement.amount)} ${newMovement.type.toLowerCase()} hareketi kaydedildi.` });
+    } catch (error) {
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Kasa hareketi kaydedilemedi.' });
+    }
   };
 
   // Handle New Sale
@@ -364,7 +449,7 @@ export default function CashPage() {
         status: 'Tahsil Edildi',
         branchId: selectedPatient.branchId,
         deviceEarSide
-      }, selectedStock?.id);
+      }, selectedStock?.id, saleForm.account.trim());
 
       const branchName = activeBranch.mode === 'single'
         ? (branchesList.find(b => b.id === activeBranch.branchId)?.name || 'Merkez')
@@ -393,32 +478,35 @@ export default function CashPage() {
   };
 
   // Handle New Expense
-  const handleCreateExpense = (e: React.FormEvent) => {
+  const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newExpForm.description.trim()) {
       addToast({ type: 'warning', message: 'Lütfen masraf açıklamasını girin.' });
       return;
     }
 
-    const newExpense: ExpenseItem = {
-      id: `exp-${Date.now()}`,
-      date: new Date().toLocaleDateString('tr-TR'),
+    const branchRecord = branchesList.find(branch => branch.name === newExpForm.branch);
+    if (!branchRecord) { addToast({ type: 'error', message: 'Gerçek bir şube seçin.' }); return; }
+    const newExpense: Expense & { idempotencyKey: string } = {
+      id: crypto.randomUUID(),
+      idempotencyKey: crypto.randomUUID(),
+      date: new Date().toISOString().slice(0, 10),
       description: newExpForm.description,
-      category: newExpForm.category,
-      supplier: newExpForm.supplier || '—',
-      invoiceNo: newExpForm.invoiceNo || '—',
-      paymentMethod: newExpForm.paymentMethod,
+      category: newExpForm.category as Expense['category'],
+      paymentMethod: (newExpForm.paymentMethod === 'Banka' ? 'Havale' : newExpForm.paymentMethod) as Expense['paymentMethod'],
       amount: Number(newExpForm.amount) || 0,
       branch: newExpForm.branch,
-      status: 'Ödendi',
-      notes: newExpForm.notes
+      branchId: branchRecord.id,
+      createdBy: 'Mevcut kullanıcı',
+      receiptNo: newExpForm.invoiceNo || undefined,
+      notes: newExpForm.notes || undefined,
     };
 
-    setExpenses(prev => [newExpense, ...prev]);
-    setSelectedExpense(newExpense);
-    setExpenseSelectedIds([newExpense.id]);
-    setShowNewExpenseModal(false);
-    addToast({ type: 'success', message: `${newExpense.description} masraf kaydı eklendi.` });
+    try {
+      await addExpense(newExpense);
+      setShowNewExpenseModal(false);
+      setNewExpForm(form => ({ ...form, description: '', amount: 0, supplier: '', invoiceNo: '', notes: '' }));
+    } catch { /* Context error is shown to the user. */ }
   };
 
   return (
@@ -594,11 +682,10 @@ export default function CashPage() {
                 </svg>
               </div>
               <div>
-                <span>Ana Kasa Bakiyesi</span>
-                <strong>₺11.500</strong>
+                <span>Bu Ay Net Kasa Hareketi</span>
+                <strong>{formatCurrency(currentMonthNet)}</strong>
                 <div className={styles.statTrend}>
-                  <span className={styles.trendGreen}>↗ %12</span>
-                  <span className={styles.statSubtext}>geçen aya göre</span>
+                  <span className={styles.statSubtext}>veritabanındaki giriş − çıkış</span>
                 </div>
               </div>
             </div>
@@ -612,9 +699,8 @@ export default function CashPage() {
               </div>
               <div>
                 <span>Toplam Ciro</span>
-                <strong>₺12.500</strong>
+                <strong>{formatCurrency(currentMonthSales)}</strong>
                 <div className={styles.statTrend}>
-                  <span className={styles.trendGreen}>↗ %18</span>
                   <span className={styles.statSubtext}>bu ay</span>
                 </div>
               </div>
@@ -629,9 +715,8 @@ export default function CashPage() {
               </div>
               <div>
                 <span>Toplam Tahsilat</span>
-                <strong>₺12.500</strong>
+                <strong>{formatCurrency(currentMonthCollected)}</strong>
                 <div className={styles.statTrend}>
-                  <span className={styles.trendGreen}>↗ %18</span>
                   <span className={styles.statSubtext}>bu ay</span>
                 </div>
               </div>
@@ -646,7 +731,7 @@ export default function CashPage() {
               </div>
               <div>
                 <span>Bekleyen Tahsilat</span>
-                <strong>₺0</strong>
+                <strong>{formatCurrency(pendingCollections)}</strong>
                 <span className={styles.statSubtext}>— bu ay</span>
               </div>
             </div>
@@ -683,26 +768,13 @@ export default function CashPage() {
 
               {/* Bar Visualizer */}
               <div className={styles.chartBody}>
-                {[
-                  { m: 'Oca', g: 50, d: 25 },
-                  { m: 'Şub', g: 45, d: 35 },
-                  { m: 'Mar', g: 58, d: 38 },
-                  { m: 'Nis', g: 42, d: 20 },
-                  { m: 'May', g: 52, d: 38 },
-                  { m: 'Haz', g: 55, d: 30 },
-                  { m: 'Tem', g: 40, d: 22 },
-                  { m: 'Ağu', g: 65, d: 42 },
-                  { m: 'Eyl', g: 72, d: 40 },
-                  { m: 'Eki', g: 68, d: 40 },
-                  { m: 'Kas', g: 62, d: 38 },
-                  { m: 'Ara', g: 80, d: 42 }
-                ].map((item, idx) => (
+                {cashChartMonths.map((item, idx) => (
                   <div key={idx} className={styles.chartCol}>
                     <div className={styles.barsGroup}>
-                      <div className={styles.barGelir} style={{ height: `${item.g}%` }} title={`Gelir: %${item.g}`} />
-                      <div className={styles.barGider} style={{ height: `${item.d}%` }} title={`Gider: %${item.d}`} />
+                      <div className={styles.barGelir} style={{ height: `${item.income / cashChartMax * 100}%` }} title={`Gelir: ${formatCurrency(item.income)}`} />
+                      <div className={styles.barGider} style={{ height: `${item.expense / cashChartMax * 100}%` }} title={`Gider: ${formatCurrency(item.expense)}`} />
                     </div>
-                    <span className={styles.chartLabel}>{item.m}</span>
+                    <span className={styles.chartLabel}>{item.month}</span>
                   </div>
                 ))}
               </div>
@@ -718,10 +790,9 @@ export default function CashPage() {
                   </svg>
                   Kasa Özeti
                 </div>
-                <select className={styles.filterSelect} style={{ height: 30, minWidth: 100 }}>
-                  <option>Tüm Şubeler</option>
-                  <option>Merkez</option>
-                  <option>Çankaya</option>
+                <select className={styles.filterSelect} style={{ height: 30, minWidth: 100 }} value={summaryBranch} onChange={event => setSummaryBranch(event.target.value)}>
+                  <option value="Tüm Şubeler">Tüm Şubeler</option>
+                  {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                 </select>
               </div>
 
@@ -730,33 +801,33 @@ export default function CashPage() {
                   <div className={styles.summaryLabel}>
                     <span style={{ color: '#08785b' }}>💵</span> Nakit
                   </div>
-                  <div className={styles.summaryVal}>₺11.500</div>
+                  <div className={styles.summaryVal}>{formatCurrency(getMethodNet('Nakit'))}</div>
                 </div>
 
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryLabel}>
                     <span style={{ color: '#0284c7' }}>💳</span> Kredi Kartı
                   </div>
-                  <div className={styles.summaryVal}>₺0</div>
+                  <div className={styles.summaryVal}>{formatCurrency(getMethodNet('Kredi Kartı'))}</div>
                 </div>
 
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryLabel}>
                     <span style={{ color: '#7e22ce' }}>🏦</span> Havale / EFT
                   </div>
-                  <div className={styles.summaryVal}>₺0</div>
+                  <div className={styles.summaryVal}>{formatCurrency(getMethodNet('Havale'))}</div>
                 </div>
 
                 <div className={styles.summaryRow}>
                   <div className={styles.summaryLabel}>
                     <span style={{ color: '#475569' }}>📱</span> Diğer
                   </div>
-                  <div className={styles.summaryVal}>₺0</div>
+                  <div className={styles.summaryVal}>{formatCurrency(getMethodNet('Diğer'))}</div>
                 </div>
 
                 <div className={styles.summaryTotalRow}>
                   <div className={styles.summaryTotalLabel}>Toplam Bakiye</div>
-                  <div className={styles.summaryTotalVal}>₺11.500</div>
+                  <div className={styles.summaryTotalVal}>{formatCurrency(cashNetTotal)}</div>
                 </div>
               </div>
             </div>
@@ -783,7 +854,7 @@ export default function CashPage() {
                   <line x1="16" y1="2" x2="16" y2="6" />
                   <line x1="8" y1="2" x2="8" y2="6" />
                 </svg>
-                <span>01.09.2026 - 30.09.2026</span>
+                <span>{new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('tr-TR')} - {new Date().toLocaleDateString('tr-TR')}</span>
               </div>
 
               <select
@@ -792,8 +863,7 @@ export default function CashPage() {
                 onChange={e => setCashSelectedAccount(e.target.value)}
               >
                 <option value="Tüm Hesaplar">Tüm Hesaplar</option>
-                <option value="Ana Kasa">Ana Kasa</option>
-                <option value="Banka (İş Bankası)">Banka (İş Bankası)</option>
+              {[...new Set(cashMovements.map(item => item.account).filter(Boolean))].map(account => <option key={account} value={account}>{account}</option>)}
               </select>
 
               <button className={styles.btnFilter} onClick={() => addToast({ type: 'info', message: 'Filtreler uygulandı.' })}>
@@ -942,11 +1012,7 @@ export default function CashPage() {
               </div>
               <div>
                 <span>Bu Ay Toplam Gider</span>
-                <strong>₺1.000</strong>
-                <div className={styles.statTrend}>
-                  <span className={styles.trendRed}>↗ %12</span>
-                  <span className={styles.statSubtext}>geçen aya göre</span>
-                </div>
+                <strong>{formatCurrency(currentMonthExpenses)}</strong>
               </div>
             </div>
 
@@ -959,8 +1025,8 @@ export default function CashPage() {
               </div>
               <div>
                 <span>En Yüksek Gider Kalemi</span>
-                <strong>Kira</strong>
-                <span className={styles.statSubtext}>₺1.000</span>
+                <strong>{highestExpenseCategory.total ? highestExpenseCategory.category : '—'}</strong>
+                <span className={styles.statSubtext}>{formatCurrency(highestExpenseCategory.total)}</span>
               </div>
             </div>
 
@@ -973,11 +1039,7 @@ export default function CashPage() {
               </div>
               <div>
                 <span>Ortalama Aylık Gider</span>
-                <strong>₺3.250</strong>
-                <div className={styles.statTrend}>
-                  <span className={styles.trendGreen}>↘ %8</span>
-                  <span className={styles.statSubtext}>son 3 aya göre</span>
-                </div>
+                <strong>{formatCurrency(averageRecentMonthlyExpenses)}</strong>
               </div>
             </div>
 
@@ -990,7 +1052,7 @@ export default function CashPage() {
               </div>
               <div>
                 <span>Yıllık Toplam Gider</span>
-                <strong>₺38.500</strong>
+                <strong>{formatCurrency(currentYearExpenses)}</strong>
               </div>
             </div>
           </div>
@@ -1054,10 +1116,7 @@ export default function CashPage() {
               onChange={e => setExpenseSelectedBranch(e.target.value)}
             >
               <option value="Tüm Şubeler">Tüm Şubeler</option>
-              <option value="Test Şube 1">Test Şube 1</option>
-              <option value="Merkez">Merkez</option>
-              <option value="Çankaya">Çankaya</option>
-              <option value="Kadıköy">Kadıköy</option>
+              {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
             </select>
 
             <button className={styles.btnFilter} onClick={() => addToast({ type: 'info', message: 'Gider filtreleri uygulandı.' })}>
@@ -1294,10 +1353,10 @@ export default function CashPage() {
 
                       <button
                         className={`${styles.quickActionBtn} ${styles.quickActionBtnDanger}`}
-                        onClick={() => {
-                          setExpenses(prev => prev.filter(x => x.id !== selectedExpense.id));
+                        onClick={async () => {
+                          if (!window.confirm('Bu gider kaydını iptal etmek istediğinize emin misiniz?')) return;
+                          await deleteExpense(selectedExpense.id);
                           setSelectedExpense(null);
-                          addToast({ type: 'success', message: 'Gider kaydı silindi.' });
                         }}
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1323,7 +1382,7 @@ export default function CashPage() {
                         onClick={() => {
                           setNewExpForm({
                             description: selectedExpense.description,
-                            category: selectedExpense.category,
+                            category: (selectedExpense.category === 'Ofis Gideri' ? 'Malzeme' : selectedExpense.category === 'Hizmet Alımı' ? 'Diğer' : selectedExpense.category) as Expense['category'],
                             amount: selectedExpense.amount,
                             supplier: selectedExpense.supplier !== '—' ? selectedExpense.supplier : '',
                             invoiceNo: '',
@@ -1356,11 +1415,10 @@ export default function CashPage() {
         <div style={{ background: '#fff', border: '1px solid var(--csh-border)', borderRadius: 14, padding: 24 }}>
           <h3 style={{ margin: '0 0 8px', fontSize: 18, color: '#0f172a' }}>Banka ve POS Hesap Hareketleri</h3>
           <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
-            İş Bankası, Garanti BBVA ve Yapı Kredi POS hesap mutabakatları ve virman transferleri.
+            Kayıtlı kasa hareketlerini inceleyin. Harici banka entegrasyonu bu firma için yapılandırılmamışsa bu ekranda banka bakiyesi gösterilmez.
           </p>
           <div style={{ padding: 24, background: '#f8fafc', borderRadius: 10, border: '1px dashed #cbd5e1', textAlign: 'center' }}>
-            <div style={{ fontWeight: 650, color: '#475569' }}>Banka API bağlantısı aktif durumdadır.</div>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Tüm banka tahsilatları otomatik olarak Ana Kasa konsolide hareketlerine yansıtılır.</div>
+            <div style={{ fontWeight: 650, color: '#475569' }}>{cashMovements.filter(item => item.account.toLocaleLowerCase('tr-TR').includes('banka')).length} banka hesabı hareketi kayıtlı.</div>
           </div>
         </div>
       )}
@@ -1377,15 +1435,15 @@ export default function CashPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Aylık Net Kar</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>+₺11.500</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{formatCurrency(currentMonthCollected - currentMonthExpenses)}</div>
             </div>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Gider / Gelir Oranı</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#0284c7', marginTop: 4 }}>%8.0</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#0284c7', marginTop: 4 }}>{currentMonthCollected > 0 ? `%${Math.round(currentMonthExpenses / currentMonthCollected * 100)}` : '—'}</div>
             </div>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Tahsilat Oranı</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>%100</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{monthlyCollectionRate === null ? '—' : `%${monthlyCollectionRate}`}</div>
             </div>
           </div>
         </div>
@@ -1419,16 +1477,14 @@ export default function CashPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hesap</label>
-                  <select
+                  <input
+                    type="text"
                     className={styles.filterSelect}
                     style={{ width: '100%' }}
                     value={depositForm.account}
+                    placeholder="Kasa hesabı adı"
                     onChange={e => setDepositForm({ ...depositForm, account: e.target.value })}
-                  >
-                    <option value="Ana Kasa">Ana Kasa</option>
-                    <option value="Banka (İş Bankası)">Banka (İş Bankası)</option>
-                    <option value="POS Kasası">POS Kasası</option>
-                  </select>
+                  />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Tutar (₺)</label>
@@ -1560,15 +1616,14 @@ export default function CashPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Tahsilat Yapılacak Kasa</label>
-                  <select
+                  <input
+                    type="text"
                     className={styles.filterSelect}
                     style={{ width: '100%' }}
                     value={saleForm.account}
+                    placeholder="Kasa hesabı adı"
                     onChange={e => setSaleForm({ ...saleForm, account: e.target.value })}
-                  >
-                    <option value="Ana Kasa">Ana Kasa (Nakit)</option>
-                    <option value="Banka (İş Bankası)">Banka (İş Bankası POS/Hesap)</option>
-                  </select>
+                  />
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
@@ -1677,10 +1732,8 @@ export default function CashPage() {
                       value={newExpForm.branch}
                       onChange={e => setNewExpForm({ ...newExpForm, branch: e.target.value })}
                     >
-                      <option value="Test Şube 1">Test Şube 1</option>
-                      <option value="Merkez">Merkez</option>
-                      <option value="Çankaya">Çankaya</option>
-                      <option value="Kadıköy">Kadıköy</option>
+                      <option value="">Şube seçin</option>
+                      {branchesList.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1738,10 +1791,13 @@ export default function CashPage() {
               <button className={styles.btnClear} onClick={() => setShowEditExpenseModal(false)}>Vazgeç</button>
               <button
                 className={styles.btnPrimaryAction}
-                onClick={() => {
-                  setExpenses(prev => prev.map(x => x.id === selectedExpense.id ? selectedExpense : x));
-                  setShowEditExpenseModal(false);
-                  addToast({ type: 'success', message: 'Gider bilgisi güncellendi.' });
+                onClick={async () => {
+                  const stored = expensesList.find(item => item.id === selectedExpense.id);
+                  if (!stored) { addToast({ type: 'error', message: 'Gider veritabanında bulunamadı.' }); return; }
+                  try {
+                    await updateExpense({ ...stored, description: selectedExpense.description, amount: selectedExpense.amount });
+                    setShowEditExpenseModal(false);
+                  } catch { /* Context reports the persistence failure. */ }
                 }}
               >
                 Kaydet

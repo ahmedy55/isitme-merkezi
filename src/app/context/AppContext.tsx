@@ -2,20 +2,10 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import {
-  patients as initialPatients,
-  appointments as initialAppointments,
-  stockItems as initialStock,
-  sales as initialSales,
-  recallItems as initialRecall,
-  suppliers as initialSuppliers,
-  expenses as initialExpenses,
-  systemUsers as initialUsers,
-  auditLog as initialAuditLog,
-  initialBranches,
   Patient, Appointment, StockItem, SaleRecord, RecallItem,
   Supplier, Expense, SystemUser, AuditLogEntry, Branch, SupplierPurchase
 } from '../data/mockData';
-import { supabase, isConfigured } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
 import { SaleDomainService } from '../services/SaleDomainService';
 import { StockDomainService } from '../services/StockDomainService';
@@ -95,7 +85,6 @@ interface AppContextType {
   currentOrg?: any;
   logout: () => Promise<void>;
   loggingOut: boolean;
-  startDemoSession: () => void;
   dataLoading: boolean;
   refreshOrganizationData: () => Promise<void>;
   
@@ -148,18 +137,13 @@ interface AppContextType {
   addBranch: (branch: Branch) => void;
   updateBranch: (branch: Branch) => void;
   
-  // Demo ve Ayarlar Parametreleri
+  // Ayarlar Parametreleri
   demoModeActive: boolean;
   commissionRate: number;
   setCommissionRate: (rate: number) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
-
-const fallbackDemoBranches: Branch[] = [
-  { id: 'demo-branch-1', name: 'Merkez 1', address: '', phone: '', patientsCount: 0, status: 'Aktif' },
-  { id: 'demo-branch-2', name: 'Merkez 2', address: '', phone: '', patientsCount: 0, status: 'Aktif' },
-];
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPageState] = useState<Page>('login');
@@ -222,7 +206,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [usersList, setUsersList] = useState<SystemUser[]>([]);
   const [auditLogList, setAuditLogList] = useState<AuditLogEntry[]>([]);
   const [branchesList, setBranchesList] = useState<Branch[]>([]);
-  const [mockDataLoaded, setMockDataLoaded] = useState(false);
 
   // Auth Eyaletleri State
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -231,8 +214,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataLoading, setDataLoading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Demo Ayarları — orgId ve Supabase bağlantısı yoksa demo modda çalış
-  const demoModeActive = !isConfigured || process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || !currentOrgId;
+  // Kullanıcıya örnek/demo veri gösterilmez. Ekranlar yalnızca aktif firmadan yüklenen veriyi kullanır.
+  const demoModeActive = false;
   const dataGeneration = useRef(0);
   const identityRef = useRef('');
   const clearTenantData = () => {
@@ -307,25 +290,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (currentOrgId) {
       clearTenantData();
       loadAllData();
-    } else if (demoModeActive && !mockDataLoaded) {
+    } else {
       clearTenantData();
-      // Demo mod: orgId yoksa mock veriyi yükle (sadece bir kez)
-      const singleBranchDemo = process.env.NEXT_PUBLIC_DEMO_BRANCH_COUNT === '1';
-      const demoBranches = initialBranches.length > 0 ? initialBranches : fallbackDemoBranches;
-      const demoBranch = singleBranchDemo ? { ...demoBranches[0], name: 'İşitme Merkezi' } : null;
-      const demoBranchId = demoBranch?.id;
-      const demoBranchName = demoBranch?.name;
-      setPatientsList(singleBranchDemo ? initialPatients.map(patient => ({ ...patient, branchId: demoBranchId, branch: demoBranchName })) : initialPatients);
-      setAppointmentsList(singleBranchDemo ? initialAppointments.map(appointment => ({ ...appointment, branchId: demoBranchId, branch: demoBranchName! })) : initialAppointments);
-      setStockList(singleBranchDemo ? initialStock.map(item => ({ ...item, branchId: demoBranchId, branch: demoBranchName! })) : initialStock);
-      setSalesList(singleBranchDemo ? initialSales.map(sale => ({ ...sale, branchId: demoBranchId })) : initialSales);
-      setRecallList(initialRecall);
-      setSuppliersList(initialSuppliers);
-      setExpensesList(singleBranchDemo ? initialExpenses.map(expense => expense.branch === 'Genel' ? expense : { ...expense, branch: demoBranchName!, branchId: demoBranchId }) : initialExpenses);
-      setUsersList(initialUsers);
-      setAuditLogList(initialAuditLog);
-      setBranchesList(singleBranchDemo && demoBranch ? [demoBranch] : demoBranches);
-      setMockDataLoaded(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentOrgId, currentUser?.membership?.branch_id, JSON.stringify(currentUser?.membership?.roles)]);
@@ -372,34 +338,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
-      if (currentUser?.id !== 'demo-user') {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-      }
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       dataGeneration.current++;
       clearTenantData();
-      setMockDataLoaded(false);
       setCurrentUser(null);
       setCurrentOrgId(null);
       setCurrentPage('login');
-      addToast({ type: 'success', message: currentUser?.id === 'demo-user' ? 'Demo oturumundan çıkış yapıldı.' : 'Güvenli çıkış yapıldı.' });
+      addToast({ type: 'success', message: 'Güvenli çıkış yapıldı.' });
     } catch (error) {
       logger.warn(`Oturum kapatılamadı: ${String(error)}`, 'AppContext');
       addToast({ type: 'error', message: 'Çıkış yapılamadı. Bağlantınızı kontrol edip tekrar deneyin.' });
     } finally {
       setLoggingOut(false);
     }
-  };
-
-  const startDemoSession = () => {
-    if (!demoModeActive) return;
-    setCurrentUser({
-      id: 'demo-user',
-      email: 'demo@audipro.local',
-      user_metadata: { full_name: 'Demo Kullanıcısı' },
-      membership: { roles: ['Firma Yöneticisi'], branch_id: process.env.NEXT_PUBLIC_DEMO_BRANCH_COUNT === '1' ? (initialBranches[0]?.id || fallbackDemoBranches[0].id) : undefined }
-    });
-    setCurrentPage('dashboard');
   };
 
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
@@ -1015,7 +967,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentOrg,
       logout,
       loggingOut,
-      startDemoSession,
       dataLoading,
       refreshOrganizationData,
       

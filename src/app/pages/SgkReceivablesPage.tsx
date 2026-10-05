@@ -91,11 +91,12 @@ export default function SgkReceivablesPage() {
 
         if (cancelled) return;
         if (!error && data) {
-          const mapped: InvoiceRecord[] = data.map((d: any) => {
-            const rawPeriod = (d.invoice_month || '').slice(0, 7) || '2026-09';
+          const mapped: InvoiceRecord[] = data.flatMap((d: any): InvoiceRecord[] => {
+            const rawPeriod = (d.invoice_month || '').slice(0, 7);
+            if (!rawPeriod) return [];
             const rawExpected = (d.expected_month || '').slice(0, 7) || expectedPaymentMonth(rawPeriod);
             const foundBranch = branchesList.find(b => b.id === d.branch_id);
-            return {
+            return [{
               id: d.id,
               branch_id: d.branch_id,
               branchName: foundBranch?.name || '',
@@ -108,7 +109,7 @@ export default function SgkReceivablesPage() {
               status: d.status || 'Bekliyor',
               created_at: d.created_at ? new Date(d.created_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
               notes: d.notes || ''
-            };
+            }];
           });
           setInvoices(mapped);
         } else if (!cancelled && !error) {
@@ -182,7 +183,8 @@ export default function SgkReceivablesPage() {
     try {
       const expMonth = expectedPaymentMonth(periodYearMonth);
       const selectedBranchObj = branchesList.find(b => b.id === branch);
-      const branchName = selectedBranchObj ? selectedBranchObj.name : 'Test Şube 1';
+      if (!currentOrgId || !selectedBranchObj) throw new Error('Geçerli firma ve şube seçin.');
+      const branchName = selectedBranchObj.name;
 
       if (editingId) {
         // Edit existing
@@ -298,7 +300,7 @@ export default function SgkReceivablesPage() {
           <div>
             <span>Bu Ay Beklenen Ödeme</span>
             <strong>{formatCurrency(thisMonthExpected)}</strong>
-            <span className={styles.statSubtext}>Eylül 2026</span>
+            <span className={styles.statSubtext}>{monthLabel(currentMonthKey)}</span>
           </div>
         </div>
 
@@ -313,8 +315,8 @@ export default function SgkReceivablesPage() {
           </div>
           <div>
             <span>Gelecek Ay Beklenen</span>
-            <strong>{formatCurrency(nextMonthExpected || 25000)}</strong>
-            <span className={styles.statSubtext}>Kasım 2026</span>
+            <strong>{formatCurrency(nextMonthExpected)}</strong>
+            <span className={styles.statSubtext}>{monthLabel(nextMonthKey)}</span>
           </div>
         </div>
 
@@ -477,7 +479,6 @@ export default function SgkReceivablesPage() {
                       {branchesList.map(b => (
                         <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
-                      {branchesList.length === 0 && <option value="b-1">Test Şube 1</option>}
                     </select>
                   </div>
 
@@ -547,57 +548,25 @@ export default function SgkReceivablesPage() {
                 </div>
 
                 <div className={styles.timelineList}>
-                  {/* Item 1: Eylül 2026 */}
-                  <div className={styles.timelineItem}>
-                    <div className={styles.timelineDot} />
-                    <div className={styles.timelineMonth}>
-                      <span className={styles.timelineMonthName}>Eylül 2026</span>
-                      <span className={styles.timelineMonthSub}>Beklenen ödeme</span>
-                    </div>
-                    <div className={styles.timelineAmountGroup}>
-                      <span className={styles.timelineAmount}>₺0</span>
-                      <span className={styles.badgeWaiting}>Bekliyor</span>
-                    </div>
-                  </div>
-
-                  {/* Item 2: Ekim 2026 */}
-                  <div className={styles.timelineItem}>
-                    <div className={styles.timelineDot} />
-                    <div className={styles.timelineMonth}>
-                      <span className={styles.timelineMonthName}>Ekim 2026</span>
-                      <span className={styles.timelineMonthSub}>Beklenen ödeme</span>
-                    </div>
-                    <div className={styles.timelineAmountGroup}>
-                      <span className={styles.timelineAmount}>₺0</span>
-                      <span className={styles.badgeWaiting}>Bekliyor</span>
-                    </div>
-                  </div>
-
-                  {/* Item 3: Kasım 2026 (Active) */}
-                  <div className={styles.timelineItem}>
-                    <div className={`${styles.timelineDot} ${styles.timelineDotActive}`} />
-                    <div className={styles.timelineMonth}>
-                      <span className={styles.timelineMonthName}>Kasım 2026</span>
-                      <span className={styles.timelineMonthSub}>Beklenen ödeme</span>
-                    </div>
-                    <div className={styles.timelineAmountGroup}>
-                      <span className={styles.timelineAmount}>₺25.000</span>
-                      <span className={styles.badgeWaiting}>Bekliyor</span>
-                    </div>
-                  </div>
-
-                  {/* Item 4: Aralık 2026 */}
-                  <div className={styles.timelineItem}>
-                    <div className={styles.timelineDot} />
-                    <div className={styles.timelineMonth}>
-                      <span className={styles.timelineMonthName}>Aralık 2026</span>
-                      <span className={styles.timelineMonthSub}>Beklenen ödeme</span>
-                    </div>
-                    <div className={styles.timelineAmountGroup}>
-                      <span className={styles.timelineAmount}>₺0</span>
-                      <span className={styles.badgeWaiting}>Bekliyor</span>
-                    </div>
-                  </div>
+                  {Array.from({ length: 4 }, (_, index) => {
+                    const [year, month] = currentMonthKey.split('-').map(Number);
+                    const date = new Date(Date.UTC(year, month - 1 + index, 1));
+                    const key = date.toISOString().slice(0, 7);
+                    const amount = scopedList.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi').reduce((sum, invoice) => sum + invoice.amount, 0);
+                    return (
+                      <div className={styles.timelineItem} key={key}>
+                        <div className={`${styles.timelineDot} ${index === 0 ? styles.timelineDotActive : ''}`} />
+                        <div className={styles.timelineMonth}>
+                          <span className={styles.timelineMonthName}>{monthLabel(key)}</span>
+                          <span className={styles.timelineMonthSub}>Beklenen ödeme · {scopedList.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi').length} fatura</span>
+                        </div>
+                        <div className={styles.timelineAmountGroup}>
+                          <span className={styles.timelineAmount}>{formatCurrency(amount)}</span>
+                          <span className={styles.badgeWaiting}>Bekliyor</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -689,7 +658,7 @@ export default function SgkReceivablesPage() {
                             {row.status}
                           </span>
                         </td>
-                        <td>{row.branchName || 'Test Şube 1'}</td>
+                        <td>{row.branchName || '—'}</td>
                         <td style={{ color: '#64748b', fontSize: 12.5 }}>{row.created_at}</td>
                         <td style={{ textAlign: 'right' }}>
                           <div className={styles.tableActionBtns}>
@@ -920,7 +889,7 @@ export default function SgkReceivablesPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
                   <span style={{ color: '#64748b' }}>Şube:</span>
-                  <span>{selectedDetailInvoice.branchName || 'Test Şube 1'}</span>
+                  <span>{selectedDetailInvoice.branchName || '—'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
                   <span style={{ color: '#64748b' }}>Kayıt Tarihi:</span>
@@ -953,30 +922,35 @@ export default function SgkReceivablesPage() {
         <div className={styles.modalBackdrop} onClick={() => setShowCalendarModal(false)}>
           <div className={styles.modalBox} style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <div className={styles.modalTitle}>SGK 2026 Yıllık Tahsilat Takvimi</div>
+              <div className={styles.modalTitle}>SGK {new Date().getFullYear()} Yıllık Tahsilat Takvimi</div>
               <button className={styles.modalClose} onClick={() => setShowCalendarModal(false)}>✕</button>
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                {['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'].map((m, idx) => {
-                  const isNov = m === 'Kasım';
+                {Array.from({ length: 12 }, (_, idx) => {
+                  const year = new Date().getFullYear();
+                  const key = `${year}-${String(idx + 1).padStart(2, '0')}`;
+                  const expectedKey = expectedPaymentMonth(key);
+                  const isSelectedMonth = expectedKey === currentMonthKey;
+                  const monthInvoices = scopedList.filter(invoice => invoice.expected_month === expectedKey && invoice.status !== 'Tahsil Edildi');
+                  const amount = monthInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
                   return (
                     <div
-                      key={idx}
+                      key={key}
                       style={{
                         padding: 12,
                         borderRadius: 10,
-                        border: isNov ? '2px solid #08785b' : '1px solid #e2e8f0',
-                        background: isNov ? '#f0fdf8' : '#fafbfc',
+                        border: isSelectedMonth ? '2px solid #08785b' : '1px solid #e2e8f0',
+                        background: isSelectedMonth ? '#f0fdf8' : '#fafbfc',
                         textAlign: 'center'
                       }}
                     >
-                      <div style={{ fontWeight: 700, fontSize: 13, color: isNov ? '#08785b' : '#1e293b' }}>{m} 2026</div>
-                      <div style={{ fontSize: 13, fontWeight: 650, color: isNov ? '#08785b' : '#64748b', marginTop: 4 }}>
-                        {isNov ? '₺25.000' : '₺0'}
+                      <div style={{ fontWeight: 700, fontSize: 13, color: isSelectedMonth ? '#08785b' : '#1e293b' }}>{monthLabel(key)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 650, color: isSelectedMonth ? '#08785b' : '#64748b', marginTop: 4 }}>
+                        {formatCurrency(amount)}
                       </div>
                       <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 2 }}>
-                        {isNov ? '1 Fatura Bekleniyor' : 'Ödeme Yok'}
+                        {monthInvoices.length ? `${monthInvoices.length} Fatura Bekleniyor` : 'Fatura Yok'}
                       </div>
                     </div>
                   );

@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
-import { formatCurrency } from '../data/mockData';
+import { formatCurrency, getAvatarColor, getInitials } from '../data/mockData';
+import { fetchServiceTickets, saveServiceTicket, type ServiceRecord } from '../repositories/ServiceTicketRepository';
 import styles from './ServicePage.module.css';
 
 export interface ServiceItem {
   id: string;
   patientId?: string;
+  branchId?: string;
   patientName: string;
   patientPhone: string;
   patientInitials: string;
@@ -31,6 +33,25 @@ export interface ServiceItem {
   files?: { name: string; size: string; date: string }[];
   history?: { title: string; date: string; user: string; note: string }[];
 }
+
+const toIsoDate = (value: string) => {
+  if (!value || value === '—') return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const [day, month, year] = value.split('.');
+  return day && month && year ? `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` : '';
+};
+
+const toServiceRecord = (item: ServiceItem): ServiceRecord => ({
+  id: item.id, patientId: item.patientId, branchId: item.branchId,
+  patientName: item.patientName, deviceName: item.deviceName, serialNo: item.serialNo === '—' ? '' : item.serialNo,
+  barcode: item.barcode === '—' ? '' : item.barcode, receivedDate: toIsoDate(item.receivedDate),
+  estimatedDate: toIsoDate(item.estimatedDeliveryDate), returnedDate: item.returnedDate || null,
+  problem: item.problem, operations: (item.operations || []).map(({ description, cost }) => ({ description, cost })),
+  totalCost: (item.operations || []).reduce((sum, operation) => sum + operation.cost, 0),
+  status: item.status === 'Teslime Hazır' ? 'Hazır' : item.status === 'Garanti' ? 'Alındı' : item.status,
+  technician: item.technician || '', warrantyRepair: item.warrantyStatus === 'Garanti Kapsamında', notes: item.notes || '',
+  accessoriesTaken: [], complaints: [],
+});
 
 const INITIAL_SERVICE_RECORDS: ServiceItem[] = [
   {
@@ -398,12 +419,14 @@ const INITIAL_SERVICE_RECORDS: ServiceItem[] = [
 ];
 
 export default function ServicePage() {
-  const { addToast, stockList, patientsList, completeServiceTicket } = useApp();
+  const { addToast, stockList, patientsList, branchesList, currentOrgId, completeServiceTicket } = useApp();
+  const addToastRef = useRef(addToast);
+  useEffect(() => { addToastRef.current = addToast; }, [addToast]);
   const { matches } = useBranchScope();
 
   // State Management
-  const [records, setRecords] = useState<ServiceItem[]>(INITIAL_SERVICE_RECORDS);
-  const [filterStatus, setFilterStatus] = useState<string>('Tümü (15)');
+  const [records, setRecords] = useState<ServiceItem[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
   const [selectedStatusDropdown, setSelectedStatusDropdown] = useState('Tüm Durumlar');
@@ -411,8 +434,8 @@ export default function ServicePage() {
   const [selectedWarranty, setSelectedWarranty] = useState('Tüm Garanti Durumları');
 
   // Selected item for right detail drawer
-  const [selectedItem, setSelectedItem] = useState<ServiceItem | null>(INITIAL_SERVICE_RECORDS[0]);
-  const [selectedRowIds, setSelectedRowIds] = useState<string[]>(['srv-1']);
+  const [selectedItem, setSelectedItem] = useState<ServiceItem | null>(null);
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [drawerTab, setDrawerTab] = useState<'Genel' | 'İşlem Geçmişi' | 'Parça & Maliyet' | 'Dosyalar'>('Genel');
 
   // Modals state
@@ -445,6 +468,33 @@ export default function ServicePage() {
     estimatedDays: '3'
   });
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentOrgId) { setRecords([]); setSelectedItem(null); return; }
+    fetchServiceTickets(currentOrgId).then(rows => {
+      if (cancelled) return;
+      const mapped: ServiceItem[] = rows.map(row => {
+        const patient = patientsList.find(item => item.id === row.patientId);
+        const status: ServiceItem['status'] = row.status === 'Hazır' ? 'Teslime Hazır' : row.status;
+        return {
+          id: row.id, patientId: row.patientId, branchId: row.branchId,
+          patientName: patient ? `${patient.firstName} ${patient.lastName}`.trim() : row.patientName,
+          patientPhone: patient?.phone || '—', patientInitials: getInitials(row.patientName, ''), avatarColor: getAvatarColor(row.patientName),
+          deviceName: row.deviceName, earSide: 'Binaural', serialNo: row.serialNo || '—', barcode: row.barcode || '—',
+          problem: row.problem, receivedDate: row.receivedDate ? new Date(`${row.receivedDate}T12:00:00`).toLocaleDateString('tr-TR') : '—',
+          estimatedDeliveryDate: row.estimatedDate ? new Date(`${row.estimatedDate}T12:00:00`).toLocaleDateString('tr-TR') : '—',
+          returnedDate: row.returnedDate, status, warrantyStatus: row.warrantyRepair ? 'Garanti Kapsamında' : 'Garanti Dışı',
+          deviceType: row.deviceName, notes: row.notes, technician: row.technician,
+          branch: branchesList.find(branch => branch.id === row.branchId)?.name || '—', operations: row.operations.map(op => ({ ...op, date: row.receivedDate })),
+          history: [], files: [],
+        };
+      });
+      setRecords(mapped);
+      setSelectedItem(current => current ? mapped.find(item => item.id === current.id) || null : null);
+    }).catch(error => { if (!cancelled) { setRecords([]); addToastRef.current({ type: 'error', message: error instanceof Error ? error.message : 'Servis kayıtları yüklenemedi.' }); } });
+    return () => { cancelled = true; };
+  }, [currentOrgId, patientsList, branchesList]);
+
   // Pill counts calculation
   const pillCounts = useMemo(() => {
     const total = records.length;
@@ -462,6 +512,8 @@ export default function ServicePage() {
       teslim
     };
   }, [records]);
+  const warrantyCount = records.filter(record => record.warrantyStatus === 'Garanti Kapsamında').length;
+  const warrantyRate = records.length ? Math.round((warrantyCount / records.length) * 100) : 0;
 
   // Filtered rows
   const filteredRecords = useMemo(() => {
@@ -536,26 +588,14 @@ export default function ServicePage() {
     e.preventDefault();
     if (!selectedItem) return;
     const updated = records.map(r => {
-      if (r.id === selectedItem.id) {
-        const history = r.history || [];
-        return {
-          ...r,
-          status: statusUpdateVal,
-          history: [
-            {
-              title: `Durum güncellendi: ${statusUpdateVal}`,
-              date: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-              user: 'Ahmet Yılmaz',
-              note: statusUpdateNote || 'Durum değişikliği yapıldı.'
-            },
-            ...history
-          ]
-        };
-      }
+      if (r.id === selectedItem.id) return { ...r, status: statusUpdateVal, notes: statusUpdateNote.trim() ? [r.notes, statusUpdateNote.trim()].filter(Boolean).join('\n') : r.notes };
       return r;
     });
-    setRecords(updated);
     const refreshed = updated.find(r => r.id === selectedItem.id);
+    if (!refreshed || !currentOrgId || !refreshed.branchId) { addToast({ type: 'error', message: 'Servis kaydı firma/şube bilgisi eksik olduğu için güncellenemedi.' }); return; }
+    try { await saveServiceTicket(currentOrgId, toServiceRecord(refreshed)); }
+    catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Servis kaydı güncellenemedi.' }); return; }
+    setRecords(updated);
     if (refreshed) setSelectedItem(refreshed);
     setShowStatusModal(false);
     setStatusUpdateNote('');
@@ -564,17 +604,17 @@ export default function ServicePage() {
       const totalServiceCost = (selectedItem.operations || []).reduce((acc, op) => acc + (op.cost || 0), 0);
       try {
         await completeServiceTicket(selectedItem.id, selectedItem.patientName, totalServiceCost);
+        addToast({ type: 'success', message: `Servis cihazı teslim edildi, ₺${totalServiceCost.toLocaleString('tr-TR')} servis bedeli kasaya işlendi.` });
       } catch {
-        // Fallback silently if offline
+        addToast({ type: 'error', message: 'Servis durumu güncellendi ancak kasa hareketi oluşturulamadı; kasa kaydı oluşmadı.' });
       }
-      addToast({ type: 'success', message: `Servis cihazı teslim edildi, ₺${totalServiceCost.toLocaleString('tr-TR')} servis bedeli kasaya işlendi.` });
     } else {
       addToast({ type: 'success', message: `Servis durumu "${statusUpdateVal}" olarak güncellendi.` });
     }
   };
 
   // Handle Add Part
-  const handleAddPart = (e: React.FormEvent) => {
+  const handleAddPart = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItem || !newPartDesc) return;
     const cost = parseFloat(newPartCost) || 0;
@@ -595,8 +635,11 @@ export default function ServicePage() {
       }
       return r;
     });
-    setRecords(updated);
     const refreshed = updated.find(r => r.id === selectedItem.id);
+    if (!refreshed || !currentOrgId || !refreshed.branchId) { addToast({ type: 'error', message: 'Servis kaydının firma/şube bilgisi eksik.' }); return; }
+    try { await saveServiceTicket(currentOrgId, toServiceRecord(refreshed)); }
+    catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Parça/işlem kaydedilemedi.' }); return; }
+    setRecords(updated);
     if (refreshed) setSelectedItem(refreshed);
     setShowAddPartModal(false);
     setNewPartDesc('');
@@ -605,10 +648,11 @@ export default function ServicePage() {
   };
 
   // Handle Add New Record
-  const handleCreateRecord = (e: React.FormEvent) => {
+  const handleCreateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRecordForm.patientName || !newRecordForm.deviceName) {
-      addToast({ type: 'error', message: 'Lütfen hasta adı ve cihaz bilgisini girin.' });
+    const patient = patientsList.find(item => `${item.firstName} ${item.lastName}`.trim().toLocaleLowerCase('tr-TR') === newRecordForm.patientName.trim().toLocaleLowerCase('tr-TR'));
+    if (!patient || !newRecordForm.deviceName.trim() || !newRecordForm.serialNo.trim() || !newRecordForm.barcode.trim() || !patient.branchId || !currentOrgId) {
+      addToast({ type: 'error', message: 'Kayıtlı hasta, cihaz modeli, seri numarası ve barkod gerekli. Hasta şubesi firma kaydında bulunmalı.' });
       return;
     }
 
@@ -619,40 +663,44 @@ export default function ServicePage() {
       .toUpperCase()
       .substring(0, 2) || 'YK';
 
-    const newId = `srv-${Date.now()}`;
-    const today = new Date().toLocaleDateString('tr-TR');
+    const newId = crypto.randomUUID();
+    const today = new Date().toISOString().slice(0, 10);
 
     const newItem: ServiceItem = {
       id: newId,
-      patientName: newRecordForm.patientName,
-      patientPhone: newRecordForm.patientPhone || '05XX XXX XX XX',
+      patientId: patient.id,
+      branchId: patient.branchId,
+      patientName: `${patient.firstName} ${patient.lastName}`.trim(),
+      patientPhone: patient.phone || '—',
       patientInitials: initials,
       avatarColor: '#0d9488',
       deviceName: newRecordForm.deviceName,
       earSide: newRecordForm.earSide,
-      serialNo: newRecordForm.serialNo || 'SN-' + Math.floor(1000000000 + Math.random() * 9000000000),
-      barcode: newRecordForm.barcode || 'BC-' + Math.floor(100 + Math.random() * 900),
-      problem: newRecordForm.problem || 'Genel kontrol ve bakım',
-      receivedDate: today,
-      estimatedDeliveryDate: new Date(Date.now() + 3 * 86400000).toLocaleDateString('tr-TR'),
+      serialNo: newRecordForm.serialNo.trim(),
+      barcode: newRecordForm.barcode.trim(),
+      problem: newRecordForm.problem || 'Belirtilmedi',
+      receivedDate: new Date(`${today}T12:00:00`).toLocaleDateString('tr-TR'),
+      estimatedDeliveryDate: new Date(Date.now() + Number(newRecordForm.estimatedDays || 3) * 86400000).toLocaleDateString('tr-TR'),
       status: 'Alındı',
       warrantyStatus: newRecordForm.warrantyStatus,
       deviceType: newRecordForm.deviceType,
       notes: newRecordForm.notes,
-      technician: 'Teknik Servis',
-      branch: 'Merkez Şube',
+      technician: '',
+      branch: branchesList.find(branch => branch.id === patient.branchId)?.name || '—',
       operations: [],
       files: [],
       history: [
         {
           title: 'Yeni Servis Kaydı Açıldı',
           date: today,
-          user: 'Ahmet Yılmaz',
+          user: '—',
           note: newRecordForm.notes || 'Cihaz teslim alındı.'
         }
       ]
     };
 
+    try { await saveServiceTicket(currentOrgId, toServiceRecord(newItem)); }
+    catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Yeni servis kaydı kaydedilemedi.' }); return; }
     setRecords([newItem, ...records]);
     setSelectedItem(newItem);
     setSelectedRowIds([newItem.id]);
@@ -738,11 +786,7 @@ export default function ServicePage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Serviste Bekleyen</span>
-            <span className={styles.statValue}>4</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendUpRed}>↑ %33</span>
-              <span className={styles.trendMuted}>geçen aya göre</span>
-            </div>
+            <span className={styles.statValue}>{pillCounts.alindi + pillCounts.inceleniyor + pillCounts.tamir}</span>
           </div>
         </div>
 
@@ -756,11 +800,7 @@ export default function ServicePage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Teslime Hazır</span>
-            <span className={styles.statValue}>2</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendUpRed}>↑ %100</span>
-              <span className={styles.trendMuted}>geçen aya göre</span>
-            </div>
+            <span className={styles.statValue}>{pillCounts.hazir}</span>
           </div>
         </div>
 
@@ -774,11 +814,8 @@ export default function ServicePage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Servis Geliri</span>
-            <span className={styles.statValue}>₺8.750</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↑ %25</span>
-              <span className={styles.trendMuted}>bu ay</span>
-            </div>
+            <span className={styles.statValue}>—</span>
+            <div className={styles.statTrend}><span className={styles.trendMuted}>Servis gelir tablosu bağlı değil</span></div>
           </div>
         </div>
 
@@ -792,10 +829,8 @@ export default function ServicePage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Garanti Kapsamında</span>
-            <span className={styles.statValue}>3</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendMuted}>Toplamın %27'si</span>
-            </div>
+            <span className={styles.statValue}>{warrantyCount}</span>
+            <div className={styles.statTrend}><span className={styles.trendMuted}>Toplamın %{warrantyRate}'si</span></div>
           </div>
         </div>
       </div>
@@ -895,10 +930,7 @@ export default function ServicePage() {
           onChange={e => setSelectedBranch(e.target.value)}
         >
           <option value="Tüm Şubeler">Tüm Şubeler</option>
-          <option value="Merkez Şube">Merkez Şube</option>
-          <option value="Kadıköy Şube">Kadıköy Şube</option>
-          <option value="Çankaya Şube">Çankaya Şube</option>
-          <option value="Test Şube 1">Test Şube 1</option>
+          {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
         </select>
 
         <select
@@ -1523,16 +1555,7 @@ export default function ServicePage() {
                   className={styles.btnSecondaryAction}
                   style={{ marginTop: 14 }}
                   onClick={() => {
-                    const newFile = {
-                      name: 'Cihaz_Durum_Raporu.pdf',
-                      size: '1.2 MB',
-                      date: new Date().toLocaleDateString('tr-TR')
-                    };
-                    const updated = records.map(r => r.id === selectedItem.id ? { ...r, files: [...(r.files || []), newFile] } : r);
-                    setRecords(updated);
-                    setSelectedItem(updated.find(r => r.id === selectedItem.id) || null);
-                    setShowAddFileModal(false);
-                    addToast({ type: 'success', message: 'Dosya başarıyla yüklendi.' });
+                    addToast({ type: 'error', message: 'Servis dosyaları için dosya saklama altyapısı yapılandırılmadı; dosya yüklenmedi.' });
                   }}
                 >
                   Dosya Seçin
@@ -1623,11 +1646,11 @@ export default function ServicePage() {
                 </div>
                 <div style={{ background: '#eff6ff', padding: 14, borderRadius: 10 }}>
                   <div style={{ fontSize: 12, color: '#2563eb' }}>Garanti Kapsamı Oranı</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb' }}>%27</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb' }}>%{warrantyRate}</div>
                 </div>
                 <div style={{ background: '#fef3c7', padding: 14, borderRadius: 10 }}>
                   <div style={{ fontSize: 12, color: '#b45309' }}>Ortalama Onarım Süresi</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#b45309' }}>2.4 Gün</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#b45309' }}>—</div>
                 </div>
               </div>
             </div>
@@ -1637,7 +1660,7 @@ export default function ServicePage() {
                 type="button"
                 className={styles.btnPrimaryAction}
                 onClick={() => {
-                  addToast({ type: 'success', message: 'Rapor PDF formatında dışa aktarıldı.' });
+                  addToast({ type: 'error', message: 'Servis raporu PDF dışa aktarma henüz bağlı değil; dosya oluşturulmadı.' });
                   setShowReportModal(false);
                 }}
               >

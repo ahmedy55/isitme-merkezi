@@ -41,13 +41,13 @@ export interface ActivityRecord {
   patientName: string; description: string; duration?: string; branchId?: string;
 }
 export async function fetchActivities(): Promise<ActivityRecord[]> {
-  const { data, error } = await supabase.from('activity_logs').select('*, actor:memberships!activity_member_fk(first_name,last_name,roles)').order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('activity_logs').select('*, actor:memberships!activity_member_fk(first_name,last_name,roles), branches(name)').order('created_at', { ascending: false });
   if (error) throw new Error('Aktiviteler yüklenemedi.');
   return (data || []).map((r: any) => ({
-    id: r.id, timestamp: new Date(r.created_at).toLocaleString('tr-TR'),
+    id: r.id, timestamp: r.created_at,
     userName: [r.actor?.first_name, r.actor?.last_name].filter(Boolean).join(' ') || 'Personel',
     userRole: r.actor?.roles?.join(', ') || 'Personel', type: r.activity_type,
-    patientName: r.patient_name, description: r.description, branchId: r.branch_id,
+    patientName: r.patient_name, description: r.description, branchId: r.branch_id, branchName: r.branches?.name || '',
     duration: r.duration_minutes ? `${r.duration_minutes} dk` : undefined,
   }));
 }

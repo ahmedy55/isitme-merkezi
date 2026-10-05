@@ -173,7 +173,7 @@ export default function AssetsPage() {
   const { activeBranch } = useBranch();
 
   // Asset list state
-  const [assetList, setAssetList] = useState<DisplayAsset[]>(currentOrgId ? [] : INITIAL_MOCK_ASSETS);
+  const [assetList, setAssetList] = useState<DisplayAsset[]>([]);
 
   // Category pill filter
   const [categoryPill, setCategoryPill] = useState('Tümü');
@@ -259,10 +259,6 @@ export default function AssetsPage() {
   }, [currentOrgId]);
 
   useEffect(() => {
-    if (!currentOrgId) {
-      setAssetList(INITIAL_MOCK_ASSETS);
-      return;
-    }
     setAssetList([]);
     setSelectedIds([]);
     setActiveItem(null);
@@ -321,6 +317,12 @@ export default function AssetsPage() {
   const totalAssetsValue = filteredAssets.reduce((sum, asset) => sum + asset.cost, 0);
   const inMaintenanceCount = filteredAssets.filter(asset => asset.status === 'Bakımda' || asset.status === 'Onarımda').length;
   const calibrationWarningCount = filteredAssets.filter(asset => asset.nextCalibrationDate && new Date(asset.nextCalibrationDate.split('.').reverse().join('-')) <= new Date()).length;
+  const calibrationScheduleItems = assetList.filter(asset => {
+    const parts = asset.nextCalibrationDate?.split('.');
+    if (!parts || parts.length !== 3) return false;
+    const dueDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T23:59:59`);
+    return !Number.isNaN(dueDate.getTime()) && dueDate.getTime() - Date.now() <= 90 * 24 * 60 * 60 * 1000;
+  });
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -418,6 +420,7 @@ export default function AssetsPage() {
   // Submit new asset
   const handleAddNewAsset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentOrgId) { addToast({ type: 'error', message: 'Aktif firma bağlantısı yok; demirbaş kaydedilmedi.' }); return; }
     if (!newAssetForm.name.trim()) {
       addToast({ type: 'warning', message: 'Lütfen demirbaş adını girin.' });
       return;
@@ -476,6 +479,7 @@ export default function AssetsPage() {
   };
 
   const handleDeleteAsset = async (id: string) => {
+    if (!currentOrgId) { addToast({ type: 'error', message: 'Aktif firma bağlantısı yok; demirbaş arşivlenmedi.' }); return; }
     if (currentOrgId) {
       try { await archiveAsset(id); }
       catch { addToast({ type: 'error', message: 'Demirbaş arşivlenemedi. Lütfen tekrar deneyin.' }); return; }
@@ -536,10 +540,6 @@ export default function AssetsPage() {
           <div>
             <span>Toplam Demirbaş</span>
             <strong>{totalAssetsCount}</strong>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↗ %9</span>
-              <span className={styles.statSubtext}>geçen aya göre</span>
-            </div>
           </div>
         </div>
 
@@ -555,10 +555,6 @@ export default function AssetsPage() {
           <div>
             <span>Envanter Toplam Değeri</span>
             <strong>{formatCurrency(totalAssetsValue)}</strong>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↘ %12</span>
-              <span className={styles.statSubtext}>geçen aya göre</span>
-            </div>
           </div>
         </div>
 
@@ -572,10 +568,6 @@ export default function AssetsPage() {
           <div>
             <span>Bakım / Onarımda</span>
             <strong>{inMaintenanceCount}</strong>
-            <div className={styles.statTrend}>
-              <span className={styles.trendRed}>↗ %50</span>
-              <span className={styles.statSubtext}>cihaz</span>
-            </div>
           </div>
         </div>
 
@@ -676,14 +668,6 @@ export default function AssetsPage() {
           {branchesList.map(b => (
             <option key={b.id} value={b.name}>{b.name}</option>
           ))}
-          {branchesList.length === 0 && !currentOrgId && (
-            <>
-              <option value="Test Şube 1">Test Şube 1</option>
-              <option value="Merkez">Merkez</option>
-              <option value="Çankaya">Çankaya</option>
-              <option value="Kadıköy">Kadıköy</option>
-            </>
-          )}
         </select>
 
         <select
@@ -1118,9 +1102,7 @@ export default function AssetsPage() {
               {drawerTab === 'bakim' && (
                 <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
                   <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontWeight: 650, color: '#0f172a' }}>Yıllık Kalibrasyon ve Akustik Test</div>
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Tarih: 10.08.2025 · Yapan: Meditest Kalibrasyon Lab</div>
-                    <div style={{ fontSize: 11.5, color: '#08785b', fontWeight: 600, marginTop: 4 }}>✓ Sertifika No: CAL-2025-8841 (Geçerli)</div>
+                    <div style={{ color: '#64748b' }}>Bu demirbaş için kayıtlı bakım/kalibrasyon bilgisi bulunmuyor.</div>
                   </div>
                   <button
                     className={styles.btnFilter}
@@ -1135,9 +1117,7 @@ export default function AssetsPage() {
               {drawerTab === 'dosyalar' && (
                 <div style={{ display: 'grid', gap: 8, fontSize: 12.5 }}>
                   {[
-                    { name: 'Kullanım Kılavuzu.pdf', size: '3.4 MB', date: '30.08.2023' },
-                    { name: 'Fatura ve Garanti Belgesi.pdf', size: '820 KB', date: '30.08.2023' },
-                    { name: 'Kalibrasyon Sertifikası 2025.pdf', size: '1.1 MB', date: '10.08.2025' }
+                    ...([] as { name: string; size: string; date: string }[])
                   ].map((f, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                       <div>
@@ -1146,27 +1126,27 @@ export default function AssetsPage() {
                       </div>
                       <button
                         className={styles.btnEditLink}
-                        onClick={() => addToast({ type: 'success', message: `${f.name} indiriliyor...` })}
+                        onClick={() => addToast({ type: 'error', message: 'Bu dosya için saklanan bir ek bulunmuyor; indirme başlatılmadı.' })}
                       >
                         İndir
                       </button>
                     </div>
                   ))}
+                  <div style={{ padding: 12, color: '#64748b' }}>Ekli dosya bulunmuyor.</div>
                 </div>
               )}
 
               {drawerTab === 'gecmis' && (
                 <div style={{ display: 'grid', gap: 8, fontSize: 12 }}>
                   {[
-                    { text: 'Demirbaş envantere eklendi.', date: '30.08.2023 11:20', user: 'Ahmet Yılmaz' },
-                    { text: 'Periyodik kalibrasyon tamamlandı.', date: '10.08.2025 15:40', user: 'Servis Teknisyeni' },
-                    { text: 'Odyometri kabini yanına konumlandırıldı.', date: '15.08.2025 09:10', user: 'Ahmet Yılmaz' }
+                    ...([] as { text: string; date: string; user: string }[])
                   ].map((log, idx) => (
                     <div key={idx} style={{ padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                       <div style={{ color: '#0f172a', fontWeight: 600 }}>{log.text}</div>
                       <div style={{ color: '#64748b', fontSize: 11, marginTop: 2 }}>{log.date} · {log.user}</div>
                     </div>
                   ))}
+                  <div style={{ padding: 12, color: '#64748b' }}>İşlem geçmişi kaydı bulunmuyor.</div>
                 </div>
               )}
             </div>
@@ -1379,6 +1359,7 @@ export default function AssetsPage() {
               <button
                 className={styles.btnNewAsset}
                 onClick={async () => {
+                  if (!currentOrgId) { addToast({ type: 'error', message: 'Aktif firma bağlantısı yok; demirbaş güncellenmedi.' }); return; }
                   const branch = branchesList.find(item => item.name === activeItem.branch);
                   if (currentOrgId && !branch) { addToast({ type: 'error', message: 'Geçerli bir şube seçin.' }); return; }
                   const record: AssetRecord = {
@@ -1416,21 +1397,15 @@ export default function AssetsPage() {
               <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowScheduleModal(false)}>✕</button>
             </div>
             <div style={{ padding: 20, display: 'grid', gap: 10 }}>
-              <div style={{ padding: 12, background: '#fef3c7', borderRadius: 10, border: '1px solid #fde68a', color: '#b45309', fontSize: 13 }}>
-                <strong>Yaklaşan 2 Kalibrasyon:</strong> Odyometre ve Otoskop için periyodik kalibrasyon süreleri yaklaşıyor.
-              </div>
-              {[
-                { name: 'QA Odyometre', date: '10.08.2026', status: 'Planlandı', lab: 'Meditest Lab' },
-                { name: 'Otoskop Heine', date: '12.04.2025', status: 'Süresi Yakın', lab: 'Teknik Servis' },
-                { name: 'UV Temizleme Cihazı', date: '07.02.2025', status: 'Tamamlandı', lab: 'Klinik İçi' }
-              ].map((s, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              {calibrationScheduleItems.length === 0 && <div style={{ padding: 12, color: '#64748b' }}>Önümüzdeki 90 gün içinde bakım tarihi olan kayıtlı demirbaş yok.</div>}
+              {calibrationScheduleItems.map((s) => (
+                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                   <div>
                     <div style={{ fontWeight: 650, color: '#0f172a' }}>{s.name}</div>
-                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Hedef Tarih: {s.date} · {s.lab}</div>
+                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Hedef Tarih: {s.nextCalibrationDate}</div>
                   </div>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: s.status === 'Süresi Yakın' ? '#dc2626' : '#08785b', background: s.status === 'Süresi Yakın' ? '#fee2e2' : '#e6f7f0', padding: '3px 8px', borderRadius: 6 }}>
-                    {s.status}
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: s.maintenanceStatus === 'Bakım zamanı geçti' ? '#dc2626' : '#08785b', background: s.maintenanceStatus === 'Bakım zamanı geçti' ? '#fee2e2' : '#e6f7f0', padding: '3px 8px', borderRadius: 6 }}>
+                    {s.maintenanceStatus}
                   </span>
                 </div>
               ))}
@@ -1477,7 +1452,7 @@ export default function AssetsPage() {
                 onClick={() => {
                   setShowMaintenanceModal(false);
                   setShowCalibrationModal(false);
-                  addToast({ type: 'success', message: `${activeItem.name} için işlem başarıyla kaydedildi.` });
+                  addToast({ type: 'error', message: 'Bakım/kalibrasyon hareketleri için ilişkili kayıt tablosu bağlı değil; işlem kaydedilmedi.' });
                 }}
               >
                 Kaydet
@@ -1502,11 +1477,9 @@ export default function AssetsPage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hedef Şube</label>
-                <select className={styles.filterSelect} style={{ width: '100%' }}>
-                  <option value="Çankaya">Çankaya</option>
-                  <option value="Kadıköy">Kadıköy</option>
-                  <option value="Merkez">Merkez</option>
-                  <option value="Test Şube 1">Test Şube 1</option>
+                <select className={styles.filterSelect} style={{ width: '100%' }} defaultValue="">
+                  <option value="" disabled>Şube seçin</option>
+                  {branchesList.filter(branch => branch.status === 'Aktif' && branch.name !== activeItem.branch).map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                 </select>
               </div>
               <div>
@@ -1520,7 +1493,7 @@ export default function AssetsPage() {
                 className={styles.btnNewAsset}
                 onClick={() => {
                   setShowTransferModal(false);
-                  addToast({ type: 'success', message: `${activeItem.name} transfer fişi oluşturuldu.` });
+                  addToast({ type: 'error', message: 'Demirbaş transfer hareket tablosu bağlı değil; transfer kaydedilmedi.' });
                 }}
               >
                 Transferi Onayla
@@ -1557,7 +1530,7 @@ export default function AssetsPage() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
               <button
                 className={styles.btnClear}
-                onClick={() => addToast({ type: 'success', message: 'Demirbaş raporu indiriliyor...' })}
+                onClick={() => addToast({ type: 'error', message: 'Rapor dışa aktarma henüz bağlı değil; dosya oluşturulmadı.' })}
               >
                 📥 PDF Olarak İndir
               </button>

@@ -42,7 +42,7 @@ function ToastIcon({ type }: { type: string }) {
 }
 
 function AppContent() {
-  const { currentPage, toasts, removeToast, currentUser, currentOrgId, dataLoading, demoModeActive, selectedPatientId, setSelectedPatientId, setCurrentPage } = useApp();
+  const { currentPage, toasts, removeToast, currentUser, currentOrgId, dataLoading, selectedPatientId, setSelectedPatientId, setCurrentPage } = useApp();
   const { activeBranch } = useBranch();
   const previousBranchScope = React.useRef<string | null>(null);
   const branchScopeKey = activeBranch.mode === 'single' ? `single:${activeBranch.branchId}` : activeBranch.mode === 'region' ? `region:${activeBranch.regionId}` : 'all';
@@ -81,7 +81,7 @@ function AppContent() {
   }
 
   const renderPage = () => {
-    if ((!currentUser || (!currentOrgId && !demoModeActive)) || dataLoading) return <p>Oturum ve firma verileri yükleniyor…</p>;
+    if (!currentUser || !currentOrgId || dataLoading) return <p>Oturum ve firma verileri yükleniyor…</p>;
     const roles: string[] = currentUser.membership?.roles || [];
     if (!canAccessPage(currentPage, roles)) return <p>Bu modül için yetkiniz yok.</p>;
     switch (currentPage) {

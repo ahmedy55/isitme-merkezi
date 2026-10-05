@@ -53,7 +53,6 @@ function IconCrossCard({ size = 20 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
 }
 
-const audiologists = ['Dr. Elif Arslan', 'Dr. Can Yılmaz'];
 const DAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cts', 'Paz'];
 const formatCalendarDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const getIstanbulDate = (date = new Date()) => {
@@ -195,12 +194,16 @@ const defaultShowcaseSlots: ShowcaseSlot[] = [
 ];
 
 export default function AppointmentsPage() {
-  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, addAppointment, updateAppointment, updateAppointmentStatus, addToast, currentOrgId, appointmentCreatePatientId, clearAppointmentCreationRequest } = useApp();
+  const { appointmentsList: rawAppointmentsList, patientsList, branchesList, usersList, addAppointment, updateAppointment, updateAppointmentStatus, addToast, currentOrgId, appointmentCreatePatientId, clearAppointmentCreationRequest } = useApp();
   const { activeBranch } = useBranch();
 
   const appointmentsList = useMemo(() => {
     return rawAppointmentsList.filter(a => BranchService.matchesBranch(a.branch, a.branchId, activeBranch));
   }, [rawAppointmentsList, activeBranch]);
+  const audiologists = useMemo(() => [...new Set([
+    ...usersList.filter(user => user.status === 'Aktif').map(user => `${user.firstName} ${user.lastName}`.trim()),
+    ...appointmentsList.map(appointment => appointment.audiologist).filter(Boolean),
+  ])], [usersList, appointmentsList]);
 
   // View mode: 'takvim' (schedule + widgets), 'liste' (table), 'gun', 'hafta', 'ay'
   const [viewMode, setViewMode] = useState<'takvim' | 'liste' | 'gun' | 'hafta' | 'ay'>('takvim');
@@ -219,7 +222,6 @@ export default function AppointmentsPage() {
   const [serverNow, setServerNow] = useState<Date>(() => new Date());
 
   // Modals and action dropdown
-  const [showcaseList, setShowcaseList] = useState<ShowcaseSlot[]>(defaultShowcaseSlots);
   const [updatingAppointmentIds, setUpdatingAppointmentIds] = useState<Set<string>>(() => new Set());
   const [showAddModal, setShowAddModal] = useState(false);
   const [newAppointmentPatientId, setNewAppointmentPatientId] = useState<string | null>(null);
@@ -381,7 +383,7 @@ export default function AppointmentsPage() {
     return cells;
   }, [calendarViewMonth, calendarViewYear]);
 
-  // Combine showcase slots with live appointments for selected date
+  // Takvim sadece seçili güne ait veritabanı randevularını gösterir.
   const selectedDateStr = useMemo(() => {
     const y = currentDate.getFullYear();
     const m = (currentDate.getMonth() + 1).toString().padStart(2, '0');
@@ -390,56 +392,25 @@ export default function AppointmentsPage() {
   }, [currentDate]);
 
   const timelineSlots = useMemo<ShowcaseSlot[]>(() => {
-    // If date is 2025-09-12 (the showcase date from screenshot), use default slots
-    // plus any dynamically added live appointments
     const liveForDay = appointmentsList.filter(a => a.date === selectedDateStr);
-    
-    if (!currentOrgId && selectedDateStr === '2025-09-12') {
-      if (liveForDay.length === 0) return showcaseList;
-      // Merge live appointments
-      const extraSlots: ShowcaseSlot[] = liveForDay.map(apt => {
-        const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
-        return {
-          id: apt.id,
-          date: apt.date,
-          hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '09:00',
-          timeRange: `${apt.time || '10:00'}-${(parseInt(apt.time?.split(':')[1] || '0') + 30).toString().padStart(2, '0')}`,
-          patientName: apt.patientName,
-          patientInitials: getInitials(apt.patientName, ''),
-          avatarColor: getAvatarColor(apt.patientName),
-          type: apt.type,
-          duration: '30 dk',
-          phone: patient?.phone || '+90 532 000 00 00',
-          device: patient?.currentDevice || '—',
-          status: (apt.status === 'Hatırlatıldı' ? 'Randevu Onayı' : apt.status) as any,
-        };
-      });
-      return [...showcaseList, ...extraSlots];
-    }
-
-    // For any other date, show live appointments or fallback
-    if (liveForDay.length > 0) {
-      return liveForDay.map((apt): ShowcaseSlot => {
-        const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
-        return {
-          id: apt.id,
-          date: apt.date,
-          hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '10:00',
-          timeRange: `${apt.time?.slice(0, 5) || '10:00'}`,
-          patientName: apt.patientName,
-          patientInitials: getInitials(apt.patientName, ''),
-          avatarColor: getAvatarColor(apt.patientName),
-          type: apt.type,
-          duration: '30 dk',
-          phone: patient?.phone || '+90 532 000 00 00',
-          device: patient?.currentDevice || '—',
-          status: (apt.status === 'Hatırlatıldı' ? 'Randevu Onayı' : apt.status) as any,
-        };
-      });
-    }
-
-    return currentOrgId ? [] : showcaseList;
-  }, [selectedDateStr, appointmentsList, patientsList, showcaseList, currentOrgId]);
+    return liveForDay.map((apt): ShowcaseSlot => {
+      const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
+      return {
+        id: apt.id,
+        date: apt.date,
+        hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '—',
+        timeRange: apt.time?.slice(0, 5) || '—',
+        patientName: apt.patientName,
+        patientInitials: getInitials(apt.patientName, ''),
+        avatarColor: getAvatarColor(apt.patientName),
+        type: apt.type,
+        duration: '30 dk',
+        phone: patient?.phone || '—',
+        device: patient?.currentDevice || '—',
+        status: (apt.status === 'Hatırlatıldı' ? 'Randevu Onayı' : apt.status) as any,
+      };
+    });
+  }, [selectedDateStr, appointmentsList, patientsList]);
 
   const scopedAppointments = useMemo(() => appointmentsList.filter(appointment => {
     if (filterAudiologist !== 'Tümü' && appointment.audiologist !== filterAudiologist) return false;
@@ -647,7 +618,7 @@ export default function AppointmentsPage() {
             <span>Bu Hafta</span>
             <strong>{weeklyCount}</strong>
             <div className={styles.statChangeUp}>
-              <IconTrendUp size={11} /> %12 artış
+              <span>Seçilen haftadaki toplam</span>
             </div>
           </div>
         </div>
@@ -679,7 +650,7 @@ export default function AppointmentsPage() {
             <span>Tamamlanan</span>
             <strong>{completedCount}</strong>
             <div className={styles.statChangeUp}>
-              <IconTrendUp size={11} /> %18 artış
+              <span>Seçili aralıktaki toplam</span>
             </div>
           </div>
         </div>
@@ -696,7 +667,7 @@ export default function AppointmentsPage() {
             <span>İptal / Gelmedi</span>
             <strong>{canceledCount}</strong>
             <div className={styles.statChangeDown}>
-              <IconTrendDown size={11} /> %25 azalış
+              <span>Seçili aralıktaki toplam</span>
             </div>
           </div>
         </div>
@@ -1304,7 +1275,6 @@ export default function AppointmentsPage() {
             className={styles.actionDropdownItem}
             onClick={() => {
               updateAppointmentStatus(activeSlotMenu.id, 'Geldi');
-              setShowcaseList(prev => prev.map(s => s.id === activeSlotMenu.id ? { ...s, status: 'Geldi' } : s));
               setActiveSlotMenu(null);
             }}
           >
@@ -1316,7 +1286,6 @@ export default function AppointmentsPage() {
             className={styles.actionDropdownItem}
             onClick={() => {
               updateAppointmentStatus(activeSlotMenu.id, 'Hatırlatıldı');
-              setShowcaseList(prev => prev.map(s => s.id === activeSlotMenu.id ? { ...s, status: 'Randevu Onayı' } : s));
               setActiveSlotMenu(null);
             }}
           >
@@ -1346,7 +1315,6 @@ export default function AppointmentsPage() {
             className={`${styles.actionDropdownItem} ${styles.actionItemDanger}`}
             onClick={() => {
               updateAppointmentStatus(activeSlotMenu.id, 'İptal');
-              setShowcaseList(prev => prev.map(s => s.id === activeSlotMenu.id ? { ...s, status: 'İptal' } : s));
               setActiveSlotMenu(null);
             }}
           >
@@ -1515,8 +1483,12 @@ export function NewAppointmentModal({
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
 
   // Audiologist & Branch
-  const [audiologist, setAudiologist] = useState(initialAppointment?.audiologist || 'Dr. Elif Arslan');
-  const { branchesList } = useApp();
+  const [audiologist, setAudiologist] = useState(initialAppointment?.audiologist || '');
+  const { branchesList, usersList } = useApp();
+  const availableAudiologists = [...new Set([
+    ...usersList.filter(user => user.status === 'Aktif').map(user => `${user.firstName} ${user.lastName}`.trim()),
+    ...(initialAppointment?.audiologist ? [initialAppointment.audiologist] : []),
+  ])];
   const { activeBranch } = useBranch();
   const [branch, setBranch] = useState(initialAppointment?.branchId || (activeBranch.mode === 'single' ? activeBranch.branchId : ''));
 
@@ -2072,7 +2044,8 @@ export function NewAppointmentModal({
           {initialAppointment && (
             <label className="form-group">Odyolog
               <select className="form-select" value={audiologist} onChange={event => setAudiologist(event.target.value)}>
-                {[...new Set([...audiologists, initialAppointment.audiologist].filter(Boolean))].map(name => <option key={name} value={name}>{name}</option>)}
+                <option value="" disabled>Personel seçin</option>
+                {availableAudiologists.map(name => <option key={name} value={name}>{name}</option>)}
               </select>
             </label>
           )}

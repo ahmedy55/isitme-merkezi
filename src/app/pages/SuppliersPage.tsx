@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency } from '../data/mockData';
 import styles from './SuppliersPage.module.css';
 
@@ -319,11 +318,31 @@ const INITIAL_SUPPLIERS: SupplierItem[] = [
 ];
 
 export default function SuppliersPage() {
-  const { addToast, addExpense, addSupplier } = useApp();
-  const { matches } = useBranchScope();
+  const { addToast, addSupplier, updateSupplier, suppliersList, branchesList, currentOrgId } = useApp();
 
-  // State Management
-  const [suppliers, setSuppliers] = useState<SupplierItem[]>(INITIAL_SUPPLIERS);
+  const suppliers = useMemo<SupplierItem[]>(() => suppliersList.map((supplier, index) => {
+    const category: SupplierItem['category'] = supplier.category === 'İşitme Cihazı' ? 'Cihaz'
+      : supplier.category === 'Pil & Aksesuar' ? 'Pil'
+        : supplier.category === 'Teknik Servis' ? 'Servis'
+          : supplier.category === 'Kalıp Malzemesi' ? 'Aksesuar' : 'Diğer';
+    const purchases = supplier.purchases || [];
+    return {
+      id: supplier.id,
+      companyName: supplier.companyName,
+      subtitle: `${category} Tedarikçisi`,
+      initials: supplier.companyName.split(/\\s+/).map(part => part[0] || '').join('').slice(0, 2).toLocaleUpperCase('tr-TR'),
+      avatarColor: ['#0d9488', '#2563eb', '#7c3aed', '#d97706'][index % 4],
+      category,
+      contactPerson: supplier.contactPerson || '—',
+      phone: supplier.phone || '—', email: supplier.email || '—', address: supplier.address || '—',
+      taxNo: supplier.taxNo || '—', balance: Number(supplier.balance || 0), status: supplier.status,
+      branch: '—', notes: supplier.notes,
+      totalPurchases: purchases.reduce((sum, purchase) => sum + Number(purchase.total || 0), 0),
+      totalPaid: purchases.filter(purchase => purchase.paymentStatus === 'Ödendi').reduce((sum, purchase) => sum + Number(purchase.total || 0), 0),
+      invoices: purchases.map(purchase => ({ id: purchase.id, invoiceNo: purchase.invoiceNo, date: purchase.date, amount: purchase.total, status: purchase.paymentStatus })),
+      payments: []
+    };
+  }), [suppliersList]);
   const [filterPill, setFilterPill] = useState<'Tümü' | 'Aktif' | 'Pasif'>('Tümü');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
@@ -331,8 +350,8 @@ export default function SuppliersPage() {
   const [selectedStatusDropdown, setSelectedStatusDropdown] = useState('Tüm Durumlar');
 
   // Selected item for right detail drawer
-  const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(INITIAL_SUPPLIERS[0]);
-  const [selectedRowIds, setSelectedRowIds] = useState<string[]>(['sup-1']);
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierItem | null>(null);
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [drawerTab, setDrawerTab] = useState<'Genel' | 'Alış Faturaları' | 'Ödeme Geçmişi' | 'Notlar'>('Genel');
 
   // Modals state
@@ -361,16 +380,20 @@ export default function SuppliersPage() {
   const [invoiceForm, setInvoiceForm] = useState({
     invoiceNo: '',
     date: new Date().toLocaleDateString('tr-TR'),
-    amount: 15000,
+    amount: 0,
     description: ''
   });
 
   const [paymentForm, setPaymentForm] = useState({
-    amount: 5000,
+    amount: 0,
     method: 'Banka Transferi',
     date: new Date().toLocaleDateString('tr-TR'),
     notes: ''
   });
+
+  useEffect(() => {
+    if (selectedSupplier && !suppliers.some(item => item.id === selectedSupplier.id)) setSelectedSupplier(null);
+  }, [selectedSupplier, suppliers]);
 
   // Pill counts calculation
   const pillCounts = useMemo(() => {
@@ -379,11 +402,19 @@ export default function SuppliersPage() {
     const passive = suppliers.filter(s => s.status === 'Pasif').length;
     return { total, active, passive };
   }, [suppliers]);
+  const supplierTotals = useMemo(() => {
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const purchasesThisMonth = suppliers.reduce((sum, supplier) => sum + (supplier.invoices || []).reduce((invoiceSum, invoice) => {
+      const isoDate = invoice.date.includes('.') ? invoice.date.split('.').reverse().join('-') : invoice.date.slice(0, 10);
+      return invoiceSum + (isoDate.startsWith(monthKey) ? Number(invoice.amount || 0) : 0);
+    }, 0), 0);
+    const balanceOwed = suppliers.reduce((sum, supplier) => sum + Math.max(0, -supplier.balance), 0);
+    return { purchasesThisMonth, balanceOwed };
+  }, [suppliers]);
 
   // Filtered rows
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter(item => {
-      if (!matches(item.branch)) return false;
 
       // Filter pill
       if (filterPill === 'Aktif' && item.status !== 'Aktif') return false;
@@ -391,7 +422,6 @@ export default function SuppliersPage() {
 
       // Dropdowns
       if (selectedCategory !== 'Tüm Kategoriler' && item.category !== selectedCategory) return false;
-      if (selectedBranch !== 'Tüm Şubeler' && item.branch !== selectedBranch) return false;
       if (selectedStatusDropdown !== 'Tüm Durumlar' && item.status !== selectedStatusDropdown) return false;
 
       // Search term
@@ -406,7 +436,7 @@ export default function SuppliersPage() {
 
       return true;
     });
-  }, [suppliers, filterPill, selectedCategory, selectedBranch, selectedStatusDropdown, searchTerm, matches]);
+  }, [suppliers, filterPill, selectedCategory, selectedStatusDropdown, searchTerm]);
 
   // Toggle selection
   const handleToggleRow = (id: string, e: React.MouseEvent) => {
@@ -445,17 +475,18 @@ export default function SuppliersPage() {
   };
 
   // Toggle supplier status between Aktif / Pasif
-  const handleToggleStatus = (supplier: SupplierItem) => {
+  const handleToggleStatus = async (supplier: SupplierItem) => {
     const nextStatus = supplier.status === 'Aktif' ? 'Pasif' : 'Aktif';
-    const updated = suppliers.map(s => s.id === supplier.id ? { ...s, status: nextStatus as SupplierItem['status'] } : s);
-    setSuppliers(updated);
-    const refreshed = updated.find(s => s.id === supplier.id);
-    if (refreshed) setSelectedSupplier(refreshed);
-    addToast({ type: 'info', message: `${supplier.companyName} durumu "${nextStatus}" olarak güncellendi.` });
+    const source = suppliersList.find(item => item.id === supplier.id);
+    if (!source) return;
+    try {
+      await updateSupplier({ ...source, status: nextStatus });
+      addToast({ type: 'success', message: `${supplier.companyName} durumu güncellendi.` });
+    } catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Tedarikçi güncellenemedi.' }); }
   };
 
   // Handle Add New Supplier
-  const handleCreateSupplier = (e: React.FormEvent) => {
+  const handleCreateSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSupForm.companyName.trim()) {
       addToast({ type: 'error', message: 'Lütfen firma adını girin.' });
@@ -469,33 +500,15 @@ export default function SuppliersPage() {
       .toUpperCase()
       .substring(0, 2) || 'TD';
 
-    const newId = `sup-${Date.now()}`;
-    const newSupplier: SupplierItem = {
-      id: newId,
-      companyName: newSupForm.companyName,
-      subtitle: newSupForm.subtitle || `${newSupForm.category} Tedarikçisi`,
-      initials,
-      avatarColor: '#0d9488',
-      category: newSupForm.category,
-      contactPerson: newSupForm.contactPerson || 'Belirtilmedi',
-      contactTitle: newSupForm.contactTitle,
-      phone: newSupForm.phone || '05XX XXX XX XX',
-      email: newSupForm.email || 'info@tedarikci.com',
-      address: newSupForm.address || 'İstanbul / Türkiye',
-      taxNo: newSupForm.taxNo || '1234567890',
-      balance: 0,
-      status: newSupForm.status,
-      branch: 'Merkez Şube',
-      notes: newSupForm.notes || '—',
-      totalPurchases: 0,
-      totalPaid: 0,
-      invoices: [],
-      payments: []
-    };
-
-    setSuppliers([newSupplier, ...suppliers]);
-    setSelectedSupplier(newSupplier);
-    setSelectedRowIds([newSupplier.id]);
+    const category = newSupForm.category === 'Cihaz' ? 'İşitme Cihazı' : newSupForm.category === 'Pil' ? 'Pil & Aksesuar' : newSupForm.category === 'Servis' ? 'Teknik Servis' : newSupForm.category === 'Aksesuar' ? 'Kalıp Malzemesi' : 'Diğer';
+    try {
+      await addSupplier({
+        id: crypto.randomUUID(), companyName: newSupForm.companyName.trim(), contactPerson: newSupForm.contactPerson.trim(),
+        phone: newSupForm.phone.trim(), email: newSupForm.email.trim(), address: newSupForm.address.trim(), taxNo: newSupForm.taxNo.trim(),
+        category, status: newSupForm.status, balance: 0, createdAt: new Date().toISOString(), notes: newSupForm.notes.trim(), purchases: []
+      });
+    } catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Tedarikçi kaydedilemedi.' }); return; }
+    setSelectedRowIds([]);
     setShowNewSupplierModal(false);
     setNewSupForm({
       companyName: '',
@@ -510,7 +523,7 @@ export default function SuppliersPage() {
       status: 'Aktif',
       notes: ''
     });
-    addToast({ type: 'success', message: 'Yeni tedarikçi başarıyla kaydedildi.' });
+    addToast({ type: 'success', message: 'Yeni tedarikçi kaydedildi.' });
   };
 
   // Handle Add Invoice
@@ -520,30 +533,11 @@ export default function SuppliersPage() {
     const invNo = invoiceForm.invoiceNo.trim() || `ALIS-${Math.floor(1000 + Math.random() * 9000)}`;
     const amt = Number(invoiceForm.amount) || 0;
 
-    const updated = suppliers.map(s => {
-      if (s.id === selectedSupplier.id) {
-        const invs = s.invoices || [];
-        const newBalance = s.balance + amt;
-        const newTotal = (s.totalPurchases || 0) + amt;
-        return {
-          ...s,
-          balance: newBalance,
-          totalPurchases: newTotal,
-          invoices: [
-            { id: `inv-${Date.now()}`, invoiceNo: invNo, date: invoiceForm.date, amount: amt, status: 'Bekliyor' },
-            ...invs
-          ]
-        };
-      }
-      return s;
-    });
-
-    setSuppliers(updated);
-    const refreshed = updated.find(s => s.id === selectedSupplier.id);
-    if (refreshed) setSelectedSupplier(refreshed);
-    setShowAddInvoiceModal(false);
-    setInvoiceForm({ invoiceNo: '', date: new Date().toLocaleDateString('tr-TR'), amount: 15000, description: '' });
-    addToast({ type: 'success', message: `${invNo} numaralı alış faturası kaydedildi, bakiye güncellendi.` });
+    if (!currentOrgId || amt <= 0 || !invNo) {
+      addToast({ type: 'error', message: 'Geçerli fatura numarası ve sıfırdan büyük tutar girin.' });
+      return;
+    }
+    addToast({ type: 'error', message: 'Alış faturası, stok ve kasa kayıtlarını tek işlemde güvenli kaydeden sunucu işlemi henüz bu ortamda etkin değil. Kayıt oluşturulmadı.' });
   };
 
   // Handle Make Payment
@@ -552,48 +546,11 @@ export default function SuppliersPage() {
     if (!selectedSupplier) return;
     const amt = Number(paymentForm.amount) || 0;
 
-    const updated = suppliers.map(s => {
-      if (s.id === selectedSupplier.id) {
-        const pays = s.payments || [];
-        const newBalance = Math.max(0, s.balance - amt);
-        const newTotalPaid = (s.totalPaid || 0) + amt;
-        return {
-          ...s,
-          balance: newBalance,
-          totalPaid: newTotalPaid,
-          payments: [
-            { id: `pay-${Date.now()}`, date: paymentForm.date, amount: amt, method: paymentForm.method },
-            ...pays
-          ]
-        };
-      }
-      return s;
-    });
-
-    setSuppliers(updated);
-    const refreshed = updated.find(s => s.id === selectedSupplier.id);
-    if (refreshed) setSelectedSupplier(refreshed);
-    setShowMakePaymentModal(false);
-    setPaymentForm({ amount: 5000, method: 'Banka Transferi', date: new Date().toLocaleDateString('tr-TR'), notes: '' });
-
-    if (addExpense) {
-      try {
-        await addExpense({
-          id: `exp-${Date.now()}`,
-          category: 'Malzeme',
-          description: `${selectedSupplier.companyName} Tedarikçi Ödemesi`,
-          amount: amt,
-          date: new Date().toISOString().split('T')[0],
-          paymentMethod: paymentForm.method.includes('Nakit') ? 'Nakit' : 'Havale',
-          branch: selectedSupplier.branch || 'Merkez',
-          createdBy: 'Sistem Yöneticisi'
-        });
-      } catch {
-        // Fallback silently if offline
-      }
+    if (amt <= 0) {
+      addToast({ type: 'error', message: 'Ödeme tutarı sıfırdan büyük olmalıdır.' });
+      return;
     }
-
-    addToast({ type: 'success', message: `₺${amt.toLocaleString('tr-TR')} ödeme kaydedildi, kasadan düşüldü ve bakiye güncellendi.` });
+    addToast({ type: 'error', message: 'Tedarikçi ödemesi ile tedarikçi bakiyesi/kasa hareketini birlikte kaydeden sunucu işlemi henüz bu ortamda etkin değil. Ödeme oluşturulmadı.' });
   };
 
   return (
@@ -663,11 +620,7 @@ export default function SuppliersPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Tedarikçi</span>
-            <span className={styles.statValue}>12</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↑ %20</span>
-              <span className={styles.trendMuted}>geçen yıla göre</span>
-            </div>
+            <span className={styles.statValue}>{pillCounts.total}</span>
           </div>
         </div>
 
@@ -681,11 +634,7 @@ export default function SuppliersPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Toplam Borcumuz</span>
-            <span className={styles.statValue}>₺25.450</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendUpRed}>↑ %8</span>
-              <span className={styles.trendMuted}>geçen yıla göre</span>
-            </div>
+            <span className={styles.statValue}>{formatCurrency(supplierTotals.balanceOwed)}</span>
           </div>
         </div>
 
@@ -699,11 +648,7 @@ export default function SuppliersPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Bu Ay Alım Tutarı</span>
-            <span className={styles.statValue}>₺48.200</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendUpGreen}>↑ %35</span>
-              <span className={styles.trendMuted}>geçen aya göre</span>
-            </div>
+            <span className={styles.statValue}>{formatCurrency(supplierTotals.purchasesThisMonth)}</span>
           </div>
         </div>
 
@@ -717,9 +662,9 @@ export default function SuppliersPage() {
           </div>
           <div className={styles.statInfo}>
             <span className={styles.statLabel}>Aktif Tedarikçiler</span>
-            <span className={styles.statValue}>10</span>
+            <span className={styles.statValue}>{pillCounts.active}</span>
             <div className={styles.statTrend}>
-              <span className={styles.trendMuted}>Pasif: 2</span>
+              <span className={styles.trendMuted}>Pasif: {pillCounts.passive}</span>
             </div>
           </div>
         </div>
@@ -791,10 +736,6 @@ export default function SuppliersPage() {
           onChange={e => setSelectedBranch(e.target.value)}
         >
           <option value="Tüm Şubeler">Tüm Şubeler</option>
-          <option value="Merkez Şube">Merkez Şube</option>
-          <option value="Kadıköy Şube">Kadıköy Şube</option>
-          <option value="Çankaya Şube">Çankaya Şube</option>
-          <option value="Test Şube 1">Test Şube 1</option>
         </select>
 
         <select
@@ -1399,10 +1340,15 @@ export default function SuppliersPage() {
               <h2>✏️ Tedarikçi Bilgilerini Düzenle</h2>
               <button type="button" className={styles.modalCloseBtn} onClick={() => setShowEditSupplierModal(false)}>✕</button>
             </div>
-            <form onSubmit={e => {
+            <form onSubmit={async e => {
               e.preventDefault();
-              setShowEditSupplierModal(false);
-              addToast({ type: 'success', message: 'Tedarikçi bilgileri başarıyla güncellendi.' });
+              const source = suppliersList.find(item => item.id === selectedSupplier.id);
+              if (!source) return;
+              try {
+                await updateSupplier({ ...source, companyName: selectedSupplier.companyName, contactPerson: selectedSupplier.contactPerson, phone: selectedSupplier.phone, email: selectedSupplier.email, address: selectedSupplier.address, taxNo: selectedSupplier.taxNo });
+                setShowEditSupplierModal(false);
+                addToast({ type: 'success', message: 'Tedarikçi bilgileri güncellendi.' });
+              } catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Tedarikçi güncellenemedi.' }); }
             }}>
               <div className={styles.modalBody}>
                 <div className={styles.formGroup}>
@@ -1617,15 +1563,15 @@ export default function SuppliersPage() {
                 </div>
                 <div style={{ background: '#fef2f2', padding: 14, borderRadius: 10 }}>
                   <div style={{ fontSize: 12, color: '#dc2626' }}>Toplam Borç Bakiye</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#dc2626' }}>₺25.450</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#dc2626' }}>{formatCurrency(supplierTotals.balanceOwed)}</div>
                 </div>
                 <div style={{ background: '#ecfdf5', padding: 14, borderRadius: 10 }}>
                   <div style={{ fontSize: 12, color: '#16a34a' }}>Bu Ay Alım Hacmi</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a' }}>₺48.200</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a' }}>{formatCurrency(supplierTotals.purchasesThisMonth)}</div>
                 </div>
                 <div style={{ background: '#f5f3ff', padding: 14, borderRadius: 10 }}>
                   <div style={{ fontSize: 12, color: '#7e22ce' }}>Aktif Dağıtım Oranı</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#7e22ce' }}>%83.3</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#7e22ce' }}>{suppliers.length ? Math.round(suppliers.filter(s => s.status === 'Aktif').length / suppliers.length * 100) : 0}%</div>
                 </div>
               </div>
             </div>
@@ -1635,8 +1581,7 @@ export default function SuppliersPage() {
                 type="button"
                 className={styles.btnPrimaryAction}
                 onClick={() => {
-                  addToast({ type: 'success', message: 'Tedarikçi raporu PDF olarak dışa aktarıldı.' });
-                  setShowReportModal(false);
+                  addToast({ type: 'error', message: 'PDF dışa aktarma henüz bağlı değil; rapor dosyası oluşturulmadı.' });
                 }}
               >
                 Raporu İndir (PDF)
@@ -1656,21 +1601,19 @@ export default function SuppliersPage() {
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  { name: 'İşitme Cihazı Üreticileri', count: 5, color: '#0284c7' },
-                  { name: 'Pil & Batarya Distribütörleri', count: 2, color: '#ea580c' },
-                  { name: 'Kalıp & Laboratuvar Tedarikçileri', count: 3, color: '#7e22ce' },
-                  { name: 'Teknik Servis Çözüm Ortakları', count: 1, color: '#e11d48' },
-                  { name: 'Genel Medikal & Sarf', count: 1, color: '#475569' }
-                ].map((grp, i) => (
+                {Array.from(new Set(suppliers.map(supplier => supplier.category))).map((category, i) => {
+                  const groupCount = suppliers.filter(supplier => supplier.category === category).length;
+                  const color = ['#0284c7', '#ea580c', '#7e22ce', '#e11d48', '#475569'][i % 5];
+                  return (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f8fafc', borderRadius: 8, fontSize: 13 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: grp.color }}></span>
-                      <strong>{grp.name}</strong>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }}></span>
+                      <strong>{category}</strong>
                     </div>
-                    <span style={{ color: '#64748b' }}>{grp.count} Tedarikçi</span>
+                    <span style={{ color: '#64748b' }}>{groupCount} Tedarikçi</span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className={styles.modalFooter}>

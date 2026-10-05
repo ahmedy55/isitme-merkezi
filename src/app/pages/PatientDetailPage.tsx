@@ -1329,7 +1329,7 @@ export default function PatientDetailPage() {
                     <div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>SGK Geri Ödeme Hakkı</div>
                       <span className={`badge badge-${patient.sgkStatus === 'Yenileme Hakkı Var' ? 'success' : 'neutral'}`}>
-                        {patient.sgkStatus === 'Yenileme Hakkı Var' ? 'Mevcut (₺6.200 Desteği Açık)' : 'Yok'}
+                        {patient.sgkStatus === 'Yenileme Hakkı Var' ? 'Mevcut' : 'Yok'}
                       </span>
                     </div>
                   </div>

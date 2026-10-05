@@ -297,8 +297,8 @@ export default function RecallPage() {
   const todayDateKey = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
 
   // Selected patient for detail drawer
-  const [selectedRecallId, setSelectedRecallId] = useState<string>('rec-1');
-  const [showDetailPanel, setShowDetailPanel] = useState<boolean>(true);
+  const [selectedRecallId, setSelectedRecallId] = useState<string>('');
+  const [showDetailPanel, setShowDetailPanel] = useState<boolean>(false);
   const [panelTab, setPanelTab] = useState<'Genel' | 'Cihazlar' | 'Hatırlatmalar' | 'Randevular' | 'İşlemler'>('Genel');
 
   // Checkbox selections
@@ -356,9 +356,9 @@ export default function RecallPage() {
         id: item.id,
         patientId: item.patientId,
         patientName: item.patientName,
-        patientAge: p ? calculateAge(p.birthDate) : 60,
+        patientAge: p?.birthDate ? calculateAge(p.birthDate) : 0,
         patientGender: p?.gender || 'Belirtilmemiş',
-        patientPhone: p?.phone || '+90 500 000 00 00',
+        patientPhone: p?.phone || '—',
         patientEmail: p?.email || '',
         patientAddress: p?.address || '—',
         patientDevice: p?.currentDevice || '—',
@@ -367,15 +367,15 @@ export default function RecallPage() {
         avatarColor: getAvatarColor(item.patientName),
         typeTitle: item.reason,
         typeSub: `(${item.probability || 'Planlandı'})`,
-        planDate: item.dueDate || new Date().toISOString().split('T')[0],
+        planDate: item.dueDate || '—',
         planTime: '10:00',
         status: item.status as ShowcaseRecall['status'],
         branchName: p?.branch || '',
         lastAction: item.lastContact ? `Son temas: ${item.lastContact}` : '—',
       };
     });
-    return currentOrgId ? liveConverted : [...liveConverted, ...defaultShowcaseRecalls];
-  }, [recallList, patientsList, currentOrgId]);
+    return liveConverted;
+  }, [recallList, patientsList]);
 
   // Filtered rows
   const filteredRecalls = useMemo(() => {
@@ -448,7 +448,7 @@ export default function RecallPage() {
     if (recallPageNumber > pageCount) setRecallPageNumber(pageCount);
   }, [recallPageNumber, pageCount]);
 
-  const activeRecall = allRecalls.find(r => r.id === selectedRecallId) || allRecalls[0] || (!currentOrgId ? defaultShowcaseRecalls[0] : undefined);
+  const activeRecall = allRecalls.find(r => r.id === selectedRecallId) || allRecalls[0];
   const activePatient = activeRecall ? patientsList.find(patient => patient.id === activeRecall.patientId) : undefined;
   const patientDevices = activeRecall ? stockList.filter(item => item.assignedPatientId === activeRecall.patientId) : [];
   const patientAppointments = activeRecall
@@ -1024,27 +1024,15 @@ export default function RecallPage() {
               </div>
 
               <div className={styles.actionTimeline}>
-                <div className={styles.actionTimelineItem}>
-                  <div className={styles.actionTimelineIcon}>💬</div>
-                  <div className={styles.actionTimelineText}>
-                    <strong>SMS gönderildi</strong>
-                    <span>07 Eyl 2025, 10:24</span>
+                {activeRecall.lastAction && activeRecall.lastAction !== '—' ? (
+                  <div className={styles.actionTimelineItem}>
+                    <div className={styles.actionTimelineIcon}>◷</div>
+                    <div className={styles.actionTimelineText}>
+                      <strong>Hatırlatma için son temas</strong>
+                      <span>{activeRecall.lastAction.replace('Son temas: ', '')}</span>
+                    </div>
                   </div>
-                </div>
-                <div className={styles.actionTimelineItem}>
-                  <div className={styles.actionTimelineIcon}>📝</div>
-                  <div className={styles.actionTimelineText}>
-                    <strong>Not eklendi</strong>
-                    <span>05 Eyl 2025, 16:30</span>
-                  </div>
-                </div>
-                <div className={styles.actionTimelineItem}>
-                  <div className={styles.actionTimelineIcon}>⚙</div>
-                  <div className={styles.actionTimelineText}>
-                    <strong>Cihaz ayarı yapıldı</strong>
-                    <span>12 Ağu 2025, 11:20</span>
-                  </div>
-                </div>
+                ) : <p className={styles.panelEmptyState}>Bu hatırlatma için henüz işlem kaydı yok.</p>}
               </div>
             </div>
             </>}

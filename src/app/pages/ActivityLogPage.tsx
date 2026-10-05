@@ -36,24 +36,6 @@ function IconDotsVertical({ size = 15 }: { size?: number }) {
   );
 }
 
-function IconTrendUp({ size = 11 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-      <polyline points="17 6 23 6 23 12"/>
-    </svg>
-  );
-}
-
-function IconTrendDown({ size = 11 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
-      <polyline points="17 18 23 18 23 12"/>
-    </svg>
-  );
-}
-
 function IconFilterFunnel({ size = 13 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -333,37 +315,35 @@ export default function ActivityLogPage() {
     if (currentOrgId) {
       fetchActivities()
         .then(rows => {
-          if (!cancelled && rows && rows.length > 0) {
+          if (!cancelled) {
             const mapped: ActivityRecord[] = (rows as any[]).map((r, idx) => ({
               id: r.id || `act-live-${idx}`,
-              timestamp: r.timestamp || '2025-09-12 12:00',
-              dateStr: r.timestamp ? new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(r.timestamp.replace(' ', 'T'))) : '',
-              timeStr: r.timestamp ? r.timestamp.split(' ')[1] : '12:00',
+              timestamp: r.timestamp,
+              dateStr: new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(r.timestamp)),
+              timeStr: new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' }).format(new Date(r.timestamp)),
               patientId: r.patientId,
-              patientName: r.patientName || 'Hasta',
-              patientAge: 60,
-              patientGender: 'Belirtilmemiş',
-              patientAvatarColor: '#0f766e',
-              patientInitials: (r.patientName || 'HA').slice(0, 2).toUpperCase(),
-              patientPhone: '+90 532 000 00 00',
+              patientName: r.patientName,
+              patientAge: (() => { const patient = patientsList.find(item => item.id === r.patientId); return patient?.birthDate ? calculateAge(patient.birthDate) : 0; })(),
+              patientGender: patientsList.find(item => item.id === r.patientId)?.gender || 'Belirtilmemiş',
+              patientAvatarColor: getAvatarColor(r.patientName),
+              patientInitials: getInitials(r.patientName, ''),
+              patientPhone: patientsList.find(item => item.id === r.patientId)?.phone || '—',
               type: r.type === 'Arama' ? 'Telefon Araması' : r.type === 'Randevu' ? 'Randevu İşlemi' : 'Not Ekleme',
               description: r.description || '',
               staffName: r.userName || 'Personel',
               staffInitials: (r.userName || 'PE').slice(0, 2).toUpperCase(),
               staffAvatarColor: '#3b82f6',
-              branchName: r.branchName || 'Merkez'
+              branchName: r.branchName || branchesList.find(branch => branch.id === r.branchId)?.name || '—'
             }));
             setActivities(mapped);
-          } else if (!cancelled) {
-            setActivities([]);
           }
         })
-        .catch(() => {});
+        .catch(() => { if (!cancelled) setActivities([]); });
     } else {
-      setActivities(defaultShowcaseActivities);
+      setActivities([]);
     }
     return () => { cancelled = true; };
-  }, [currentOrgId]);
+  }, [currentOrgId, patientsList, branchesList]);
 
   const toggleCheck = (id: string) => {
     setCheckedIds(prev => {
@@ -467,7 +447,7 @@ export default function ActivityLogPage() {
     setActivePatientSuggestionIndex(-1);
   };
 
-  const handleCreateActivity = (e: React.FormEvent) => {
+  const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formPatientName.trim() || !formDescription.trim()) {
       addToast({ type: 'warning', message: 'Lütfen hasta adı ve açıklama alanlarını doldurun.' });
@@ -504,15 +484,39 @@ export default function ActivityLogPage() {
       branchName: selectedBranch.name
     };
 
-    setActivities(prev => [newRecord, ...prev]);
-    setSelectedActId(newRecord.id);
+    const activityType: Record<ActivityRecord['type'], string> = {
+      'Telefon Araması': 'Arama',
+      'Yüz Yüze Görüşme': 'Not Ekleme',
+      'Not Ekleme': 'Not Ekleme',
+      'Randevu İşlemi': 'Randevu',
+      'Cihaz İşlemi': 'Not Ekleme',
+      'Yeni Hasta': 'Hasta Girişi',
+      'Diğer': 'Not Ekleme',
+    };
+    try {
+      await createActivity({
+        branchId: selectedBranch.id,
+        patientName: selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim() : formPatientName.trim(),
+        patientId: selectedPatient?.id,
+        type: activityType[formType],
+        description: formDescription.trim(),
+      });
+      const rows = await fetchActivities();
+      const created = rows[0];
+      if (!created) throw new Error('Kaydedilen aktivite yeniden yüklenemedi.');
+      setActivities(previous => [{ ...newRecord, id: created.id, timestamp: created.timestamp }, ...previous]);
+      setSelectedActId(created.id);
+    } catch (error) {
+      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Aktivite kaydedilemedi.' });
+      return;
+    }
     setShowModal(false);
     setFormPatientName('');
     setFormPatientId(null);
     setIsPatientSuggestionsOpen(false);
     setActivePatientSuggestionIndex(-1);
     setFormDescription('');
-    addToast({ type: 'success', message: 'Yeni aktivite kaydı başarıyla eklendi.' });
+    addToast({ type: 'success', message: 'Yeni aktivite kaydı başarıyla kaydedildi.' });
   };
 
   const handleResetFilters = () => {
@@ -563,9 +567,7 @@ export default function ActivityLogPage() {
           <div>
             <span>Bugünkü Toplam Aktivite</span>
             <strong>{todaysActivities.length}</strong>
-            <div className={styles.statChangeUp}>
-              <IconTrendUp size={11} /> %20 düne göre
-            </div>
+            <div className={styles.statChangeUp}>Bugün kaydedilen</div>
           </div>
         </div>
 
@@ -577,9 +579,7 @@ export default function ActivityLogPage() {
           <div>
             <span>Telefon Görüşmeleri</span>
             <strong>{activityCount('Telefon Araması')}</strong>
-            <div className={styles.statChangeUp}>
-              <IconTrendUp size={11} /> %33
-            </div>
+            <div className={styles.statChangeUp}>Bugün kaydedilen</div>
           </div>
         </div>
 
@@ -591,9 +591,7 @@ export default function ActivityLogPage() {
           <div>
             <span>Yüz Yüze Görüşmeler</span>
             <strong>{activityCount('Yüz Yüze Görüşme')}</strong>
-            <div className={styles.statChangeUp}>
-              <IconTrendUp size={11} /> %20
-            </div>
+            <div className={styles.statChangeUp}>Bugün kaydedilen</div>
           </div>
         </div>
 
@@ -605,9 +603,7 @@ export default function ActivityLogPage() {
           <div>
             <span>Not / Diğer İşlemler</span>
             <strong>{activityCount('Not Ekleme') + activityCount('Diğer')}</strong>
-            <div className={styles.statChangeDown}>
-              <IconTrendDown size={11} /> %33
-            </div>
+            <div className={styles.statChangeDown}>Bugün kaydedilen</div>
           </div>
         </div>
 
@@ -619,9 +615,7 @@ export default function ActivityLogPage() {
           <div>
             <span>Yeni Hasta Kaydı</span>
             <strong>{activityCount('Yeni Hasta')}</strong>
-            <div className={styles.statChangeUp}>
-              <IconTrendUp size={11} /> %100
-            </div>
+            <div className={styles.statChangeUp}>Bugün kaydedilen</div>
           </div>
         </div>
       </div>
@@ -671,10 +665,7 @@ export default function ActivityLogPage() {
             aria-label="Personel"
           >
             <option value="Tümü">Personel: Tümü</option>
-            <option value="Ahmet Yılmaz">Ahmet Yılmaz</option>
-            <option value="Fatma Kaya">Fatma Kaya</option>
-            <option value="Zeynep Arslan">Zeynep Arslan</option>
-            <option value="Teknik Servis">Teknik Servis</option>
+            {[...new Set(usersList.filter(user => user.status === 'Aktif').map(user => `${user.firstName} ${user.lastName}`.trim()))].map(name => <option key={name} value={name}>{name}</option>)}
           </select>
 
           <select
@@ -684,8 +675,7 @@ export default function ActivityLogPage() {
             aria-label="Şube"
           >
             <option value="Tümü">Şube: Tümü</option>
-            <option value="Merkez">Merkez</option>
-            <option value="Çankaya">Çankaya</option>
+            {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
           </select>
 
           <div className={styles.filterBtnsWrap}>

@@ -17,10 +17,11 @@ interface AuditItem {
   actionTypeKey: string;
   module: string;
   description: string;
-  status: 'Başarılı' | 'Hatalı';
+  status: 'Başarılı' | 'Hatalı' | '—';
   ipAddress: string;
   device: string;
   detailsJson: Record<string, any>;
+  timestampISO?: string;
 }
 
 const DETAIL_LABELS: Record<string, string> = {
@@ -282,7 +283,7 @@ const INITIAL_AUDIT_LOGS: AuditItem[] = [
 ];
 
 export default function AuditLogPage() {
-  const { addToast } = useApp();
+  const { addToast, auditLogList, usersList } = useApp();
   const { activeBranch } = useBranchScope();
 
   // Search & Filters
@@ -291,12 +292,18 @@ export default function AuditLogPage() {
   const [actionFilter, setActionFilter] = useState('All');
   const [userFilter, setUserFilter] = useState('All');
   const [resultFilter, setResultFilter] = useState('All');
-  const [dateRange, setDateRange] = useState('01.09.2026 - 30.09.2026');
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const format = (date: Date) => date.toLocaleDateString('tr-TR');
+    return `${format(start)} - ${format(end)}`;
+  });
 
   // Selection & Detail Panel State
-  const [selectedRowId, setSelectedRowId] = useState<string>('audit-1');
-  const [checkedIds, setCheckedIds] = useState<string[]>(['audit-1']);
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
+  const [selectedRowId, setSelectedRowId] = useState<string>('');
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [isJsonExpanded, setIsJsonExpanded] = useState<boolean>(false);
 
   // Pagination
@@ -310,7 +317,30 @@ export default function AuditLogPage() {
 
   // Filtered List
   const filteredLogs = useMemo(() => {
-    return INITIAL_AUDIT_LOGS.filter(item => {
+    const liveLogs: AuditItem[] = auditLogList.map(item => {
+      const user = usersList.find(candidate => candidate.userId === item.userId || candidate.id === item.userId);
+      let detailsJson: Record<string, any> = {};
+      if (item.details) {
+        try { detailsJson = JSON.parse(item.details); }
+        catch { detailsJson = { details: item.details }; }
+      }
+      return {
+        id: item.id,
+        date: item.timestamp ? new Date(item.timestamp).toLocaleString('tr-TR') : '—',
+        timestampISO: item.timestamp,
+        userName: item.userName,
+        userRole: user?.roles?.join(', ') || '—',
+        userInitials: item.userName.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toLocaleUpperCase('tr-TR'),
+        userAvatarBg: '#e6f4ef', userAvatarColor: '#08785b',
+        action: `${item.module} ${item.action}`,
+        actionTypeKey: item.action.toLocaleLowerCase('tr-TR'),
+        module: item.module,
+        description: item.description,
+        status: '—',
+        ipAddress: '—', device: '—', detailsJson,
+      };
+    });
+    return liveLogs.filter(item => {
       const q = searchTerm.toLowerCase().trim();
       const matchesSearch = !q ||
         item.description.toLowerCase().includes(q) ||
@@ -323,15 +353,28 @@ export default function AuditLogPage() {
       const matchesAction = actionFilter === 'All' || item.action === actionFilter;
       const matchesUser = userFilter === 'All' || item.userName === userFilter;
       const matchesResult = resultFilter === 'All' || item.status === resultFilter;
+      const [startText, endText] = dateRange.split(' - ');
+      const asISO = (text: string) => {
+        const [day, month, year] = text.split('.');
+        return day && month && year ? `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` : '';
+      };
+      const fromISO = asISO(startText || '');
+      const toISO = asISO(endText || '');
+      const recordDate = item.timestampISO?.slice(0, 10) || '';
+      const matchesDate = (!fromISO || recordDate >= fromISO) && (!toISO || recordDate <= toISO);
 
-      return matchesSearch && matchesModule && matchesAction && matchesUser && matchesResult;
+      return matchesSearch && matchesModule && matchesAction && matchesUser && matchesResult && matchesDate;
     });
-  }, [searchTerm, moduleFilter, actionFilter, userFilter, resultFilter]);
+  }, [auditLogList, usersList, searchTerm, moduleFilter, actionFilter, userFilter, resultFilter, dateRange]);
 
   // Selected Log Object for Drawer
   const activeLog = useMemo(() => {
-    return INITIAL_AUDIT_LOGS.find(l => l.id === selectedRowId) || INITIAL_AUDIT_LOGS[0];
-  }, [selectedRowId]);
+    return auditLogList.find(l => l.id === selectedRowId) ? filteredLogs.find(l => l.id === selectedRowId) : undefined;
+  }, [auditLogList, filteredLogs, selectedRowId]);
+
+  const todayLogs = auditLogList.filter(item => item.timestamp?.slice(0, 10) === new Date().toISOString().slice(0, 10));
+  const todayAuditCount = new Set(todayLogs.map(item => item.userId).filter(Boolean)).size;
+  const moduleCount = new Set(filteredLogs.map(item => item.module).filter(Boolean)).size;
 
   // Selection Handlers
   const handleToggleCheck = (id: string, e: React.MouseEvent) => {
@@ -574,11 +617,8 @@ export default function AuditLogPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Toplam İşlem</span>
-            <span className={styles.statValue}>156</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %18</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
-            </div>
+            <span className={styles.statValue}>{filteredLogs.length}</span>
+            <div className={styles.statTrend}><span className={styles.trendSub}>Seçilen filtrelerde</span></div>
           </div>
         </div>
 
@@ -594,11 +634,8 @@ export default function AuditLogPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Aktif Kullanıcı</span>
-            <span className={styles.statValue}>12</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %9</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
-            </div>
+            <span className={styles.statValue}>{todayAuditCount}</span>
+            <div className={styles.statTrend}><span className={styles.trendSub}>Bugün işlem yapan farklı kullanıcı</span></div>
           </div>
         </div>
 
@@ -613,11 +650,8 @@ export default function AuditLogPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Etkilenen Modül</span>
-            <span className={styles.statValue}>8</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %0</span>
-              <span className={styles.trendSub}>geçen aya göre</span>
-            </div>
+            <span className={styles.statValue}>{moduleCount}</span>
+            <div className={styles.statTrend}><span className={styles.trendSub}>Seçilen kayıtlardaki modül</span></div>
           </div>
         </div>
 
@@ -631,11 +665,8 @@ export default function AuditLogPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Başarılı İşlem</span>
-            <span className={styles.statValue}>154</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendGreen}>↑ %19</span>
-              <span className={styles.trendSub}>toplamın %98.7&apos;si</span>
-            </div>
+            <span className={styles.statValue}>—</span>
+            <div className={styles.statTrend}><span className={styles.trendSub}>Başarı durumu veritabanında tutulmuyor</span></div>
           </div>
         </div>
 
@@ -650,11 +681,8 @@ export default function AuditLogPage() {
           </div>
           <div className={styles.statBody}>
             <span className={styles.statLabel}>Hatalı İşlem</span>
-            <span className={styles.statValue}>2</span>
-            <div className={styles.statTrend}>
-              <span className={styles.trendRed}>↑ %0</span>
-              <span className={styles.trendSub}>toplamın %1.3&apos;ü</span>
-            </div>
+            <span className={styles.statValue}>—</span>
+            <div className={styles.statTrend}><span className={styles.trendSub}>Hata durumu veritabanında tutulmuyor</span></div>
           </div>
         </div>
       </div>
@@ -684,12 +712,7 @@ export default function AuditLogPage() {
             onChange={(e) => setModuleFilter(e.target.value)}
           >
             <option value="All">Tüm Modüller</option>
-            <option value="Kasa">Kasa</option>
-            <option value="Randevu">Randevu</option>
-            <option value="Hastalar">Hastalar</option>
-            <option value="Stok">Stok</option>
-            <option value="Teknik Servis">Teknik Servis</option>
-            <option value="Şube & Yetki">Şube & Yetki</option>
+            {[...new Set(auditLogList.map(item => item.module).filter(Boolean))].map(module => <option key={module} value={module}>{module}</option>)}
           </select>
 
           <select 
@@ -698,16 +721,7 @@ export default function AuditLogPage() {
             onChange={(e) => setActionFilter(e.target.value)}
           >
             <option value="All">Tüm İşlem Türleri</option>
-            <option value="Satış Ekleme">Satış Ekleme</option>
-            <option value="Randevu Güncelleme">Randevu Güncelleme</option>
-            <option value="Hasta Güncelleme">Hasta Güncelleme</option>
-            <option value="Ödeme Ekleme">Ödeme Ekleme</option>
-            <option value="Cihaz Ekleme">Cihaz Ekleme</option>
-            <option value="Servis Kaydı Ekleme">Servis Kaydı Ekleme</option>
-            <option value="Muayene Kaydı Ekleme">Muayene Kaydı Ekleme</option>
-            <option value="Personel Ekleme">Personel Ekleme</option>
-            <option value="Fatura Silme">Fatura Silme</option>
-            <option value="Hasta Ekleme">Hasta Ekleme</option>
+            {[...new Set(auditLogList.map(item => `${item.module} ${item.action}`.trim()).filter(Boolean))].map(action => <option key={action} value={action}>{action}</option>)}
           </select>
 
           <select 
@@ -716,12 +730,7 @@ export default function AuditLogPage() {
             onChange={(e) => setUserFilter(e.target.value)}
           >
             <option value="All">Tüm Kullanıcılar</option>
-            <option value="Ahmet Yılmaz">Ahmet Yılmaz</option>
-            <option value="Zeynep Kaya">Zeynep Kaya</option>
-            <option value="Mehmet Kaya">Mehmet Kaya</option>
-            <option value="Elif Demir">Elif Demir</option>
-            <option value="Zeynep Güneş">Zeynep Güneş</option>
-            <option value="Cem Doğan">Cem Doğan</option>
+            {[...new Set(auditLogList.map(item => item.userName))].map(name => <option key={name} value={name}>{name}</option>)}
           </select>
 
           <select 
@@ -730,8 +739,6 @@ export default function AuditLogPage() {
             onChange={(e) => setResultFilter(e.target.value)}
           >
             <option value="All">Tüm Sonuçlar</option>
-            <option value="Başarılı">Başarılı</option>
-            <option value="Hatalı">Hatalı</option>
           </select>
 
           <button 
@@ -1237,7 +1244,7 @@ export default function AuditLogPage() {
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                {['Bugün', 'Son 7 Gün', 'Bu Ay (Eylül 2026)', 'Son 3 Ay', 'Bu Yıl (2026)', 'Tüm Zamanlar'].map((rangeOption) => (
+                {['Bugün', 'Son 7 Gün', `Bu Ay (${new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric' }).format(new Date())})`, 'Son 3 Ay', `Bu Yıl (${new Date().getFullYear()})`, 'Tüm Zamanlar'].map((rangeOption) => (
                   <button
                     key={rangeOption}
                     type="button"
@@ -1253,13 +1260,16 @@ export default function AuditLogPage() {
                       textAlign: 'left'
                     }}
                     onClick={() => {
-                      if (rangeOption.includes('Bu Ay')) {
-                        setDateRange('01.09.2026 - 30.09.2026');
-                      } else if (rangeOption === 'Son 7 Gün') {
-                        setDateRange('23.09.2026 - 30.09.2026');
-                      } else {
-                        setDateRange(rangeOption);
-                      }
+                      const now = new Date();
+                      const start = new Date(now);
+                      const end = new Date(now);
+                      if (rangeOption === 'Bugün') start.setHours(0, 0, 0, 0);
+                      else if (rangeOption === 'Son 7 Gün') start.setDate(now.getDate() - 6);
+                      else if (rangeOption.startsWith('Bu Ay')) start.setDate(1);
+                      else if (rangeOption === 'Son 3 Ay') start.setMonth(now.getMonth() - 2, 1);
+                      else if (rangeOption.startsWith('Bu Yıl')) start.setMonth(0, 1);
+                      const format = (date: Date) => date.toLocaleDateString('tr-TR');
+                      setDateRange(rangeOption === 'Tüm Zamanlar' ? 'Tüm Zamanlar' : `${format(start)} - ${format(end)}`);
                       setShowDateModal(false);
                       addToast({ type: 'info', message: `Tarih filtresi güncellendi: ${rangeOption}` });
                     }}

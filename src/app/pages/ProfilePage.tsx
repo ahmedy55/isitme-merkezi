@@ -18,7 +18,7 @@ export default function ProfilePage() {
       <dl className="profile-details">
         <div><dt>Ad Soyad</dt><dd>{getDisplayName(currentUser, usersList)}</dd></div>
         <div><dt>E-posta</dt><dd>{currentUser?.email || 'Belirtilmemiş'}</dd></div>
-        <div><dt>Firma</dt><dd>{currentOrg?.name || currentUser?.app_metadata?.organization_name || (currentUser?.id === 'demo-user' ? 'Demo İşitme Merkezi' : 'Firma bilgisi yükleniyor')}</dd></div>
+        <div><dt>Firma</dt><dd>{currentOrg?.name || currentUser?.app_metadata?.organization_name || 'Firma bilgisi yükleniyor'}</dd></div>
         <div><dt>Rol</dt><dd>{getUserRole(currentUser, usersList)}</dd></div>
         <div><dt>Erişilebilir şube</dt><dd>{branch?.name || (roles.includes('Firma Yöneticisi') ? `${branchesList.filter(item => item.status === 'Aktif').length} aktif şube` : 'Atanmamış')}</dd></div>
       </dl>

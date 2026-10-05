@@ -291,7 +291,7 @@ export default function BranchesPage() {
 
   // Branch and Staff States
   const branches = useMemo<BranchItem[]>(() => {
-    const source = branchesList.length ? branchesList : currentOrgId ? [] : INITIAL_BRANCHES.map(item => ({ id: item.id, name: item.name, address: item.address, phone: item.phone, status: item.status as Branch['status'], patientsCount: item.patientCount }));
+    const source = branchesList;
     return source.map(branch => {
       const assigned = usersList.filter(user => user.branchId === branch.id || (!user.branchId && user.branch === branch.name));
       const patientCount = patientsList.filter(patient => patient.branchId === branch.id || (!patient.branchId && patient.branch === branch.name)).length;
@@ -300,7 +300,7 @@ export default function BranchesPage() {
     });
   }, [branchesList, usersList, patientsList, salesList, currentOrgId]);
   const staffList = useMemo<StaffUser[]>(() => {
-    const source: SystemUser[] = usersList.length ? usersList : currentOrgId ? [] : INITIAL_STAFF.map(item => ({ id: item.id, userId: item.uuid, firstName: item.firstName, lastName: item.lastName, email: item.email, phone: item.phone, roles: [item.role === 'Diğer' ? 'Odyometrist' : item.role] as SystemUser['roles'], branch: item.branch, status: item.status, createdAt: item.lastLogin, lastLogin: item.lastLogin }));
+    const source: SystemUser[] = usersList;
     return source.map(user => {
       const role: StaffUser['role'] = user.roles[0] || 'Odyometrist';
       return { id: user.id, uuid: user.userId || user.id, firstName: user.firstName, lastName: user.lastName, initials: `${user.firstName[0] || ''}${user.lastName[0] || ''}`.toUpperCase(), avatarColor: '#0d9488', email: user.email, phone: user.phone, role, branch: user.branch, status: user.status, lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleString('tr-TR') : '—', accessLevel: role === 'Firma Yöneticisi' ? 'Tam Erişim' : 'Sınırlı Erişim' };

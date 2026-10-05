@@ -7,7 +7,7 @@ import { Expense } from '../data/mockData';
 import { IconSearch, IconPlus, IconEdit, IconDelete, IconFilter, IconCheck, IconWarning, IconDownload } from '../components/Icons';
 
 export default function ExpensesPage() {
-  const { expensesList: allExpenses, addExpense, updateExpense, deleteExpense, addToast, branchesList } = useApp();
+  const { expensesList: allExpenses, addExpense, updateExpense, deleteExpense, addToast, branchesList, currentUser } = useApp();
   const { matches, activeBranchId, activeBranch } = useBranchScope();
   const oneBranchCompany = branchesList.filter(branch => branch.status === 'Aktif').length === 1;
   const expensesList = React.useMemo(() => allExpenses.filter(e => matches(e.branch, e.branchId) || ((activeBranch.mode === 'all' || oneBranchCompany) && e.branch === 'Genel' && !e.branchId)), [allExpenses, matches, activeBranch.mode, oneBranchCompany]);
@@ -30,7 +30,7 @@ export default function ExpensesPage() {
   const [formAmount, setFormAmount] = useState<number>(0);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'Nakit' | 'Havale' | 'Kredi Kartı' | 'Otomatik Ödeme'>('Havale');
   const [formBranch, setFormBranch] = useState('');
-  const [formCreatedBy, setFormCreatedBy] = useState('Dr. Elif Arslan');
+  const [formCreatedBy, setFormCreatedBy] = useState('');
   const [formReceiptNo, setFormReceiptNo] = useState('');
   const [formNotes, setFormNotes] = useState('');
 
@@ -51,7 +51,7 @@ export default function ExpensesPage() {
     setFormAmount(0);
     setFormPaymentMethod('Havale');
     setFormBranch(activeBranchId || '');
-    setFormCreatedBy('Dr. Elif Arslan');
+    setFormCreatedBy(currentUser?.name || '');
     setFormReceiptNo('');
     setFormNotes('');
     setErrors({});
@@ -112,7 +112,7 @@ export default function ExpensesPage() {
       await updateExpense(updated);
     } else {
       const newExpense: Expense & { idempotencyKey?: string } = {
-        id: 'exp-' + Math.floor(Math.random() * 1000000),
+        id: crypto.randomUUID(),
         date: formDate,
         category: formCategory,
         description: formDescription,

@@ -145,12 +145,12 @@ const INITIAL_TRANSFERS: TransferLogItem[] = [
 ];
 
 export default function BranchActivitiesPage() {
-  const { addToast, currentOrgId, branchesList, patientsList, salesList, appointmentsList, currentUser, updatePatient, refreshOrganizationData } = useApp();
+  const { addToast, currentOrgId, branchesList, patientsList, salesList, appointmentsList, currentUser, refreshOrganizationData } = useApp();
   const { matches } = useBranchScope();
 
   // State Management
   const [dateRange, setDateRange] = useState(() => `01.01.${new Date().getFullYear()} - ${new Date().toLocaleDateString('tr-TR')}`);
-  const [transfers, setTransfers] = useState<TransferLogItem[]>(currentOrgId ? [] : INITIAL_TRANSFERS);
+  const [transfers, setTransfers] = useState<TransferLogItem[]>([]);
   const [transferMatrixTab, setTransferMatrixTab] = useState<'Şubeler Arası' | 'Giden / Gelen'>('Şubeler Arası');
   const [transferStatusFilter, setTransferStatusFilter] = useState('Tümünü Gör');
 
@@ -212,7 +212,8 @@ export default function BranchActivitiesPage() {
         return false;
       }
     } else {
-      updatePatient({ ...patient, branch: target.name, branchId: target.id });
+      addToast({ type: 'error', message: 'Aktif firma bağlantısı yok; transfer kaydedilmedi.' });
+      return false;
     }
     return true;
   };
@@ -283,7 +284,7 @@ export default function BranchActivitiesPage() {
       notes: `${sourceBranch} şubesinden ${targetBranch} şubesine hızlı dosya transferi yapıldı.`
     };
 
-    if (!currentOrgId) setTransfers([newTrf, ...transfers]);
+    if (!currentOrgId) return;
     setSearchPatientText('');
     addToast({
       type: 'success',
@@ -317,7 +318,7 @@ export default function BranchActivitiesPage() {
       notes: modalNotes || 'Şubeler arası hasta ve cihaz dosyası transferi gerçekleştirildi.'
     };
 
-    if (!currentOrgId) setTransfers([newTrf, ...transfers]);
+    if (!currentOrgId) return;
     setShowNewTransferModal(false);
     setModalPatientName('');
     setModalNotes('');
@@ -467,7 +468,7 @@ export default function BranchActivitiesPage() {
       </div>
 
       {/* ── SECTION 1: 3 Branch Cards Grid ── */}
-      <div className={styles.branchesGrid3} style={{ display: currentOrgId ? 'none' : undefined }}>
+      <div className={styles.branchesGrid3} style={{ display: 'none' }} aria-hidden="true">
         {/* Card 1: Merkez */}
         <div className={styles.branchCard}>
           <div className={styles.branchHeaderRow}>
