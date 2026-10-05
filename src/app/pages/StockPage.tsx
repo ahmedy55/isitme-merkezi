@@ -333,7 +333,9 @@ export default function StockPage() {
       // Status dropdown filter
       if (selectedStatus !== 'Tüm Durumlar') {
         const itemStockStatus = item.quantity === 0 ? 'Stok Yok' : item.quantity <= item.criticalLevel ? 'Azaldı' : 'Stokta';
-        if (itemStockStatus !== selectedStatus) return false;
+        if (selectedStatus === 'Kritik Stok') {
+          if (item.quantity > item.criticalLevel) return false;
+        } else if (itemStockStatus !== selectedStatus) return false;
       }
 
       // Search term
@@ -673,7 +675,7 @@ export default function StockPage() {
         </div>
 
         {/* Card 5: Kritik Stok */}
-        <div className={styles.statCard} onClick={() => setSelectedStatus('Azaldı')}>
+        <div className={styles.statCard} onClick={() => setSelectedStatus('Kritik Stok')}>
           <div className={`${styles.statIcon} ${styles.iconRed}`}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -780,6 +782,7 @@ export default function StockPage() {
           <option value="Tüm Durumlar">Tüm Durumlar</option>
           <option value="Stokta">Stokta</option>
           <option value="Azaldı">Azaldı</option>
+          <option value="Kritik Stok">Kritik Stok (azaldı ve stok yok)</option>
           <option value="Stok Yok">Stok Yok</option>
         </select>
 
