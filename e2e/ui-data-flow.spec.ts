@@ -994,6 +994,27 @@ test('garanti bitiş tarihi olmayan demirbaşta eksik bilgi açıkça belirtilir
   await expect(page.getByText('Bilgi yok')).toBeVisible();
 });
 
+test('Record warranty information for an asset', async ({ page }) => {
+  await mockTenantData(page, true, { assetWarrantyExpiry: null });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await page.getByRole('row').filter({ hasText: assetName }).click();
+  await page.getByRole('button', { name: 'Garanti' }).click();
+  await expect(page.getByText('Garanti bilgisi girilmemiş')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Düzenle' }).first().click();
+  await expect(page.getByText('Demirbaş Bilgilerini Düzenle')).toBeVisible();
+
+  await page.locator('#edit-asset-warranty-start-date').fill('2026-05-15');
+  await page.locator('#edit-asset-warranty-end-date').fill('2028-05-15');
+
+  await page.getByRole('button', { name: 'Kaydet' }).click();
+
+  await expect(page.locator('.toast.success').first()).toBeVisible();
+  await expect(page.getByText('Garanti bilgisi girilmemiş')).not.toBeVisible();
+  await expect(page.getByText('15.05.2028').last()).toBeVisible();
+});
+
 test('demirbaş seri numarası araması noktalama farklarını normalize eder', async ({ page }) => {
   await mockTenantData(page, true, { assetSerial: 'QA ASSET 1B 001' });
   await signIn(page);

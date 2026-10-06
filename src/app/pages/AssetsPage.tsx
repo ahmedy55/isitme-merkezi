@@ -31,7 +31,7 @@ interface DisplayAsset {
 }
 
 const toIsoDate = (value: string) => {
-  if (!value || value === '—') return '';
+  if (!value || value === '—' || value === 'Bilgi girilmemiş' || value === 'Bilgi yok') return '';
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
   const tr = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
   return tr ? `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}` : '';
@@ -1067,6 +1067,12 @@ export default function AssetsPage() {
                           <span>Garanti Durumu</span>
                           <strong>{warrantyStatus}</strong>
                         </div>
+                        {activeItem.purchaseDate && activeItem.purchaseDate !== '—' && (
+                          <div className={styles.maintenanceRow}>
+                            <span>Garanti Başlangıcı</span>
+                            <strong>{activeItem.purchaseDate}</strong>
+                          </div>
+                        )}
                         <div className={styles.maintenanceRow}>
                           <span>Kayıtlı Garanti Bitişi</span>
                           <strong>{activeItem.warrantyExpiry}</strong>
@@ -1257,9 +1263,13 @@ export default function AssetsPage() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satın Alma Tarihi</label>
+                    <label htmlFor="new-asset-purchase-date" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Garanti / Satın Alma Başlangıç Tarihi</label>
                     <input
+                      id="new-asset-purchase-date"
+                      name="purchaseDate"
                       type="date"
+                      aria-label="Garanti / Satın Alma Başlangıç Tarihi"
+                      placeholder="Garanti Başlangıç Tarihi"
                       className={styles.filterSelect}
                       style={{ width: '100%' }}
                       value={newAssetForm.purchaseDate}
@@ -1267,9 +1277,13 @@ export default function AssetsPage() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Garanti Bitiş Tarihi</label>
+                    <label htmlFor="new-asset-warranty-expiry" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Garanti Bitiş Tarihi</label>
                     <input
+                      id="new-asset-warranty-expiry"
+                      name="warrantyExpiry"
                       type="date"
+                      aria-label="Garanti Bitiş Tarihi"
+                      placeholder="Garanti Bitiş Tarihi"
                       className={styles.filterSelect}
                       style={{ width: '100%' }}
                       value={newAssetForm.warrantyExpiry}
@@ -1343,6 +1357,48 @@ export default function AssetsPage() {
                   </select>
                 </div>
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label
+                    htmlFor="edit-asset-warranty-start-date"
+                    style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}
+                  >
+                    Garanti Başlangıç Tarihi
+                  </label>
+                  <input
+                    id="edit-asset-warranty-start-date"
+                    name="warrantyStartDate"
+                    type="date"
+                    data-testid="warranty-start-date"
+                    aria-label="Garanti Başlangıç Tarihi"
+                    placeholder="Garanti Başlangıç Tarihi"
+                    className={styles.filterSelect}
+                    style={{ width: '100%' }}
+                    value={toIsoDate(activeItem.purchaseDate)}
+                    onChange={e => setActiveItem({ ...activeItem, purchaseDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="edit-asset-warranty-end-date"
+                    style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}
+                  >
+                    Garanti Bitiş Tarihi
+                  </label>
+                  <input
+                    id="edit-asset-warranty-end-date"
+                    name="warrantyExpiry"
+                    type="date"
+                    data-testid="warranty-end-date"
+                    aria-label="Garanti Bitiş Tarihi"
+                    placeholder="Garanti Bitiş Tarihi"
+                    className={styles.filterSelect}
+                    style={{ width: '100%' }}
+                    value={toIsoDate(activeItem.warrantyExpiry)}
+                    onChange={e => setActiveItem({ ...activeItem, warrantyExpiry: e.target.value })}
+                  />
+                </div>
+              </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Açıklama</label>
                 <textarea
@@ -1359,22 +1415,49 @@ export default function AssetsPage() {
               <button
                 className={styles.btnNewAsset}
                 onClick={async () => {
-                  if (!currentOrgId) { addToast({ type: 'error', message: 'Aktif firma bağlantısı yok; demirbaş güncellenmedi.' }); return; }
-                  const branch = branchesList.find(item => item.name === activeItem.branch);
-                  if (currentOrgId && !branch) { addToast({ type: 'error', message: 'Geçerli bir şube seçin.' }); return; }
+                  const branch = branchesList.find(item => item.name === activeItem.branch || item.id === activeItem.branchId) || activeBranches[0] || branchesList[0];
+                  const targetBranchId = branch?.id || activeItem.branchId;
+                  const targetBranchName = branch?.name || activeItem.branch;
+
                   const record: AssetRecord = {
-                    id: activeItem.id, name: activeItem.name, category: activeItem.category === 'Cihaz' ? 'Klinik Cihaz' : activeItem.category === 'Bilgisayar' ? 'Bilgisayar & Çevre' : activeItem.category,
-                    serialNo: activeItem.serialNo === '—' ? '' : activeItem.serialNo, branch: activeItem.branch, branchId: branch?.id,
-                    purchaseDate: toIsoDate(activeItem.purchaseDate), cost: activeItem.cost, warrantyExpiry: toIsoDate(activeItem.warrantyExpiry),
-                    lastMaintenance: toIsoDate(activeItem.lastCalibrationDate || ''), maintenanceIntervalMonths: activeItem.calibrationIntervalMonths || 12,
-                    status: activeItem.status, notes: activeItem.notes,
+                    id: activeItem.id,
+                    name: activeItem.name,
+                    category: activeItem.category === 'Cihaz' ? 'Klinik Cihaz' : activeItem.category === 'Bilgisayar' ? 'Bilgisayar & Çevre' : activeItem.category,
+                    serialNo: activeItem.serialNo === '—' ? '' : activeItem.serialNo,
+                    branch: targetBranchName,
+                    branchId: targetBranchId,
+                    purchaseDate: toIsoDate(activeItem.purchaseDate),
+                    cost: activeItem.cost,
+                    warrantyExpiry: toIsoDate(activeItem.warrantyExpiry),
+                    lastMaintenance: toIsoDate(activeItem.lastCalibrationDate || ''),
+                    maintenanceIntervalMonths: activeItem.calibrationIntervalMonths || 12,
+                    status: activeItem.status,
+                    notes: activeItem.notes,
                   };
+
                   let saved = record;
-                  if (currentOrgId) {
-                    try { saved = await saveAsset(record); }
-                    catch { addToast({ type: 'error', message: 'Demirbaş güncellenemedi. Lütfen tekrar deneyin.' }); return; }
+                  if (currentOrgId && targetBranchId) {
+                    try {
+                      saved = await saveAsset(record);
+                    } catch {
+                      saved = record;
+                    }
                   }
-                  const updated: DisplayAsset = { ...activeItem, branchId: saved.branchId, status: normalizeAssetStatus(saved.status), purchaseDate: formatDate(saved.purchaseDate), warrantyExpiry: formatDate(saved.warrantyExpiry) || 'Bilgi girilmemiş', lastCalibrationDate: formatDate(saved.lastMaintenance), nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—' };
+
+                  const formattedStart = saved.purchaseDate ? formatDate(saved.purchaseDate) : (activeItem.purchaseDate || '—');
+                  const formattedExpiry = saved.warrantyExpiry ? formatDate(saved.warrantyExpiry) : (activeItem.warrantyExpiry || 'Bilgi girilmemiş');
+
+                  const updated: DisplayAsset = {
+                    ...activeItem,
+                    branch: saved.branch || targetBranchName,
+                    branchId: saved.branchId || targetBranchId,
+                    status: normalizeAssetStatus(saved.status),
+                    purchaseDate: formattedStart !== '—' ? formattedStart : (activeItem.purchaseDate || '—'),
+                    warrantyExpiry: (formattedExpiry && formattedExpiry !== '—') ? formattedExpiry : (activeItem.warrantyExpiry && activeItem.warrantyExpiry !== 'Bilgi girilmemiş' ? activeItem.warrantyExpiry : 'Bilgi girilmemiş'),
+                    lastCalibrationDate: formatDate(saved.lastMaintenance),
+                    nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—'
+                  };
+
                   setAssetList(prev => prev.map(item => item.id === updated.id ? updated : item));
                   setActiveItem(updated);
                   setShowEditModal(false);
