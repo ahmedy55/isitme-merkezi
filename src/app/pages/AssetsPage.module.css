@@ -482,6 +482,11 @@
   color: #dc2626;
 }
 
+.statusOther {
+  background: #f1f5f9;
+  color: #475569;
+}
+
 .statusDot {
   width: 6px;
   height: 6px;
@@ -491,6 +496,7 @@
 .dotGreen { background: #08785b; }
 .dotOrange { background: #d97706; }
 .dotRed { background: #dc2626; }
+.dotOther { background: #64748b; }
 
 /* ── Table Action Buttons ── */
 .actionBtns {

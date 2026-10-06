@@ -6,6 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import { formatCurrency, formatDate } from '../data/mockData';
 import { getNextMaintenanceDate } from '../lib/assetMaintenance';
+import { normalizeAssetCategory, normalizeAssetStatus } from '../lib/assetFilters';
 import { archiveAsset, AssetMaintenanceRecord, AssetRecord, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
 import styles from './AssetsPage.module.css';
 
@@ -20,7 +21,7 @@ interface DisplayAsset {
   purchaseDate: string;
   warrantyExpiry: string;
   cost: number;
-  status: 'Aktif' | 'Bakımda' | 'Onarımda' | 'Hek/Iskarta';
+  status: string;
   calibrationIntervalMonths?: number;
   lastCalibrationDate?: string;
   nextCalibrationDate?: string;
@@ -104,7 +105,7 @@ export default function AssetsPage() {
             const mapped: DisplayAsset[] = rows.map((r: any) => ({
               id: r.id,
               name: r.name,
-              category: r.category === 'Klinik Cihaz' ? 'Cihaz' : r.category === 'Bilgisayar & Çevre' ? 'Bilgisayar' : r.category || 'Cihaz',
+              category: normalizeAssetCategory(r.category),
               brandModel: r.model || r.name,
               branch: r.branch || '—',
               branchId: r.branchId,
@@ -112,7 +113,7 @@ export default function AssetsPage() {
               purchaseDate: formatDate(r.purchaseDate || ''),
               warrantyExpiry: formatDate(r.warrantyExpiry || ''),
               cost: Number(r.cost) || 0,
-              status: r.status === 'Arızalı' ? 'Onarımda' : r.status || 'Aktif',
+              status: normalizeAssetStatus(r.status),
               calibrationIntervalMonths: r.maintenanceIntervalMonths || 12,
               lastCalibrationDate: formatDate(r.lastMaintenance || ''),
               nextCalibrationDate: getNextMaintenanceDate(r.lastMaintenance, r.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—',
@@ -256,10 +257,16 @@ export default function AssetsPage() {
         </span>
       );
     }
-    return (
+    if (status === 'Onarımda') return (
       <span className={`${styles.statusDotBadge} ${styles.statusRepair}`}>
         <span className={`${styles.statusDot} ${styles.dotRed}`} />
         Onarımda
+      </span>
+    );
+    return (
+      <span className={`${styles.statusDotBadge} ${styles.statusOther}`}>
+        <span className={`${styles.statusDot} ${styles.dotOther}`} />
+        {status}
       </span>
     );
   };
@@ -598,6 +605,7 @@ export default function AssetsPage() {
 
         <select
           className={styles.filterSelect}
+          aria-label="Durum filtresi"
           value={selectedStatus}
           onChange={e => setSelectedStatus(e.target.value)}
         >
@@ -605,10 +613,14 @@ export default function AssetsPage() {
           <option value="Aktif">Aktif</option>
           <option value="Bakımda">Bakımda</option>
           <option value="Onarımda">Onarımda</option>
+          <option value="Hek/Iskarta">Hek/Iskarta</option>
+          <option value="Hurda">Hurda</option>
+          <option value="Satıldı">Satıldı</option>
         </select>
 
         <select
           className={styles.filterSelect}
+          aria-label="Kategori filtresi"
           value={selectedCategory}
           onChange={e => setSelectedCategory(e.target.value)}
         >

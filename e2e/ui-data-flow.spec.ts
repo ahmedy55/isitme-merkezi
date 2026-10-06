@@ -367,6 +367,21 @@ test('boş demirbaş verisinde seçim paneli ve pagination görünmez', async ({
   await expect(page.getByText('Toplam 0 kayıt')).toBeVisible();
 });
 
+test('demirbaş kategorisi ve durumu veritabanı etiketlerinden normalize edilerek filtrelenir', async ({ page }) => {
+  await openAssets(page, true);
+
+  await page.getByRole('combobox', { name: 'Durum filtresi' }).selectOption('Aktif');
+  await page.getByRole('combobox', { name: 'Kategori filtresi' }).selectOption('Cihaz');
+
+  const row = page.getByRole('row').filter({ hasText: assetName });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('Cihaz');
+  await expect(row).toContainText('Aktif');
+
+  await page.getByRole('combobox', { name: 'Kategori filtresi' }).selectOption('Mobilya');
+  await expect(page.getByText('Aranan kriterlere uygun demirbaş kaydı bulunamadı.')).toBeVisible();
+});
+
 test('satır üç nokta menüsü drawer açmadan görüntülenir; satır tıklaması drawer açar', async ({ page }) => {
   await mockTenantData(page, true, { maintenanceRows: [] });
   await signIn(page);
