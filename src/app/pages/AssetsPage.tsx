@@ -7,6 +7,7 @@ import { BranchService } from '../services/BranchService';
 import { formatCurrency, formatDate } from '../data/mockData';
 import { getNextMaintenanceDate } from '../lib/assetMaintenance';
 import { normalizeAssetCategory, normalizeAssetStatus } from '../lib/assetFilters';
+import { matchesInventoryIdentifier } from '../lib/inventorySearch';
 import { archiveAsset, AssetMaintenanceRecord, AssetRecord, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
 import styles from './AssetsPage.module.css';
 
@@ -170,10 +171,10 @@ export default function AssetsPage() {
 
       // Search term
       if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase();
-        const matchName = item.name.toLowerCase().includes(q);
-        const matchBrand = item.brandModel.toLowerCase().includes(q);
-        const matchSerial = item.serialNo.toLowerCase().includes(q);
+        const q = searchTerm.trim().toLocaleLowerCase('tr-TR');
+        const matchName = item.name.toLocaleLowerCase('tr-TR').includes(q);
+        const matchBrand = item.brandModel.toLocaleLowerCase('tr-TR').includes(q);
+        const matchSerial = matchesInventoryIdentifier(item.serialNo, q);
         if (!matchName && !matchBrand && !matchSerial) return false;
       }
 

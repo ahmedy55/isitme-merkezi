@@ -23,6 +23,7 @@ type ExtraFixtures = {
   cashBranchIds?: string[];
   expenseBranchIds?: string[];
   invoiceBranchIds?: string[];
+  assetSerial?: string;
 };
 
 function base64Url(value: unknown) {
@@ -149,7 +150,7 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         name: assetName,
         category: 'Klinik Cihaz',
         model: 'Test Model',
-        serial_no: 'PW-ONLY-001',
+        serial_no: fixtures.assetSerial || 'PW-ONLY-001',
         purchase_date: '2026-01-10',
         purchase_price: 12000,
         warranty_expiry: '2027-01-10',
@@ -416,6 +417,16 @@ test('demirbaş kategorisi ve durumu veritabanı etiketlerinden normalize ediler
 
   await page.getByRole('combobox', { name: 'Kategori filtresi' }).selectOption('Mobilya');
   await expect(page.getByText('Aranan kriterlere uygun demirbaş kaydı bulunamadı.')).toBeVisible();
+});
+
+test('demirbaş seri numarası araması noktalama farklarını normalize eder', async ({ page }) => {
+  await mockTenantData(page, true, { assetSerial: 'QA ASSET 1B 001' });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await page.getByPlaceholder('Demirbaş adı, seri no, marka ile ara...').fill('QA-ASSET-1B-001');
+  const row = page.getByRole('row').filter({ hasText: assetName });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('QA ASSET 1B 001');
 });
 
 test('satır üç nokta menüsü drawer açmadan görüntülenir; satır tıklaması drawer açar', async ({ page }) => {
