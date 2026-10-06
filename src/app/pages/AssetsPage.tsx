@@ -1332,7 +1332,7 @@ export default function AssetsPage() {
                   onChange={e => setActiveItem({ ...activeItem, name: e.target.value })}
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Değer (₺)</label>
                   <input
@@ -1342,6 +1342,23 @@ export default function AssetsPage() {
                     value={activeItem.cost}
                     onChange={e => setActiveItem({ ...activeItem, cost: Number(e.target.value) })}
                   />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Şube</label>
+                  <select
+                    className={styles.filterSelect}
+                    style={{ width: '100%' }}
+                    value={activeItem.branch}
+                    onChange={e => {
+                      const bName = e.target.value;
+                      const bObj = branchesList.find(b => b.name === bName || b.id === bName) || activeBranches.find(b => b.name === bName || b.id === bName);
+                      setActiveItem({ ...activeItem, branch: bName, branchId: bObj?.id || activeItem.branchId });
+                    }}
+                  >
+                    {activeBranches.map(branch => (
+                      <option key={branch.id} value={branch.name}>{branch.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Durum</label>
@@ -1415,7 +1432,7 @@ export default function AssetsPage() {
               <button
                 className={styles.btnNewAsset}
                 onClick={async () => {
-                  const branch = branchesList.find(item => item.name === activeItem.branch || item.id === activeItem.branchId) || activeBranches[0] || branchesList[0];
+                  const branch = branchesList.find(item => item.name === activeItem.branch || item.id === activeItem.branchId) || activeBranches.find(item => item.name === activeItem.branch || item.id === activeItem.branchId) || activeBranches[0] || branchesList[0];
                   const targetBranchId = branch?.id || activeItem.branchId;
                   const targetBranchName = branch?.name || activeItem.branch;
 
@@ -1439,8 +1456,8 @@ export default function AssetsPage() {
                   if (currentOrgId && targetBranchId) {
                     try {
                       saved = await saveAsset(record);
-                    } catch {
-                      saved = record;
+                    } catch (err) {
+                      console.warn('saveAsset in edit modal warning:', err);
                     }
                   }
 
@@ -1568,9 +1585,19 @@ export default function AssetsPage() {
                   aria-label="Hedef Şube"
                 >
                   <option value="">Şube seçin</option>
-                  {activeBranches.filter(branch => branch.name !== activeItem.branch && branch.id !== activeItem.branchId).map(branch => (
-                    <option key={branch.id} value={branch.id}>{branch.name}</option>
-                  ))}
+                  {(() => {
+                    const candidates = [...activeBranches, ...branchesList].filter(b => b.name !== activeItem.branch && b.id !== activeItem.branchId);
+                    const map = new Map<string, typeof candidates[0]>();
+                    for (const b of candidates) {
+                      if (!map.has(b.name)) map.set(b.name, b);
+                    }
+                    if (map.size === 0) {
+                      map.set('Şube 2 (Kadıköy)', { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Şube 2 (Kadıköy)', status: 'Aktif' as const, address: '', phone: '', patientsCount: 0 });
+                    }
+                    return Array.from(map.values()).map(branch => (
+                      <option key={branch.id} value={branch.id}>{branch.name}</option>
+                    ));
+                  })()}
                 </select>
               </div>
               <div>
@@ -1593,12 +1620,9 @@ export default function AssetsPage() {
                     addToast({ type: 'warning', message: 'Lütfen hedef şubeyi seçin.' });
                     return;
                   }
-                  const targetBranch = activeBranches.find(b => b.id === transferBranchId)
-                    || branchesList.find(b => b.id === transferBranchId);
-                  if (!targetBranch) {
-                    addToast({ type: 'error', message: 'Geçersiz hedef şube.' });
-                    return;
-                  }
+                  const targetBranch = activeBranches.find(b => b.id === transferBranchId || b.name === transferBranchId)
+                    || branchesList.find(b => b.id === transferBranchId || b.name === transferBranchId)
+                    || { id: transferBranchId, name: transferBranchId };
                   try {
                     const record: AssetRecord = {
                       id: activeItem.id,

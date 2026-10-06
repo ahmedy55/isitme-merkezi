@@ -39,6 +39,9 @@ type ExtraFixtures = {
   assetWarrantyExpiry?: string | null;
   assetStatus?: string;
   transferRows?: Record<string, unknown>[];
+  orgSettings?: Record<string, unknown>;
+  memberRows?: Record<string, unknown>[];
+  branchRows?: Record<string, unknown>[];
 };
 
 function base64Url(value: unknown) {
@@ -290,14 +293,43 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       rows = [{ ...body, id: 'acacacac-acac-4cac-8cac-acacacacacac', created_at: new Date().toISOString() }];
     }
 
-    if (table === 'memberships') {
-      rows = [{ id: '55555555-5555-4555-8555-555555555555', user_id: userId, organization_id: orgId, branch_id: branchId, first_name: 'Playwright', last_name: 'Test', email: 'playwright@example.invalid', roles: ['Firma Yöneticisi'], status: 'active' }];
+    if (table === 'organization_settings') {
+      if (['POST', 'PATCH', 'PUT'].includes(route.request().method())) {
+        const body = route.request().postDataJSON();
+        const payload = Array.isArray(body) ? body[0] : body;
+        fixtures.orgSettings = { ...(fixtures.orgSettings || {}), ...payload, organization_id: orgId };
+        await route.fulfill({ status: 200, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify([fixtures.orgSettings]) });
+        return;
+      }
+      if (route.request().headers()['accept']?.includes('vnd.pgrst.object+json')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/vnd.pgrst.object+json',
+          headers: corsHeaders,
+          body: JSON.stringify(fixtures.orgSettings || { organization_id: orgId, notification_settings: null }),
+        });
+        return;
+      }
+      rows = fixtures.orgSettings ? [fixtures.orgSettings] : [{ organization_id: orgId, notification_settings: null }];
+    } else if (table === 'memberships') {
+      if (['POST', 'PATCH', 'PUT'].includes(route.request().method())) {
+        const body = route.request().postDataJSON();
+        const payload = Array.isArray(body) ? body[0] : body;
+        const currentMember = (fixtures.memberRows || [{ id: '55555555-5555-4555-8555-555555555555', user_id: userId, organization_id: orgId, branch_id: branchId, first_name: 'Playwright', last_name: 'Test', email: 'playwright@example.invalid', roles: ['Firma Yöneticisi'], status: 'active' }])[0];
+        const updatedMember = { ...currentMember, ...payload };
+        fixtures.memberRows = [updatedMember];
+        await route.fulfill({ status: 200, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify([updatedMember]) });
+        return;
+      }
+      rows = fixtures.memberRows || [{ id: '55555555-5555-4555-8555-555555555555', user_id: userId, organization_id: orgId, branch_id: branchId, first_name: 'Playwright', last_name: 'Test', email: 'playwright@example.invalid', roles: ['Firma Yöneticisi'], status: 'active' }];
     } else if (table === 'my_organizations') {
       rows = [{ organization_id: orgId, name: 'Playwright Yalıtılmış Test Firması' }];
     } else if (table === 'branches') {
-      rows = [{ id: branchId, organization_id: orgId, name: 'QA Şube', status: 'active', archived_at: null }];
+      rows = fixtures.branchRows || [
+        { id: branchId, organization_id: orgId, name: 'QA Şube', status: 'active', archived_at: null },
+      ];
     } else if (table === 'assets' && withAsset) {
-      const existingAsset = {
+      const existingAsset: any = {
         id: assetId,
         organization_id: orgId,
         branch_id: branchId,
@@ -312,9 +344,18 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         archived_at: null,
         branches: { name: 'QA Şube' },
       };
-      if (route.request().method() === 'POST') {
-        const body = route.request().postDataJSON() as Record<string, unknown>;
-        Object.assign(existingAsset, body);
+      if (['POST', 'PATCH', 'PUT'].includes(route.request().method())) {
+        const body = route.request().postDataJSON();
+        const payload = Array.isArray(body) ? body[0] : body;
+        Object.assign(existingAsset, payload);
+        if (payload.branch_id) {
+          existingAsset.branch_id = payload.branch_id;
+          const matchedBranch = (fixtures.branchRows || [
+            { id: branchId, name: 'QA Şube' },
+            { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Şube 2 (Kadıköy)' }
+          ]).find((b: any) => b.id === payload.branch_id);
+          existingAsset.branches = { name: String((matchedBranch as any)?.name || 'Şube 2 (Kadıköy)') };
+        }
         fixtures.assetStatus = String(existingAsset.status);
         await route.fulfill({ status: 200, contentType: 'application/vnd.pgrst.object+json', headers: corsHeaders, body: JSON.stringify(existingAsset) });
         return;
@@ -396,8 +437,8 @@ async function signIn(page: Page) {
   }
 }
 
-async function openAssets(page: Page, withAsset: boolean) {
-  await mockTenantData(page, withAsset);
+async function openAssets(page: Page, withAsset: boolean, fixtures: ExtraFixtures = {}) {
+  await mockTenantData(page, withAsset, fixtures);
   await signIn(page);
   await expect(page.getByRole('button', { name: 'Demirbaşlar' })).toBeVisible();
   await page.getByRole('button', { name: 'Demirbaşlar' }).click();
@@ -1433,7 +1474,7 @@ test('Open an appointment from the list and review details', async ({ page }) =>
       organization_id: orgId,
       branch_id: branchId,
       patient_id: 'p-apt-1',
-      date: new Date().toISOString().slice(0, 10),
+      date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date()),
       time: '14:00',
       type: 'Muayene',
       status: 'Bekliyor',
@@ -1506,7 +1547,7 @@ test('View SGK document and report tracking', async ({ page }) => {
 });
 
 test('Move an appointment to a different date or time', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
   await mockTenantData(page, false, {
     patientRows: [{
       id: 'p-resched-1',
@@ -1589,7 +1630,7 @@ test('Filter the patient directory by status and appointment context', async ({ 
 });
 
 test('Cancel an appointment from the schedule', async ({ page }) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
   await mockTenantData(page, false, {
     patientRows: [{
       id: 'p-cancel-1',
@@ -1643,4 +1684,168 @@ test('Review transfer history across branches', async ({ page }) => {
   await expect(page.getByRole('columnheader', { name: 'İŞLEMLER' })).toBeVisible();
 
   await expect(page.getByText('Tamamlandı').first()).toBeVisible();
+});
+
+test('Enable WhatsApp and SMS notification preferences', async ({ page }) => {
+  await mockTenantData(page, true);
+  await signIn(page);
+
+  await page.getByRole('button', { name: 'Ayarlar' }).click();
+  await page.getByRole('button', { name: 'WhatsApp / SMS' }).click();
+
+  await page.getByRole('button', { name: 'Değişiklikleri kaydet' }).click();
+  await expect(page.getByText('WhatsApp / SMS ayarları başarıyla kaydedildi.')).toBeVisible();
+  await expect(page.getByText('WhatsApp bağlantısı henüz uygulanmadı.')).not.toBeVisible();
+});
+
+test('Update alert and security preferences', async ({ page }) => {
+  await mockTenantData(page, true);
+  await signIn(page);
+
+  await page.getByRole('button', { name: 'Ayarlar' }).click();
+  await page.getByRole('navigation', { name: 'Ayar kategorileri' }).getByRole('button', { name: 'Bildirimler' }).click();
+
+  const toggle = page.getByTestId('toggle-sale_create');
+  await toggle.click();
+
+  await page.getByRole('button', { name: 'Bildirim ayarlarını kaydet' }).click();
+  await expect(page.getByText('Bildirim ayarları başarıyla kaydedildi.')).toBeVisible();
+
+  // Switch to Firma Bilgileri and return to Bildirimler
+  await page.getByRole('navigation', { name: 'Ayar kategorileri' }).getByRole('button', { name: 'Firma Bilgileri' }).click();
+  await page.getByRole('navigation', { name: 'Ayar kategorileri' }).getByRole('button', { name: 'Bildirimler' }).click();
+  await expect(page.getByTestId('toggle-sale_create')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('Add a new staff member', async ({ page }) => {
+  await mockTenantData(page, true, {
+    branchRows: [
+      { id: branchId, organization_id: orgId, name: 'QA Şube', status: 'active', archived_at: null },
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', organization_id: orgId, name: 'Şube 2 (Kadıköy)', status: 'active', archived_at: null },
+    ],
+  });
+  await page.route('**/api/invite-user', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      success: true,
+      user: {
+        id: 'user-new-staff-1',
+        email: 'burak.test@example.invalid',
+        firstName: 'Burak',
+        lastName: 'Akın',
+        roles: ['Odyometrist'],
+        branch: 'QA Şube',
+        branchId,
+        status: 'Aktif',
+      }
+    })
+  }));
+  await signIn(page);
+
+  await page.getByRole('button', { name: 'Şubeler & Yetki' }).click();
+  await page.getByRole('button', { name: 'Yeni Personel Ekle' }).click();
+
+  await page.getByPlaceholder('Örn: Burak').fill('Burak');
+  await page.getByPlaceholder('Örn: Akın').fill('Akın');
+  await page.getByPlaceholder('burak@isitmemerkezi.com').fill('burak.test@example.invalid');
+  await page.getByPlaceholder('05XX XXX XX XX').fill('05551234567');
+
+  const branchSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'QA Şube' }) }).last();
+  await branchSelect.selectOption({ label: 'QA Şube' });
+
+  await page.getByRole('button', { name: 'Personeli Kaydet' }).click();
+  await expect(page.getByText('Kullanıcı eklenemedi: Geçersiz veri formatı.')).not.toBeVisible();
+
+  await page.getByRole('button', { name: /Personel Yönetimi/ }).click();
+  await expect(page.getByText('Burak Akın').first()).toBeVisible();
+});
+
+test('Remove a role from personnel', async ({ page }) => {
+  await mockTenantData(page, true, {
+    branchRows: [
+      { id: branchId, organization_id: orgId, name: 'QA Şube', status: 'active', archived_at: null },
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', organization_id: orgId, name: 'Şube 2 (Kadıköy)', status: 'active', archived_at: null },
+    ],
+  });
+  await signIn(page);
+
+  await page.getByRole('button', { name: 'Şubeler & Yetki' }).click();
+  await page.getByRole('button', { name: /Personel Yönetimi/ }).click();
+  await page.getByRole('button', { name: 'Düzenle' }).first().click();
+
+  const roleSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Odyometrist' }) }).first();
+  await roleSelect.selectOption('Odyometrist');
+
+  await page.getByRole('button', { name: 'Güncelle' }).click();
+  await expect(page.getByText('Geçerli bir şube seçin.')).not.toBeVisible();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+});
+
+test('Assign a clinic asset to another branch', async ({ page }) => {
+  await openAssets(page, true, {
+    branchRows: [
+      { id: branchId, organization_id: orgId, name: 'QA Şube', status: 'active', archived_at: null },
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', organization_id: orgId, name: 'Şube 2 (Kadıköy)', status: 'active', archived_at: null },
+    ],
+  });
+
+  const row = page.getByRole('row').filter({ hasText: assetName });
+  await row.click();
+  await page.getByRole('button', { name: 'Transfer Et' }).click();
+
+  const targetSelect = page.locator('select[aria-label="Hedef Şube"]');
+  await targetSelect.selectOption({ label: 'Şube 2 (Kadıköy)' });
+
+  await page.getByRole('button', { name: 'Transferi Onayla' }).click();
+  await expect(page.getByText('Demirbaş kaydedilemedi.')).not.toBeVisible();
+  await expect(page.getByText(/başarıyla Şube 2 \(Kadıköy\) şubesine transfer edildi\./)).toBeVisible();
+});
+
+test('Edit an existing clinic asset', async ({ page }) => {
+  await openAssets(page, true);
+
+  const row = page.getByRole('row').filter({ hasText: assetName });
+  await row.getByTitle('Düzenle').click();
+
+  const warrantyEnd = page.getByLabel('Garanti Bitiş Tarihi');
+  await warrantyEnd.fill('2027-10-06');
+
+  await page.getByRole('button', { name: 'Kaydet' }).click();
+  await expect(page.getByText('Demirbaş kaydedilemedi.')).not.toBeVisible();
+  await expect(page.getByText('Demirbaş bilgileri kaydedildi.')).toBeVisible();
+  await expect(page.getByText('06.10.2027').first()).toBeVisible();
+});
+
+test('Transfer a patient with related records between branches', async ({ page }) => {
+  await mockTenantData(page, true, {
+    patientRows: [{
+      id: 'patient-transfer-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Test Hasta',
+      last_name: 'Tek Şube Bir',
+      branch: 'QA Şube',
+      patient_status: 'Müşteri',
+      deleted_at: null,
+    }],
+    branchRows: [
+      { id: branchId, organization_id: orgId, name: 'QA Şube', status: 'active', archived_at: null },
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', organization_id: orgId, name: 'Şube 2 (Kadıköy)', status: 'active', archived_at: null }
+    ]
+  });
+  await signIn(page);
+
+  await page.getByRole('button', { name: 'Şube Aktiviteleri' }).click();
+
+  await page.getByPlaceholder('Hasta adı, TC veya telefon no...').fill('Test Hasta');
+  const currentBranchSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'QA Şube' }) }).first();
+  await currentBranchSelect.selectOption({ label: 'QA Şube' });
+
+  const targetBranchSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Şube 2 (Kadıköy)' }) }).last();
+  await targetBranchSelect.selectOption({ label: 'Şube 2 (Kadıköy)' });
+
+  await page.getByRole('button', { name: 'Hasta Dosyasını ve Kayıtlarını Transfer Et' }).click();
+  await expect(page.getByText('Hastanın mevcut şubesi seçilen kaynak şube değil.')).not.toBeVisible();
+  await expect(page.getByText(/şubesine aktarıldı\./)).toBeVisible();
 });

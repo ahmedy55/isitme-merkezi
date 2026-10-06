@@ -57,8 +57,9 @@ export async function POST(request: NextRequest) {
       if(error || !branch) return NextResponse.json({error:'Geçersiz şube.'},{status:400});
     }
     // Never reuse a different tenant's Auth account or mutate its profile.
+    const userPassword = password || `AudiPro#${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}!Aa1`;
     const {data:created,error:createError}=await admin.auth.admin.createUser({
-      email:email.trim().toLowerCase(),password,email_confirm:true,
+      email:email.trim().toLowerCase(),password: userPassword,email_confirm:true,
       app_metadata:{organization_id:orgId,branch_id:branchId || null,roles},
       user_metadata:{first_name:firstName || '',last_name:lastName || ''},
     });

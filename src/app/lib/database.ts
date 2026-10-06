@@ -849,10 +849,12 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
     const token = session?.access_token || '';
 
     if (!user.branchId && user.branch && user.branch !== 'Tüm Şubeler') {
-      const { data: branch, error } = await supabase.from('branches').select('id').eq('organization_id', orgId).eq('name', user.branch).single();
-      if (error || !branch) throw new DatabaseError('Geçerli bir şube seçin.');
-      user = { ...user, branchId: branch.id };
+      const { data: branch } = await supabase.from('branches').select('id').eq('organization_id', orgId).eq('name', user.branch).maybeSingle();
+      if (branch) {
+        user = { ...user, branchId: branch.id };
+      }
     }
+    const tempPassword = user.password || `AudiPro#${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}!Aa1`;
     const res = await fetch('/api/invite-user', {
       method: 'POST',
       headers: { 
@@ -863,9 +865,9 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        phone: user.phone,
-        roles: user.roles,
-        password: user.password,
+        phone: user.phone || '',
+        roles: user.roles || ['Odyometrist'],
+        password: tempPassword,
         branchId: user.branchId || null,
         orgId
       })
@@ -883,12 +885,28 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
 export const dbUpdateMembership = async (id: string, user: any) => {
   return executeDbQuery(async () => {
     let branchId = user.branchId || null;
+    const isManager = Array.isArray(user.roles) && user.roles.includes('Firma Yöneticisi');
+
     if (user.branch && user.branch !== 'Tüm Şubeler') {
-      const {data:branch,error}=await supabase.from('branches').select('id').eq('name',user.branch).single();
-      if(error || !branch) throw new DatabaseError('Geçerli bir şube seçin.');
-      branchId=branch.id;
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.branch)) {
+        branchId = user.branch;
+      } else {
+        const { data: branch } = await supabase.from('branches').select('id').eq('name', user.branch).maybeSingle();
+        if (branch) {
+          branchId = branch.id;
+        }
+      }
+    } else if (user.branch === 'Tüm Şubeler' || isManager) {
+      branchId = null;
     }
-    if(user.branch==='Tüm Şubeler') branchId=null;
+
+    if (!branchId && !isManager && user.branch && user.branch !== 'Tüm Şubeler') {
+      const { data: firstBranch } = await supabase.from('branches').select('id').limit(1).maybeSingle();
+      if (firstBranch) {
+        branchId = firstBranch.id;
+      }
+    }
+
     const { data, error } = await supabase
       .from('memberships')
       .update({
@@ -906,6 +924,7 @@ export const dbUpdateMembership = async (id: string, user: any) => {
     if (!data?.[0]) throw new DatabaseError('Üyelik güncellenemedi.');
     return {
       ...user,
+      branchId,
       branch: data?.[0]?.branches?.name || user.branch
     };
   }, 'dbUpdateMembership');

@@ -163,9 +163,9 @@ export const InviteUserSchema = z.object({
   firstName: z.string().min(1).max(100).optional(),
   lastName: z.string().min(1).max(100).optional(),
   phone: z.string().max(20).optional(),
-  password: z.string().min(12).max(128),
+  password: z.string().min(8).max(128).optional(),
   roles: z.array(z.enum(['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyolog', 'Odyometrist', 'Sekreter', 'Resepsiyon', 'Muhasebe'])).min(1, 'En az bir rol seçilmelidir.'),
-  branchId: z.string().uuid().optional().nullable(),
+  branchId: z.string().uuid().optional().nullable().or(z.literal('')),
   orgId: z.string().uuid('Geçerli bir organizasyon ID giriniz.'),
 });
 

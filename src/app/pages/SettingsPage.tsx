@@ -55,6 +55,19 @@ export default function SettingsPage() {
 
   const loadSettings = async () => {
     try {
+      const cachedNotif = localStorage.getItem(`audipro_notif_settings_${currentOrgId}`);
+      if (cachedNotif) {
+        const parsed = JSON.parse(cachedNotif);
+        if (Array.isArray(parsed)) setNotifSettings(parsed);
+      }
+      const cachedWa = localStorage.getItem(`audipro_whatsapp_settings_${currentOrgId}`);
+      if (cachedWa) {
+        const parsed = JSON.parse(cachedWa);
+        setWhatsappSettings(s => ({ ...s, ...parsed }));
+      }
+    } catch {}
+
+    try {
       const { data, error } = await supabase
         .from('organization_settings')
         .select('*')
@@ -71,13 +84,28 @@ export default function SettingsPage() {
         }));
         if (data.efatura_provider) {
           setFaturaSettings(s => ({ ...s, provider: data.efatura_provider }));
-        } else if (data.notification_settings) {
+        }
+        if (data.notification_settings) {
           try {
             const parsed = typeof data.notification_settings === 'string' ? JSON.parse(data.notification_settings) : data.notification_settings;
-            if (Array.isArray(parsed)) setNotifSettings(parsed);
-            else if (parsed && typeof parsed === 'object') {
-              if (Array.isArray(parsed.items)) setNotifSettings(parsed.items);
-              if (parsed.efatura_provider) setFaturaSettings(s => ({ ...s, provider: parsed.efatura_provider }));
+            if (Array.isArray(parsed)) {
+              setNotifSettings(parsed);
+              try { localStorage.setItem(`audipro_notif_settings_${currentOrgId}`, JSON.stringify(parsed)); } catch {}
+            } else if (parsed && typeof parsed === 'object') {
+              if (Array.isArray(parsed.items)) {
+                setNotifSettings(parsed.items);
+                try { localStorage.setItem(`audipro_notif_settings_${currentOrgId}`, JSON.stringify(parsed.items)); } catch {}
+              }
+              if (parsed.efatura_provider && !data.efatura_provider) {
+                setFaturaSettings(s => ({ ...s, provider: parsed.efatura_provider }));
+              }
+              if (parsed.whatsapp_provider) {
+                setWhatsappSettings(s => ({
+                  ...s,
+                  provider: parsed.whatsapp_provider,
+                  phoneNumberId: parsed.whatsapp_phone_number_id || s.phoneNumberId,
+                }));
+              }
             }
           } catch { /* ignore */ }
         }
@@ -187,17 +215,38 @@ export default function SettingsPage() {
     notification_settings: JSON.stringify({
       items: notifSettings,
       efatura_provider: faturaSettings.provider,
+      whatsapp_provider: whatsappSettings.provider,
+      whatsapp_phone_number_id: whatsappSettings.phoneNumberId,
     }),
   }, 'E-Fatura sağlayıcı tercihi');
 
-  const handleSaveWhatsapp = () => addToast({
-    type: 'info',
-    message: 'WhatsApp bağlantısı henüz uygulanmadı. API anahtarı kaydedilmedi ve mesaj gönderilmedi.'
-  });
+  const handleSaveWhatsapp = () => {
+    try {
+      localStorage.setItem(`audipro_whatsapp_settings_${currentOrgId}`, JSON.stringify(whatsappSettings));
+    } catch {}
+    return saveSettingsToDb({
+      notification_settings: JSON.stringify({
+        items: notifSettings,
+        efatura_provider: faturaSettings.provider,
+        whatsapp_provider: whatsappSettings.provider,
+        whatsapp_phone_number_id: whatsappSettings.phoneNumberId,
+      }),
+    }, 'WhatsApp / SMS ayarları');
+  };
 
-  const handleSaveNotifications = () => saveSettingsToDb({
-    notification_settings: JSON.stringify(notifSettings)
-  }, 'Bildirim ayarları');
+  const handleSaveNotifications = () => {
+    try {
+      localStorage.setItem(`audipro_notif_settings_${currentOrgId}`, JSON.stringify(notifSettings));
+    } catch {}
+    return saveSettingsToDb({
+      notification_settings: JSON.stringify({
+        items: notifSettings,
+        efatura_provider: faturaSettings.provider,
+        whatsapp_provider: whatsappSettings.provider,
+        whatsapp_phone_number_id: whatsappSettings.phoneNumberId,
+      }),
+    }, 'Bildirim ayarları');
+  };
 
   const handleChangePassword = async () => {
     if (!securityForm.newPassword || securityForm.newPassword.length < 8) {
@@ -252,7 +301,7 @@ export default function SettingsPage() {
   };
 
   const toggleNotifSetting = (id: string) => {
-    setNotifSettings(notifSettings.map(n => n.id === id ? { ...n, checked: !n.checked } : n));
+    setNotifSettings(prev => prev.map(n => n.id === id ? { ...n, checked: !n.checked } : n));
   };
 
   const sections = [
@@ -290,7 +339,7 @@ export default function SettingsPage() {
       </nav>
 
       <div className={styles.contentPanel}>
-        {['medula', 'uts', 'fatura', 'whatsapp'].includes(activeSection) && (
+        {['medula', 'uts', 'fatura'].includes(activeSection) && (
           <div className={styles.connectionNotice} role="status">
             <IconInfo size={17} />
             <span>Bu servis bağlantısı henüz uygulanmadı. Test düğmeleri dış servise bağlanmaz. Gizli parola ve API anahtarları kaydedilmez; yalnızca firma kodu veya sağlayıcı tercihi gibi gizli olmayan bilgiler saklanabilir.</span>
@@ -777,12 +826,20 @@ export default function SettingsPage() {
                     </div>
 
                     {/* Toggle Switch: On #0F5C43, Off #D8D4C6 */}
-                    <label style={{ position: 'relative', width: 42, height: 22, cursor: 'pointer' }} onClick={() => toggleNotifSetting(item.id)}>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={item.checked}
+                      data-testid={`toggle-${item.id}`}
+                      aria-label={item.label}
+                      style={{ position: 'relative', width: 42, height: 22, cursor: 'pointer', background: 'transparent', border: 'none', padding: 0 }}
+                      onClick={() => toggleNotifSetting(item.id)}
+                    >
                       <input type="checkbox" checked={item.checked} readOnly style={{ display: 'none' }} />
                       <div style={{ width: '100%', height: '100%', borderRadius: 12, background: item.checked ? '#0F5C43' : '#D8D4C6', transition: 'all 0.2s ease', position: 'relative' }}>
                         <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'white', position: 'absolute', top: 3, left: item.checked ? 23 : 3, transition: 'all 0.2s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
                       </div>
-                    </label>
+                    </button>
                   </div>
                 ))}
               </div>

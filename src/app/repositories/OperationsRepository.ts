@@ -23,16 +23,44 @@ export async function fetchAssets(): Promise<AssetRecord[]> {
 }
 export async function saveAsset(asset: AssetRecord): Promise<AssetRecord> {
   const orgId = await getActiveOrgId();
-  if (!orgId || !asset.branchId) throw new Error('Firma ve şube seçimi gerekli.');
-  const { data, error } = await supabase.from('assets').upsert({
-    id: asset.id, organization_id: orgId, branch_id: asset.branchId, name: asset.name,
-    category: asset.category, serial_no: asset.serialNo, purchase_date: asset.purchaseDate || null,
-    purchase_price: asset.cost, warranty_expiry: asset.warrantyExpiry || null,
-    last_maintenance: asset.lastMaintenance || null, maintenance_interval_months: asset.maintenanceIntervalMonths,
-    status: asset.status, notes: asset.notes || '',
-  }).select('*, branches(name)').single();
-  if (error || !data) throw new Error('Demirbaş kaydedilemedi.');
-  return assetFromDb(data);
+  if (!orgId) throw new Error('Firma seçimi gerekli.');
+
+  let branchId = asset.branchId;
+  if (!branchId && asset.branch) {
+    const { data: bRow } = await supabase.from('branches').select('id').eq('name', asset.branch).maybeSingle();
+    if (bRow) branchId = bRow.id;
+  }
+  if (!branchId) {
+    const { data: defaultBranch } = await supabase.from('branches').select('id').limit(1).maybeSingle();
+    if (defaultBranch) branchId = defaultBranch.id;
+  }
+  if (!branchId) throw new Error('Demirbaş için geçerli bir şube seçimi gerekli.');
+
+  const payload: any = {
+    organization_id: orgId,
+    branch_id: branchId,
+    name: asset.name,
+    category: asset.category,
+    serial_no: asset.serialNo,
+    purchase_date: asset.purchaseDate || null,
+    purchase_price: asset.cost,
+    warranty_expiry: asset.warrantyExpiry || null,
+    last_maintenance: asset.lastMaintenance || null,
+    maintenance_interval_months: asset.maintenanceIntervalMonths,
+    status: asset.status,
+    notes: asset.notes || '',
+  };
+
+  let result = await supabase.from('assets').update(payload).eq('id', asset.id).select('*, branches(name)').maybeSingle();
+  if (!result.data) {
+    result = await supabase.from('assets').upsert({ id: asset.id, ...payload }, { onConflict: 'id' }).select('*, branches(name)').maybeSingle();
+  }
+
+  if (result.error || !result.data) {
+    console.error('saveAsset error:', result.error);
+    throw new Error(result.error?.message || 'Demirbaş kaydedilemedi.');
+  }
+  return assetFromDb(result.data);
 }
 export async function archiveAsset(id: string): Promise<void> {
   const { error } = await supabase.from('assets').update({ archived_at: new Date().toISOString() }).eq('id', id);

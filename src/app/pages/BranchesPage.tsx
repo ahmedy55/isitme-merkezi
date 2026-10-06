@@ -239,9 +239,16 @@ export default function BranchesPage() {
       addToast({ type: 'error', message: 'Ad ve soyad zorunludur.' });
       return;
     }
-    if (!newStaffForm.branch || !branchesList.some(branch => branch.name === newStaffForm.branch) && currentOrgId) {
-      addToast({ type: 'error', message: 'Lütfen mevcut bir şube seçin.' });
-      return;
+    const isManagerRole = newStaffForm.role === 'Firma Yöneticisi';
+    const foundBranch = branchesList.find(branch => branch.name === newStaffForm.branch || branch.id === newStaffForm.branch);
+    let assignedBranchId = foundBranch?.id || null;
+    let assignedBranchName = foundBranch?.name || newStaffForm.branch;
+
+    if (!assignedBranchId && !isManagerRole && currentOrgId) {
+      if (branchesList.length > 0) {
+        assignedBranchId = branchesList[0].id;
+        assignedBranchName = branchesList[0].name;
+      }
     }
 
     if (!newStaffForm.email.trim()) {
@@ -253,10 +260,10 @@ export default function BranchesPage() {
       firstName: newStaffForm.firstName,
       lastName: newStaffForm.lastName,
       email: newStaffForm.email,
-      phone: newStaffForm.phone,
+      phone: newStaffForm.phone || '',
       roles: [newStaffForm.role],
-      branch: newStaffForm.branch,
-      branchId: branchesList.find(branch => branch.name === newStaffForm.branch)?.id || null,
+      branch: assignedBranchName || 'Tüm Şubeler',
+      branchId: assignedBranchId,
       status: 'Aktif',
       createdAt: new Date().toISOString(),
     };
@@ -1002,6 +1009,7 @@ export default function BranchesPage() {
                       onChange={e => setNewStaffForm({ ...newStaffForm, branch: e.target.value })}
                     >
                       <option value="">Şube seçin</option>
+                      <option value="Tüm Şubeler">Tüm Şubeler</option>
                       {branches.map(b => (
                         <option key={b.name} value={b.name}>{b.name}</option>
                       ))}
@@ -1032,9 +1040,11 @@ export default function BranchesPage() {
               e.preventDefault();
               const original = usersList.find(user => user.id === editingStaff.id);
               if (!original) return;
-              const branchId = branchesList.find(branch => branch.name === editingStaff.branch)?.id || null;
+              const targetBranchObj = branchesList.find(branch => branch.name === editingStaff.branch || branch.id === editingStaff.branch);
+              const branchId = targetBranchObj?.id || (editingStaff.branch !== 'Tüm Şubeler' ? branchesList[0]?.id : null);
+              const branchName = targetBranchObj?.name || (branchId ? branchesList.find(b => b.id === branchId)?.name : editingStaff.branch);
               try {
-                await updateUser({ ...original, firstName: editingStaff.firstName, lastName: editingStaff.lastName, phone: editingStaff.phone, roles: [editingStaff.role === 'Diğer' ? 'Odyometrist' : editingStaff.role], branch: editingStaff.branch, branchId });
+                await updateUser({ ...original, firstName: editingStaff.firstName, lastName: editingStaff.lastName, phone: editingStaff.phone, roles: [editingStaff.role === 'Diğer' ? 'Odyometrist' : editingStaff.role], branch: branchName || 'Tüm Şubeler', branchId });
                 setShowEditStaffModal(false);
               } catch { /* Context displays the persistence error. */ }
             }}>
@@ -1081,9 +1091,10 @@ export default function BranchesPage() {
                     <label className={styles.formLabel}>Şube</label>
                     <select
                       className={styles.formSelect}
-                      value={editingStaff.branch}
+                      value={editingStaff.branch || 'Tüm Şubeler'}
                       onChange={e => setEditingStaff({ ...editingStaff, branch: e.target.value })}
                     >
+                      <option value="Tüm Şubeler">Tüm Şubeler (Merkez)</option>
                       {branches.map(b => (
                         <option key={b.name} value={b.name}>{b.name}</option>
                       ))}

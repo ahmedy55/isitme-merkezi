@@ -88,7 +88,7 @@ function SvgDonut({
 
 export default function BranchActivitiesPage() {
   const { addToast, currentOrgId, branchesList, patientsList, salesList, appointmentsList, currentUser, refreshOrganizationData } = useApp();
-  const { matches, activeBranch } = useBranchScope();
+  const { matches, activeBranch, activeBranchName, activeBranchId } = useBranchScope();
 
   // Transfer Types Donut Slices / Branch access resolution
   const authorizedBranches: Array<{ id: string; name: string; organizationId?: string | null; status: any; address?: string }> = useMemo(() => {
@@ -120,6 +120,33 @@ export default function BranchActivitiesPage() {
     const matched = authorizedBranches.filter(branch => matches(branch.name, branch.id));
     return matched.length >= 2 ? matched : authorizedBranches;
   }, [isManager, authorizedBranches, matches]);
+
+  const transferBranches = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    for (const b of visibleBranches) {
+      if (b.name && !map.has(b.name)) {
+        map.set(b.name, { id: b.id, name: b.name });
+      }
+    }
+    for (const b of branchesList) {
+      if (!(b as any).archivedAt && b.name && !map.has(b.name)) {
+        map.set(b.name, { id: b.id, name: b.name });
+      }
+    }
+    for (const p of patientsList) {
+      if (p.branch && !map.has(p.branch)) {
+        map.set(p.branch, { id: p.branchId || crypto.randomUUID(), name: p.branch });
+      }
+    }
+    if (activeBranchName && !map.has(activeBranchName)) {
+      map.set(activeBranchName, { id: activeBranchId || crypto.randomUUID(), name: activeBranchName });
+    }
+    if (map.size === 0) {
+      map.set('Merkez Şube', { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Merkez Şube' });
+      map.set('Şube 2 (Kadıköy)', { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Şube 2 (Kadıköy)' });
+    }
+    return Array.from(map.values());
+  }, [visibleBranches, branchesList, patientsList, activeBranch]);
 
   const [dateRange, setDateRange] = useState(() => `01.01.${new Date().getFullYear()} - ${new Date().toLocaleDateString('tr-TR')}`);
   const [transfers, setTransfers] = useState<TransferLogItem[]>(() => [
@@ -223,13 +250,21 @@ export default function BranchActivitiesPage() {
   }, [branchesList]);
 
   const performPatientTransfer = async (patientName: string, fromName: string, toName: string) => {
-    const patient = patientsList.find(item => `${item.firstName} ${item.lastName}`.toLocaleLowerCase('tr-TR') === patientName.trim().toLocaleLowerCase('tr-TR'));
-    const source = branchesList.find(branch => branch.name === fromName);
-    const target = branchesList.find(branch => branch.name === toName);
+    const clean = patientName.trim().toLocaleLowerCase('tr-TR');
+    const patient = patientsList.find(item => {
+      const fullName = `${item.firstName} ${item.lastName}`.toLocaleLowerCase('tr-TR');
+      return fullName === clean || fullName.startsWith(clean) || clean.startsWith(item.firstName.toLocaleLowerCase('tr-TR'));
+    });
+    const source = transferBranches.find(branch => branch.name === fromName || branch.id === fromName) || branchesList.find(branch => branch.name === fromName);
+    const target = transferBranches.find(branch => branch.name === toName || branch.id === toName) || branchesList.find(branch => branch.name === toName);
     if (!patient || !patient.id) { addToast({ type: 'error', message: 'Hasta kaydı bulunamadı. Listeden kayıtlı bir hastanın tam adını girin.' }); return false; }
-    if (!source || !target || source.id === target.id) { addToast({ type: 'error', message: 'Kaynak ve hedef olarak farklı, mevcut şubeleri seçin.' }); return false; }
+    if (!source || !target || source.id === target.id || source.name === target.name) { addToast({ type: 'error', message: 'Kaynak ve hedef olarak farklı, mevcut şubeleri seçin.' }); return false; }
     if (currentOrgId) {
-      if (patient.branchId !== source.id) { addToast({ type: 'error', message: 'Hastanın mevcut şubesi seçilen kaynak şube değil.' }); return false; }
+      const patientBranchMatches = (patient.branch && patient.branch === source.name) || (patient.branchId && patient.branchId === source.id);
+      if (!patientBranchMatches && patient.branchId && source.id && patient.branchId !== source.id) {
+        addToast({ type: 'error', message: 'Hastanın mevcut şubesi seçilen kaynak şube değil.' });
+        return false;
+      }
       try {
         const userRoles = currentUser?.membership?.roles || [];
         if (!userRoles.includes('Firma Yöneticisi')) { addToast({ type: 'error', message: 'Hasta şubesi transferi yalnızca firma yöneticisi tarafından yapılabilir.' }); return false; }
@@ -747,7 +782,18 @@ export default function BranchActivitiesPage() {
                   placeholder="Hasta adı, TC veya telefon no..."
                   className={styles.searchInput}
                   value={searchPatientText}
-                  onChange={e => setSearchPatientText(e.target.value)}
+                  onChange={e => {
+                    const text = e.target.value;
+                    setSearchPatientText(text);
+                    const clean = text.trim().toLocaleLowerCase('tr-TR');
+                    if (clean) {
+                      const matched = patientsList.find(p => `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === clean || `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR').startsWith(clean));
+                      if (matched) {
+                        const pBranch = matched.branch || branchesList.find(b => b.id === matched.branchId)?.name;
+                        if (pBranch) setSourceBranch(pBranch);
+                      }
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -761,7 +807,7 @@ export default function BranchActivitiesPage() {
                   onChange={e => setSourceBranch(e.target.value)}
                 >
                   <option value="">Şube seçin</option>
-                  {visibleBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                  {transferBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                 </select>
               </div>
 
@@ -782,7 +828,7 @@ export default function BranchActivitiesPage() {
                   onChange={e => setTargetBranch(e.target.value)}
                 >
                   <option value="">Şube seçin</option>
-                  {visibleBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                  {transferBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                 </select>
               </div>
             </div>
@@ -987,7 +1033,7 @@ export default function BranchActivitiesPage() {
                       onChange={e => setModalSourceBranch(e.target.value)}
                     >
                       <option value="">Şube seçin</option>
-                      {visibleBranches.map((branch: any) => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                      {transferBranches.map((branch: any) => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
 
@@ -999,7 +1045,7 @@ export default function BranchActivitiesPage() {
                       onChange={e => setModalTargetBranch(e.target.value)}
                     >
                       <option value="">Şube seçin</option>
-                      {visibleBranches.map((branch: any) => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                      {transferBranches.map((branch: any) => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                     </select>
                   </div>
                 </div>
