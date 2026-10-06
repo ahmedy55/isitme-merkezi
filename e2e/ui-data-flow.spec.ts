@@ -22,6 +22,8 @@ type ExtraFixtures = {
   serviceInsertBodies?: Record<string, unknown>[];
   failServiceInsert?: boolean;
   invoiceRows?: Record<string, unknown>[];
+  paymentRows?: Record<string, unknown>[];
+  paymentInsertBodies?: Record<string, unknown>[];
   failStockInsert?: boolean;
   cashBranchIds?: string[];
   expenseBranchIds?: string[];
@@ -89,6 +91,25 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     const url = new URL(route.request().url());
     const table = url.pathname.split('/').filter(Boolean).at(-1);
     let rows: unknown[] = [];
+
+    if (table === 'record_sgk_payment' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      fixtures.paymentInsertBodies?.push(body);
+      const invoice = fixtures.invoiceRows?.find(item => item.id === body.p_invoice_id);
+      if (invoice) invoice.status = 'Tahsil Edildi';
+      const paymentId = 'bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbcbc';
+      fixtures.paymentRows = [{
+        id: paymentId,
+        invoice_id: body.p_invoice_id,
+        branch_id: branchId,
+        amount: body.p_amount,
+        payment_date: body.p_payment_date,
+        notes: body.p_notes || '',
+        created_at: new Date().toISOString(),
+      }, ...(fixtures.paymentRows || [])];
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify(paymentId) });
+      return;
+    }
 
     if (table === 'adjust_stock_item') {
       const body = route.request().postDataJSON() as { p_item: string; p_delta: number };
@@ -204,6 +225,8 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       rows = fixtures.serviceRows || [];
     } else if (table === 'sgk_period_invoices') {
       rows = fixtures.invoiceRows || [];
+    } else if (table === 'sgk_payment_records') {
+      rows = fixtures.paymentRows || [];
     } else if (table === 'patients') {
       rows = fixtures.patientRows || [];
     } else if (table === 'recall_items') {
@@ -433,6 +456,36 @@ test('SGK Ağustos dönemi ödeme zaman çizelgesi Kasım 2026 ayını ve yıll�
   const yearlyNovember = page.locator('[data-payment-month="2026-11"]').last();
   await expect(yearlyNovember).toBeVisible();
   await expect(yearlyNovember).toContainText('Beklenen ödeme');
+});
+
+test('SGK faturası tahsil edildiğinde ödeme geçmişinde gerçek tahsilat satırı oluşur', async ({ page }) => {
+  const invoiceId = '88888888-8888-4888-8888-888888888888';
+  const paymentInsertBodies: Record<string, unknown>[] = [];
+  await mockTenantData(page, false, {
+    invoiceRows: [{
+      id: invoiceId, organization_id: orgId, branch_id: branchId,
+      invoice_month: '2026-09-01', expected_month: '2026-11-01', invoice_no: 'QA-SGK-3B-202609', amount: 25000,
+      status: 'Bekliyor', created_at: '2026-09-01T12:00:00Z', notes: 'E2E tahsilat doğrulaması',
+    }],
+    paymentRows: [],
+    paymentInsertBodies,
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'SGK Ödeme Takvimi' }).click();
+  const invoiceRow = page.getByRole('row').filter({ hasText: 'QA-SGK-3B-202609' });
+  await expect(invoiceRow).toContainText('Bekliyor');
+  await invoiceRow.locator('button[title="İşlemler"]').click();
+  await page.getByRole('button', { name: /Tahsil Edildi Yap/ }).click();
+
+  await expect.poll(() => paymentInsertBodies.length).toBe(1);
+  expect(paymentInsertBodies[0]).toMatchObject({ p_invoice_id: invoiceId, p_amount: 25000 });
+  await expect(invoiceRow).toContainText('Tahsil Edildi');
+
+  await page.getByRole('button', { name: 'Tahsilat Geçmişi' }).click();
+  const paymentRow = page.getByRole('row').filter({ hasText: 'QA-SGK-3B-202609' });
+  await expect(paymentRow).toBeVisible();
+  await expect(paymentRow).toContainText('25.000');
+  await expect(page.getByText('Toplam 1 tahsilat kaydı')).toBeVisible();
 });
 
 test('servis raporu dışa aktarma gerçek, yazdırılabilir rapor görüntüleyici açar', async ({ page }) => {

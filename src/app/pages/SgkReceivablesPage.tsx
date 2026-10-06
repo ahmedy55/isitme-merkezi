@@ -23,6 +23,16 @@ interface InvoiceRecord {
   notes?: string;
 }
 
+interface PaymentRecord {
+  id: string;
+  invoice_id: string;
+  branch_id: string;
+  amount: number;
+  payment_date: string;
+  notes: string;
+  created_at: string;
+}
+
 export default function SgkReceivablesPage() {
   const { currentOrgId, branchesList, addToast } = useApp();
   const { activeBranchId, matches } = useBranchScope();
@@ -33,6 +43,8 @@ export default function SgkReceivablesPage() {
 
   // Invoice records state
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([]);
+  const [paymentLoadError, setPaymentLoadError] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -111,10 +123,47 @@ export default function SgkReceivablesPage() {
     };
   }, [currentOrgId, branchesList]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentOrgId) {
+      setPaymentRecords([]);
+      setPaymentLoadError('');
+      return;
+    }
+
+    void supabase
+      .from('sgk_payment_records')
+      .select('id, invoice_id, branch_id, amount, payment_date, notes, created_at')
+      .eq('organization_id', currentOrgId)
+      .order('payment_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setPaymentRecords([]);
+          setPaymentLoadError(`SGK tahsilat geçmişi yüklenemedi: ${error.message}`);
+          return;
+        }
+        setPaymentLoadError('');
+        setPaymentRecords((data || []).map((row: any): PaymentRecord => ({
+          id: row.id,
+          invoice_id: row.invoice_id,
+          branch_id: row.branch_id,
+          amount: Number(row.amount) || 0,
+          payment_date: row.payment_date,
+          notes: row.notes || '',
+          created_at: row.created_at || '',
+        })));
+      });
+
+    return () => { cancelled = true; };
+  }, [currentOrgId]);
+
   // Scoped list according to branch scope
   const scopedList = useMemo(() => {
     return invoices.filter(inv => matches(undefined, inv.branch_id));
   }, [invoices, matches]);
+  const scopedPayments = useMemo(() => paymentRecords.filter(payment => matches(undefined, payment.branch_id)), [paymentRecords, matches]);
 
   // Filtered list for bottom table
   const filteredList = useMemo(() => {
@@ -241,10 +290,47 @@ export default function SgkReceivablesPage() {
     addToast({ type: 'error', message: 'SGK fatura tablosunda güvenli silme işlemi yapılandırılmadı; kayıt silinmedi.' });
   };
 
-  const handleMarkPaid = (id: string) => {
-    void id;
+  const handleMarkPaid = async (id: string) => {
     setActiveActionMenuId(null);
-    addToast({ type: 'error', message: 'SGK fatura tablosunda tahsilat durumu alanı yapılandırılmadı; değişiklik kaydedilmedi.' });
+    const invoice = invoices.find(item => item.id === id);
+    if (!invoice) {
+      addToast({ type: 'error', message: 'Tahsil edilecek SGK faturası bulunamadı.' });
+      return;
+    }
+    const paidAmount = paymentRecords
+      .filter(payment => payment.invoice_id === id)
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const remaining = Math.max(0, invoice.amount - paidAmount);
+    if (remaining === 0) {
+      addToast({ type: 'info', message: 'Bu SGK faturası zaten tamamen tahsil edilmiş.' });
+      return;
+    }
+
+    const now = new Date();
+    const paymentDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+    const { data, error } = await supabase.rpc('record_sgk_payment', {
+      p_invoice_id: invoice.id,
+      p_amount: remaining,
+      p_payment_date: paymentDate,
+      p_notes: '',
+    });
+    if (error || !data) {
+      addToast({ type: 'error', message: `SGK tahsilatı kaydedilemedi: ${error?.message || 'Veritabanı kaydı doğrulanamadı.'}` });
+      return;
+    }
+
+    const payment: PaymentRecord = {
+      id: String(data),
+      invoice_id: invoice.id,
+      branch_id: invoice.branch_id || '',
+      amount: remaining,
+      payment_date: paymentDate,
+      notes: '',
+      created_at: now.toISOString(),
+    };
+    setPaymentRecords(previous => [payment, ...previous]);
+    setInvoices(previous => previous.map(item => item.id === invoice.id ? { ...item, status: 'Tahsil Edildi' } : item));
+    addToast({ type: 'success', message: `${invoice.invoice_no} faturası için ${formatCurrency(remaining)} tahsilat kaydedildi.` });
   };
 
   return (
@@ -687,8 +773,9 @@ export default function SgkReceivablesPage() {
                               {activeActionMenuId === row.id && (
                                 <div className={styles.dropdownMenu}>
                                   <button
+                                    type="button"
                                     className={styles.dropdownItem}
-                                    onClick={() => handleMarkPaid(row.id)}
+                                    onClick={() => void handleMarkPaid(row.id)}
                                   >
                                     ✓ Tahsil Edildi Yap
                                   </button>
@@ -805,10 +892,37 @@ export default function SgkReceivablesPage() {
           <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
             Banka hesaplarına aktarılan SGK ödemeleri ve kesinti mutabakat kayıtları.
           </p>
-          <div style={{ padding: 28, textAlign: 'center', background: '#f8fafc', borderRadius: 10, border: '1px dashed #cbd5e1' }}>
-            <div style={{ fontSize: 14, fontWeight: 650, color: '#475569' }}>Bu yıl içinde henüz tamamlanmış tahsilat kaydı bulunmuyor.</div>
-            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Dönem faturaları tahsil edildiğinde burada listelenecektir.</div>
-          </div>
+          {paymentLoadError ? (
+            <div role="alert" style={{ padding: 20, color: '#b91c1c', background: '#fef2f2', borderRadius: 10 }}>{paymentLoadError}</div>
+          ) : scopedPayments.length === 0 ? (
+            <div style={{ padding: 28, textAlign: 'center', background: '#f8fafc', borderRadius: 10, border: '1px dashed #cbd5e1' }}>
+              <div style={{ fontSize: 14, fontWeight: 650, color: '#475569' }}>Henüz tamamlanmış tahsilat kaydı bulunmuyor.</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Tahsil edilen dönem faturaları burada listelenir.</div>
+            </div>
+          ) : (
+            <div className={styles.tableWrap}>
+              <table className={styles.invoiceTable}>
+                <thead><tr><th>Tahsilat Tarihi</th><th>Fatura No</th><th>Dönem</th><th>Şube</th><th>Tutar</th><th>Açıklama</th></tr></thead>
+                <tbody>
+                  {scopedPayments.map(payment => {
+                    const invoice = invoices.find(item => item.id === payment.invoice_id);
+                    const paymentDate = new Date(`${payment.payment_date}T12:00:00`).toLocaleDateString('tr-TR');
+                    return (
+                      <tr key={payment.id}>
+                        <td>{paymentDate}</td>
+                        <td className={styles.invoiceNoCell}>{invoice?.invoice_no || '—'}</td>
+                        <td>{invoice?.invoice_period_label || '—'}</td>
+                        <td>{invoice?.branchName || branchesList.find(item => item.id === payment.branch_id)?.name || '—'}</td>
+                        <td className={styles.amountCell}>{formatCurrency(payment.amount)}</td>
+                        <td style={{ color: '#64748b' }}>{payment.notes || invoice?.notes || '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className={styles.tableFooter}>Toplam {scopedPayments.length} tahsilat kaydı</div>
+            </div>
+          )}
         </div>
       )}
 
