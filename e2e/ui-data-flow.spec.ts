@@ -25,6 +25,7 @@ type ExtraFixtures = {
   expenseBranchIds?: string[];
   invoiceBranchIds?: string[];
   assetSerial?: string;
+  assetWarrantyExpiry?: string | null;
 };
 
 function base64Url(value: unknown) {
@@ -172,7 +173,7 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         serial_no: fixtures.assetSerial || 'PW-ONLY-001',
         purchase_date: '2026-01-10',
         purchase_price: 12000,
-        warranty_expiry: '2027-01-10',
+        warranty_expiry: fixtures.assetWarrantyExpiry === undefined ? '2027-01-10' : fixtures.assetWarrantyExpiry,
         status: 'Aktif',
         archived_at: null,
         branches: { name: 'QA Şube' },
@@ -473,6 +474,25 @@ test('demirbaş kategorisi ve durumu veritabanı etiketlerinden normalize ediler
 
   await page.getByRole('combobox', { name: 'Kategori filtresi' }).selectOption('Mobilya');
   await expect(page.getByText('Aranan kriterlere uygun demirbaş kaydı bulunamadı.')).toBeVisible();
+});
+
+test('demirbaş Garanti sekmesi kayıtlı bitiş tarihini ve kapsam sınırlarını gösterir', async ({ page }) => {
+  await openAssets(page, true);
+  await page.getByRole('row').filter({ hasText: assetName }).click();
+  await page.getByRole('button', { name: 'Garanti' }).click();
+  await expect(page.getByText('Garanti Bilgileri')).toBeVisible();
+  await expect(page.getByText('10.01.2027').last()).toBeVisible();
+  await expect(page.getByText(/kapsamı garanti belgesinden teyit edin/)).toBeVisible();
+});
+
+test('garanti bitiş tarihi olmayan demirbaşta eksik bilgi açıkça belirtilir', async ({ page }) => {
+  await mockTenantData(page, true, { assetWarrantyExpiry: null });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await page.getByRole('row').filter({ hasText: assetName }).click();
+  await page.getByRole('button', { name: 'Garanti' }).click();
+  await expect(page.getByText('Garanti bilgisi girilmemiş')).toBeVisible();
+  await expect(page.getByText('Bilgi yok')).toBeVisible();
 });
 
 test('demirbaş seri numarası araması noktalama farklarını normalize eder', async ({ page }) => {

@@ -61,7 +61,7 @@ export default function AssetsPage() {
   const [maintenanceForm, setMaintenanceForm] = useState({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '', notes: '' });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [drawerTab, setDrawerTab] = useState<'genel' | 'bakim' | 'dosyalar' | 'gecmis'>('genel');
+  const [drawerTab, setDrawerTab] = useState<'genel' | 'garanti' | 'bakim' | 'dosyalar' | 'gecmis'>('genel');
 
   // Action menu dropdown
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export default function AssetsPage() {
               branchId: r.branchId,
               serialNo: r.serialNo || '—',
               purchaseDate: formatDate(r.purchaseDate || ''),
-              warrantyExpiry: formatDate(r.warrantyExpiry || ''),
+              warrantyExpiry: formatDate(r.warrantyExpiry || '') || 'Bilgi girilmemiş',
               cost: Number(r.cost) || 0,
               status: normalizeAssetStatus(r.status),
               calibrationIntervalMonths: r.maintenanceIntervalMonths || 12,
@@ -363,7 +363,7 @@ export default function AssetsPage() {
       branchId: savedRecord.branchId,
       serialNo: newAssetForm.serialNo || '—',
       purchaseDate: formatDate(savedRecord.purchaseDate),
-      warrantyExpiry: formatDate(savedRecord.warrantyExpiry),
+      warrantyExpiry: formatDate(savedRecord.warrantyExpiry) || 'Bilgi girilmemiş',
       cost: savedRecord.cost,
       status: savedRecord.status as DisplayAsset['status'],
       calibrationIntervalMonths: savedRecord.maintenanceIntervalMonths,
@@ -888,6 +888,12 @@ export default function AssetsPage() {
                 Genel
               </button>
               <button
+                className={`${styles.drawerTabBtn} ${drawerTab === 'garanti' ? styles.drawerTabBtnActive : ''}`}
+                onClick={() => setDrawerTab('garanti')}
+              >
+                Garanti
+              </button>
+              <button
                 className={`${styles.drawerTabBtn} ${drawerTab === 'bakim' ? styles.drawerTabBtnActive : ''}`}
                 onClick={() => setDrawerTab('bakim')}
               >
@@ -1038,6 +1044,52 @@ export default function AssetsPage() {
                     </div>
                   </div>
                 </>
+              )}
+
+              {drawerTab === 'garanti' && (
+                <div className={styles.drawerSection}>
+                  <div className={styles.sectionHeader}>
+                    <span className={styles.sectionTitle}>Garanti Bilgileri</span>
+                    <button className={styles.btnEditLink} onClick={() => setShowEditModal(true)}>
+                      Düzenle
+                    </button>
+                  </div>
+                  {toIsoDate(activeItem.warrantyExpiry) ? (() => {
+                    const expiry = toIsoDate(activeItem.warrantyExpiry);
+                    const expiryDate = new Date(`${expiry}T23:59:59`);
+                    const warrantyTimeRemaining = expiryDate.getTime() - Date.now();
+                    const warrantyStatus = warrantyTimeRemaining >= 0 ? 'Kayıtlı bitiş tarihine göre süre devam ediyor' : 'Kayıtlı bitiş tarihine göre süre sona ermiş';
+                    return (
+                      <div className={styles.maintenanceBox}>
+                        <div className={styles.maintenanceRow}>
+                          <span>Garanti Durumu</span>
+                          <strong>{warrantyStatus}</strong>
+                        </div>
+                        <div className={styles.maintenanceRow}>
+                          <span>Kayıtlı Garanti Bitişi</span>
+                          <strong>{activeItem.warrantyExpiry}</strong>
+                        </div>
+                        <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: 12 }}>
+                          Sağlayıcı ve sözleşme kapsamı bu kayıtta tutulmuyor; kapsamı garanti belgesinden teyit edin.
+                        </p>
+                      </div>
+                    );
+                  })() : (
+                    <div className={styles.maintenanceBox}>
+                      <div className={styles.maintenanceRow}>
+                        <span>Garanti Durumu</span>
+                        <strong>Garanti bilgisi girilmemiş</strong>
+                      </div>
+                      <div className={styles.maintenanceRow}>
+                        <span>Garanti Bitişi</span>
+                        <strong>Bilgi yok</strong>
+                      </div>
+                      <p style={{ margin: '8px 0 0', color: '#64748b', fontSize: 12 }}>
+                        Bu demirbaş için garanti tarihi kayıtlı değil. Gerçek bilgiyi eklemek için Düzenle'yi kullanın.
+                      </p>
+                    </div>
+                  )}
+                </div>
               )}
 
               {drawerTab === 'bakim' && (
@@ -1314,7 +1366,7 @@ export default function AssetsPage() {
                     try { saved = await saveAsset(record); }
                     catch { addToast({ type: 'error', message: 'Demirbaş güncellenemedi. Lütfen tekrar deneyin.' }); return; }
                   }
-                  const updated: DisplayAsset = { ...activeItem, branchId: saved.branchId, purchaseDate: formatDate(saved.purchaseDate), warrantyExpiry: formatDate(saved.warrantyExpiry), lastCalibrationDate: formatDate(saved.lastMaintenance), nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—' };
+                  const updated: DisplayAsset = { ...activeItem, branchId: saved.branchId, purchaseDate: formatDate(saved.purchaseDate), warrantyExpiry: formatDate(saved.warrantyExpiry) || 'Bilgi girilmemiş', lastCalibrationDate: formatDate(saved.lastMaintenance), nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—' };
                   setAssetList(prev => prev.map(item => item.id === updated.id ? updated : item));
                   setActiveItem(updated);
                   setShowEditModal(false);
