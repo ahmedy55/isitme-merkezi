@@ -38,6 +38,7 @@ type ExtraFixtures = {
   assetSerial?: string;
   assetWarrantyExpiry?: string | null;
   assetStatus?: string;
+  transferRows?: Record<string, unknown>[];
 };
 
 function base64Url(value: unknown) {
@@ -339,6 +340,36 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     } else if (table === 'decrypt_patient_tcs') {
       const patientIds = (route.request().postDataJSON() as { p_patient_ids?: string[] }).p_patient_ids || [];
       rows = (fixtures.patientRows || []).filter(patient => patientIds.includes(String(patient.id))).map(patient => ({ patient_id: patient.id, tc: patient.decrypted_tc || '' }));
+    } else if (table === 'transfer_patient_branch') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      const transferRecord = {
+        id: '61616161-6161-4161-8161-616161616161',
+        organization_id: orgId,
+        patient_id: body.p_patient,
+        patient_name: 'Test Hasta Tek Şube Bir',
+        source_branch_id: branchId,
+        target_branch_id: body.p_target,
+        transferred_by: userId,
+        created_at: new Date().toISOString(),
+        notes: 'Hasta şube transferi tamamlandı.'
+      };
+      fixtures.transferRows = [transferRecord, ...(fixtures.transferRows || [])];
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify(null) });
+      return;
+    } else if (table === 'branch_transfers') {
+      rows = fixtures.transferRows || [
+        {
+          id: '51515151-5151-4151-8151-515151515151',
+          organization_id: orgId,
+          patient_id: '11111111-1111-4111-8111-111111111111',
+          patient_name: 'Test Hasta Tek Şube Bir',
+          source_branch_id: branchId,
+          target_branch_id: branchId,
+          transferred_by: userId,
+          created_at: new Date().toISOString(),
+          notes: 'Şubeler arası transfer tamamlandı.'
+        }
+      ];
     }
 
     await route.fulfill({
@@ -1589,4 +1620,27 @@ test('Cancel an appointment from the schedule', async ({ page }) => {
   await page.getByRole('button', { name: 'İptal Et' }).click();
   await expect(page.getByText('Randevu başarıyla iptal edildi.')).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Ahmet Test' })).not.toBeVisible();
+});
+
+test('Review transfer history across branches', async ({ page }) => {
+  await mockTenantData(page, true);
+  await signIn(page);
+
+  await page.getByRole('button', { name: 'Şube Aktiviteleri' }).click();
+  await page.getByRole('button', { name: 'Şubeler Arası' }).click();
+
+  const statusSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Tamamlananlar' }) });
+  await statusSelect.selectOption('Tamamlananlar');
+
+  await expect(page.getByText('Bu filtrede transfer kaydı yok.')).not.toBeVisible();
+
+  await expect(page.getByRole('columnheader', { name: 'TARİH' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'HASTA' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'KAYNAK ŞUBE' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'HEDEF ŞUBE' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'TRANSFER EDEN' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'DURUM' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'İŞLEMLER' })).toBeVisible();
+
+  await expect(page.getByText('Tamamlandı').first()).toBeVisible();
 });
