@@ -464,15 +464,38 @@ export const dbFetchSales = async () => {
 };
 
 export const dbInsertSale = async (sale: any, stockItemId?: string, cashRegisterId?: string) => {
-  const payload=toSnake(sale);
-  const {data,error}=await supabase.rpc('complete_sale',{
-      p_sale:{patient_id:payload.patient_id,date:payload.date,items:payload.items.map((item: any) => ({name:item.name,quantity:item.quantity,price:item.price,type:item.type,stock_item_id:item.stock_item_id})),installments:payload.installments || [],
-      total:payload.total,sgk_amount:payload.sgk_amount || 0,patient_amount:payload.patient_amount ?? payload.total,
-      payment_method:payload.payment_method,status:payload.status,audiologist:payload.audiologist,device_ear_side:payload.device_ear_side},
-    p_key:payload.idempotency_key,p_stock:stockItemId || null,p_register:cashRegisterId || 'kas-1',
-  });
-  if(error) throw new DatabaseError('Satış işlemi tamamlanamadı.',error);
-  return {...toCamel(data),items:sale.items,installments:sale.installments || [],patientName:sale.patientName};
+  return executeDbQuery(async () => {
+    const payload = toSnake(sale);
+    const { data, error } = await supabase.rpc('complete_sale', {
+      p_sale: {
+        patient_id: payload.patient_id,
+        date: payload.date,
+        items: payload.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          type: item.type,
+          stock_item_id: item.stock_item_id
+        })),
+        installments: payload.installments || [],
+        total: payload.total,
+        sgk_amount: payload.sgk_amount || 0,
+        patient_amount: payload.patient_amount ?? payload.total,
+        payment_method: payload.payment_method,
+        status: payload.status,
+        audiologist: payload.audiologist,
+        device_ear_side: payload.device_ear_side
+      },
+      p_key: payload.idempotency_key,
+      p_stock: stockItemId || null,
+      p_register: cashRegisterId || 'kas-1',
+    });
+    if (error) {
+      const msg = error.message || 'Satış işlemi tamamlanamadı.';
+      throw new DatabaseError(msg, error);
+    }
+    return { ...toCamel(data), items: sale.items, installments: sale.installments || [], patientName: sale.patientName };
+  }, 'dbInsertSale');
 };
 
 // ═══════════════════════════════════════════════

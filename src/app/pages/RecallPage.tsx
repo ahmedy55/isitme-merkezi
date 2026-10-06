@@ -1080,17 +1080,22 @@ export default function RecallPage() {
                     reason: (newRecallType === 'SGK Yenileme' ? 'SGK Yenileme' : 'Yıllık Kontrol') as any,
                     dueDate: newDueDate || new Date().toISOString().split('T')[0],
                     status: 'Bekliyor',
-                    lastContact: null,
                     estimatedRevenue: 15000,
                     probability: 'Yüksek Olasılık',
+                    lastContact: new Date().toISOString().split('T')[0],
                     notes: newNotes.trim() || undefined
                   };
-                  await addRecallItem(newRecall);
-                  setShowNewModal(false);
-                  setNewPatientId('');
-                  setNewPatientName('');
-                  setNewDueDate('');
-                  setNewNotes('');
+                  try {
+                    await addRecallItem(newRecall);
+                    addToast({ type: 'success', message: `${newPatientName.trim()} için hatırlatma başarıyla kaydedildi.` });
+                    setShowNewModal(false);
+                    setNewPatientId('');
+                    setNewPatientName('');
+                    setNewDueDate('');
+                    setNewNotes('');
+                  } catch (err: any) {
+                    addToast({ type: 'error', message: err?.message || 'Hatırlatma kaydedilemedi.' });
+                  }
                 }}
               >
                 Kaydet

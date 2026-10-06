@@ -215,7 +215,9 @@ export default function LoginPage() {
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
+                id="toggle-password-visibility"
+                aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                onClick={() => setShowPassword(prev => !prev)}
                 style={{
                   position: 'absolute',
                   right: 14,

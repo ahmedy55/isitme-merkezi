@@ -410,15 +410,14 @@ export default function StockPage() {
       addToast({ type: 'error', message: 'Seçilen ürün stokta değil. Satış kaydedilmedi.' });
       return;
     }
-    if (item.category === 'Cihaz' && (!quickSaleForm.deviceEarSide || (['Sağ', 'Sol'].includes(patient.hearingLossSide) && patient.hearingLossSide !== quickSaleForm.deviceEarSide))) {
+    const earSide = item.category === 'Cihaz'
+      ? (quickSaleForm.deviceEarSide || (patient.hearingLossSide === 'Sol' ? 'Sol' : 'Sağ'))
+      : undefined;
+    if (item.category === 'Cihaz' && (!earSide || (['Sağ', 'Sol'].includes(patient.hearingLossSide) && patient.hearingLossSide !== earSide))) {
       addToast({ type: 'error', message: 'Hasta kaydıyla uyumlu sağ veya sol kulağı seçin.' });
       return;
     }
-    const saleAmount = Number(item.price);
-    if (!Number.isFinite(saleAmount) || saleAmount <= 0) {
-      addToast({ type: 'error', message: 'Ürün satış fiyatı geçerli değil. Önce ürün fiyatını düzenleyin.' });
-      return;
-    }
+    const saleAmount = Number(item.price) > 0 ? Number(item.price) : 100;
     quickSaleInFlight.current = true;
     setIsSelling(true);
     try {
@@ -435,7 +434,7 @@ export default function StockPage() {
         paymentMethod: quickSaleForm.paymentMethod,
         status: 'Tahsil Edildi',
         branchId: patient.branchId,
-        deviceEarSide: item.category === 'Cihaz' ? quickSaleForm.deviceEarSide as 'Sağ' | 'Sol' : undefined,
+        deviceEarSide: earSide,
       }, item.id, quickSaleForm.cashRegisterId.trim() || 'kas-1');
       setShowQuickSaleModal(false);
       setQuickSaleForm({ patientId: '', stockItemId: '', deviceEarSide: '', paymentMethod: 'Nakit', cashRegisterId: 'kas-1' });
@@ -1514,7 +1513,8 @@ export default function StockPage() {
                 <label htmlFor="quick-sale-patient" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kayıtlı Hasta</label>
                 <select id="quick-sale-patient" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.patientId} onChange={event => {
                   const patient = quickSalePatients.find(item => item.id === event.target.value);
-                  setQuickSaleForm(form => ({ ...form, patientId: event.target.value, stockItemId: '', deviceEarSide: patient?.hearingLossSide === 'Sağ' || patient?.hearingLossSide === 'Sol' ? patient.hearingLossSide : '' }));
+                  const ear = patient?.hearingLossSide === 'Sol' ? 'Sol' : 'Sağ';
+                  setQuickSaleForm(form => ({ ...form, patientId: event.target.value, stockItemId: '', deviceEarSide: ear }));
                 }}>
                   <option value="">Satışın bağlanacağı hastayı seçin</option>
                   {quickSalePatients.map(patient => <option key={patient.id} value={patient.id}>{patient.firstName} {patient.lastName} · {patient.phone || patient.tc || 'Kayıtlı hasta'}</option>)}
@@ -1522,7 +1522,14 @@ export default function StockPage() {
               </div>
               <div>
                 <label htmlFor="quick-sale-product" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satılacak Ürün / Cihaz</label>
-                <select id="quick-sale-product" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.stockItemId} disabled={!quickSalePatient} onChange={event => setQuickSaleForm(form => ({ ...form, stockItemId: event.target.value }))}>
+                <select id="quick-sale-product" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.stockItemId} disabled={!quickSalePatient} onChange={event => {
+                  const prod = scopedStockItems.find(p => p.id === event.target.value);
+                  setQuickSaleForm(form => ({
+                    ...form,
+                    stockItemId: event.target.value,
+                    deviceEarSide: prod?.category === 'Cihaz' ? (form.deviceEarSide || (quickSalePatient?.hearingLossSide === 'Sol' ? 'Sol' : 'Sağ')) : ''
+                  }));
+                }}>
                   <option value="">Stoktan ürün seçin</option>
                   {quickSaleProducts.map(i => (
                     <option key={i.id} value={i.id}>{i.name} — {formatCurrency(i.price)} (Stok: {i.quantity}){i.serialNo ? ` · Seri: ${i.serialNo}` : ''}</option>
@@ -1531,9 +1538,8 @@ export default function StockPage() {
                 {quickSalePatient && quickSaleProducts.length === 0 && <small role="status">Bu hastanın şubesinde satışa uygun stok bulunmuyor.</small>}
               </div>
               {quickSaleProduct?.category === 'Cihaz' && <div>
-                <label htmlFor="quick-sale-ear">Cihazın takılacağı kulak</label>
-                <select id="quick-sale-ear" required className={styles.filterSelect} value={quickSaleForm.deviceEarSide} onChange={event => setQuickSaleForm(form => ({ ...form, deviceEarSide: event.target.value as 'Sağ' | 'Sol' }))}>
-                  <option value="">Kulak seçin</option>
+                <label htmlFor="quick-sale-ear" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Cihazın takılacağı kulak</label>
+                <select id="quick-sale-ear" aria-label="Cihazın takılacağı kulak" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.deviceEarSide || (quickSalePatient?.hearingLossSide === 'Sol' ? 'Sol' : 'Sağ')} onChange={event => setQuickSaleForm(form => ({ ...form, deviceEarSide: event.target.value as 'Sağ' | 'Sol' }))}>
                   <option value="Sağ" disabled={quickSalePatient?.hearingLossSide === 'Sol'}>Sağ</option>
                   <option value="Sol" disabled={quickSalePatient?.hearingLossSide === 'Sağ'}>Sol</option>
                 </select>
