@@ -54,7 +54,8 @@ export default function LoginPage() {
         if(refreshError) throw refreshError;
 
         addToast({ type: 'success', message: `Hoş geldiniz! ${orgName} oturumu açıldı.` });
-        setCurrentPage('dashboard');
+        const requestedPage = new URLSearchParams(window.location.search).get('page');
+        setCurrentPage(requestedPage === 'patients' ? 'patients' : 'dashboard');
       } else {
         // 2+ aktif organizasyonu varsa seçim ekranına yönlendir
         setCurrentPage('org-select');

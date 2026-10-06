@@ -1367,7 +1367,7 @@ export default function AssetsPage() {
                     try { saved = await saveAsset(record); }
                     catch { addToast({ type: 'error', message: 'Demirbaş güncellenemedi. Lütfen tekrar deneyin.' }); return; }
                   }
-                  const updated: DisplayAsset = { ...activeItem, branchId: saved.branchId, purchaseDate: formatDate(saved.purchaseDate), warrantyExpiry: formatDate(saved.warrantyExpiry) || 'Bilgi girilmemiş', lastCalibrationDate: formatDate(saved.lastMaintenance), nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—' };
+                  const updated: DisplayAsset = { ...activeItem, branchId: saved.branchId, status: normalizeAssetStatus(saved.status), purchaseDate: formatDate(saved.purchaseDate), warrantyExpiry: formatDate(saved.warrantyExpiry) || 'Bilgi girilmemiş', lastCalibrationDate: formatDate(saved.lastMaintenance), nextCalibrationDate: getNextMaintenanceDate(saved.lastMaintenance, saved.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—' };
                   setAssetList(prev => prev.map(item => item.id === updated.id ? updated : item));
                   setActiveItem(updated);
                   setShowEditModal(false);

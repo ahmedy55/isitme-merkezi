@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { getAvatarColor, getInitials, calculateAge, formatCurrency, formatDate, type RecallItem } from '../data/mockData';
 import { IconCalendar, IconCheck, IconSearch, IconClose, IconPlus, IconPhone, IconMail } from '../components/Icons';
 import { getRecallCounts, isRecallOverdue } from '../lib/recallStats';
+import { isDateKeyInRange, parseRecallDateRange } from '../lib/recallDateRange';
 import styles from './RecallPage.module.css';
 
 /* ── Inline SVG Icons ── */
@@ -250,16 +251,8 @@ export default function RecallPage() {
       if (filterBranch !== 'Tümü' && item.branchName !== filterBranch) return false;
 
       if (filterDateRange.trim()) {
-        const [from, to] = filterDateRange.split('→').map(value => value.trim());
-        const toISO = (value: string) => {
-          const parsed = Date.parse(value);
-          return Number.isNaN(parsed) ? '' : new Date(parsed).toISOString().slice(0, 10);
-        };
-        const recallDate = /^\d{4}-\d{2}-\d{2}$/.test(item.planDate) ? item.planDate : toISO(item.planDate);
-        const fromISO = toISO(from || '');
-        const toDateISO = toISO(to || '');
-        if (fromISO && recallDate < fromISO) return false;
-        if (toDateISO && recallDate > toDateISO) return false;
+        const range = parseRecallDateRange(filterDateRange);
+        if ((range.from || range.to) && !isDateKeyInRange(item.planDate, range)) return false;
       }
 
       return true;

@@ -314,7 +314,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCurrentOrgId(nextOrg);
       if (!user) setCurrentPage('login');
       else if (!nextOrg) setCurrentPage('org-select',true);
-      else setCurrentPage((prev: Page)=>(prev==='login'||prev==='org-select'?'dashboard':prev));
+      else {
+        const requestedPage = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('page') === 'patients'
+          ? 'patients'
+          : 'dashboard';
+        setCurrentPage((prev: Page)=>(prev==='login'||prev==='org-select'?requestedPage:prev));
+      }
     };
     supabase.auth.getUser().then(({data})=>applySession(data.user));
     // Do not await Supabase queries inside its Auth callback (auth lock deadlock).

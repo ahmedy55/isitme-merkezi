@@ -191,14 +191,15 @@ export default function ServicePage() {
     return () => { cancelled = true; };
   }, [currentOrgId, branchesList, matches]);
 
+  const branchScopedRecords = useMemo(() => records.filter(item => matches(item.branch, item.branchId)), [records, matches]);
   // Pill counts calculation
   const pillCounts = useMemo(() => {
-    const total = records.length;
-    const alindi = records.filter(r => r.status === 'Alındı').length;
-    const inceleniyor = records.filter(r => r.status === 'İnceleniyor').length;
-    const tamir = records.filter(r => r.status === 'Tamir Ediliyor').length;
-    const hazir = records.filter(r => r.status === 'Teslime Hazır').length;
-    const teslim = records.filter(r => r.status === 'Teslim Edildi').length;
+    const total = branchScopedRecords.length;
+    const alindi = branchScopedRecords.filter(r => r.status === 'Alındı').length;
+    const inceleniyor = branchScopedRecords.filter(r => r.status === 'İnceleniyor').length;
+    const tamir = branchScopedRecords.filter(r => r.status === 'Tamir Ediliyor').length;
+    const hazir = branchScopedRecords.filter(r => r.status === 'Teslime Hazır').length;
+    const teslim = branchScopedRecords.filter(r => r.status === 'Teslim Edildi').length;
     return {
       all: total,
       alindi,
@@ -207,14 +208,13 @@ export default function ServicePage() {
       hazir,
       teslim
     };
-  }, [records]);
+  }, [branchScopedRecords]);
   const warrantyCount = records.filter(record => record.warrantyStatus === 'Garanti Kapsamında').length;
   const warrantyRate = records.length ? Math.round((warrantyCount / records.length) * 100) : 0;
 
   // Filtered rows
   const filteredRecords = useMemo(() => {
-    return records.filter(item => {
-      if (!matches(item.branch, item.branchId)) return false;
+    return branchScopedRecords.filter(item => {
 
       // Status pill filter
       if (filterStatus.startsWith('Alındı') && item.status !== 'Alındı') return false;
@@ -240,7 +240,7 @@ export default function ServicePage() {
 
       return true;
     });
-  }, [records, filterStatus, selectedBranch, selectedStatusDropdown, selectedDeviceType, selectedWarranty, searchTerm, matches]);
+  }, [branchScopedRecords, filterStatus, selectedBranch, selectedStatusDropdown, selectedDeviceType, selectedWarranty, searchTerm]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   const pagedRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);

@@ -19,7 +19,7 @@ interface DisplayStockItem extends StockItem {
 
 
 export default function StockPage() {
-  const { stockList, addStockItem, updateStockItem, deleteStockItem, adjustStockItem, addToast, branchesList, currentOrgId, currentUser } = useApp();
+  const { stockList, addStockItem, updateStockItem, deleteStockItem, adjustStockItem, addSale, addToast, branchesList, patientsList, currentOrgId, currentUser } = useApp();
   const { activeBranch } = useBranch();
   const activeBranches = useMemo(() => branchesList.filter(branch => branch.status === 'Aktif' || (branch.status as string) === 'active'), [branchesList]);
   const addToastRef = useRef(addToast);
@@ -75,6 +75,9 @@ export default function StockPage() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [addProductError, setAddProductError] = useState('');
+  const [quickSaleForm, setQuickSaleForm] = useState({
+    patientId: '', stockItemId: '', paymentMethod: 'Nakit' as 'Nakit' | 'Kredi Kartı' | 'Havale', cashRegisterId: 'kas-1',
+  });
 
   // Adjustment Form
   const [adjustmentQty, setAdjustmentQty] = useState(1);
@@ -175,6 +178,9 @@ export default function StockPage() {
   const scopedStockItems = useMemo(() => allStockItems.filter(item =>
     BranchService.matchesBranch(item.branch, item.branchId, activeBranch)
   ), [allStockItems, activeBranch]);
+  const quickSalePatients = patientsList.filter(patient => patient.branchId && BranchService.matchesBranch(patient.branch, patient.branchId, activeBranch));
+  const quickSalePatient = quickSalePatients.find(patient => patient.id === quickSaleForm.patientId);
+  const quickSaleProducts = scopedStockItems.filter(item => item.quantity > 0 && item.status === 'Stokta' && (!quickSalePatient || item.branchId === quickSalePatient.branchId));
   const totalProducts = scopedStockItems.length;
   const totalStockQty = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
   const totalStockValue = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0) * (Number(item.purchasePrice) || Number(item.price) || 0), 0);
@@ -374,6 +380,49 @@ export default function StockPage() {
       addToast({ type: 'error', message });
     } finally {
       setIsAdjustingStock(false);
+    }
+  };
+
+  const handleQuickSale = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const patient = patientsList.find(item => item.id === quickSaleForm.patientId);
+    const item = stockList.find(stock => stock.id === quickSaleForm.stockItemId);
+    if (!currentOrgId || !patient?.branchId || !item) {
+      addToast({ type: 'error', message: 'Satış için hasta, ürün ve geçerli şube seçin. Satış kaydedilmedi.' });
+      return;
+    }
+    if (item.branchId !== patient.branchId || !BranchService.matchesBranch(item.branch, item.branchId, activeBranch)) {
+      addToast({ type: 'error', message: 'Ürün ve hasta aynı erişilebilir şubede olmalıdır. Satış kaydedilmedi.' });
+      return;
+    }
+    if (item.quantity < 1 || item.status !== 'Stokta') {
+      addToast({ type: 'error', message: 'Seçilen ürün stokta değil. Satış kaydedilmedi.' });
+      return;
+    }
+    const saleAmount = Number(item.price);
+    if (!Number.isFinite(saleAmount) || saleAmount <= 0) {
+      addToast({ type: 'error', message: 'Ürün satış fiyatı geçerli değil. Önce ürün fiyatını düzenleyin.' });
+      return;
+    }
+    try {
+      await addSale({
+        id: `sale-${crypto.randomUUID()}`,
+        idempotencyKey: crypto.randomUUID(),
+        patientId: patient.id,
+        patientName: `${patient.firstName} ${patient.lastName}`.trim(),
+        date: new Date().toISOString().slice(0, 10),
+        items: [{ name: item.name, quantity: 1, price: saleAmount, stockItemId: item.id, serialNo: item.serialNo, barcode: item.barcode, type: item.category === 'Cihaz' ? 'Cihaz' : 'Aksesuar' }],
+        total: saleAmount,
+        sgkAmount: 0,
+        patientAmount: saleAmount,
+        paymentMethod: quickSaleForm.paymentMethod,
+        status: 'Tahsil Edildi',
+        branchId: patient.branchId,
+      }, item.id, quickSaleForm.cashRegisterId.trim() || 'kas-1');
+      setShowQuickSaleModal(false);
+      setQuickSaleForm({ patientId: '', stockItemId: '', paymentMethod: 'Nakit', cashRegisterId: 'kas-1' });
+    } catch {
+      // addSale surfaces the database error and keeps the modal open for correction.
     }
   };
 
@@ -1431,47 +1480,45 @@ export default function StockPage() {
           <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
               <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Hızlı Satış Fişi / Çıkışı</h3>
-              <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowQuickSaleModal(false)}>✕</button>
+              <button type="button" aria-label="Hızlı satış penceresini kapat" style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowQuickSaleModal(false)}>✕</button>
             </div>
-            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+            <form onSubmit={event => void handleQuickSale(event)} style={{ padding: 20, display: 'grid', gap: 12 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Müşteri / Hasta Adı</label>
-                <input className={styles.filterSelect} style={{ width: '100%' }} placeholder="Hasta adı (veya perakende satış)" />
+                <label htmlFor="quick-sale-patient" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kayıtlı Hasta</label>
+                <select id="quick-sale-patient" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.patientId} onChange={event => setQuickSaleForm(form => ({ ...form, patientId: event.target.value, stockItemId: '' }))}>
+                  <option value="">Satışın bağlanacağı hastayı seçin</option>
+                  {quickSalePatients.map(patient => <option key={patient.id} value={patient.id}>{patient.firstName} {patient.lastName} · {patient.phone || patient.tc || 'Kayıtlı hasta'}</option>)}
+                </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satılacak Ürün</label>
-                <select className={styles.filterSelect} style={{ width: '100%' }}>
-                  {filteredItems.map(i => (
-                    <option key={i.id} value={i.id}>{i.name} — {formatCurrency(i.price)} (Stok: {i.quantity})</option>
+                <label htmlFor="quick-sale-product" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Satılacak Ürün / Cihaz</label>
+                <select id="quick-sale-product" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.stockItemId} disabled={!quickSalePatient} onChange={event => setQuickSaleForm(form => ({ ...form, stockItemId: event.target.value }))}>
+                  <option value="">Stoktan ürün seçin</option>
+                  {quickSaleProducts.map(i => (
+                    <option key={i.id} value={i.id}>{i.name} — {formatCurrency(i.price)} (Stok: {i.quantity}){i.serialNo ? ` · Seri: ${i.serialNo}` : ''}</option>
                   ))}
                 </select>
+                {quickSalePatient && quickSaleProducts.length === 0 && <small role="status">Bu hastanın şubesinde satışa uygun stok bulunmuyor.</small>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Ödeme Yöntemi</label>
-                  <select className={styles.filterSelect} style={{ width: '100%' }}>
-                    <option>Nakit</option>
-                    <option>Kredi Kartı / POS</option>
-                    <option>Havale / EFT</option>
+                  <label htmlFor="quick-sale-payment" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Ödeme Yöntemi</label>
+                  <select id="quick-sale-payment" className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.paymentMethod} onChange={event => setQuickSaleForm(form => ({ ...form, paymentMethod: event.target.value as typeof form.paymentMethod }))}>
+                    <option value="Nakit">Nakit</option>
+                    <option value="Kredi Kartı">Kredi Kartı / POS</option>
+                    <option value="Havale">Havale / EFT</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kasa Seçimi</label>
-                  <div className={styles.filterSelect} style={{ width: '100%', color: '#64748b' }}>Kasa seçimi mevcut değil</div>
+                  <label htmlFor="quick-sale-register" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kasa Hesabı</label>
+                  <input id="quick-sale-register" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.cashRegisterId} onChange={event => setQuickSaleForm(form => ({ ...form, cashRegisterId: event.target.value }))} />
                 </div>
               </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-              <button className={styles.btnClear} onClick={() => setShowQuickSaleModal(false)}>Vazgeç</button>
-              <button
-                className={styles.btnPrimaryAction}
-                onClick={() => {
-                  addToast({ type: 'error', message: 'Hızlı satış formu hasta, ödeme ve kasa kayıtlarını ilişkili tablolarla kaydetmiyor. Kayıt oluşturulmadı; satış için Satış modülünü kullanın.' });
-                }}
-              >
-                Satışı Onayla
-              </button>
-            </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8 }}>
+                <button type="button" className={styles.btnClear} onClick={() => setShowQuickSaleModal(false)}>Vazgeç</button>
+                <button type="submit" className={styles.btnPrimaryAction} disabled={!quickSalePatient || !quickSaleProducts.length}>Satışı Onayla</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

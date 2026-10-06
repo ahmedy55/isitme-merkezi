@@ -56,6 +56,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [{ source: '/hastalar', destination: '/?page=patients', permanent: false }];
+  },
   async headers() {
     return [
       {
