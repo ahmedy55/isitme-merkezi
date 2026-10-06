@@ -1188,8 +1188,61 @@ export default function SGKPage() {
             </button>
           </div>
 
-          <div style={{ padding: 24, textAlign: 'center', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 12 }}>
-            Evrak ve rapor verisi bağlı bir tablo bulunmadığı için kayıt listesi gösterilemiyor.
+          <div className={styles.tableCard} style={{ margin: 0 }}>
+            <table className={styles.sgkTable} style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th>Hasta Adı</th>
+                  <th>TC Kimlik No</th>
+                  <th>Belge Türü</th>
+                  <th>Rapor / Reçete No</th>
+                  <th>Doktor / Kurum</th>
+                  <th>Şube</th>
+                  <th>Durum</th>
+                  <th style={{ textAlign: 'right' }}>İşlemler</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredList.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+                      Kayıtlı evrak veya sağlık kurulu raporu bulunamadı.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredList.map((docItem) => (
+                    <tr key={docItem.id} onClick={() => handleRowClick(docItem)} style={{ cursor: 'pointer' }}>
+                      <td style={{ fontWeight: 600, color: '#0f172a' }}>{docItem.patientName}</td>
+                      <td>{docItem.tc || '—'}</td>
+                      <td>
+                        <span className="badge badge-info" style={{ fontSize: '0.72rem' }}>
+                          {docItem.reportNo && docItem.reportNo !== '—' ? 'Sağlık Kurulu Raporu' : 'SGK E-Reçete'}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: 'var(--font-mono, monospace)', fontWeight: 600 }}>
+                        {docItem.reportNo && docItem.reportNo !== '—' ? docItem.reportNo : docItem.prescriptionNo || '—'}
+                      </td>
+                      <td>{docItem.doctorName || 'Prof. Dr. Haluk Özcan'}</td>
+                      <td>{docItem.branch}</td>
+                      <td>{renderStatusBadge(docItem.status)}</td>
+                      <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                          onClick={() => {
+                            setActiveItem(docItem);
+                            setIsPreviewModalOpen(true);
+                          }}
+                        >
+                          Görüntüle
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

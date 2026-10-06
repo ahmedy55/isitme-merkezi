@@ -150,13 +150,23 @@ export default function StockPage() {
 
       // Search term
       if (searchTerm.trim()) {
-        const q = searchTerm.trim().toLocaleLowerCase('tr-TR');
-        const matchName = item.name.toLowerCase().includes(q);
-        const matchBrand = (item.brand || '').toLowerCase().includes(q);
-        const matchModel = (item.model || '').toLowerCase().includes(q);
-        const matchSerial = matchesInventoryIdentifier(item.serialNo, q);
-        const matchBarcode = matchesInventoryIdentifier(item.barcode, q);
-        const matchQuantity = `${item.quantity} adet`.includes(q);
+        const qRaw = searchTerm.trim();
+        const qTr = qRaw.toLocaleLowerCase('tr-TR');
+        const qEn = qRaw.toLowerCase();
+        const qNorm = qTr.replace(/ı/g, 'i');
+        const matchField = (val?: string) => {
+          if (!val) return false;
+          const vTr = val.toLocaleLowerCase('tr-TR');
+          const vEn = val.toLowerCase();
+          const vNorm = vTr.replace(/ı/g, 'i');
+          return vTr.includes(qTr) || vEn.includes(qEn) || vNorm.includes(qNorm);
+        };
+        const matchName = matchField(item.name);
+        const matchBrand = matchField(item.brand);
+        const matchModel = matchField(item.model);
+        const matchSerial = matchesInventoryIdentifier(item.serialNo, qTr) || matchesInventoryIdentifier(item.serialNo, qEn);
+        const matchBarcode = matchesInventoryIdentifier(item.barcode, qTr) || matchesInventoryIdentifier(item.barcode, qEn);
+        const matchQuantity = `${item.quantity} adet`.includes(qTr) || `${item.quantity} adet`.includes(qEn);
         if (!matchName && !matchBrand && !matchModel && !matchSerial && !matchBarcode && !matchQuantity) return false;
       }
 

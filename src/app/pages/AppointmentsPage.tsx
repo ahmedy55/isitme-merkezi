@@ -279,27 +279,6 @@ export default function AppointmentsPage() {
     return `${y}-${m}-${d}`;
   }, [currentDate]);
 
-  const timelineSlots = useMemo<ShowcaseSlot[]>(() => {
-    const liveForDay = appointmentsList.filter(a => a.date === selectedDateStr);
-    return liveForDay.map((apt): ShowcaseSlot => {
-      const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
-      return {
-        id: apt.id,
-        date: apt.date,
-        hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '—',
-        timeRange: apt.time?.slice(0, 5) || '—',
-        patientName: apt.patientName,
-        patientInitials: getInitials(apt.patientName, ''),
-        avatarColor: getAvatarColor(apt.patientName),
-        type: apt.type,
-        duration: '30 dk',
-        phone: patient?.phone || '—',
-        device: patient?.currentDevice || '—',
-        status: (apt.status === 'Hatırlatıldı' ? 'Randevu Onayı' : apt.status) as any,
-      };
-    });
-  }, [selectedDateStr, appointmentsList, patientsList]);
-
   const scopedAppointments = useMemo(() => appointmentsList.filter(appointment => {
     if (filterAudiologist !== 'Tümü' && appointment.audiologist !== filterAudiologist) return false;
     if (filterBranch !== 'All' && appointment.branchId !== filterBranch) return false;
@@ -307,11 +286,35 @@ export default function AppointmentsPage() {
   }), [appointmentsList, filterAudiologist, filterBranch]);
 
   const visibleAppointments = useMemo(() => scopedAppointments.filter(appointment => {
-    if (statusFilter === 'bekleyen' && appointment.status !== 'Bekliyor') return false;
-    if (statusFilter === 'tamamlanan' && !['Tamamlandı', 'Geldi'].includes(appointment.status)) return false;
-    if (statusFilter === 'iptal' && !['İptal', 'Gelmedi'].includes(appointment.status)) return false;
-    return true;
+    if (statusFilter === 'bekleyen') return ['Bekliyor', 'Hatırlatıldı'].includes(appointment.status);
+    if (statusFilter === 'tamamlanan') return ['Tamamlandı', 'Geldi'].includes(appointment.status);
+    if (statusFilter === 'iptal') return ['İptal', 'Gelmedi'].includes(appointment.status);
+    // In active schedule view ('all'), filter out cancelled appointments so they don't linger in the active schedule
+    return !['İptal', 'Gelmedi'].includes(appointment.status);
   }), [scopedAppointments, statusFilter]);
+
+  const aptToSlot = (apt: any): ShowcaseSlot => {
+    const patient = patientsList.find(p => p.id === apt.patientId || `${p.firstName} ${p.lastName}` === apt.patientName);
+    return {
+      id: apt.id,
+      date: apt.date,
+      hour: apt.time?.split(':')[0] ? `${apt.time.split(':')[0]}:00` : '—',
+      timeRange: apt.time?.slice(0, 5) || '—',
+      patientName: apt.patientName,
+      patientInitials: getInitials(apt.patientName, ''),
+      avatarColor: getAvatarColor(apt.patientName),
+      type: apt.type,
+      duration: '30 dk',
+      phone: patient?.phone || '—',
+      device: patient?.currentDevice || '—',
+      status: (apt.status === 'Hatırlatıldı' ? 'Randevu Onayı' : apt.status) as any,
+    };
+  };
+
+  const timelineSlots = useMemo<ShowcaseSlot[]>(() => {
+    const liveForDay = visibleAppointments.filter(a => a.date === selectedDateStr);
+    return liveForDay.map(aptToSlot);
+  }, [selectedDateStr, visibleAppointments, patientsList]);
 
   const calendarStatusDots = useMemo(() => {
     const colorsByDate = new Map<string, Set<string>>();
@@ -763,7 +766,11 @@ export default function AppointmentsPage() {
                 return (
                   <div key={slot.id} className={styles.slotRow}>
                     <div className={styles.slotHourLabel}>{slot.hour}</div>
-                    <div className={styles.slotItemCard}>
+                    <div
+                      className={styles.slotItemCard}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setSelectedDetailSlot(slot)}
+                    >
                       <div className={styles.slotItemLeft}>
                         <span className={styles.slotTimeRange}>{slot.timeRange}</span>
                         <div className={styles.slotAvatar} style={{ background: slot.avatarColor || '#3b82f6' }}>
@@ -781,7 +788,7 @@ export default function AppointmentsPage() {
                           {slot.status}
                         </span>
 
-                        <div className={styles.slotActions}>
+                        <div className={styles.slotActions} onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             className={styles.slotActionBtn}
@@ -1016,7 +1023,11 @@ export default function AppointmentsPage() {
                     </td>
                   </tr>
                 ) : selectedDayAppointments.map((apt) => (
-                  <tr key={apt.id}>
+                  <tr
+                    key={apt.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelectedDetailSlot(aptToSlot(apt))}
+                  >
                     <td data-label="Saat" style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-600)', fontWeight: 600 }}>
                       {apt.time?.slice(0, 5)}
                     </td>
@@ -1041,7 +1052,7 @@ export default function AppointmentsPage() {
                         {apt.status}
                       </span>
                     </td>
-                    <td data-label="İşlem">
+                    <td data-label="İşlem" onClick={(e) => e.stopPropagation()}>
                       {isOpenAppointment(apt.status) ? <div style={{ display: 'flex', gap: 4 }}>
                         <button
                           type="button"
@@ -1058,7 +1069,7 @@ export default function AppointmentsPage() {
                           disabled={updatingAppointmentIds.has(apt.id)}
                           onClick={() => void handleAppointmentStatusChange(apt.id, 'İptal')}
                         >
-                          İptal
+                          İptal Et
                         </button>
                       </div> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>İşlem tamamlandı</span>}
                     </td>

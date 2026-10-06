@@ -43,11 +43,17 @@ export default function OrgSelectPage() {
   const handleSelectOrg = async (orgId: string, orgName: string) => {
     setSelectingId(orgId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session || (session.expires_at && session.expires_at * 1000 < Date.now() + 60000)) {
+        const refreshed = await supabase.auth.refreshSession();
+        if (refreshed.data?.session) {
+          session = refreshed.data.session;
+        }
+      }
+      let token = session?.access_token || '';
 
       // 1. Server-side /api/select-org ile app_metadata.organization_id'yi yaz
-      const res = await fetch('/api/select-org', {
+      let res = await fetch('/api/select-org', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,6 +61,21 @@ export default function OrgSelectPage() {
         },
         body: JSON.stringify({ orgId })
       });
+
+      if (res.status === 401) {
+        const refreshed = await supabase.auth.refreshSession();
+        if (refreshed.data?.session) {
+          token = refreshed.data.session.access_token;
+          res = await fetch('/api/select-org', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ orgId })
+          });
+        }
+      }
 
       if (!res.ok) {
         const errData = await res.json();

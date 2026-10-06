@@ -273,7 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Klinik verileri yüklenemedi.');
       addToast({ type: 'error', message: 'Klinik verileri veritabanından çekilemedi.' });
     } finally {
-      if (generation === dataGeneration.current) setDataLoading(false);
+      setDataLoading(false);
     }
   };
   const refreshOrganizationData = async () => {
@@ -526,7 +526,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await dbUpdateAppointmentStatus(id, status);
         setAppointmentsList(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-        addToast({ type: 'success', message: `Randevu durumu '${status}' olarak güncellendi.` });
+        const message = status === 'İptal' ? 'Randevu başarıyla iptal edildi.' : `Randevu durumu '${status}' olarak güncellendi.`;
+        addToast({ type: 'success', message });
         return true;
       } catch (err: any) {
         logger.warn(`dbUpdateAppointmentStatus background sync error: ${err.message}`, 'AppContext');

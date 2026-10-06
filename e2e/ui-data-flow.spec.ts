@@ -328,7 +328,10 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     } else if (table === 'patients') {
       rows = fixtures.patientRows || [];
     } else if (table === 'recall_items') {
-      rows = fixtures.recallRows || [];
+      rows = (fixtures.recallRows || []).map(row => ({
+        ...row,
+        patients: fixtures.patientRows?.find(patient => patient.id === row.patient_id) || (row as any).patients,
+      }));
     } else if (table === 'appointments') {
       rows = (fixtures.appointmentRows || []).map(row => ({ ...row, patients: fixtures.patientRows?.find(patient => patient.id === row.patient_id) || row.patients }));
     } else if (table === 'activity_logs') {
@@ -352,6 +355,14 @@ async function signIn(page: Page) {
   await page.getByPlaceholder('ornek@audipro.com').fill('playwright@example.invalid');
   await page.getByPlaceholder('••••••••').fill('playwright-test-password');
   await page.getByRole('button', { name: 'Giriş Yap' }).click();
+  try {
+    await expect(page.getByRole('button', { name: 'Giriş Yap' })).not.toBeVisible({ timeout: 5000 });
+  } catch {
+    await page.getByPlaceholder('ornek@audipro.com').fill('playwright@example.invalid');
+    await page.getByPlaceholder('••••••••').fill('playwright-test-password');
+    await page.getByRole('button', { name: 'Giriş Yap' }).click();
+    await expect(page.getByRole('button', { name: 'Giriş Yap' })).not.toBeVisible({ timeout: 15000 });
+  }
 }
 
 async function openAssets(page: Page, withAsset: boolean) {
@@ -1201,7 +1212,7 @@ test('View dashboard overview metrics', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Dashboard' })).toBeVisible();
   await page.getByRole('button', { name: 'Dashboard' }).click();
   await expect(page.getByText('Toplam Ciro')).toBeVisible();
-  await expect(page.getByText('Randevu')).toBeVisible();
+  await expect(page.getByRole('main').getByText('Randevu', { exact: true })).toBeVisible();
 });
 
 test('Filter cash activity by branch', async ({ page }) => {
@@ -1316,9 +1327,237 @@ test('View assets that are due for calibration', async ({ page }) => {
   });
   await signIn(page);
   await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await expect(page.getByRole('heading', { name: 'Demirbaş & Klinik Cihaz Yönetimi' })).toBeVisible();
   const row = page.getByRole('row').filter({ hasText: assetName });
   await expect(row).toBeVisible();
   await row.click();
   await page.getByRole('button', { name: 'Bakım', exact: true }).click();
   await expect(page.getByText('Kalibrasyon · TÜBİTAK UME')).toBeVisible();
+});
+
+test('Create a new recall reminder', async ({ page }) => {
+  await mockTenantData(page, false, {
+    recallRows: [{
+      id: 'r-test-1',
+      patient_id: '11111111-1111-4111-8111-111111111101',
+      organization_id: orgId,
+      branch_id: branchId,
+      due_date: '2026-11-01',
+      status: 'Bekliyor',
+      notes: 'Yıllık kontrol',
+      recall_type: 'Periyodik Kontrol',
+    }],
+    patientRows: [{
+      id: '11111111-1111-4111-8111-111111111101',
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Kemal',
+      last_name: 'Hatirlatma',
+      phone: '05550001234',
+      patient_status: 'Müşteri',
+      deleted_at: null,
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Recall' }).click();
+  await expect(page.getByText('Oturum ve firma verileri yükleniyor…')).not.toBeVisible();
+  await expect(page.getByText('Kemal Hatirlatma')).toBeVisible();
+});
+
+test('Open an appointment from the list and review details', async ({ page }) => {
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: 'p-apt-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Ahmet',
+      last_name: 'Detay',
+      phone: '05551112233',
+      patient_status: 'Müşteri',
+      deleted_at: null,
+    }],
+    appointmentRows: [{
+      id: 'apt-detail-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      patient_id: 'p-apt-1',
+      date: new Date().toISOString().slice(0, 10),
+      time: '14:00',
+      type: 'Muayene',
+      status: 'Bekliyor',
+      audiologist: 'Odyolog',
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Randevular', exact: true }).click();
+  await page.getByRole('button', { name: 'Liste' }).click();
+  const row = page.getByRole('row').filter({ hasText: 'Ahmet Detay' });
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page.getByText('Randevu Detayı')).toBeVisible();
+  await expect(page.getByText('Ahmet Detay').nth(1)).toBeVisible();
+});
+
+test('Use quick segments to switch patient directory views', async ({ page }) => {
+  await mockTenantData(page, false, {
+    patientRows: [
+      { id: 'p-seg-1', organization_id: orgId, branch_id: branchId, first_name: 'Ali', last_name: 'Aktif', patient_status: 'Müşteri', phone: '05550001111', deleted_at: null },
+      { id: 'p-seg-2', organization_id: orgId, branch_id: branchId, first_name: 'Can', last_name: 'Cihaz', patient_status: 'Müşteri', current_device: 'Phonak L90', phone: '05550002222', deleted_at: null },
+      { id: 'p-seg-3', organization_id: orgId, branch_id: branchId, first_name: 'Riza', last_name: 'Randevu', patient_status: 'Müşteri', phone: '05550003333', deleted_at: null },
+    ],
+    appointmentRows: [
+      { id: 'apt-seg-3', organization_id: orgId, branch_id: branchId, patient_id: 'p-seg-3', date: '2026-10-20', time: '10:00', status: 'Bekliyor', type: 'Kontrol' },
+    ],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Hastalar' }).click();
+  await expect(page.getByText('Ali Aktif')).toBeVisible();
+  await page.getByRole('button', { name: 'Cihaz Kullanan' }).click();
+  await expect(page.getByText('Sonuç bulunamadı')).not.toBeVisible();
+  await expect(page.getByText('Can Cihaz')).toBeVisible();
+  await page.getByRole('button', { name: 'Randevusu Olan' }).click();
+  await expect(page.getByText('Sonuç bulunamadı')).not.toBeVisible();
+  await expect(page.getByText('Riza Randevu')).toBeVisible();
+});
+
+test('Select a multi-branch organization and enter consolidated workspace', async ({ page }) => {
+  await mockTenantData(page, false);
+  await signIn(page);
+  await expect(page.getByRole('button', { name: 'Dashboard' })).toBeVisible();
+});
+
+test('View SGK document and report tracking', async ({ page }) => {
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: 'p-sgk-doc-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Selin',
+      last_name: 'Evrakli',
+      phone: '05559990011',
+      report_no: 'RAP-2026-99',
+      prescription_no: 'REC-2026-99',
+      deleted_at: null,
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'SGK & Reçete', exact: true }).click();
+  await page.getByRole('button', { name: /Evrak.*Rapor Takibi/i }).click();
+  await expect(page.getByText('Evrak ve rapor verisi bağlı bir tablo bulunmadığı için kayıt listesi gösterilemiyor.')).not.toBeVisible();
+  await expect(page.getByText('Selin Evrakli')).toBeVisible();
+  await expect(page.getByText('RAP-2026-99')).toBeVisible();
+});
+
+test('Move an appointment to a different date or time', async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: 'p-resched-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Guncel',
+      last_name: 'Hasta',
+      phone: '05553334455',
+      patient_status: 'Müşteri',
+      deleted_at: null,
+    }],
+    appointmentRows: [{
+      id: 'apt-resched-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      patient_id: 'p-resched-1',
+      date: today,
+      time: '10:00',
+      type: 'Muayene',
+      status: 'Bekliyor',
+      audiologist: 'Odyolog',
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Randevular', exact: true }).click();
+  await page.getByRole('button', { name: 'Liste' }).click();
+  await page.getByRole('row').filter({ hasText: 'Guncel Hasta' }).click();
+  await page.getByRole('button', { name: 'Randevuyu Düzenle' }).click();
+  await page.getByRole('button', { name: 'Değişiklikleri Kaydet' }).click();
+  await expect(page.getByText('Randevu başarıyla güncellendi.')).toBeVisible();
+});
+
+test('Search for a stock item', async ({ page }) => {
+  await mockTenantData(page, false, {
+    stockRows: [{
+      id: 'stk-qa-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      name: 'Automated QA Item - Inventory Details Test',
+      category: 'Cihaz',
+      quantity: 5,
+      critical_level: 1,
+      price: 15000,
+      status: 'Stokta',
+      uts_status: 'Bildirildi',
+      deleted_at: null,
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
+  const searchInput = page.getByPlaceholder('Ürün adı, marka, seri no veya barkod ile ara...');
+  await searchInput.fill('Automated QA Item - Inventory Details Test');
+  await expect(page.getByText('Aranan kriterlere uygun stok kaydı bulunamadı.')).not.toBeVisible();
+  await expect(page.getByText('Automated QA Item - Inventory Details Test').first()).toBeVisible();
+});
+
+test('Filter the patient directory by status and appointment context', async ({ page }) => {
+  await mockTenantData(page, false, {
+    patientRows: [
+      { id: 'p-match-1', organization_id: orgId, branch_id: branchId, first_name: 'Randevusu', last_name: 'Var', phone: '05550001001', patient_status: 'Müşteri', last_visit: '2026-10-06', deleted_at: null },
+      { id: 'p-nomatch-2', organization_id: orgId, branch_id: branchId, first_name: 'Randevusu', last_name: 'Yok1', phone: '05550001002', patient_status: 'Müşteri', last_visit: null, deleted_at: null },
+      { id: 'p-nomatch-3', organization_id: orgId, branch_id: branchId, first_name: 'Randevusu', last_name: 'Yok2', phone: '05550001003', patient_status: 'Müşteri', last_visit: null, deleted_at: null },
+    ],
+    appointmentRows: [
+      { id: 'apt-filter-1', organization_id: orgId, branch_id: branchId, patient_id: 'p-match-1', date: '2026-10-06', time: '11:00', status: 'Bekliyor', type: 'Muayene' },
+    ],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Hastalar' }).click();
+  await expect(page.getByText('Var')).toBeVisible();
+  await expect(page.getByText('Yok1')).toBeVisible();
+  const dateInput = page.getByTitle('Tarih aralığı');
+  await dateInput.fill('2026-10-06');
+  await expect(page.getByText('Var')).toBeVisible();
+  await expect(page.getByText('Yok1')).not.toBeVisible();
+  await expect(page.getByText('Yok2')).not.toBeVisible();
+});
+
+test('Cancel an appointment from the schedule', async ({ page }) => {
+  const today = new Date().toISOString().slice(0, 10);
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: 'p-cancel-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Ahmet',
+      last_name: 'Test',
+      phone: '05557778899',
+      patient_status: 'Müşteri',
+      deleted_at: null,
+    }],
+    appointmentRows: [{
+      id: 'apt-cancel-1',
+      organization_id: orgId,
+      branch_id: branchId,
+      patient_id: 'p-cancel-1',
+      date: today,
+      time: '14:00',
+      type: 'Muayene',
+      status: 'Bekliyor',
+      audiologist: 'Odyolog',
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Randevular', exact: true }).click();
+  await page.getByRole('button', { name: 'Liste' }).click();
+  await expect(page.getByText('Ahmet Test')).toBeVisible();
+  await page.getByRole('button', { name: 'İptal Et' }).click();
+  await expect(page.getByText('Randevu başarıyla iptal edildi.')).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Ahmet Test' })).not.toBeVisible();
 });

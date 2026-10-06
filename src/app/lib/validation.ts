@@ -60,8 +60,11 @@ export function validateAppointmentDateTime(
   now = new Date(),
 ): { isValid: boolean; error?: string } {
   if (!dateStr || !timeStr) return { isValid: false, error: 'Randevu tarihi ve saati seçiniz.' };
-  const selectedDateTime = new Date(`${dateStr}T${timeStr}:00`);
+  const normalizedTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+  const selectedDateTime = new Date(`${dateStr}T${normalizedTime}`);
   if (!Number.isFinite(selectedDateTime.getTime())) return { isValid: false, error: 'Geçerli bir randevu tarihi ve saati seçiniz.' };
-  if (selectedDateTime <= now) return { isValid: false, error: 'Geçmiş bir tarih veya saate randevu oluşturulamaz.' };
+  const today = new Date(now);
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  if (dateStr < todayStr) return { isValid: false, error: 'Geçmiş bir tarihe randevu oluşturulamaz.' };
   return { isValid: true };
 }

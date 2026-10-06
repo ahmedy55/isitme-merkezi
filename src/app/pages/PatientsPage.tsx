@@ -66,7 +66,7 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 export default function PatientsPage() {
-  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, updatePatient, deletePatient, addToast, dataLoading, branchesList, appointmentsList, stockList, salesList } = useApp();
+  const { setCurrentPage, setSelectedPatientId, patientsList, addPatient, updatePatient, deletePatient, addToast, dataLoading, branchesList, appointmentsList, stockList, salesList, recallList } = useApp();
   const { activeBranch } = useBranch();
 
   const [search, setSearch] = useState('');
@@ -555,34 +555,43 @@ export default function PatientsPage() {
       const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
       const matchBranch = filterBranch === 'Tümü' || p.branchId === filterBranch;
       const hasDevice = patientHasDevice(p);
-      const matchDevice = filterDevice === 'Tümü' || (filterDevice === 'Cihaz kullanıyor' ? hasDevice : !hasDevice);
-      const hasUpcomingAppointment = branchAppointments.some(appointment => appointment.patientId === p.id && appointment.date >= new Date().toISOString().slice(0, 10) && !['İptal', 'Gelmedi'].includes(appointment.status));
-      const matchAppointment = filterAppointment === 'Tümü' || (filterAppointment === 'Randevusu olan' ? hasUpcomingAppointment : !hasUpcomingAppointment);
+      const matchDevice = filterDevice === 'Tümü' || (filterDevice === 'Cihaz kullanıyor' ? (hasDevice || Boolean(p.currentDevice)) : (!hasDevice && !p.currentDevice));
+      const patientAppointments = branchAppointments.filter(appointment =>
+        (appointment.patientId ? appointment.patientId === p.id : appointment.patientName === `${p.firstName} ${p.lastName}`) &&
+        !['İptal', 'Gelmedi'].includes(appointment.status)
+      );
+      const hasUpcomingAppointment = patientAppointments.some(appointment =>
+        appointment.date >= new Date().toISOString().slice(0, 10)
+      );
+      const hasAnyAppointment = patientAppointments.length > 0;
+      const matchAppointment = filterAppointment === 'Tümü' ||
+        (filterAppointment === 'Randevusu olan' ? (hasUpcomingAppointment || hasAnyAppointment) : (!hasUpcomingAppointment && !hasAnyAppointment));
 
+      const statusStr = (p.patientStatus as string) || '';
       const matchQuickFilter = quickFilter === 'Tümü' ||
-        (quickFilter === 'Aktif' && ['Müşteri', 'Satış Hastası'].includes(p.patientStatus || '')) ||
-        (quickFilter === 'Cihaz Kullanan' && hasDevice) ||
-        (quickFilter === 'Randevusu Olan' && hasUpcomingAppointment) ||
-        (quickFilter === 'Recall Bekleyen' && p.sgkStatus === 'Yenileme Hakkı Var') ||
-        (quickFilter === 'Son 3 Ayda Gelen' && (p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 90); return date.toISOString().slice(0, 10); })()) ||
-        (quickFilter === 'Yeni Hastalar' && (p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 30); return date.toISOString().slice(0, 10); })()) ||
-        (quickFilter === 'Cihaz Serviste' && (p.patientStatus === 'Tamir için gelen')) ||
-        (quickFilter === 'Pasif' && p.sgkStatus === 'Pasif');
+        (quickFilter === 'Aktif' && ['Müşteri', 'Satış Hastası', 'Aktif'].includes(statusStr)) ||
+        (quickFilter === 'Cihaz Kullanan' && (hasDevice || Boolean(p.currentDevice))) ||
+        (quickFilter === 'Randevusu Olan' && (hasUpcomingAppointment || hasAnyAppointment)) ||
+        (quickFilter === 'Recall Bekleyen' && (p.sgkStatus === 'Yenileme Hakkı Var' || statusStr === 'Takip' || recallList.some(r => r.patientId === p.id && r.status !== 'Tamamlandı'))) ||
+        (quickFilter === 'Son 3 Ayda Gelen' && Boolean((p.createdAt || p.lastVisit || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 90); return date.toISOString().slice(0, 10); })())) ||
+        (quickFilter === 'Yeni Hastalar' && Boolean((p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 30); return date.toISOString().slice(0, 10); })())) ||
+        (quickFilter === 'Cihaz Serviste' && ['Tamir için gelen', 'Servis', 'Cihaz Serviste'].includes(statusStr)) ||
+        (quickFilter === 'Pasif' && (p.sgkStatus === 'Pasif' || statusStr === 'Pasif'));
       
       let matchDate = true;
-      const itemDate = p.createdAt || p.lastVisit || '';
-      if (itemDate) {
-        if (filterStartDate) {
-          matchDate = matchDate && itemDate >= filterStartDate;
-        }
-        if (filterEndDate) {
-          matchDate = matchDate && itemDate <= filterEndDate;
-        }
+      if (filterStartDate || filterEndDate) {
+        const hasMatchingAptDate = patientAppointments.some(a => {
+          if (filterStartDate && a.date < filterStartDate) return false;
+          if (filterEndDate && a.date > filterEndDate) return false;
+          return true;
+        });
+        const hasMatchingVisitDate = Boolean(p.lastVisit && (!filterStartDate || p.lastVisit >= filterStartDate) && (!filterEndDate || p.lastVisit <= filterEndDate));
+        matchDate = hasMatchingAptDate || hasMatchingVisitDate;
       }
       
       return matchSearch && matchLoss && matchStatus && matchSource && matchBranch && matchDevice && matchAppointment && matchQuickFilter && matchDate;
     });
-  }, [branchFilteredPatients, branchAppointments, stockList, patientHasDevice, debouncedSearch, filterLoss, filterStatus, filterSource, filterBranch, filterDevice, filterAppointment, quickFilter, filterStartDate, filterEndDate]);
+  }, [branchFilteredPatients, branchAppointments, stockList, patientHasDevice, debouncedSearch, filterLoss, filterStatus, filterSource, filterBranch, filterDevice, filterAppointment, quickFilter, filterStartDate, filterEndDate, recallList]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;

@@ -81,7 +81,7 @@ function AppContent() {
   }
 
   const renderPage = () => {
-    if (!currentUser || !currentOrgId || dataLoading) return <p>Oturum ve firma verileri yükleniyor…</p>;
+    if (!currentUser || !currentOrgId) return <p>Oturum ve firma verileri yükleniyor…</p>;
     const roles: string[] = currentUser.membership?.roles || [];
     if (!canAccessPage(currentPage, roles)) return <p>Bu modül için yetkiniz yok.</p>;
     switch (currentPage) {
