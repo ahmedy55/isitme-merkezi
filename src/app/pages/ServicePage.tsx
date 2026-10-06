@@ -98,7 +98,8 @@ export default function ServicePage() {
     const reportTitle = item ? `Servis Raporu - ${item.deviceName}` : 'Aylık Servis Faaliyet Raporu';
     const reportRows = item
       ? [
-          ['Hasta', item.patientName], ['Cihaz', item.deviceName], ['Seri No', item.serialNo],
+          ['Hasta', item.patientName], ['Telefon', item.patientPhone], ['Cihaz', `${item.deviceName} (${item.earSide})`],
+          ['Seri No', item.serialNo], ['Barkod', item.barcode],
           ['Arıza / Sorun', item.problem], ['Durum', item.status], ['Şube', item.branch],
           ['Teslim Alınma', item.receivedDate], ['Tahmini Teslim', item.estimatedDeliveryDate],
           ['Garanti', item.warrantyStatus], ['Teknisyen', item.technician], ['Notlar', item.notes],
@@ -112,13 +113,14 @@ export default function ServicePage() {
     const popup = window.open('', '_blank');
     if (!popup) {
       addToast({ type: 'error', message: 'Rapor penceresi açılamadı. Tarayıcı açılır pencere iznini etkinleştirip tekrar deneyin.' });
-      return;
+      return false;
     }
     popup.opener = null;
     popup.document.open();
     popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(reportTitle)}</title><style>body{font:14px Arial,sans-serif;color:#172033;margin:40px auto;max-width:800px;padding:0 24px}h1{font-size:22px;border-bottom:2px solid #08785b;padding-bottom:12px}p{color:#64748b}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{text-align:left;border-bottom:1px solid #dbe3ea;padding:12px;vertical-align:top}th{width:30%;color:#475569}.actions{margin:20px 0}@media print{body{margin:0;max-width:none}.actions{display:none}}</style></head><body><div class="actions"><button onclick="window.print()">Yazdır / PDF olarak kaydet</button></div><h1>${escapeHtml(reportTitle)}</h1><p>Oluşturulma: ${escapeHtml(new Date().toLocaleString('tr-TR'))}</p><table><tbody>${content}</tbody></table></body></html>`);
     popup.document.close();
     popup.focus();
+    return true;
   };
 
   // Form states
@@ -1339,8 +1341,7 @@ export default function ServicePage() {
                 type="button"
                 className={styles.btnPrimaryAction}
                 onClick={() => {
-                  window.print();
-                  setShowPrintModal(false);
+                  if (exportServiceReport()) setShowPrintModal(false);
                 }}
               >
                 Yazdır / PDF İndir

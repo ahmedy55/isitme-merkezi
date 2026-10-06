@@ -561,6 +561,30 @@ test('servis raporu dışa aktarma gerçek, yazdırılabilir rapor görüntüley
   await expect(report.getByRole('button', { name: 'Yazdır / PDF olarak kaydet' })).toBeVisible();
 });
 
+test('tekil servis formu yazdırma rapor görüntüleyicisini açar', async ({ page }) => {
+  const patientId = 'abababab-abab-4bab-8bab-abababababab';
+  await mockTenantData(page, false, {
+    patientRows: [{ id: patientId, organization_id: orgId, branch_id: branchId, first_name: 'E2E', last_name: 'Hasta', phone: '05000000001', patient_status: 'Aktif', deleted_at: null }],
+    serviceRows: [{
+      id: '99999999-9999-4999-8999-999999999999', organization_id: orgId, branch_id: branchId, patient_id: patientId,
+      patient_name: 'E2E Hasta', patient_phone: '05000000001', device_name: 'E2E Cihaz', device_serial: 'E2E-SN', barcode: 'E2E-BC',
+      received_date: '2026-09-20', delivered_date: null, complaint: 'Ses kesilmesi', service_fee: 0,
+      status: 'Bekliyor', technician: 'Teknik Servis', notes: '', details: { status: 'Alındı', operations: [], warrantyRepair: true },
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Teknik Servis' }).click();
+  await page.getByRole('row').filter({ hasText: 'E2E Cihaz' }).click();
+  await page.getByRole('button', { name: 'Servis Formu Yazdır' }).click();
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Yazdır / PDF İndir' }).click();
+  const report = await popupPromise;
+  await expect(report.getByRole('heading', { name: 'Servis Raporu - E2E Cihaz' })).toBeVisible();
+  await expect(report.getByText('E2E-SN')).toBeVisible();
+  await expect(report.getByRole('button', { name: 'Yazdır / PDF olarak kaydet' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Yazdır / PDF İndir' })).toHaveCount(0);
+});
+
 test('teknik servis durum penceresi iptal ile kapanır ve iptal edilen seçim kaydedilmez', async ({ page }) => {
   const serviceInsertBodies: Record<string, unknown>[] = [];
   await mockTenantData(page, false, {
