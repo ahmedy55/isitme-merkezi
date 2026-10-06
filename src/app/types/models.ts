@@ -88,6 +88,7 @@ export interface StockItem {
   utsKurumNo?: string;
   gln?: string;
   mersisNo?: string;
+  description?: string;
 }
 
 export interface SaleRecord {

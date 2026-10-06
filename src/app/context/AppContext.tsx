@@ -360,7 +360,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts(prev => [...prev, { ...toast, id }]);
-    setTimeout(() => removeToast(id), 4000);
+    setTimeout(() => removeToast(id), 10000);
   };
 
   const removeToast = (id: string) => {

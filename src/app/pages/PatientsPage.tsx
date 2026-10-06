@@ -585,8 +585,7 @@ export default function PatientsPage() {
           if (filterEndDate && a.date > filterEndDate) return false;
           return true;
         });
-        const hasMatchingVisitDate = Boolean(p.lastVisit && (!filterStartDate || p.lastVisit >= filterStartDate) && (!filterEndDate || p.lastVisit <= filterEndDate));
-        matchDate = hasMatchingAptDate || hasMatchingVisitDate;
+        matchDate = hasMatchingAptDate;
       }
       
       return matchSearch && matchLoss && matchStatus && matchSource && matchBranch && matchDevice && matchAppointment && matchQuickFilter && matchDate;
@@ -804,6 +803,7 @@ export default function PatientsPage() {
                   value={filterStartDate}
                   onChange={(e) => setFilterStartDate(e.target.value)}
                   title="Tarih aralığı"
+                  aria-label="Randevu Tarihi"
                 />
               </div>
             </div>

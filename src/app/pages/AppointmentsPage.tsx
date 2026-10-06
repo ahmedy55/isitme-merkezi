@@ -478,6 +478,7 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
+
       {/* ── 5 Stat Metric Cards ── */}
       <div className={styles.statsGrid}>
         {/* 1. Bugünkü Randevular */}
@@ -1053,25 +1054,39 @@ export default function AppointmentsPage() {
                       </span>
                     </td>
                     <td data-label="İşlem" onClick={(e) => e.stopPropagation()}>
-                      {isOpenAppointment(apt.status) ? <div style={{ display: 'flex', gap: 4 }}>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button
                           type="button"
-                          className="btn btn-sm btn-primary"
-                          disabled={updatingAppointmentIds.has(apt.id)}
-                          onClick={() => void handleAppointmentStatusChange(apt.id, 'Geldi')}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => setSelectedDetailSlot(aptToSlot(apt))}
+                          title="Randevu Detayı"
                         >
-                          <IconCheck size={12} /> Geldi
+                          Detay
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-danger"
-                          disabled={updatingAppointmentIds.has(apt.id)}
-                          onClick={() => void handleAppointmentStatusChange(apt.id, 'İptal')}
-                        >
-                          İptal Et
-                        </button>
-                      </div> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>İşlem tamamlandı</span>}
+                        {isOpenAppointment(apt.status) ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-primary"
+                              disabled={updatingAppointmentIds.has(apt.id)}
+                              onClick={() => void handleAppointmentStatusChange(apt.id, 'Geldi')}
+                              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                            >
+                              <IconCheck size={12} /> Geldi
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger"
+                              disabled={updatingAppointmentIds.has(apt.id)}
+                              onClick={() => void handleAppointmentStatusChange(apt.id, 'İptal')}
+                            >
+                              İptal Et
+                            </button>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>İşlem tamamlandı</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1291,7 +1306,9 @@ export default function AppointmentsPage() {
           onClose={() => setEditingAppointment(null)}
           onSave={async updatedAppointment => {
             const saved = await updateAppointment(updatedAppointment);
-            if (saved) setEditingAppointment(null);
+            if (saved) {
+              setEditingAppointment(null);
+            }
           }}
           patientsList={patientsList}
           addToast={addToast}

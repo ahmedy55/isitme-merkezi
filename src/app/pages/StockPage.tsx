@@ -29,14 +29,19 @@ export default function StockPage() {
   // Envanter yalnızca aktif firmadan yüklenen kayıtları kullanır.
   const allStockItems = useMemo(() => {
     if (stockList && stockList.length > 0) {
-      return stockList.map(item => ({
-        ...item,
-        branchStockBreakdown: { [item.branch]: item.quantity },
-        description: item.brand && item.model ? `${item.brand} ${item.model} ${item.category}` : item.name
-      }));
+      return stockList.map(item => {
+        const branchObj = branchesList.find(b => b.id === item.branchId);
+        const branchName = item.branch || branchObj?.name || '';
+        return {
+          ...item,
+          branch: branchName,
+          branchStockBreakdown: { [branchName]: item.quantity },
+          description: item.brand && item.model ? `${item.brand} ${item.model} ${item.category}` : (item.description || item.name)
+        };
+      });
     }
     return [];
-  }, [stockList]);
+  }, [stockList, branchesList]);
 
   // Pill tab filter (Tümü, Cihaz, Pil, Kalıp, Aksesuar)
   const [categoryPill, setCategoryPill] = useState('Tümü');
@@ -126,18 +131,31 @@ export default function StockPage() {
       }
 
       // Pill tab filter
-      if (categoryPill !== 'Tümü' && item.category !== categoryPill) {
-        return false;
+      if (categoryPill !== 'Tümü') {
+        const itemCat = (item.category || '').toLowerCase();
+        const pillCat = categoryPill.toLowerCase();
+        if (itemCat !== pillCat && !itemCat.includes(pillCat) && !pillCat.includes(itemCat)) {
+          return false;
+        }
       }
 
       // Category dropdown filter
-      if (selectedCategory !== 'Tüm Kategoriler' && item.category !== selectedCategory) {
-        return false;
+      if (selectedCategory !== 'Tüm Kategoriler') {
+        const itemCat = (item.category || '').toLowerCase();
+        const selCat = selectedCategory.toLowerCase();
+        if (itemCat !== selCat && !itemCat.includes(selCat) && !selCat.includes(itemCat)) {
+          return false;
+        }
       }
 
       // Branch dropdown filter
-      if (selectedBranch !== 'Tüm Şubeler' && item.branch !== selectedBranch) {
-        return false;
+      if (selectedBranch !== 'Tüm Şubeler') {
+        const matchesBranchFilter =
+          item.branch === selectedBranch ||
+          item.branchId === selectedBranch ||
+          branchesList.find(b => b.id === item.branchId)?.name === selectedBranch ||
+          branchesList.find(b => b.name === selectedBranch)?.id === item.branchId;
+        if (!matchesBranchFilter) return false;
       }
 
       // Status dropdown filter
@@ -153,26 +171,28 @@ export default function StockPage() {
         const qRaw = searchTerm.trim();
         const qTr = qRaw.toLocaleLowerCase('tr-TR');
         const qEn = qRaw.toLowerCase();
-        const qNorm = qTr.replace(/ı/g, 'i');
+        const qNorm = qTr.replace(/ı/g, 'i').replace(/İ/g, 'i');
         const matchField = (val?: string) => {
           if (!val) return false;
           const vTr = val.toLocaleLowerCase('tr-TR');
           const vEn = val.toLowerCase();
-          const vNorm = vTr.replace(/ı/g, 'i');
-          return vTr.includes(qTr) || vEn.includes(qEn) || vNorm.includes(qNorm);
+          const vNorm = vTr.replace(/ı/g, 'i').replace(/İ/g, 'i');
+          return vTr.includes(qTr) || vEn.includes(qEn) || vNorm.includes(qNorm) || vTr.includes(qNorm) || vNorm.includes(qTr);
         };
-        const matchName = matchField(item.name);
+        const matchName = matchField(item.name) || matchField((item as any).title) || matchField((item as any).productName);
         const matchBrand = matchField(item.brand);
         const matchModel = matchField(item.model);
+        const matchDesc = matchField(item.description);
+        const matchCategory = matchField(item.category);
         const matchSerial = matchesInventoryIdentifier(item.serialNo, qTr) || matchesInventoryIdentifier(item.serialNo, qEn);
         const matchBarcode = matchesInventoryIdentifier(item.barcode, qTr) || matchesInventoryIdentifier(item.barcode, qEn);
         const matchQuantity = `${item.quantity} adet`.includes(qTr) || `${item.quantity} adet`.includes(qEn);
-        if (!matchName && !matchBrand && !matchModel && !matchSerial && !matchBarcode && !matchQuantity) return false;
+        if (!matchName && !matchBrand && !matchModel && !matchDesc && !matchCategory && !matchSerial && !matchBarcode && !matchQuantity) return false;
       }
 
       return true;
     });
-  }, [allStockItems, activeBranch, categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm]);
+  }, [allStockItems, activeBranch, categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm, branchesList]);
 
   useEffect(() => setCurrentTablePage(1), [categoryPill, selectedCategory, selectedBranch, selectedStatus, searchTerm, tablePageSize]);
   const tablePageCount = Math.max(1, Math.ceil(filteredItems.length / tablePageSize));
