@@ -19,6 +19,8 @@ type ExtraFixtures = {
   appointmentRows?: Record<string, unknown>[];
   maintenanceRows?: Record<string, unknown>[];
   serviceRows?: Record<string, unknown>[];
+  serviceInsertBodies?: Record<string, unknown>[];
+  failServiceInsert?: boolean;
   invoiceRows?: Record<string, unknown>[];
   failStockInsert?: boolean;
   cashBranchIds?: string[];
@@ -128,6 +130,26 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         contentType: 'application/vnd.pgrst.object+json',
         headers: corsHeaders,
         body: JSON.stringify(recall),
+      });
+      return;
+    }
+    if (table === 'service_tickets' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      fixtures.serviceInsertBodies?.push(body);
+      if (fixtures.failServiceInsert) {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          headers: corsHeaders,
+          body: JSON.stringify({ code: '23514', message: 'Servis durumu veritabanı kuralına uymuyor.' }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/vnd.pgrst.object+json',
+        headers: corsHeaders,
+        body: JSON.stringify({ id: body.id }),
       });
       return;
     }
@@ -410,6 +432,71 @@ test('servis raporu dışa aktarma gerçek, yazdırılabilir rapor görüntüley
   await expect(report.getByRole('heading', { name: 'Servis Raporu - E2E Cihaz' })).toBeVisible();
   await expect(report.getByText('E2E Hasta')).toBeVisible();
   await expect(report.getByRole('button', { name: 'Yazdır / PDF olarak kaydet' })).toBeVisible();
+});
+
+test('teknik servis kabul formu kaydı gerçek hasta ve şubeyle oluşturup modalı kapatır', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const serviceInsertBodies: Record<string, unknown>[] = [];
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: patientId,
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Test Hasta',
+      last_name: 'Tek Şube Bir',
+      phone: '05000000001',
+      patient_status: 'Aktif',
+      deleted_at: null,
+    }],
+    serviceRows: [],
+    serviceInsertBodies,
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Teknik Servis' }).click();
+  await page.getByRole('button', { name: 'Yeni Servis Kaydı' }).click();
+  await page.getByPlaceholder('Örn: Ahmet Can').fill('Test Hasta Tek Şube Bir');
+  await page.getByPlaceholder('05XX XXX XX XX').fill('05000000001');
+  await page.getByPlaceholder('Örn: Oticon Real 1').fill('E2E Servis Cihazı');
+  await page.getByPlaceholder('Örn: 1234567890').fill('QA-SN-SERVICE-CREATE-001');
+  await page.getByPlaceholder('Örn: OT-001').fill('QA-SERVICE-CREATE-001');
+  await page.getByPlaceholder('Örn: Ses kesilmesi, cızırtı, cihaz açılmıyor...').fill('E2E kabul arızası');
+  await page.getByRole('button', { name: 'Servis Kaydını Aç' }).click();
+
+  await expect.poll(() => serviceInsertBodies.length).toBe(1);
+  expect(serviceInsertBodies[0]).toMatchObject({
+    organization_id: orgId,
+    branch_id: branchId,
+    patient_id: patientId,
+    patient_name: 'Test Hasta Tek Şube Bir',
+    device_serial: 'QA-SN-SERVICE-CREATE-001',
+    barcode: 'QA-SERVICE-CREATE-001',
+    status: 'Bekliyor',
+  });
+  await expect(page.getByText('Yeni teknik servis kaydı oluşturuldu.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Yeni Teknik Servis Kaydı/ })).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: 'QA-SN-SERVICE-CREATE-001' })).toBeVisible();
+});
+
+test('teknik servis veritabanı hatası modalda gösterilir ve tekrar gönderim kilitlenmez', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  await mockTenantData(page, false, {
+    patientRows: [{ id: patientId, organization_id: orgId, branch_id: branchId, first_name: 'Test Hasta', last_name: 'Tek Şube Bir', phone: '05000000001', patient_status: 'Aktif', deleted_at: null }],
+    serviceRows: [],
+    serviceInsertBodies: [],
+    failServiceInsert: true,
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Teknik Servis' }).click();
+  await page.getByRole('button', { name: 'Yeni Servis Kaydı' }).click();
+  await page.getByPlaceholder('Örn: Ahmet Can').fill('Test Hasta Tek Şube Bir');
+  await page.getByPlaceholder('Örn: Oticon Real 1').fill('E2E Servis Cihazı');
+  await page.getByPlaceholder('Örn: 1234567890').fill('QA-SN-SERVICE-ERROR-001');
+  await page.getByPlaceholder('Örn: OT-001').fill('QA-SERVICE-ERROR-001');
+  await page.getByPlaceholder('Örn: Ses kesilmesi, cızırtı, cihaz açılmıyor...').fill('Test doğrulama');
+  await page.getByRole('button', { name: 'Servis Kaydını Aç' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Servis durumu veritabanı kuralına uymuyor.' }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Yeni Teknik Servis Kaydı/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Servis Kaydını Aç' })).toBeEnabled();
 });
 
 test('demirbaş, SGK fatura ve kasa tahsilat akışları gerçek aktif şubeyi kullanır', async ({ page }) => {

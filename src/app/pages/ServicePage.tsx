@@ -90,6 +90,8 @@ export default function ServicePage() {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isCreatingRecord, setIsCreatingRecord] = useState(false);
+  const [createRecordError, setCreateRecordError] = useState('');
 
   const exportServiceReport = () => {
     const item = selectedItem;
@@ -340,9 +342,26 @@ export default function ServicePage() {
   // Handle Add New Record
   const handleCreateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    const patient = patientsList.find(item => `${item.firstName} ${item.lastName}`.trim().toLocaleLowerCase('tr-TR') === newRecordForm.patientName.trim().toLocaleLowerCase('tr-TR'));
+    if (isCreatingRecord) return;
+    setCreateRecordError('');
+    const normalizePatientName = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
+    const normalizePhone = (value: string) => value.replace(/\D/g, '').replace(/^90(?=\d{10}$)/, '0');
+    const patientByName = patientsList.find(item => normalizePatientName(`${item.firstName} ${item.lastName}`) === normalizePatientName(newRecordForm.patientName));
+    const submittedPhone = normalizePhone(newRecordForm.patientPhone);
+    const patientByPhone = submittedPhone.length >= 10
+      ? patientsList.find(item => normalizePhone(item.phone || '') === submittedPhone)
+      : undefined;
+    const patient = patientByName && patientByPhone && patientByName.id !== patientByPhone.id
+      ? undefined
+      : patientByName || patientByPhone;
     if (!patient || !newRecordForm.deviceName.trim() || !newRecordForm.serialNo.trim() || !newRecordForm.barcode.trim() || !patient.branchId || !currentOrgId) {
-      addToast({ type: 'error', message: 'Kayıtlı hasta, cihaz modeli, seri numarası ve barkod gerekli. Hasta şubesi firma kaydında bulunmalı.' });
+      const message = !patient
+        ? 'Hasta adı veya telefonu kayıtlı bir hasta ile eşleşmiyor.'
+        : !patient.branchId
+          ? 'Seçilen hastanın aktif şube bilgisi bulunamadı.'
+          : 'Cihaz modeli, seri numarası ve barkod gereklidir.';
+      setCreateRecordError(message);
+      addToast({ type: 'error', message });
       return;
     }
 
@@ -389,8 +408,17 @@ export default function ServicePage() {
       ]
     };
 
-    try { await saveServiceTicket(currentOrgId, toServiceRecord(newItem)); }
-    catch (error) { addToast({ type: 'error', message: error instanceof Error ? error.message : 'Yeni servis kaydı kaydedilemedi.' }); return; }
+    setIsCreatingRecord(true);
+    try {
+      await saveServiceTicket(currentOrgId, toServiceRecord(newItem));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Yeni servis kaydı kaydedilemedi.';
+      setCreateRecordError(message);
+      addToast({ type: 'error', message });
+      return;
+    } finally {
+      setIsCreatingRecord(false);
+    }
     setRecords([newItem, ...records]);
     setSelectedItem(newItem);
     setSelectedRowIds([newItem.id]);
@@ -454,7 +482,7 @@ export default function ServicePage() {
           <button
             type="button"
             className={styles.btnPrimaryAction}
-            onClick={() => setShowNewRecordModal(true)}
+            onClick={() => { setCreateRecordError(''); setShowNewRecordModal(true); }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1362,6 +1390,7 @@ export default function ServicePage() {
             </div>
             <form onSubmit={handleCreateRecord}>
               <div className={styles.modalBody}>
+                {createRecordError && <div role="alert" className={styles.formGroup} style={{ color: '#b42318', background: '#fef3f2', border: '1px solid #fecdca', borderRadius: 8, padding: '10px 12px' }}>{createRecordError}</div>}
                 <div className={styles.formGrid2}>
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Hasta Adı Soyadı *</label>
@@ -1371,8 +1400,12 @@ export default function ServicePage() {
                       placeholder="Örn: Ahmet Can"
                       className={styles.formInput}
                       value={newRecordForm.patientName}
-                      onChange={e => setNewRecordForm({ ...newRecordForm, patientName: e.target.value })}
+                      list="service-patient-options"
+                      onChange={e => { setCreateRecordError(''); setNewRecordForm({ ...newRecordForm, patientName: e.target.value }); }}
                     />
+                    <datalist id="service-patient-options">
+                      {patientsList.map(patient => <option key={patient.id} value={`${patient.firstName} ${patient.lastName}`.trim()} />)}
+                    </datalist>
                   </div>
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Hasta Telefon</label>
@@ -1417,6 +1450,7 @@ export default function ServicePage() {
                     <label className={styles.formLabel}>Seri No</label>
                     <input
                       type="text"
+                      required
                       placeholder="Örn: 1234567890"
                       className={styles.formInput}
                       value={newRecordForm.serialNo}
@@ -1427,6 +1461,7 @@ export default function ServicePage() {
                     <label className={styles.formLabel}>Barkod No</label>
                     <input
                       type="text"
+                      required
                       placeholder="Örn: OT-001"
                       className={styles.formInput}
                       value={newRecordForm.barcode}
@@ -1487,7 +1522,9 @@ export default function ServicePage() {
               </div>
               <div className={styles.modalFooter}>
                 <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowNewRecordModal(false)}>İptal</button>
-                <button type="submit" className={styles.btnPrimaryAction}>Servis Kaydını Aç</button>
+                <button type="submit" className={styles.btnPrimaryAction} disabled={isCreatingRecord}>
+                  {isCreatingRecord ? 'Kaydediliyor…' : 'Servis Kaydını Aç'}
+                </button>
               </div>
             </form>
           </div>

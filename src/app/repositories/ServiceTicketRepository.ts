@@ -48,6 +48,7 @@ export async function saveServiceTicket(orgId: string, record: ServiceRecord): P
     details: { estimatedDate: record.estimatedDate, operations: record.operations, status: record.status,
       warrantyRepair: record.warrantyRepair, accessoriesTaken: record.accessoriesTaken, complaints: record.complaints },
   }).select('id').single();
-  if (error || !data) throw new Error('Servis kaydı saklanamadı. Bilgileri ve bağlantıyı kontrol edin.');
+  if (error) throw new Error(error.message || 'Servis kaydı saklanamadı. Bilgileri ve bağlantıyı kontrol edin.');
+  if (!data) throw new Error('Veritabanı servis kaydını onaylamadı. Lütfen tekrar deneyin.');
   return record;
 }
