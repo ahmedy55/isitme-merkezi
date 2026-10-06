@@ -490,7 +490,9 @@ export const dbInsertRecallItem = async (item: any) => {
     if (!organizationId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
     if (!item.patientId) throw new DatabaseError('Hatırlatma gerçek bir hasta kaydına bağlanmalıdır.');
 
-    const { id: _id, patientName: _patientName, ...payload } = toSnake(item);
+    // Patient names are display data resolved through patient_id, not columns
+    // on recall_items. Strip the snake-cased property before inserting.
+    const { id: _id, patient_name: _patientName, ...payload } = toSnake(item);
     const { data, error } = await supabase
       .from('recall_items')
       .insert({ ...payload, organization_id: organizationId })

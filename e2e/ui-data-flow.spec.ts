@@ -15,6 +15,7 @@ type ExtraFixtures = {
   stockRows?: Record<string, unknown>[];
   patientRows?: Record<string, unknown>[];
   recallRows?: Record<string, unknown>[];
+  recallInsertBodies?: Record<string, unknown>[];
   appointmentRows?: Record<string, unknown>[];
   maintenanceRows?: Record<string, unknown>[];
   serviceRows?: Record<string, unknown>[];
@@ -110,6 +111,24 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       const row = { ...body[0], id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' };
       fixtures.appointmentRows = [...(fixtures.appointmentRows || []), row];
       rows = [row];
+    }
+    if (table === 'recall_items' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown> | Record<string, unknown>[];
+      const insertBody = Array.isArray(body) ? body[0] : body;
+      const recall = {
+        ...insertBody,
+        id: 'edededed-eded-4ded-8ded-edededededed',
+        patients: { first_name: 'Test Hasta', last_name: 'Tek Şube Bir' },
+      };
+      fixtures.recallInsertBodies?.push(insertBody);
+      fixtures.recallRows = [...(fixtures.recallRows || []), recall];
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/vnd.pgrst.object+json',
+        headers: corsHeaders,
+        body: JSON.stringify(recall),
+      });
+      return;
     }
     if (table === 'asset_maintenance_records') {
       if (route.request().method() === 'POST') {
@@ -291,6 +310,43 @@ test('hatırlatma araması kayıtlı hastanın TC kimlik numarasını eşleştir
   await page.getByRole('button', { name: 'Recall' }).click();
   await page.getByPlaceholder('Hasta adı, telefon, TC veya cihaz seri no...').fill('0000000001');
   await expect(page.getByText('E2E Hasta').first()).toBeVisible();
+});
+
+test('yeni hatırlatma hastaya bağlanır ve şemada olmayan hasta_adı alanı gönderilmez', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const recallInsertBodies: Record<string, unknown>[] = [];
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: patientId,
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'Test Hasta',
+      last_name: 'Tek Şube Bir',
+      phone: '05000000001',
+      tc: 'ENC:v2:test',
+      patient_status: 'Aktif',
+      deleted_at: null,
+    }],
+    recallRows: [],
+    recallInsertBodies,
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Recall' }).click();
+  await page.getByRole('button', { name: 'Yeni Hatırlatma' }).click();
+  await page.getByRole('combobox', { name: 'Hasta Adı *' }).fill('Test Hasta Tek Şube Bir');
+  await page.getByRole('option', { name: /Test Hasta Tek Şube Bir/ }).click();
+  await page.locator('input[type="date"]').fill('2026-10-10');
+  await page.getByRole('button', { name: 'Kaydet' }).click();
+
+  await expect.poll(() => recallInsertBodies.length).toBe(1);
+  expect(recallInsertBodies[0]).toMatchObject({
+    patient_id: patientId,
+    organization_id: orgId,
+    due_date: '2026-10-10',
+  });
+  expect(recallInsertBodies[0]).not.toHaveProperty('patient_name');
+  await expect(page.getByText('Test Hasta Tek Şube Bir').first()).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('hasta listesi telefon aramasını boşluk, tire ve ülke kodu biçimlerinden bağımsız eşleştirir', async ({ page }) => {
