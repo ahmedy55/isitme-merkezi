@@ -1215,6 +1215,7 @@ export default function AssetsPage() {
                     <select
                       className={styles.filterSelect}
                       style={{ width: '100%' }}
+                      aria-label="Şube"
                       value={newAssetForm.branch}
                       onChange={e => setNewAssetForm({ ...newAssetForm, branch: e.target.value })}
                     >

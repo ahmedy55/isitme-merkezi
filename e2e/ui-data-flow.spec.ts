@@ -16,6 +16,8 @@ type ExtraFixtures = {
   stockMovementRows?: Record<string, unknown>[];
   patientRows?: Record<string, unknown>[];
   recallRows?: Record<string, unknown>[];
+  activityRows?: Record<string, unknown>[];
+  activityInsertBodies?: Record<string, unknown>[];
   recallInsertBodies?: Record<string, unknown>[];
   appointmentRows?: Record<string, unknown>[];
   maintenanceRows?: Record<string, unknown>[];
@@ -186,6 +188,19 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       });
       return;
     }
+    if (table === 'activity_logs' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      fixtures.activityInsertBodies?.push(body);
+      fixtures.activityRows = [{
+        ...body,
+        id: 'abababab-abab-4bab-8bab-abababababab',
+        created_at: new Date().toISOString(),
+        actor: { first_name: 'Playwright', last_name: 'Test', roles: ['Firma Yöneticisi'] },
+        branches: { name: 'QA Şube' },
+      }, ...(fixtures.activityRows || [])];
+      await route.fulfill({ status: 201, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify(fixtures.activityRows[0]) });
+      return;
+    }
     if (table === 'service_tickets' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as Record<string, unknown>;
       fixtures.serviceInsertBodies?.push(body);
@@ -232,7 +247,7 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     }
 
     if (table === 'memberships') {
-      rows = [{ id: '55555555-5555-4555-8555-555555555555', user_id: userId, organization_id: orgId, branch_id: null, roles: ['Firma Yöneticisi'], status: 'active' }];
+      rows = [{ id: '55555555-5555-4555-8555-555555555555', user_id: userId, organization_id: orgId, branch_id: branchId, first_name: 'Playwright', last_name: 'Test', email: 'playwright@example.invalid', roles: ['Firma Yöneticisi'], status: 'active' }];
     } else if (table === 'my_organizations') {
       rows = [{ organization_id: orgId, name: 'Playwright Yalıtılmış Test Firması' }];
     } else if (table === 'branches') {
@@ -265,6 +280,8 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       rows = fixtures.recallRows || [];
     } else if (table === 'appointments') {
       rows = fixtures.appointmentRows || [];
+    } else if (table === 'activity_logs') {
+      rows = fixtures.activityRows || [];
     } else if (table === 'decrypt_patient_tcs') {
       const patientIds = (route.request().postDataJSON() as { p_patient_ids?: string[] }).p_patient_ids || [];
       rows = (fixtures.patientRows || []).filter(patient => patientIds.includes(String(patient.id))).map(patient => ({ patient_id: patient.id, tc: patient.decrypted_tc || '' }));
@@ -293,6 +310,43 @@ async function openAssets(page: Page, withAsset: boolean) {
   await page.getByRole('button', { name: 'Demirbaşlar' }).click();
   await expect(page.getByRole('heading', { name: 'Demirbaş & Klinik Cihaz Yönetimi' })).toBeVisible();
 }
+
+test('aktivite formunda etiketli aktif şube seçilir ve not kaydedilir', async ({ page }) => {
+  const patientId = 'abababab-abab-4bab-8bab-abababababab';
+  const activityInsertBodies: Record<string, unknown>[] = [];
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: patientId, organization_id: orgId, branch_id: branchId,
+      first_name: 'Test', last_name: 'Hasta', phone: '05000000001',
+      patient_status: 'Aktif', deleted_at: null,
+    }],
+    activityRows: [],
+    activityInsertBodies,
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Aktivite Kaydı' }).click();
+  await page.getByRole('button', { name: 'Yeni Aktivite Gir' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Yeni Aktivite Kaydı Gir' });
+  const branchSelect = dialog.getByRole('combobox', { name: 'Şube' });
+  await expect(branchSelect).toBeEnabled();
+  await branchSelect.selectOption(branchId);
+  await dialog.getByLabel('Personel').selectOption('55555555-5555-4555-8555-555555555555');
+  await dialog.getByLabel('Hasta Adı Soyadı *').fill('Test Hasta');
+  await dialog.getByRole('option', { name: /Test Hasta/ }).click();
+  await dialog.getByPlaceholder('Görüşme veya işlem özetini girin...').fill('E2E aktivite notu');
+  await dialog.getByRole('button', { name: 'Kaydet' }).click();
+
+  await expect.poll(() => activityInsertBodies.length).toBe(1);
+  expect(activityInsertBodies[0]).toMatchObject({
+    organization_id: orgId,
+    branch_id: branchId,
+    patient_id: patientId,
+    activity_type: 'Arama',
+    description: 'E2E aktivite notu',
+  });
+  await expect(dialog).toHaveCount(0);
+});
 
 const stockId = '77777777-7777-4777-8777-777777777777';
 const stockFixture = {

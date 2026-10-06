@@ -943,9 +943,9 @@ export default function ActivityLogPage() {
       {/* ── Modal for New Activity ── */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="activity-create-title" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
-              <h3>Yeni Aktivite Kaydı Gir</h3>
+              <h3 id="activity-create-title">Yeni Aktivite Kaydı Gir</h3>
               <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setShowModal(false)}>
                 <IconClose size={16} />
               </button>
@@ -1037,10 +1037,12 @@ export default function ActivityLogPage() {
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                    <label htmlFor="activity-form-staff" style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
                       Personel *
                     </label>
                     <select
+                      id="activity-form-staff"
+                      aria-label="Personel"
                       className="form-select"
                       value={formStaffId}
                       onChange={(e) => setFormStaffId(e.target.value)}
@@ -1055,10 +1057,12 @@ export default function ActivityLogPage() {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
+                  <label htmlFor="activity-form-branch" style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#4a5c68', marginBottom: 4 }}>
                     Şube *
                   </label>
                   <select
+                    id="activity-form-branch"
+                    aria-label="Şube"
                     className="form-select"
                       value={formBranchId}
                       onChange={(e) => setFormBranchId(e.target.value)}
@@ -1066,9 +1070,19 @@ export default function ActivityLogPage() {
                       required
                       disabled={activityBranches.length === 0}
                   >
-                    <option value="">{dataLoading ? 'Şubeler yükleniyor…' : 'Aktif şube seçin'}</option>
+                    <option value="">{dataLoading ? 'Şubeler yükleniyor…' : activityBranches.length ? 'Şube seçin' : 'Önce Şube Yönetimi’nden şube ekleyin'}</option>
                     {activityBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                   </select>
+                  {!dataLoading && activityBranches.length === 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ marginTop: 8 }}
+                      onClick={() => { setShowModal(false); setCurrentPage('branches'); }}
+                    >
+                      Şube Yönetimine Git
+                    </button>
+                  )}
                 </div>
 
                 <div>

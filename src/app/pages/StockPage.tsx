@@ -1257,6 +1257,7 @@ export default function StockPage() {
                     <select
                       className={styles.filterSelect}
                       style={{ width: '100%' }}
+                      aria-label="Şube"
                       value={newItemForm.branch}
                       onChange={e => setNewItemForm({ ...newItemForm, branch: e.target.value })}
                     >

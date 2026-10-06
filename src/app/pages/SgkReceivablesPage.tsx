@@ -545,6 +545,7 @@ export default function SgkReceivablesPage() {
                     <label className={styles.inputLabel}>Şube</label>
                     <select
                       className={styles.selectBox}
+                      aria-label="Şube"
                       value={branch}
                       onChange={e => setBranch(e.target.value)}
                     >

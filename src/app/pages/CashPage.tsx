@@ -994,6 +994,7 @@ export default function CashPage() {
 
             <select
               className={styles.filterSelect}
+              aria-label="Gider şubesi"
               value={expenseSelectedBranch}
               onChange={e => setExpenseSelectedBranch(e.target.value)}
             >
@@ -1382,6 +1383,7 @@ export default function CashPage() {
                   <select
                     className={styles.filterSelect}
                     style={{ width: '100%' }}
+                    aria-label="Şube"
                     value={activeBranch.mode === 'single' ? activeBranch.branchId : depositForm.branchId}
                     disabled={activeBranch.mode === 'single'}
                     onChange={e => setDepositForm({ ...depositForm, branchId: e.target.value })}
@@ -1646,6 +1648,7 @@ export default function CashPage() {
                     <select
                       className={styles.filterSelect}
                       style={{ width: '100%' }}
+                      aria-label="Gider şubesi"
                       value={newExpForm.branch}
                       onChange={e => setNewExpForm({ ...newExpForm, branch: e.target.value })}
                     >

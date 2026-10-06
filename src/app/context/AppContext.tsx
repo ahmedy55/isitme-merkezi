@@ -827,10 +827,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Şube CRUD
   const addBranch = async (branch: Branch) => {
     requireActiveOrganization();
-    if (currentOrg && branchesList.length >= (currentOrg.max_branches || 2)) {
+    const activeBranchCount = branchesList.filter(branch => branch.status === 'Aktif' || (branch.status as string) === 'active').length;
+    if (currentOrg && activeBranchCount >= (currentOrg.max_branches || 2)) {
       addToast({
         type: 'warning',
-        message: `Şube limitinize ulaştınız (Maksimum ${currentOrg.max_branches} şube). Paketinizi yükseltmek için SaaS yöneticiniz ile iletişime geçin.`
+        message: `Aktif şube limitinize ulaştınız (Maksimum ${currentOrg.max_branches || 2} şube). Paketinizi yükseltmek için SaaS yöneticiniz ile iletişime geçin.`
       });
       return;
     }
