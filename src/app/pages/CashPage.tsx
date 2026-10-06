@@ -41,18 +41,28 @@ interface ExpenseItem {
 }
 
 export default function CashPage() {
-  const { addToast, branchesList, patientsList, stockList, addSale, addExpense, updateExpense, deleteExpense, expensesList, salesList, currentOrgId } = useApp();
+  const { addToast, branchesList, patientsList, stockList, addSale, addExpense, updateExpense, deleteExpense, expensesList, salesList, currentOrgId, currentPage } = useApp();
   const { matches, activeBranch } = useBranchScope();
-  const activeBranches = useMemo(() => branchesList.filter(branch => branch.status === 'Aktif' || (branch.status as string) === 'active'), [branchesList]);
+  const activeBranches = useMemo(() => {
+    const list = branchesList.filter(branch => !(branch as any).archivedAt && (branch.status === 'Aktif' || (branch.status as string) === 'active'));
+    if (list.length > 0) return list;
+    if (branchesList.length > 0) return branchesList.filter(branch => !(branch as any).archivedAt);
+    return [{ id: 'br-default', name: 'Merkez', status: 'Aktif' as const }];
+  }, [branchesList]);
 
   // Active Main Sub-Tab: 'cash' (Kasa & Tahsilat) or 'expenses' (Masraflar)
-  const [mainTab, setMainTab] = useState<'cash' | 'expenses' | 'transfers' | 'reports'>('cash');
+  const [mainTab, setMainTab] = useState<'cash' | 'expenses' | 'transfers' | 'reports'>(() => currentPage === 'expenses' ? 'expenses' : 'cash');
+  useEffect(() => {
+    if (currentPage === 'expenses') setMainTab('expenses');
+    else if (currentPage === 'cash') setMainTab('cash');
+  }, [currentPage]);
 
   // ── KASA & TAHSİLAT STATES ──
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
   const [cashRevision, setCashRevision] = useState(0);
   const [cashFilterPill, setCashFilterPill] = useState('Tümü');
   const [cashSelectedAccount, setCashSelectedAccount] = useState('Tüm Hesaplar');
+  const [cashSelectedBranch, setCashSelectedBranch] = useState('Tüm Şubeler');
   const [summaryBranch, setSummaryBranch] = useState('Tüm Şubeler');
   const [cashSelectedIds, setCashSelectedIds] = useState<string[]>([]);
   const [cashPage, setCashPage] = useState(1);
@@ -130,14 +140,15 @@ export default function CashPage() {
       const mappedMovements: CashMovement[] = (transactions as any[]).map(row => {
         const sale = row.referenceEntity === 'sale' ? (salesList.find(item => item.id === row.referenceId) as SaleRecord | undefined) : undefined;
         const expense = row.referenceEntity === 'expense' ? actualExpenses.find(item => item.id === row.referenceId) : undefined;
-        const branch = branchesList.find(item => item.id === row.branchId);
+        const branch = branchesList.find(item => item.id === row.branchId || item.name === row.branch)
+          || activeBranches.find(item => item.id === row.branchId || item.name === row.branch);
         const isOutgoing = ['EXPENSE', 'PAYOUT'].includes(row.type);
         return {
           id: row.id, date: row.createdAt ? new Date(row.createdAt).toLocaleString('tr-TR') : '—', dateKey: row.createdAt?.slice(0, 10),
           account: row.cashRegisterId || '—', type: isOutgoing ? 'Çıkış' : 'Giriş', category: row.category || '—',
           description: row.description || '—', patientOrEntity: sale?.patientName || expense?.createdBy || '—',
           amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || '—',
-          status: 'Tahsil Edildi', branch: branch?.name || '—', branchId: row.branchId, referenceEntity: row.referenceEntity, referenceId: row.referenceId,
+          status: 'Tahsil Edildi', branch: branch?.name || row.branch || '—', branchId: row.branchId || branch?.id, referenceEntity: row.referenceEntity, referenceId: row.referenceId,
         };
       });
       const mappedExpenses: ExpenseItem[] = actualExpenses.map(expense => ({
@@ -152,12 +163,20 @@ export default function CashPage() {
       setSelectedExpense(current => current ? mappedExpenses.find(item => item.id === current.id) || null : null);
     }).catch(() => { if (!cancelled) { setCashMovements([]); setExpenses([]); } });
     return () => { cancelled = true; };
-  }, [currentOrgId, branchesList, expensesList, salesList, cashRevision]);
+  }, [currentOrgId, branchesList, expensesList, salesList, cashRevision, activeBranches]);
 
   // Filtered Cash Movements
   const filteredCashMovements = useMemo(() => {
     return cashMovements.filter(item => {
       if (!matches(item.branch, item.branchId)) return false;
+      const targetBranch = cashSelectedBranch !== 'Tüm Şubeler' ? cashSelectedBranch : (summaryBranch !== 'Tüm Şubeler' ? summaryBranch : null);
+      if (targetBranch) {
+        const foundBranch = activeBranches.find(b => b.name === targetBranch || b.id === targetBranch)
+          || branchesList.find(b => b.name === targetBranch || b.id === targetBranch);
+        const targetName = foundBranch ? foundBranch.name : targetBranch;
+        const targetId = foundBranch ? foundBranch.id : targetBranch;
+        if (item.branch !== targetName && item.branchId !== targetId) return false;
+      }
       if (cashFilterPill === 'Girişler' && item.type !== 'Giriş') return false;
       if (cashFilterPill === 'Çıkışlar' && item.type !== 'Çıkış') return false;
       if (cashFilterPill === 'Tahsil Edildi' && item.status !== 'Tahsil Edildi') return false;
@@ -166,7 +185,7 @@ export default function CashPage() {
       if (cashSelectedAccount !== 'Tüm Hesaplar' && item.account !== cashSelectedAccount) return false;
       return true;
     });
-  }, [cashMovements, cashFilterPill, cashSelectedAccount, matches]);
+  }, [cashMovements, cashFilterPill, cashSelectedAccount, cashSelectedBranch, summaryBranch, activeBranches, branchesList, matches]);
 
   const getMethodNet = (method: string) => cashMovements
     .filter(item => (summaryBranch === 'Tüm Şubeler' || item.branch === summaryBranch) && item.paymentMethod === method)
@@ -202,6 +221,36 @@ export default function CashPage() {
     return { month: date.toLocaleDateString('tr-TR', { month: 'short' }), income: rows.filter(item => item.type === 'Giriş').reduce((sum, row) => sum + row.amount, 0), expense: rows.filter(item => item.type === 'Çıkış').reduce((sum, row) => sum + row.amount, 0) };
   });
   const cashChartMax = Math.max(1, ...cashChartMonths.flatMap(month => [month.income, month.expense]));
+  // Transfer Movements & Summary
+  const transferMovements = useMemo(() => {
+    return cashMovements.filter(item => {
+      const type = (item.type || '').toUpperCase();
+      const cat = (item.category || '').toLowerCase();
+      const acc = (item.account || '').toLowerCase();
+      const method = (item.paymentMethod || '').toLowerCase();
+      const desc = (item.description || '').toLowerCase();
+      return type === 'TRANSFER'
+        || cat.includes('transfer') || cat.includes('havale') || cat.includes('eft')
+        || acc.includes('banka') || acc.includes('ziraat') || acc.includes('garanti') || acc.includes('iş') || acc.includes('yapı') || acc.includes('pos')
+        || method.includes('havale') || method.includes('eft') || method.includes('banka')
+        || desc.includes('transfer') || desc.includes('havale') || desc.includes('eft') || desc.includes('banka');
+    });
+  }, [cashMovements]);
+
+  const transferTotalAmount = useMemo(() => {
+    return transferMovements.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [transferMovements]);
+
+  const havaleEftTotal = useMemo(() => {
+    return cashMovements
+      .filter(item => {
+        const method = (item.paymentMethod || '').toLowerCase();
+        const cat = (item.category || '').toLowerCase();
+        const acc = (item.account || '').toLowerCase();
+        return method.includes('havale') || method.includes('eft') || cat.includes('havale') || cat.includes('eft') || acc.includes('banka') || (item.type || '').toUpperCase() === 'TRANSFER';
+      })
+      .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [cashMovements]);
 
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
@@ -360,7 +409,9 @@ export default function CashPage() {
       return;
     }
 
-    const branchRecord = branchesList.find(branch => branch.name === newExpForm.branch);
+    const branchRecord = branchesList.find(branch => branch.name === newExpForm.branch)
+      || activeBranches.find(b => b.name === newExpForm.branch)
+      || activeBranches[0];
     if (!branchRecord) { addToast({ type: 'error', message: 'Gerçek bir şube seçin.' }); return; }
     const newExpense: Expense & { idempotencyKey: string } = {
       id: crypto.randomUUID(),
@@ -439,7 +490,22 @@ export default function CashPage() {
               </button>
               <button
                 className={styles.btnPrimaryAction}
-                onClick={() => setShowNewExpenseModal(true)}
+                onClick={() => {
+                  const defaultBranch = activeBranch.mode === 'single'
+                    ? activeBranches.find(branch => branch.id === activeBranch.branchId) || activeBranches[0]
+                    : activeBranches[0];
+                  setNewExpForm({
+                    description: '',
+                    category: 'Kira',
+                    amount: 0,
+                    supplier: '',
+                    invoiceNo: '',
+                    paymentMethod: 'Nakit',
+                    branch: defaultBranch?.name || activeBranches[0]?.name || 'Merkez',
+                    notes: ''
+                  });
+                  setShowNewExpenseModal(true);
+                }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="12" y1="5" x2="12" y2="19" />
@@ -665,7 +731,15 @@ export default function CashPage() {
                   </svg>
                   Kasa Özeti
                 </div>
-                <select className={styles.filterSelect} style={{ height: 30, minWidth: 100 }} value={summaryBranch} onChange={event => setSummaryBranch(event.target.value)}>
+                <select
+                  className={styles.filterSelect}
+                  style={{ height: 30, minWidth: 100 }}
+                  value={summaryBranch}
+                  onChange={event => {
+                    setSummaryBranch(event.target.value);
+                    setCashSelectedBranch(event.target.value);
+                  }}
+                >
                   <option value="Tüm Şubeler">Tüm Şubeler</option>
                   {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
                 </select>
@@ -734,6 +808,19 @@ export default function CashPage() {
 
               <select
                 className={styles.filterSelect}
+                aria-label="Şube Filtresi"
+                value={cashSelectedBranch}
+                onChange={e => {
+                  setCashSelectedBranch(e.target.value);
+                  setSummaryBranch(e.target.value);
+                }}
+              >
+                <option value="Tüm Şubeler">Tüm Şubeler</option>
+                {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+              </select>
+
+              <select
+                className={styles.filterSelect}
                 value={cashSelectedAccount}
                 onChange={e => setCashSelectedAccount(e.target.value)}
               >
@@ -750,6 +837,8 @@ export default function CashPage() {
                 onClick={() => {
                   setCashFilterPill('Tümü');
                   setCashSelectedAccount('Tüm Hesaplar');
+                  setCashSelectedBranch('Tüm Şubeler');
+                  setSummaryBranch('Tüm Şubeler');
                 }}
               >
                 Temizle
@@ -999,7 +1088,7 @@ export default function CashPage() {
 
             <select
               className={styles.filterSelect}
-              aria-label="Gider şubesi"
+              aria-label="Gider şubesi filtresi"
               value={expenseSelectedBranch}
               onChange={e => setExpenseSelectedBranch(e.target.value)}
             >
@@ -1320,13 +1409,99 @@ export default function CashPage() {
           VIEW 3: BANKA TRANSFERLERİ
          ══════════════════════════════════════════════════════════════════════ */}
       {mainTab === 'transfers' && (
-        <div style={{ background: '#fff', border: '1px solid var(--csh-border)', borderRadius: 14, padding: 24 }}>
-          <h3 style={{ margin: '0 0 8px', fontSize: 18, color: '#0f172a' }}>Banka ve POS Hesap Hareketleri</h3>
-          <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
-            Kayıtlı kasa hareketlerini inceleyin. Harici banka entegrasyonu bu firma için yapılandırılmamışsa bu ekranda banka bakiyesi gösterilmez.
-          </p>
-          <div style={{ padding: 24, background: '#f8fafc', borderRadius: 10, border: '1px dashed #cbd5e1', textAlign: 'center' }}>
-            <div style={{ fontWeight: 650, color: '#475569' }}>{cashMovements.filter(item => item.account.toLocaleLowerCase('tr-TR').includes('banka')).length} banka hesabı hareketi kayıtlı.</div>
+        <div style={{ display: 'grid', gap: 20 }}>
+          {/* Transfer Summary Area / Kasa Özeti */}
+          <div className={styles.summaryCard} style={{ background: '#fff', border: '1px solid var(--csh-border)', borderRadius: 14, padding: 20 }}>
+            <div className={styles.summaryHeader} style={{ marginBottom: 16 }}>
+              <div className={styles.summaryTitle} style={{ fontSize: 16, fontWeight: 750, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#08785b" strokeWidth="2">
+                  <rect x="2" y="4" width="20" height="16" rx="2" />
+                  <line x1="2" y1="10" x2="22" y2="10" />
+                </svg>
+                Kasa Özeti & Havale-EFT İşlemleri
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+              <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Havale-EFT Toplamı</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>
+                  {formatCurrency(havaleEftTotal || transferTotalAmount)}
+                </div>
+                <small style={{ color: '#64748b', fontSize: 11 }}>Kasa Özeti / Havale-EFT totals</small>
+              </div>
+              <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Transfer Kaydı</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>
+                  {transferMovements.length} adet
+                </div>
+                <small style={{ color: '#64748b', fontSize: 11 }}>Banka transfer hareketleri</small>
+              </div>
+              <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Banka & POS Hesap Toplamı</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#7c3aed', marginTop: 4 }}>
+                  {formatCurrency(transferTotalAmount)}
+                </div>
+                <small style={{ color: '#64748b', fontSize: 11 }}>Transfer toplam tutarı</small>
+              </div>
+            </div>
+          </div>
+
+          {/* Detailed Transfer Records Table */}
+          <div className={styles.tableSection} style={{ background: '#fff', border: '1px solid var(--csh-border)', borderRadius: 14, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Banka Transfer Kayıtları</h3>
+              <span style={{ fontSize: 13, color: '#64748b' }}>Toplam {transferMovements.length} transfer kaydı</span>
+            </div>
+            <div className={styles.tableWrap}>
+              <table className={styles.dataTable}>
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Hesap / Banka</th>
+                    <th>İşlem Türü</th>
+                    <th>Kategori</th>
+                    <th>Açıklama</th>
+                    <th>Hasta / Cari</th>
+                    <th>Tutar</th>
+                    <th>Şube</th>
+                    <th>Durum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transferMovements.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#64748b' }}>
+                        Kayıtlı banka transfer hareketi bulunamadı.
+                      </td>
+                    </tr>
+                  ) : (
+                    transferMovements.map(row => (
+                      <tr key={row.id}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{row.date}</td>
+                        <td style={{ fontWeight: 600 }}>{row.account}</td>
+                        <td>
+                          <span className={styles.badgeOperationIn}>
+                            {row.type}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={styles.badgeCategoryPill}>{row.category}</span>
+                        </td>
+                        <td>{row.description}</td>
+                        <td>{row.patientOrEntity}</td>
+                        <td style={{ fontWeight: 700, color: '#08785b' }}>
+                          {formatCurrency(row.amount)}
+                        </td>
+                        <td>{row.branch}</td>
+                        <td>
+                          <span className={styles.badgeStatusPaid}>{row.status}</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

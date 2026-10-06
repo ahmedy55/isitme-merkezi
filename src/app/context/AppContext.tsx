@@ -717,7 +717,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       await dbUpdateRecallStatus(id, status);
       setRecallList(prev => prev.map(r => r.id === id ? { ...r, status, lastContact: new Date().toISOString().split('T')[0] } : r));
-      addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
+      if (status === 'Tamamlandı') {
+        addToast({ type: 'success', message: 'Hatırlatma başarıyla tamamlandı olarak işaretlendi.' });
+      } else {
+        addToast({ type: 'success', message: 'Hatırlatma durumu güncellendi.' });
+      }
     } catch (err: any) {
       logger.warn(`dbUpdateRecallStatus background sync error: ${err.message}`, 'AppContext');
       addToast({ type: 'error', message: 'Hatırlatma kaydedilemedi. Lütfen tekrar deneyin.' });

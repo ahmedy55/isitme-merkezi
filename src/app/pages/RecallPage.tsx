@@ -640,9 +640,8 @@ export default function RecallPage() {
                                   <button
                                     type="button"
                                     role="menuitem"
-                                    onClick={() => {
-                                      updateRecallItemStatus(recall.id, 'Tamamlandı');
-                                      addToast({ type: 'success', message: `${recall.patientName} hatırlatması tamamlandı olarak işaretlendi.` });
+                                    onClick={async () => {
+                                      await updateRecallItemStatus(recall.id, 'Tamamlandı');
                                       setActiveActionMenuId(null);
                                     }}
                                   >Tamamlandı Olarak İşaretle</button>
@@ -831,9 +830,8 @@ export default function RecallPage() {
                   <button
                     type="button"
                     style={{ fontSize: '11px', fontWeight: 600, padding: '7px 12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
-                    onClick={() => {
-                      updateRecallItemStatus(activeRecall.id, 'Tamamlandı');
-                      addToast({ type: 'success', message: `${activeRecall.patientName} hatırlatması tamamlandı olarak işaretlendi.` });
+                    onClick={async () => {
+                      await updateRecallItemStatus(activeRecall.id, 'Tamamlandı');
                     }}
                   >
                     ✓ Tamamlandı

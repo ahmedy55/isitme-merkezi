@@ -427,7 +427,7 @@ export default function StockPage() {
         patientId: patient.id,
         patientName: `${patient.firstName} ${patient.lastName}`.trim(),
         date: new Date().toISOString().slice(0, 10),
-        items: [{ name: item.name, quantity: 1, price: saleAmount, stockItemId: item.id, serialNo: item.serialNo, barcode: item.barcode, type: item.category === 'Cihaz' ? 'Cihaz' : 'Aksesuar' }],
+        items: [{ name: item.name, quantity: 1, price: saleAmount, stockItemId: item.id, serialNo: item.serialNo || '', barcode: item.barcode || '', type: item.category === 'Cihaz' ? 'Cihaz' : 'Aksesuar' }],
         total: saleAmount,
         sgkAmount: 0,
         patientAmount: saleAmount,

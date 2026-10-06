@@ -906,16 +906,45 @@ export default function SgkReceivablesPage() {
                 <thead><tr><th>Tahsilat Tarihi</th><th>Fatura No</th><th>Dönem</th><th>Şube</th><th>Tutar</th><th>Açıklama</th></tr></thead>
                 <tbody>
                   {scopedPayments.map(payment => {
-                    const invoice = invoices.find(item => item.id === payment.invoice_id);
+                    const matchedInvoice = invoices.find(item => item.id === payment.invoice_id);
+                    const invoiceToOpen: InvoiceRecord = matchedInvoice || {
+                      id: payment.invoice_id || payment.id,
+                      invoice_month: payment.payment_date.slice(0, 7),
+                      invoice_period_label: payment.payment_date,
+                      expected_month: payment.payment_date.slice(0, 7),
+                      expected_month_label: payment.payment_date,
+                      invoice_no: payment.notes || 'SGK-TAHSILAT',
+                      amount: payment.amount,
+                      status: 'Tahsil Edildi',
+                      notes: payment.notes || 'Hakediş Tahsilatı',
+                      branch_id: payment.branch_id,
+                      branchName: branchesList.find(item => item.id === payment.branch_id)?.name || 'Merkez',
+                      created_at: payment.payment_date
+                    };
                     const paymentDate = new Date(`${payment.payment_date}T12:00:00`).toLocaleDateString('tr-TR');
                     return (
-                      <tr key={payment.id}>
+                      <tr
+                        key={payment.id}
+                        onClick={() => setSelectedDetailInvoice(invoiceToOpen)}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <td>{paymentDate}</td>
-                        <td className={styles.invoiceNoCell}>{invoice?.invoice_no || '—'}</td>
-                        <td>{invoice?.invoice_period_label || '—'}</td>
-                        <td>{invoice?.branchName || branchesList.find(item => item.id === payment.branch_id)?.name || '—'}</td>
+                        <td className={styles.invoiceNoCell}>
+                          <button
+                            type="button"
+                            aria-label={`${invoiceToOpen.invoice_no} fatura detayını aç`}
+                            onClick={event => {
+                              event.stopPropagation();
+                              setSelectedDetailInvoice(invoiceToOpen);
+                            }}
+                          >
+                            {invoiceToOpen.invoice_no}
+                          </button>
+                        </td>
+                        <td>{invoiceToOpen.invoice_period_label || '—'}</td>
+                        <td>{invoiceToOpen.branchName || '—'}</td>
                         <td className={styles.amountCell}>{formatCurrency(payment.amount)}</td>
-                        <td style={{ color: '#64748b' }}>{payment.notes || invoice?.notes || '—'}</td>
+                        <td style={{ color: '#64748b' }}>{payment.notes || invoiceToOpen.notes || '—'}</td>
                       </tr>
                     );
                   })}

@@ -1135,12 +1135,38 @@ test('Create a new patient recall reminder', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Recall' }).click();
   await page.getByRole('button', { name: 'Yeni Hatırlatma' }).click();
-  await page.getByPlaceholder('Hasta ara (ad, soyad, telefon)...').fill('Test Hasta');
+  await page.locator('#recall-patient-search').fill('Test Hasta');
   await page.locator('#recall-patient-suggestions button').first().click();
   await page.getByRole('button', { name: 'Kaydet' }).click();
 
-  await expect(page.locator('.toast.success')).toContainText('kaydedildi');
+  await expect(page.locator('.toast.success').filter({ hasText: 'kaydedildi' })).toBeVisible();
   await expect(page.getByText('Test Hasta Tek Şube Bir').first()).toBeVisible();
+});
+
+test('Review overdue recall reminders', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  await mockTenantData(page, false, {
+    patientRows: [{ id: patientId, organization_id: orgId, branch_id: branchId, first_name: 'Gecikmiş', last_name: 'Hasta', phone: '05000000001', patient_status: 'Aktif', deleted_at: null }],
+    recallRows: [{ id: 'rec-overdue', organization_id: orgId, patient_id: patientId, patients: { first_name: 'Gecikmiş', last_name: 'Hasta' }, reason: 'Yıllık Kontrol', due_date: '2026-09-01', status: 'Bekliyor' }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Recall' }).click();
+  await expect(page.getByText('Tarihi Geçen').first()).toBeVisible();
+  await page.getByText('Tarihi Geçen').first().click();
+  await expect(page.getByText('Gecikmiş Hasta')).toBeVisible();
+});
+
+test('Mark a recall reminder as completed', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  await mockTenantData(page, false, {
+    patientRows: [{ id: patientId, organization_id: orgId, branch_id: branchId, first_name: 'Tamamlanacak', last_name: 'Hasta', phone: '05000000001', patient_status: 'Aktif', deleted_at: null }],
+    recallRows: [{ id: 'rec-complete', organization_id: orgId, patient_id: patientId, patients: { first_name: 'Tamamlanacak', last_name: 'Hasta' }, reason: 'Kontrol', due_date: '2026-10-20', status: 'Bekliyor' }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Recall' }).click();
+  await page.getByRole('button', { name: /için diğer işlemler/ }).click();
+  await page.getByRole('menuitem', { name: 'Tamamlandı Olarak İşaretle' }).click();
+  await expect(page.locator('.toast.success').filter({ hasText: 'tamamlandı olarak işaretlendi' })).toBeVisible();
 });
 
 test('Filter patients by appointment status', async ({ page }) => {
@@ -1188,9 +1214,12 @@ test('Filter cash activity by branch', async ({ page }) => {
   });
   await signIn(page);
   await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
-  await expect(page.getByRole('heading', { name: 'Kasa, Tahsilat & Masraflar' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Kasa/ })).toBeVisible();
   const branchSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Tüm Şubeler' }) }).first();
   await expect(branchSelect).toBeVisible();
+  await branchSelect.selectOption('QA Şube');
+  await expect(page.getByText('Cihaz Satışı')).toBeVisible();
+  await expect(page.getByText('Pil Satışı')).toHaveCount(0);
 });
 
 test('Browse SGK document and report tracking', async ({ page }) => {
@@ -1231,6 +1260,8 @@ test('Review collection history for SGK payments', async ({ page }) => {
   await page.getByRole('button', { name: 'Fatura Kayıtları', exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: 'QA-SGK-TAHSILAT-01' })).toBeVisible();
   await expect(page.getByText('Tahsil Edildi').first()).toBeVisible();
+  await page.getByRole('button', { name: 'QA-SGK-TAHSILAT-01' }).click();
+  await expect(page.getByRole('dialog', { name: 'SGK Dönem Faturası Detayı' })).toBeVisible();
 });
 
 test('Review bank transfer records', async ({ page }) => {
@@ -1242,8 +1273,23 @@ test('Review bank transfer records', async ({ page }) => {
   });
   await signIn(page);
   await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
-  await page.getByRole('button', { name: 'Transferler', exact: true }).click();
+  await page.getByRole('button', { name: 'Banka Transferleri' }).click();
+  await expect(page.getByText('Havale-EFT Toplamı')).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'Ziraat Bankası' })).toBeVisible();
+});
+
+test('Add an expense and verify it appears in the expenses view', async ({ page }) => {
+  await mockTenantData(page, false, {});
+  await signIn(page);
+  await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
+  await expect(page.getByRole('heading', { name: /Kasa/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Masraflar', exact: true }).first().click();
+  await expect(page.getByRole('heading', { name: 'Masraf & Gider Yönetimi' })).toBeVisible();
+  await page.getByRole('button', { name: 'Yeni Gider Kaydet' }).click();
+  const branchSelect = page.locator('select[aria-label="Gider şubesi"]');
+  await expect(branchSelect).toBeVisible();
+  const options = await branchSelect.locator('option').allTextContents();
+  expect(options.filter(o => o.trim() && o !== 'Şube seçin').length).toBeGreaterThan(0);
 });
 
 test('Review an asset\'s maintenance schedule', async ({ page }) => {

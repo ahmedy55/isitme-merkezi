@@ -49,8 +49,8 @@ export default function ExpensesPage() {
     setFormCategory('Fatura');
     setFormDescription('');
     setFormAmount(0);
-    setFormPaymentMethod('Havale');
-    setFormBranch(activeBranchId || '');
+    const defaultBranchId = activeBranchId || branchesList.find(b => b.status === 'Aktif')?.id || branchesList[0]?.id || '';
+    setFormBranch(defaultBranchId);
     setFormCreatedBy(currentUser?.name || '');
     setFormReceiptNo('');
     setFormNotes('');
@@ -478,19 +478,23 @@ export default function ExpensesPage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                  {activeBranch.mode === 'all' && branchesList.filter(branch => branch.status === 'Aktif').length > 1 && <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">Şube / Bölüm</label>
-                    <select
-                      className="form-input"
-                      value={formBranch}
-                      onChange={(e) => setFormBranch(e.target.value)}
-                    >
-                      {!formBranch && <option value="">Şube seçin</option>}
-                      {branchesList.filter(branch => branch.status === 'Aktif').map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-                      {activeBranch.mode === 'all' && <option value="Genel">Genel (Firma ortak gideri)</option>}
-                    </select>
-                  </div>
-                  }
+                  {activeBranch.mode === 'all' && (
+                    <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                      <label className="form-label">Şube / Bölüm</label>
+                      <select
+                        className="form-input"
+                        value={formBranch}
+                        onChange={(e) => setFormBranch(e.target.value)}
+                      >
+                        <option value="">Şube seçin</option>
+                        {(branchesList.filter(branch => branch.status === 'Aktif').length > 0
+                          ? branchesList.filter(branch => branch.status === 'Aktif')
+                          : (branchesList.length > 0 ? branchesList : [{ id: 'br-default', name: 'Merkez', status: 'Aktif' }])
+                        ).map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                        {activeBranch.mode === 'all' && <option value="Genel">Genel (Firma ortak gideri)</option>}
+                      </select>
+                    </div>
+                  )}
                   <div className="form-group" style={{ flex: 1, margin: 0 }}>
                     <label className="form-label">Evrak / Fiş No</label>
                     <input
