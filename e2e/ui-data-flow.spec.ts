@@ -280,6 +280,30 @@ test('hatırlatma araması kayıtlı hastanın TC kimlik numarasını eşleştir
   await expect(page.getByText('E2E Hasta').first()).toBeVisible();
 });
 
+test('hasta listesi telefon aramasını boşluk, tire ve ülke kodu biçimlerinden bağımsız eşleştirir', async ({ page }) => {
+  const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  await mockTenantData(page, false, {
+    patientRows: [{
+      id: patientId,
+      organization_id: orgId,
+      branch_id: branchId,
+      first_name: 'QA Telefon',
+      last_name: 'Hastası',
+      phone: '+90 (000) 000-00-06',
+      tc: 'ENC:v2:test',
+      decrypted_tc: '',
+      patient_status: 'Aktif',
+      deleted_at: null,
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Hastalar' }).click();
+  await page.getByPlaceholder('Hasta adı, telefon, TC, cihaz seri no...').fill('0000000006');
+  const row = page.getByRole('row').filter({ hasText: 'QA Telefon Hastası' });
+  await expect(row).toBeVisible();
+  await expect(page.getByText('Toplam 1 hasta')).toBeVisible();
+});
+
 test('SGK ödeme zaman çizelgesi, seçilen dönem için hesaplanır', async ({ page }) => {
   await mockTenantData(page, false, {
     invoiceRows: [{

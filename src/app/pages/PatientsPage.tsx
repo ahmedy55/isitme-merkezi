@@ -6,7 +6,7 @@ import { useBranch } from '../context/BranchContext';
 import { BranchService } from '../services/BranchService';
 import CustomSelect from '../components/CustomSelect';
 import { useDebounce } from '../hooks/useDebounce';
-import { isValidTurkishPhone, normalizeTurkishPhoneInput } from '../lib/turkishPhone';
+import { createTurkishPhoneSearchMatcher, isValidTurkishPhone, normalizeTurkishPhoneInput } from '../lib/turkishPhone';
 import { isSupportedPatientPhoto, resizePatientPhoto } from '../lib/patientPhoto';
 import styles from './PatientsPage.module.css';
 import {
@@ -539,12 +539,14 @@ export default function PatientsPage() {
 
   const filtered = useMemo(() => {
     const searchLower = debouncedSearch.toLowerCase().trim();
+    const matchesPhoneSearch = createTurkishPhoneSearchMatcher(debouncedSearch.trim());
     return branchFilteredPatients.filter((p) => {
       const matchSearch =
         !searchLower ||
         `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchLower) ||
         p.tc.includes(searchLower) ||
-        p.phone.includes(searchLower) ||
+        p.phone.toLowerCase().includes(searchLower) ||
+        matchesPhoneSearch(p.phone) ||
         (p.address || '').toLowerCase().includes(searchLower) ||
         stockList.some(item => item.assignedPatientId === p.id && `${item.serialNo} ${item.barcode || ''}`.toLowerCase().includes(searchLower));
         

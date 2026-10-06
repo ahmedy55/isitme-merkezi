@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidTurkishPhone, normalizeTurkishPhoneInput } from '../turkishPhone';
+import { createTurkishPhoneSearchMatcher, isValidTurkishPhone, normalizeTurkishPhoneInput } from '../turkishPhone';
 
 describe('Turkish phone validation', () => {
   it('accepts a 10-digit national number and an 11-digit number with leading zero', () => {
@@ -20,5 +20,13 @@ describe('Turkish phone validation', () => {
 
   it('limits input to 11 digits', () => {
     expect(normalizeTurkishPhoneInput('05551234567890')).toBe('05551234567');
+  });
+
+  it('searches stored phone numbers across punctuation and country-code formats without losing zeroes', () => {
+    const zeroPrefixedSearch = createTurkishPhoneSearchMatcher('0000000006');
+    expect(zeroPrefixedSearch('+90 (000) 000-00-06')).toBe(true);
+    expect(zeroPrefixedSearch('000 000 00 06')).toBe(true);
+    expect(createTurkishPhoneSearchMatcher('0532-123-45-67')('+90 (532) 123 45 67')).toBe(true);
+    expect(createTurkishPhoneSearchMatcher('hasta 0532')('05321234567')).toBe(false);
   });
 });
