@@ -7,6 +7,14 @@ export function expectedPaymentMonth(invoiceMonth: string): string {
   const date = new Date(Date.UTC(year, month - 1 + 2, 1));
   return date.toISOString().slice(0, 7);
 }
+export function paymentTimelineMonths(invoiceMonth: string, count = 4): string[] {
+  const firstPaymentMonth = expectedPaymentMonth(invoiceMonth);
+  if (!Number.isInteger(count) || count < 1) throw new RangeError('Takvim ay sayısı pozitif bir tam sayı olmalıdır.');
+  const [year, month] = firstPaymentMonth.split('-').map(Number);
+  return Array.from({ length: count }, (_, index) =>
+    new Date(Date.UTC(year, month - 1 + index, 1)).toISOString().slice(0, 7),
+  );
+}
 export function monthsUntil(expected: string, current = monthKey()): number {
   const [ey, em] = expected.split('-').map(Number);
   const [cy, cm] = current.split('-').map(Number);

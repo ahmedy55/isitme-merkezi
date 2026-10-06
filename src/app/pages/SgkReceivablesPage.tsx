@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { supabase } from '../lib/supabase';
-import { expectedPaymentMonth, monthKey, monthLabel, monthsUntil } from '../lib/sgkSchedule';
+import { expectedPaymentMonth, monthKey, monthLabel, monthsUntil, paymentTimelineMonths } from '../lib/sgkSchedule';
 import { formatCurrency } from '../data/mockData';
 import styles from './SgkReceivablesPage.module.css';
 
@@ -142,6 +142,7 @@ export default function SgkReceivablesPage() {
   // Dynamic statistics
   const currentMonthKey = monthKey();
   const nextMonthKey = expectedPaymentMonth(currentMonthKey);
+  const paymentTimeline = paymentTimelineMonths(periodYearMonth || currentMonthKey);
 
   const thisMonthExpected = scopedList
     .filter(i => i.expected_month === currentMonthKey && i.status === 'Bekliyor')
@@ -534,14 +535,10 @@ export default function SgkReceivablesPage() {
                 </div>
 
                 <div className={styles.timelineList}>
-                  {Array.from({ length: 4 }, (_, index) => {
-                    const startMonthKey = expectedPaymentMonth(periodYearMonth || currentMonthKey);
-                    const [year, month] = startMonthKey.split('-').map(Number);
-                    const date = new Date(Date.UTC(year, month - 1 + index, 1));
-                    const key = date.toISOString().slice(0, 7);
+                  {paymentTimeline.map((key, index) => {
                     const amount = timelineInvoices.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi').reduce((sum, invoice) => sum + invoice.amount, 0);
                     return (
-                      <div className={styles.timelineItem} key={key}>
+                      <div className={styles.timelineItem} key={key} data-payment-month={key}>
                         <div className={`${styles.timelineDot} ${index === 0 ? styles.timelineDotActive : ''}`} />
                         <div className={styles.timelineMonth}>
                           <span className={styles.timelineMonthName}>{monthLabel(key)}</span>
@@ -912,15 +909,16 @@ export default function SgkReceivablesPage() {
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                 {Array.from({ length: 12 }, (_, idx) => {
-                  const year = new Date().getFullYear();
+                  const year = Number((periodYearMonth || currentMonthKey).slice(0, 4));
                   const key = `${year}-${String(idx + 1).padStart(2, '0')}`;
-                  const expectedKey = expectedPaymentMonth(key);
-                  const isSelectedMonth = expectedKey === currentMonthKey;
-                  const monthInvoices = timelineInvoices.filter(invoice => invoice.expected_month === expectedKey && invoice.status !== 'Tahsil Edildi');
+                  const isSelectedMonth = key === currentMonthKey;
+                  const monthInvoices = scopedList.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi');
                   const amount = monthInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+                  const isExpectedPaymentMonth = paymentTimeline.includes(key);
                   return (
                     <div
                       key={key}
+                      data-payment-month={key}
                       style={{
                         padding: 12,
                         borderRadius: 10,
@@ -934,7 +932,7 @@ export default function SgkReceivablesPage() {
                         {formatCurrency(amount)}
                       </div>
                       <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 2 }}>
-                        {monthInvoices.length ? `${monthInvoices.length} Fatura Bekleniyor` : 'Fatura Yok'}
+                        {monthInvoices.length ? `${monthInvoices.length} Fatura Bekleniyor` : isExpectedPaymentMonth ? 'Beklenen ödeme' : 'Fatura Yok'}
                       </div>
                     </div>
                   );

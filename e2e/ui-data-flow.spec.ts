@@ -413,6 +413,28 @@ test('SGK ödeme zaman çizelgesi, seçilen dönem için hesaplanır', async ({ 
   await expect(timeline).not.toContainText('25.000');
 });
 
+test('SGK Ağustos dönemi ödeme zaman çizelgesi Kasım 2026 ayını ve yıllık takvimi aynı kuralla gösterir', async ({ page }) => {
+  await mockTenantData(page, false, {
+    invoiceRows: [{
+      id: '88888888-8888-4888-8888-888888888888', organization_id: orgId, branch_id: branchId,
+      invoice_month: '2026-08-01', expected_month: '2026-10-01', invoice_no: 'QA-AUG', amount: 0,
+      status: 'Bekliyor', created_at: '2026-08-01T12:00:00Z', notes: '',
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'SGK Ödeme Takvimi' }).click();
+  await page.locator('input[type="month"]').fill('2026-08');
+
+  const november = page.locator('[data-payment-month="2026-11"]');
+  await expect(november).toBeVisible();
+  await expect(november).toContainText('Beklenen ödeme');
+
+  await page.getByRole('button', { name: 'Takvim Gör' }).click();
+  const yearlyNovember = page.locator('[data-payment-month="2026-11"]').last();
+  await expect(yearlyNovember).toBeVisible();
+  await expect(yearlyNovember).toContainText('Beklenen ödeme');
+});
+
 test('servis raporu dışa aktarma gerçek, yazdırılabilir rapor görüntüleyici açar', async ({ page }) => {
   await mockTenantData(page, false, {
     serviceRows: [{
