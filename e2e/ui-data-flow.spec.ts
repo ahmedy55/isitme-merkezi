@@ -456,6 +456,46 @@ test('servis raporu dışa aktarma gerçek, yazdırılabilir rapor görüntüley
   await expect(report.getByRole('button', { name: 'Yazdır / PDF olarak kaydet' })).toBeVisible();
 });
 
+test('teknik servis durum penceresi iptal ile kapanır ve iptal edilen seçim kaydedilmez', async ({ page }) => {
+  const serviceInsertBodies: Record<string, unknown>[] = [];
+  await mockTenantData(page, false, {
+    serviceRows: [{
+      id: '99999999-9999-4999-8999-999999999999', organization_id: orgId, branch_id: branchId,
+      patient_name: 'E2E Hasta', device_name: 'E2E Cihaz', device_serial: 'E2E-SN', barcode: 'E2E-BC',
+      received_date: '2026-09-20', delivered_date: null, complaint: 'Ses kesilmesi', service_fee: 0,
+      status: 'Bekliyor', technician: 'Teknik Servis', notes: '', details: { status: 'Alındı', operations: [], warrantyRepair: true },
+    }],
+    serviceInsertBodies,
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Teknik Servis' }).click();
+  const serviceRow = page.getByRole('row').filter({ hasText: 'E2E-SN' });
+  await serviceRow.click();
+
+  await page.getByRole('button', { name: 'Durum Güncelle' }).click();
+  const statusDialog = page.getByRole('dialog', { name: /Servis Durumu Güncelle/ });
+  await expect(statusDialog).toBeVisible();
+  await statusDialog.locator('select').selectOption('Tamir Ediliyor');
+  await statusDialog.getByRole('button', { name: 'İptal' }).click();
+  await expect(statusDialog).toHaveCount(0);
+  await expect(serviceRow).toContainText('Alındı');
+  expect(serviceInsertBodies).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'Durum Güncelle' }).click();
+  const reopenedDialog = page.getByRole('dialog', { name: /Servis Durumu Güncelle/ });
+  await expect(reopenedDialog.locator('select')).toHaveValue('Alındı');
+  await reopenedDialog.locator('select').selectOption('Tamir Ediliyor');
+  await reopenedDialog.getByRole('button', { name: 'Güncellemeyi Kaydet' }).click();
+
+  await expect(reopenedDialog).toHaveCount(0);
+  await expect.poll(() => serviceInsertBodies.length).toBe(1);
+  expect(serviceInsertBodies[0]).toMatchObject({
+    status: 'İşlemde',
+    details: { status: 'Tamir Ediliyor' },
+  });
+  await expect(serviceRow).toContainText('Tamir Ediliyor');
+});
+
 test('teknik servis kabul formu kaydı gerçek hasta ve şubeyle oluşturup modalı kapatır', async ({ page }) => {
   const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
   const serviceInsertBodies: Record<string, unknown>[] = [];

@@ -125,6 +125,12 @@ export default function ServicePage() {
   const [statusUpdateVal, setStatusUpdateVal] = useState<ServiceItem['status']>('Alındı');
   const [statusUpdateNote, setStatusUpdateNote] = useState('');
 
+  const closeStatusModal = () => {
+    setShowStatusModal(false);
+    setStatusUpdateNote('');
+    if (selectedItem) setStatusUpdateVal(selectedItem.status);
+  };
+
   const [newPartDesc, setNewPartDesc] = useState('');
   const [newPartCost, setNewPartCost] = useState('450');
 
@@ -1158,11 +1164,17 @@ export default function ServicePage() {
 
       {/* ── MODAL 1: Durum Güncelle ── */}
       {showStatusModal && selectedItem && (
-        <div className={styles.modalOverlay} onClick={() => setShowStatusModal(false)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+        <div className={styles.modalOverlay} onClick={closeStatusModal}>
+          <div
+            className={styles.modalContent}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="service-status-dialog-title"
+            onClick={e => e.stopPropagation()}
+          >
             <div className={styles.modalHeader}>
-              <h2>🔄 Servis Durumu Güncelle — {selectedItem.patientName}</h2>
-              <button type="button" className={styles.modalCloseBtn} onClick={() => setShowStatusModal(false)}>✕</button>
+              <h2 id="service-status-dialog-title">🔄 Servis Durumu Güncelle — {selectedItem.patientName}</h2>
+              <button type="button" className={styles.modalCloseBtn} aria-label="Durum penceresini kapat" onClick={closeStatusModal}>✕</button>
             </div>
             <form onSubmit={handleSaveStatusUpdate}>
               <div className={styles.modalBody}>
@@ -1194,7 +1206,7 @@ export default function ServicePage() {
                 </div>
               </div>
               <div className={styles.modalFooter}>
-                <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowStatusModal(false)}>İptal</button>
+                <button type="button" className={styles.btnSecondaryAction} onClick={closeStatusModal}>İptal</button>
                 <button type="submit" className={styles.btnPrimaryAction}>Güncellemeyi Kaydet</button>
               </div>
             </form>
