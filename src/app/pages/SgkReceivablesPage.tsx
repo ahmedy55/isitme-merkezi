@@ -867,8 +867,8 @@ export default function SgkReceivablesPage() {
               </thead>
               <tbody>
                 {scopedList.map(inv => (
-                  <tr key={inv.id}>
-                    <td className={styles.invoiceNoCell}>{inv.invoice_no}</td>
+                  <tr key={inv.id} onClick={() => setSelectedDetailInvoice(inv)} style={{ cursor: 'pointer' }}>
+                    <td className={styles.invoiceNoCell}><button type="button" aria-label={`${inv.invoice_no} fatura detayını aç`} onClick={event => { event.stopPropagation(); setSelectedDetailInvoice(inv); }}>{inv.invoice_no}</button></td>
                     <td>{inv.invoice_period_label}</td>
                     <td className={styles.amountCell}>{formatCurrency(inv.amount)}</td>
                     <td>{inv.expected_month_label}</td>
@@ -954,7 +954,7 @@ export default function SgkReceivablesPage() {
       {/* ── MODAL: Fatura Detayı ── */}
       {selectedDetailInvoice && (
         <div className={styles.modalBackdrop} onClick={() => setSelectedDetailInvoice(null)}>
-          <div className={styles.modalBox} onClick={e => e.stopPropagation()}>
+          <div className={styles.modalBox} role="dialog" aria-modal="true" aria-label="SGK Dönem Faturası Detayı" onClick={e => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div className={styles.modalTitle}>SGK Dönem Faturası Detayı</div>
               <button className={styles.modalClose} onClick={() => setSelectedDetailInvoice(null)}>✕</button>

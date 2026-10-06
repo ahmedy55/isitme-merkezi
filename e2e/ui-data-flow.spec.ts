@@ -31,6 +31,8 @@ type ExtraFixtures = {
   failStockInsert?: boolean;
   failStockAdjustment?: boolean;
   cashBranchIds?: string[];
+  cashRows?: Record<string, unknown>[];
+  failPatientUpdate?: boolean;
   expenseBranchIds?: string[];
   invoiceBranchIds?: string[];
   assetSerial?: string;
@@ -97,6 +99,19 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     const url = new URL(route.request().url());
     const table = url.pathname.split('/').filter(Boolean).at(-1);
     let rows: unknown[] = [];
+    if (table === 'patients' && ['POST', 'PATCH'].includes(route.request().method())) {
+      const method = route.request().method();
+      const body = route.request().postDataJSON();
+      if (method === 'PATCH' && fixtures.failPatientUpdate) {
+        await route.fulfill({ status: 400, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify({ message: 'Reçete kaydı reddedildi.' }) });
+        return;
+      }
+      const id = method === 'PATCH' ? url.searchParams.get('id')?.replace('eq.', '') : 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd';
+      const record = { ...(fixtures.patientRows?.find(row => row.id === id) || {}), ...(Array.isArray(body) ? body[0] : body), id };
+      fixtures.patientRows = [record, ...(fixtures.patientRows || []).filter(row => row.id !== id)];
+      await route.fulfill({ status: 200, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify(method === 'POST' ? [record] : record) });
+      return;
+    }
 
     if (table === 'record_sgk_payment' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -259,6 +274,9 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       const transaction = body[0];
       if (typeof transaction.branch_id === 'string') fixtures.cashBranchIds?.push(transaction.branch_id);
       rows = [{ ...transaction, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', created_at: new Date().toISOString() }];
+      fixtures.cashRows = [...rows as Record<string, unknown>[], ...(fixtures.cashRows || [])];
+    } else if (table === 'cash_transactions') {
+      rows = fixtures.cashRows || [];
     }
     if (table === 'expenses' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as Record<string, unknown>[];
@@ -312,7 +330,7 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     } else if (table === 'recall_items') {
       rows = fixtures.recallRows || [];
     } else if (table === 'appointments') {
-      rows = fixtures.appointmentRows || [];
+      rows = (fixtures.appointmentRows || []).map(row => ({ ...row, patients: fixtures.patientRows?.find(patient => patient.id === row.patient_id) || row.patients }));
     } else if (table === 'activity_logs') {
       rows = fixtures.activityRows || [];
     } else if (table === 'decrypt_patient_tcs') {
@@ -973,6 +991,83 @@ test('demirbaş seri numarası araması noktalama farklarını normalize eder', 
   const row = page.getByRole('row').filter({ hasText: assetName });
   await expect(row).toBeVisible();
   await expect(row).toContainText('QA ASSET 1B 001');
+});
+
+test('Register a cash collection and confirm it is tracked', async ({ page }) => {
+  await mockTenantData(page, false);
+  await signIn(page);
+  await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
+  await page.getByRole('button', { name: 'Para Giriş/Çıkış' }).click();
+  await page.getByPlaceholder('Kasa hesabı adı').fill('Tahsilat Test Hesabı');
+  await page.locator('form').last().locator('input[type="number"]').fill('100');
+  await page.getByRole('button', { name: 'İşlemi Kaydet' }).click();
+  for (let pass = 0; pass < 2; pass++) {
+    await page.getByRole('button', { name: 'Girişler', exact: true }).click();
+    await page.locator('select').filter({ has: page.locator('option', { hasText: 'Tüm Hesaplar' }) }).selectOption('Tahsilat Test Hesabı');
+    await expect(page.getByRole('row').filter({ hasText: 'Tahsilat Test Hesabı' })).toContainText('100');
+    await expect(page.getByText('Toplam Tahsilat', { exact: true }).locator('..')).toContainText('₺100');
+    if (pass === 0) { await page.reload(); await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click(); }
+  }
+});
+
+test('Create a new appointment', async ({ page }) => {
+  const fixtures: ExtraFixtures = { patientRows: [], appointmentRows: [] };
+  await mockTenantData(page, false, fixtures);
+  await signIn(page);
+  await page.getByRole('button', { name: 'Randevular' }).click();
+  await page.getByRole('button', { name: /Yeni Randevu/ }).click();
+  await page.getByPlaceholder('Hasta seçin veya arayın...').click();
+  await page.getByText('+ 👤 Yeni Hasta Ekle', { exact: true }).click();
+  await page.getByPlaceholder('Hasta Adı Soyadı *').fill('Yeni Randevu Hastası');
+  await page.getByPlaceholder('Telefon (Örn: 0555...)').fill('05000000001');
+  await page.getByRole('button', { name: 'Randevu Oluştur' }).click();
+  await expect.poll(() => fixtures.appointmentRows?.length).toBe(1);
+  expect(fixtures.appointmentRows?.[0].patient_id).toBe(fixtures.patientRows?.[0].id);
+  expect(fixtures.appointmentRows?.[0].patient_id).toMatch(/^[0-9a-f-]{36}$/);
+  await page.reload();
+  await page.getByRole('button', { name: 'Randevular' }).click();
+  await expect(page.getByText('Yeni Randevu Hastası').first()).toBeVisible();
+});
+
+test('Create a new SGK prescription record', async ({ page }) => {
+  const id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const fixtures: ExtraFixtures = { patientRows: [{ id, organization_id: orgId, branch_id: branchId, first_name: 'Reçete', last_name: 'Hastası', patient_status: 'Aktif', deleted_at: null }], failPatientUpdate: true };
+  await mockTenantData(page, false, fixtures);
+  await signIn(page);
+  await page.getByRole('button', { name: 'SGK & Reçete', exact: true }).click();
+  await page.getByRole('button', { name: /Yeni Reçete Kaydı/ }).click();
+  await page.getByLabel('Reçete hastası').selectOption(id);
+  await page.getByPlaceholder('R-2025-XXXX').fill('REC-E2E-001');
+  await page.getByPlaceholder('RAP-2025-XXXX').fill('RAP-E2E-001');
+  await page.getByRole('button', { name: 'Reçeteyi Kaydet' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: /Reçete kaydı reddedildi/ })).toBeVisible();
+  fixtures.failPatientUpdate = false;
+  await page.getByRole('button', { name: 'Reçeteyi Kaydet' }).click();
+  await expect(page.getByText('Yeni SGK Reçete Kaydı', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: 'REC-E2E-001' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'SGK & Reçete', exact: true }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'REC-E2E-001' })).toBeVisible();
+});
+
+test('Review SGK invoice records', async ({ page }) => {
+  await mockTenantData(page, false, { invoiceRows: [{ id: '88888888-8888-4888-8888-888888888888', organization_id: orgId, branch_id: branchId, invoice_month: '2026-10-01', expected_month: '2026-12-01', invoice_no: 'QA-SGK-TEST-202610', amount: 100, status: 'Bekliyor', created_at: '2026-10-01T12:00:00Z' }] });
+  await signIn(page);
+  await page.getByRole('button', { name: 'SGK Ödeme Takvimi' }).click();
+  await page.getByRole('button', { name: 'Fatura Kayıtları', exact: true }).click();
+  await page.getByRole('button', { name: 'QA-SGK-TEST-202610 fatura detayını aç' }).click();
+  await expect(page.getByRole('dialog', { name: 'SGK Dönem Faturası Detayı' })).toContainText('QA-SGK-TEST-202610');
+});
+
+test('Review a service record details view', async ({ page }) => {
+  await mockTenantData(page, true, { maintenanceRows: [{ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', asset_id: assetId, record_type: 'Kalibrasyon', maintenance_date: '2026-10-01', provider: 'Test Laboratuvarı', report_number: 'KAL-001', notes: 'Kalibrasyon tamamlandı.' }] });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await page.getByRole('row').filter({ hasText: assetName }).click();
+  await page.getByRole('button', { name: 'Bakım', exact: true }).click();
+  await expect(page.getByText('Kalibrasyon · Test Laboratuvarı')).toBeVisible();
+  await expect(page.getByText('Kalibrasyon tamamlandı.')).toBeVisible();
+  await expect(page.getByText('Bu demirbaş için kayıtlı bakım/kalibrasyon bilgisi bulunmuyor.')).toHaveCount(0);
 });
 
 test('satır üç nokta menüsü drawer açmadan görüntülenir; satır tıklaması drawer açar', async ({ page }) => {

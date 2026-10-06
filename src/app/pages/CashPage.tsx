@@ -20,6 +20,7 @@ interface CashMovement {
   paymentMethod: string;
   status: 'Tahsil Edildi' | 'Bekleyen' | 'Bekliyor' | 'Taksitli';
   branch: string;
+  branchId?: string;
   referenceEntity?: string;
   referenceId?: string;
 }
@@ -49,6 +50,7 @@ export default function CashPage() {
 
   // ── KASA & TAHSİLAT STATES ──
   const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [cashRevision, setCashRevision] = useState(0);
   const [cashFilterPill, setCashFilterPill] = useState('Tümü');
   const [cashSelectedAccount, setCashSelectedAccount] = useState('Tüm Hesaplar');
   const [summaryBranch, setSummaryBranch] = useState('Tüm Şubeler');
@@ -135,7 +137,7 @@ export default function CashPage() {
           account: row.cashRegisterId || '—', type: isOutgoing ? 'Çıkış' : 'Giriş', category: row.category || '—',
           description: row.description || '—', patientOrEntity: sale?.patientName || expense?.createdBy || '—',
           amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || '—',
-          status: 'Tahsil Edildi', branch: branch?.name || '—', referenceEntity: row.referenceEntity, referenceId: row.referenceId,
+          status: 'Tahsil Edildi', branch: branch?.name || '—', branchId: row.branchId, referenceEntity: row.referenceEntity, referenceId: row.referenceId,
         };
       });
       const mappedExpenses: ExpenseItem[] = actualExpenses.map(expense => ({
@@ -150,12 +152,12 @@ export default function CashPage() {
       setSelectedExpense(current => current ? mappedExpenses.find(item => item.id === current.id) || null : null);
     }).catch(() => { if (!cancelled) { setCashMovements([]); setExpenses([]); } });
     return () => { cancelled = true; };
-  }, [currentOrgId, branchesList, expensesList, salesList]);
+  }, [currentOrgId, branchesList, expensesList, salesList, cashRevision]);
 
   // Filtered Cash Movements
   const filteredCashMovements = useMemo(() => {
     return cashMovements.filter(item => {
-      if (!matches(item.branch)) return false;
+      if (!matches(item.branch, item.branchId)) return false;
       if (cashFilterPill === 'Girişler' && item.type !== 'Giriş') return false;
       if (cashFilterPill === 'Çıkışlar' && item.type !== 'Çıkış') return false;
       if (cashFilterPill === 'Tahsil Edildi' && item.status !== 'Tahsil Edildi') return false;
@@ -173,7 +175,7 @@ export default function CashPage() {
     .filter(item => summaryBranch === 'Tüm Şubeler' || item.branch === summaryBranch)
     .reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
   const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const currentMonthMovements = cashMovements.filter(item => item.dateKey?.startsWith(currentMonthKey));
+  const currentMonthMovements = cashMovements.filter(item => matches(item.branch, item.branchId) && item.dateKey?.startsWith(currentMonthKey));
   const currentMonthNet = currentMonthMovements.reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
   const currentMonthSales = salesList.filter(sale => sale.date?.startsWith(currentMonthKey)).reduce((sum, sale) => sum + Number(sale.total || 0), 0);
   const currentMonthCollected = currentMonthMovements.filter(item => item.type === 'Giriş').reduce((sum, item) => sum + item.amount, 0);
@@ -204,7 +206,7 @@ export default function CashPage() {
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
     return expenses.filter(item => {
-      if (!matches(item.branch)) return false;
+      if (!matches(item.branch, item.branchId)) return false;
       if (expenseFilterPill !== 'Tümü' && item.category !== expenseFilterPill) return false;
       if (expenseSelectedCategory !== 'Tüm Kategoriler' && item.category !== expenseSelectedCategory) return false;
       if (expenseSelectedBranch !== 'Tüm Şubeler' && item.branch !== expenseSelectedBranch) return false;
@@ -240,15 +242,16 @@ export default function CashPage() {
     }
     try {
       const saved = await dbInsertCashTransaction({
-        branchId, cashRegisterId: depositForm.account,
+        branchId, cashRegisterId: depositForm.account.trim(),
         type: depositForm.type === 'Giriş' ? 'INCOME' : 'EXPENSE', amount,
         category: depositForm.category,
         description: depositForm.description.trim() || (depositForm.type === 'Giriş' ? 'Kasa para girişi' : 'Kasa para çıkışı'),
       });
       const newMovement: CashMovement = {
       id: saved.id,
+      dateKey: saved.createdAt?.slice(0, 10),
       date: new Date().toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      account: depositForm.account,
+      account: saved.cashRegisterId,
       type: depositForm.type,
       category: depositForm.category,
       description: depositForm.description || (depositForm.type === 'Giriş' ? 'Kasa Para Girişi' : 'Kasa Para Çıkışı'),
@@ -256,10 +259,12 @@ export default function CashPage() {
       amount,
       paymentMethod: depositForm.account.includes('Banka') ? 'Banka' : 'Nakit',
       status: 'Tahsil Edildi',
-      branch: branchName
+      branch: branchName,
+      branchId
     };
 
-    setCashMovements(prev => [newMovement, ...prev]);
+    setCashMovements(prev => [newMovement, ...prev.filter(item => item.id !== newMovement.id)]);
+    setCashRevision(version => version + 1);
     setShowDepositModal(false);
     addToast({ type: 'success', message: `${formatCurrency(newMovement.amount)} ${newMovement.type.toLowerCase()} hareketi kaydedildi.` });
     } catch (error) {

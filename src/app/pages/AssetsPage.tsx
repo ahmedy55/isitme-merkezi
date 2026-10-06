@@ -193,7 +193,7 @@ export default function AssetsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!currentOrgId || !activeItem?.id || drawerTab !== 'gecmis') {
+    if (!currentOrgId || !activeItem?.id || !['gecmis', 'bakim'].includes(drawerTab)) {
       setMaintenanceHistory([]);
       return;
     }
@@ -1094,9 +1094,14 @@ export default function AssetsPage() {
 
               {drawerTab === 'bakim' && (
                 <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
-                  <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                  {maintenanceHistory.map(record => <div key={record.id} style={{ padding: 12, background: '#f8fafc', borderRadius: 8 }}>
+                    <strong>{record.recordType}{record.provider ? ` · ${record.provider}` : ''}</strong>
+                    <div>{formatDate(record.maintenanceDate)}{record.reportNumber ? ` · Rapor: ${record.reportNumber}` : ''}</div>
+                    {record.notes && <p>{record.notes}</p>}
+                  </div>)}
+                  {maintenanceHistory.length === 0 && <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                     <div style={{ color: '#64748b' }}>Bu demirbaş için kayıtlı bakım/kalibrasyon bilgisi bulunmuyor.</div>
-                  </div>
+                  </div>}
                   <button
                     className={styles.btnFilter}
                     style={{ justifyContent: 'center' }}

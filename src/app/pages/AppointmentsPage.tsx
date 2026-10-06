@@ -1308,6 +1308,8 @@ export function NewAppointmentModal({
   initialAppointment?: any;
   initialPatientId?: string | null;
 }) {
+  const { addPatient } = useApp();
+  const [savingAppointment, setSavingAppointment] = useState(false);
   const getNextAppointmentSlot = (from = new Date()) => {
     const slot = new Date(from);
     slot.setSeconds(0, 0);
@@ -1496,6 +1498,7 @@ export function NewAppointmentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingAppointment) return;
     const appointmentDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     const appointmentTime = `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}`;
     const dateTimeValidation = validateAppointmentDateTime(appointmentDate, appointmentTime);
@@ -1505,7 +1508,7 @@ export function NewAppointmentModal({
       return;
     }
     let patientNameFinal = '';
-    let patientIdFinal = 'p-unknown';
+    let patientIdFinal = '';
 
     if (isAddingNewPatient) {
       if (!newPatientName.trim()) {
@@ -1517,7 +1520,8 @@ export function NewAppointmentModal({
       patientNameFinal = selectedPatient.name;
       patientIdFinal = selectedPatient.id;
     } else if (patientSearch.trim()) {
-      patientNameFinal = patientSearch.trim();
+      addToast?.({ type: 'error', message: 'Arama sonucundan kayıtlı hastayı seçin veya Yeni Hasta seçeneğini kullanın.' });
+      return;
     } else {
       addToast?.({ type: 'error', message: 'Lütfen bir hasta seçin veya yeni hasta adı girin.' });
       return;
@@ -1541,6 +1545,19 @@ export function NewAppointmentModal({
     const assignedBranch = activeBranches.find(item => item.id === requestedBranchId) || defaultBranch;
     if (!assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için geçerli bir şube bulunamadı.' }); return; }
     const assignedBranchId = assignedBranch.id;
+    setSavingAppointment(true);
+    if (isAddingNewPatient) {
+      try {
+        const parts = patientNameFinal.split(/\s+/);
+        const created = await addPatient({ firstName: parts.slice(0, -1).join(' ') || parts[0], lastName: parts.length > 1 ? parts[parts.length - 1] : '', tc: '', phone: newPatientPhone.trim(), branchId: assignedBranchId, branch: assignedBranch.name, patientStatus: 'Potansiyel' });
+        patientIdFinal = created.id;
+        setSelectedPatient({ id: created.id, name: patientNameFinal, phone: created.phone || '' });
+        setIsAddingNewPatient(false);
+      } catch {
+        setSavingAppointment(false);
+        return;
+      }
+    }
     const newApt = {
       ...(initialAppointment || {}),
       id: initialAppointment?.id || `apt-${Date.now().toString().slice(-6)}`,
@@ -1563,6 +1580,7 @@ export function NewAppointmentModal({
 
     try { await onSave(newApt); }
     catch { /* Keep the form open when persistence fails. */ }
+    finally { setSavingAppointment(false); }
   };
 
   return (
@@ -2279,6 +2297,7 @@ export function NewAppointmentModal({
             </button>
             <button
               type="submit"
+              disabled={savingAppointment}
               style={{
                 padding: '9px 20px', borderRadius: 8, border: 'none',
                 background: '#2563eb', color: '#ffffff', fontSize: '0.88rem', fontWeight: 600,

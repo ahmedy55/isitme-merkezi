@@ -38,6 +38,7 @@ interface SGKPrescriptionItem {
   status: 'Onaylandı' | 'İşlemde' | 'Reddedildi';
   period: string; // e.g. 2025/09
   branch: string;
+  branchId?: string;
   notes?: string;
   doctorName?: string;
   hospitalName?: string;
@@ -80,6 +81,7 @@ export default function SGKPage() {
         status,
         period: '—',
         branch: branchesList.find(branch => branch.id === patient.branchId)?.name || patient.branch || '—',
+        branchId: patient.branchId,
         doctorName: patient.doctorName || '—',
         hospitalName: '—',
         icdCode: patient.hearingLoss || '—',
@@ -110,6 +112,9 @@ export default function SGKPage() {
 
   // Modals & Menu states
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [prescriptionPatientId, setPrescriptionPatientId] = useState('');
+  const [prescriptionError, setPrescriptionError] = useState('');
+  const [savingPrescription, setSavingPrescription] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
@@ -187,7 +192,7 @@ export default function SGKPage() {
   const filteredList = useMemo(() => {
     return items.filter(item => {
       // Scope match
-      if (!matches(item.branch)) return false;
+      if (!matches(item.branch, item.branchId)) return false;
 
       // Search match
       if (searchTerm.trim()) {
@@ -263,22 +268,28 @@ export default function SGKPage() {
   // Submit new prescription
   const handleCreatePrescription = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.patientName.trim() || !formData.tc.trim() || !formData.prescriptionNo.trim() || !formData.reportNo.trim()) {
-      addToast({ type: 'warning', message: 'Hasta adı, T.C. kimlik no, reçete no ve rapor no zorunludur.' });
+    if (savingPrescription) return;
+    setPrescriptionError('');
+    if (!formData.patientName.trim() || (!prescriptionPatientId && !formData.tc.trim()) || !formData.prescriptionNo.trim() || !formData.reportNo.trim()) {
+      setPrescriptionError('Kayıtlı hasta seçimi, reçete no ve rapor no zorunludur.');
       return;
     }
-    const matchedPatient = allPatients.find(patient => patient.tc === formData.tc.trim());
-    if (!matchedPatient || `${matchedPatient.firstName} ${matchedPatient.lastName}`.trim().toLocaleLowerCase('tr-TR') !== formData.patientName.trim().toLocaleLowerCase('tr-TR')) {
-      addToast({ type: 'error', message: 'Girilen T.C. kimlik no ve ad soyad ile eşleşen kayıtlı hasta bulunamadı. Önce hastayı Hasta kayıtlarından ekleyin.' });
+    const matchedPatient = allPatients.find(patient => prescriptionPatientId ? patient.id === prescriptionPatientId : patient.tc === formData.tc.trim());
+    if (!matchedPatient || !matches(matchedPatient.branch, matchedPatient.branchId) || (!prescriptionPatientId && `${matchedPatient.firstName} ${matchedPatient.lastName}`.trim().toLocaleLowerCase('tr-TR') !== formData.patientName.trim().toLocaleLowerCase('tr-TR'))) {
+      setPrescriptionError('Kayıtlı hasta bulunamadı. Listeden hastayı seçin veya önce Hasta kayıtlarından ekleyin.');
       return;
     }
+    setSavingPrescription(true);
     try {
       await approveSGKPrescription(matchedPatient.id, formData.prescriptionNo.trim(), formData.reportNo.trim());
       setSelectedPatientId(matchedPatient.id);
       setIsNewModalOpen(false);
+      setPrescriptionPatientId('');
       setFormData({ patientName: '', tc: '', phone: '', prescriptionNo: '', reportNo: '', deviceOperation: '', period: '', status: 'İşlemde', branch: '', notes: '' });
     } catch (error) {
-      addToast({ type: 'error', message: error instanceof Error ? error.message : 'Reçete bilgileri hasta kaydına yazılamadı.' });
+      setPrescriptionError(error instanceof Error ? error.message : 'Reçete bilgileri hasta kaydına yazılamadı.');
+    } finally {
+      setSavingPrescription(false);
     }
   };
 
@@ -1239,6 +1250,18 @@ export default function SGKPage() {
 
             <form onSubmit={handleCreatePrescription}>
               <div className={styles.modalBody}>
+                <label>Kayıtlı hasta
+                  <select aria-label="Reçete hastası" value={prescriptionPatientId} onChange={event => {
+                    const patient = allPatients.find(item => item.id === event.target.value);
+                    setPrescriptionPatientId(event.target.value);
+                    setPrescriptionError('');
+                    if (patient) setFormData(form => ({ ...form, patientName: `${patient.firstName} ${patient.lastName}`.trim(), tc: patient.tc || '', phone: patient.phone || '' }));
+                  }}>
+                    <option value="">Hasta seçin</option>
+                    {allPatients.filter(patient => matches(patient.branch, patient.branchId)).map(patient => <option key={patient.id} value={patient.id}>{patient.firstName} {patient.lastName}</option>)}
+                  </select>
+                </label>
+                {prescriptionError && <p role="alert" style={{ color: '#b91c1c' }}>{prescriptionError}</p>}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
@@ -1250,7 +1273,7 @@ export default function SGKPage() {
                       required
                       placeholder="Hasta adı soyadı"
                       value={formData.patientName}
-                      onChange={e => setFormData({ ...formData, patientName: e.target.value })}
+                      onChange={e => { setPrescriptionPatientId(''); setFormData({ ...formData, patientName: e.target.value }); }}
                     />
                   </div>
 
@@ -1261,11 +1284,11 @@ export default function SGKPage() {
                     <input
                       className={styles.searchBox}
                       style={{ width: '100%' }}
-                      required
+                      required={!prescriptionPatientId}
                       maxLength={11}
                       placeholder="11 haneli TC no"
                       value={formData.tc}
-                      onChange={e => setFormData({ ...formData, tc: e.target.value.replace(/\D/g, '') })}
+                      onChange={e => { setPrescriptionPatientId(''); setFormData({ ...formData, tc: e.target.value.replace(/\D/g, '') }); }}
                     />
                   </div>
                 </div>
@@ -1400,6 +1423,7 @@ export default function SGKPage() {
                 <button
                   type="submit"
                   className={styles.btnNewPrescription}
+                  disabled={savingPrescription}
                 >
                   Reçeteyi Kaydet
                 </button>

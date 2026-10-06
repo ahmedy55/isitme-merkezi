@@ -99,7 +99,7 @@ interface AppContextType {
   branchesList: Branch[];
   
   // Veri Güncelleme Metotları
-  addPatient: (patient: Patient) => Promise<void>;
+  addPatient: (patient: Pick<Patient, 'firstName' | 'lastName'> & Partial<Patient>) => Promise<Patient>;
   updatePatient: (patient: Patient) => void;
   deletePatient: (id: string) => Promise<boolean>;
   addAppointment: (appointment: Appointment) => Promise<void>;
@@ -374,7 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 
   // Metotlar
-  const addPatient = async (patient: Patient) => {
+  const addPatient = async (patient: Pick<Patient, 'firstName' | 'lastName'> & Partial<Patient>): Promise<Patient> => {
     requireActiveOrganization();
     if (currentOrg && currentOrg.plan_type === 'trial' && patientsList.length >= 50) {
       addToast({
@@ -395,7 +395,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       try { await dbInsertAuditLog({ action: 'Hasta Ekleme', module: 'Hastalar', description: `${patient.firstName} ${patient.lastName} eklendi.` }); }
       catch (auditError: any) { logger.warn(`Hasta denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext'); }
+      return created;
     }
+    throw new Error('Aktif firma gerekli.');
   };
 
   const updatePatient = async (updatedPatient: Patient) => {
@@ -476,7 +478,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
         const created = await dbInsertAppointment(appointment);
         const pat = patientsList.find(p => p.id === appointment.patientId);
-        const patientName = pat ? `${pat.firstName} ${pat.lastName}` : 'Bilinmeyen Hasta';
+        const patientName = pat ? `${pat.firstName} ${pat.lastName}` : appointment.patientName || 'Bilinmeyen Hasta';
         const createdWithPatName = { ...created, patientName };
 
         setAppointmentsList(prev => [...prev, createdWithPatName]);
