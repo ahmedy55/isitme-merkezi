@@ -35,6 +35,7 @@ type ExtraFixtures = {
   invoiceBranchIds?: string[];
   assetSerial?: string;
   assetWarrantyExpiry?: string | null;
+  assetStatus?: string;
 };
 
 function base64Url(value: unknown) {
@@ -120,9 +121,15 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       const body = route.request().postDataJSON() as Record<string, unknown>;
       fixtures.saleRpcPayloads?.push(body);
       const stock = fixtures.stockRows?.find(row => row.id === body.p_stock);
+      const sale = body.p_sale as Record<string, unknown>;
+      if (stock?.category === 'Cihaz' && !['Sağ', 'Sol'].includes(String(sale.device_ear_side))) {
+        await route.fulfill({ status: 400, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify({ message: 'Select right or left ear for the device' }) });
+        return;
+      }
       if (stock) {
         stock.quantity = Math.max(0, Number(stock.quantity || 0) - 1);
         if (stock.quantity === 0) stock.status = 'Satıldı';
+        fixtures.stockMovementRows = [{ id: '78787878-7878-4787-8787-787878787878', stock_item_id: stock.id, type: 'SALE', quantity_change: -1, created_at: new Date().toISOString() }];
       }
       await route.fulfill({
         status: 200,
@@ -282,13 +289,14 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         purchase_date: '2026-01-10',
         purchase_price: 12000,
         warranty_expiry: fixtures.assetWarrantyExpiry === undefined ? '2027-01-10' : fixtures.assetWarrantyExpiry,
-        status: 'Aktif',
+        status: fixtures.assetStatus || 'Aktif',
         archived_at: null,
         branches: { name: 'QA Şube' },
       };
       if (route.request().method() === 'POST') {
         const body = route.request().postDataJSON() as Record<string, unknown>;
         Object.assign(existingAsset, body);
+        fixtures.assetStatus = String(existingAsset.status);
         await route.fulfill({ status: 200, contentType: 'application/vnd.pgrst.object+json', headers: corsHeaders, body: JSON.stringify(existingAsset) });
         return;
       }
@@ -414,7 +422,7 @@ test('ürün kaydı reddedildiğinde gerçek sunucu doğrulama hatası form içi
 });
 
 test('stok hareketi delta ve hareket geçmişi kaydedilir, satır/drawer miktarı anında güncellenir', async ({ page }) => {
-  await mockTenantData(page, false, { stockRows: [stockFixture] });
+  await mockTenantData(page, false, { stockRows: [{ ...stockFixture, category: 'Pil', serial_no: '' }] });
   await signIn(page);
   await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
   const row = page.getByRole('row').filter({ hasText: 'E2E Test Cihazı' });
@@ -434,7 +442,7 @@ test('stok hareketi delta ve hareket geçmişi kaydedilir, satır/drawer miktar�
 });
 
 test('stok hareketi RPC hatası görünür olur ve başarısız güncelleme miktarı değiştirmez', async ({ page }) => {
-  await mockTenantData(page, false, { stockRows: [{ ...stockFixture, quantity: 1 }], failStockAdjustment: true });
+  await mockTenantData(page, false, { stockRows: [{ ...stockFixture, category: 'Pil', serial_no: '', quantity: 1 }], failStockAdjustment: true });
   await signIn(page);
   await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
   const row = page.getByRole('row').filter({ hasText: 'E2E Test Cihazı' });
@@ -445,6 +453,20 @@ test('stok hareketi RPC hatası görünür olur ve başarısız güncelleme mikt
   await expect(page.getByRole('alert').filter({ hasText: 'Stock item is unavailable in this branch' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hareketi Uygula' })).toBeVisible();
   await expect(row).toContainText('1');
+});
+
+test('seri numaralı cihaz miktarı çoğaltılmaz ve yeni seri girişine geçilebilir', async ({ page }) => {
+  await mockTenantData(page, false, { stockRows: [{ ...stockFixture, quantity: 1 }] });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
+  await page.getByRole('row').filter({ hasText: stockFixture.name }).getByTitle('İşlemler').click();
+  await page.getByRole('button', { name: /Stok Hareketi Ekle/ }).click();
+  await page.getByText('Hareket Miktarı (Adet)').locator('..').locator('input').fill('3');
+  await page.getByRole('button', { name: 'Hareketi Uygula' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Bu seri numarası tek bir cihaza aittir.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Yeni seri numaralı cihaz ekle' }).click();
+  await expect(page.getByRole('heading', { name: 'Yeni Ürün / Stok Kartı Ekle' })).toBeVisible();
+  await expect(page.getByPlaceholder('Örn: İşitme cihazı')).toHaveValue(stockFixture.name);
 });
 
 test('hızlı satış seçilen hasta ve ürünü ilişkili satış RPCsiyle kaydeder', async ({ page }) => {
@@ -460,11 +482,19 @@ test('hızlı satış seçilen hasta ve ürünü ilişkili satış RPCsiyle kayd
   await page.getByRole('button', { name: 'Hızlı Satış' }).first().click();
   await page.getByLabel('Kayıtlı Hasta').selectOption(patientId);
   await page.getByLabel('Satılacak Ürün / Cihaz').selectOption(stockId);
+  await page.getByLabel('Cihazın takılacağı kulak').selectOption('Sağ');
   await page.getByRole('button', { name: 'Satışı Onayla' }).click();
   await expect.poll(() => saleRpcPayloads.length).toBe(1);
   expect(saleRpcPayloads[0]).toMatchObject({ p_stock: stockId, p_register: 'kas-1' });
-  expect(saleRpcPayloads[0].p_sale).toMatchObject({ patient_id: patientId, status: 'Tahsil Edildi' });
+  expect(saleRpcPayloads[0].p_sale).toMatchObject({ patient_id: patientId, status: 'Tahsil Edildi', device_ear_side: 'Sağ' });
   await expect(page.getByRole('heading', { name: 'Hızlı Satış Fişi / Çıkışı' })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
+  const row = page.getByRole('row').filter({ hasText: 'E2E Test Cihazı' });
+  await expect(row).toContainText('Stok Yok');
+  await row.click();
+  await page.getByRole('button', { name: 'Hareketler', exact: true }).click();
+  await expect(page.getByText('-1 Adet')).toBeVisible();
 });
 
 test('envanter seri numarası araması ayraç ve boşluk farklarını normalize eder', async ({ page }) => {
@@ -533,9 +563,15 @@ test('servis durum kartı ve tablo aynı aktif şube kayıtlarını gösterir', 
   });
   await signIn(page);
   await page.getByRole('button', { name: 'Teknik Servis' }).click();
+  await page.getByLabel('Servis durumu').selectOption('Teslim Edildi');
+  await expect(page.getByText('Kriterlere uygun teknik servis kaydı bulunamadı.')).toBeVisible();
   await page.getByRole('button', { name: 'Alındı (1)' }).click();
+  await expect(page.getByLabel('Servis durumu')).toHaveValue('Alındı');
   await expect(page.getByRole('row').filter({ hasText: 'E2E Servis Cihazı' })).toBeVisible();
   await expect(page.getByText('Kriterlere uygun teknik servis kaydı bulunamadı.')).toHaveCount(0);
+  await page.getByPlaceholder('Hasta adı, cihaz, seri no ile ara...').fill('eşleşmeyen-seri');
+  await expect(page.getByRole('button', { name: 'Alındı (0)' })).toBeVisible();
+  await expect(page.getByText('Kriterlere uygun teknik servis kaydı bulunamadı.')).toBeVisible();
 });
 
 test('/hastalar doğrudan adresi hasta yönetimine yönlendirir', async ({ page }) => {
@@ -905,6 +941,9 @@ test('demirbaş durum düzenlemesi kayıttan sonra tablo ve detay durumunu eşit
   await expect(row).toContainText('Bakımda');
   await row.click();
   await expect(page.getByText('Bakımda', { exact: true }).last()).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await expect(row).toContainText('Bakımda');
 });
 
 test('demirbaş Garanti sekmesi kayıtlı bitiş tarihini ve kapsam sınırlarını gösterir', async ({ page }) => {

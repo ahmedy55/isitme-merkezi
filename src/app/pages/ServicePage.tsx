@@ -71,7 +71,6 @@ export default function ServicePage() {
   const [filterStatus, setFilterStatus] = useState<string>('Tümü');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('Tüm Şubeler');
-  const [selectedStatusDropdown, setSelectedStatusDropdown] = useState('Tüm Durumlar');
   const [selectedDeviceType, setSelectedDeviceType] = useState('Tüm Cihaz Türleri');
   const [selectedWarranty, setSelectedWarranty] = useState('Tüm Garanti Durumları');
 
@@ -192,14 +191,22 @@ export default function ServicePage() {
   }, [currentOrgId, branchesList, matches]);
 
   const branchScopedRecords = useMemo(() => records.filter(item => matches(item.branch, item.branchId)), [records, matches]);
+  const filterCandidates = useMemo(() => branchScopedRecords.filter(item => {
+    if (selectedBranch !== 'Tüm Şubeler' && item.branch !== selectedBranch) return false;
+    if (selectedDeviceType !== 'Tüm Cihaz Türleri' && item.deviceType !== selectedDeviceType) return false;
+    if (selectedWarranty !== 'Tüm Garanti Durumları' && item.warrantyStatus !== selectedWarranty) return false;
+    const query = searchTerm.trim().toLocaleLowerCase('tr-TR');
+    return !query || [item.patientName, item.patientPhone, item.deviceName, item.serialNo, item.barcode, item.problem]
+      .some(value => (value || '').toLocaleLowerCase('tr-TR').includes(query));
+  }), [branchScopedRecords, selectedBranch, selectedDeviceType, selectedWarranty, searchTerm]);
   // Pill counts calculation
   const pillCounts = useMemo(() => {
-    const total = branchScopedRecords.length;
-    const alindi = branchScopedRecords.filter(r => r.status === 'Alındı').length;
-    const inceleniyor = branchScopedRecords.filter(r => r.status === 'İnceleniyor').length;
-    const tamir = branchScopedRecords.filter(r => r.status === 'Tamir Ediliyor').length;
-    const hazir = branchScopedRecords.filter(r => r.status === 'Teslime Hazır').length;
-    const teslim = branchScopedRecords.filter(r => r.status === 'Teslim Edildi').length;
+    const total = filterCandidates.length;
+    const alindi = filterCandidates.filter(r => r.status === 'Alındı').length;
+    const inceleniyor = filterCandidates.filter(r => r.status === 'İnceleniyor').length;
+    const tamir = filterCandidates.filter(r => r.status === 'Tamir Ediliyor').length;
+    const hazir = filterCandidates.filter(r => r.status === 'Teslime Hazır').length;
+    const teslim = filterCandidates.filter(r => r.status === 'Teslim Edildi').length;
     return {
       all: total,
       alindi,
@@ -208,43 +215,16 @@ export default function ServicePage() {
       hazir,
       teslim
     };
-  }, [branchScopedRecords]);
+  }, [filterCandidates]);
   const warrantyCount = records.filter(record => record.warrantyStatus === 'Garanti Kapsamında').length;
   const warrantyRate = records.length ? Math.round((warrantyCount / records.length) * 100) : 0;
 
   // Filtered rows
-  const filteredRecords = useMemo(() => {
-    return branchScopedRecords.filter(item => {
-
-      // Status pill filter
-      if (filterStatus.startsWith('Alındı') && item.status !== 'Alındı') return false;
-      if (filterStatus.startsWith('İnceleniyor') && item.status !== 'İnceleniyor') return false;
-      if (filterStatus.startsWith('Tamir Ediliyor') && item.status !== 'Tamir Ediliyor') return false;
-      if (filterStatus.startsWith('Hazır') && item.status !== 'Teslime Hazır') return false;
-      if (filterStatus.startsWith('Teslim Edildi') && item.status !== 'Teslim Edildi') return false;
-
-      // Dropdown filters
-      if (selectedBranch !== 'Tüm Şubeler' && item.branch !== selectedBranch) return false;
-      if (selectedStatusDropdown !== 'Tüm Durumlar' && item.status !== selectedStatusDropdown) return false;
-      if (selectedDeviceType !== 'Tüm Cihaz Türleri' && item.deviceType !== selectedDeviceType) return false;
-      if (selectedWarranty !== 'Tüm Garanti Durumları' && item.warrantyStatus !== selectedWarranty) return false;
-
-      // Search query
-      if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase();
-        const matchesPatient = item.patientName.toLowerCase().includes(q) || item.patientPhone.includes(q);
-        const matchesDevice = item.deviceName.toLowerCase().includes(q) || item.serialNo.toLowerCase().includes(q) || item.barcode.toLowerCase().includes(q);
-        const matchesProblem = item.problem.toLowerCase().includes(q);
-        if (!matchesPatient && !matchesDevice && !matchesProblem) return false;
-      }
-
-      return true;
-    });
-  }, [branchScopedRecords, filterStatus, selectedBranch, selectedStatusDropdown, selectedDeviceType, selectedWarranty, searchTerm]);
+  const filteredRecords = useMemo(() => filterCandidates.filter(item => filterStatus === 'Tümü' || item.status === filterStatus), [filterCandidates, filterStatus]);
 
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   const pagedRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  useEffect(() => setCurrentPage(1), [filterStatus, selectedBranch, selectedStatusDropdown, selectedDeviceType, selectedWarranty, searchTerm, pageSize]);
+  useEffect(() => setCurrentPage(1), [filterStatus, selectedBranch, selectedDeviceType, selectedWarranty, searchTerm, pageSize]);
   useEffect(() => setCurrentPage(page => Math.min(page, pageCount)), [pageCount]);
 
   // Toggle selection
@@ -570,7 +550,7 @@ export default function ServicePage() {
             { label: `Alındı (${pillCounts.alindi})`, key: 'Alındı' },
             { label: `İnceleniyor (${pillCounts.inceleniyor})`, key: 'İnceleniyor' },
             { label: `Tamir Ediliyor (${pillCounts.tamir})`, key: 'Tamir Ediliyor' },
-            { label: `Hazır (${pillCounts.hazir})`, key: 'Hazır' },
+            { label: `Hazır (${pillCounts.hazir})`, key: 'Teslime Hazır' },
             { label: `Teslim Edildi (${pillCounts.teslim})`, key: 'Teslim Edildi' }
           ].map(pill => {
             const isActive = filterStatus.startsWith(pill.key);
@@ -579,7 +559,7 @@ export default function ServicePage() {
                 key={pill.key}
                 type="button"
                 className={`${styles.pillBtn} ${isActive ? styles.pillBtnActive : ''}`}
-                onClick={() => setFilterStatus(pill.label)}
+                onClick={() => setFilterStatus(pill.key)}
               >
                 {pill.label}
               </button>
@@ -618,9 +598,8 @@ export default function ServicePage() {
             className={styles.btnClearOutline}
             onClick={() => {
               setSearchTerm('');
-              setFilterStatus('Tümü (15)');
+              setFilterStatus('Tümü');
               setSelectedBranch('Tüm Şubeler');
-              setSelectedStatusDropdown('Tüm Durumlar');
               setSelectedDeviceType('Tüm Cihaz Türleri');
               setSelectedWarranty('Tüm Garanti Durumları');
               addToast({ type: 'info', message: 'Filtreler sıfırlandı.' });
@@ -662,8 +641,9 @@ export default function ServicePage() {
 
         <select
           className={styles.filterSelect}
-          value={selectedStatusDropdown}
-          onChange={e => setSelectedStatusDropdown(e.target.value)}
+          aria-label="Servis durumu"
+          value={filterStatus === 'Tümü' ? 'Tüm Durumlar' : filterStatus}
+          onChange={e => setFilterStatus(e.target.value === 'Tüm Durumlar' ? 'Tümü' : e.target.value)}
         >
           <option value="Tüm Durumlar">Tüm Durumlar</option>
           <option value="Alındı">Alındı</option>

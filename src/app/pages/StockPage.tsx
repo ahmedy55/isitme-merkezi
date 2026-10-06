@@ -74,10 +74,15 @@ export default function StockPage() {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  useEffect(() => {
+    if (!showEditModal) setActiveItem(current => current ? allStockItems.find(item => item.id === current.id) || null : null);
+  }, [allStockItems, showEditModal]);
   const [addProductError, setAddProductError] = useState('');
   const [quickSaleForm, setQuickSaleForm] = useState({
-    patientId: '', stockItemId: '', paymentMethod: 'Nakit' as 'Nakit' | 'Kredi Kartı' | 'Havale', cashRegisterId: 'kas-1',
+    patientId: '', stockItemId: '', deviceEarSide: '' as '' | 'Sağ' | 'Sol', paymentMethod: 'Nakit' as 'Nakit' | 'Kredi Kartı' | 'Havale', cashRegisterId: 'kas-1',
   });
+  const quickSaleInFlight = useRef(false);
+  const [isSelling, setIsSelling] = useState(false);
 
   // Adjustment Form
   const [adjustmentQty, setAdjustmentQty] = useState(1);
@@ -180,6 +185,7 @@ export default function StockPage() {
   ), [allStockItems, activeBranch]);
   const quickSalePatients = patientsList.filter(patient => patient.branchId && BranchService.matchesBranch(patient.branch, patient.branchId, activeBranch));
   const quickSalePatient = quickSalePatients.find(patient => patient.id === quickSaleForm.patientId);
+  const quickSaleProduct = scopedStockItems.find(item => item.id === quickSaleForm.stockItemId);
   const quickSaleProducts = scopedStockItems.filter(item => item.quantity > 0 && item.status === 'Stokta' && (!quickSalePatient || item.branchId === quickSalePatient.branchId));
   const totalProducts = scopedStockItems.length;
   const totalStockQty = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
@@ -352,6 +358,10 @@ export default function StockPage() {
       return;
     }
     const newQty = activeItem.quantity + change;
+    if (activeItem.category === 'Cihaz' && activeItem.serialNo && !['—', 'SN-UNKNOWN'].includes(activeItem.serialNo) && newQty > 1) {
+      setAdjustmentError('Bu seri numarası tek bir cihaza aittir. Ek cihazı aşağıdaki bağlantıdan kendi seri numarasıyla kaydedin.');
+      return;
+    }
     setAdjustmentError('');
     setIsAdjustingStock(true);
     try {
@@ -385,6 +395,7 @@ export default function StockPage() {
 
   const handleQuickSale = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (quickSaleInFlight.current) return;
     const patient = patientsList.find(item => item.id === quickSaleForm.patientId);
     const item = stockList.find(stock => stock.id === quickSaleForm.stockItemId);
     if (!currentOrgId || !patient?.branchId || !item) {
@@ -399,11 +410,17 @@ export default function StockPage() {
       addToast({ type: 'error', message: 'Seçilen ürün stokta değil. Satış kaydedilmedi.' });
       return;
     }
+    if (item.category === 'Cihaz' && (!quickSaleForm.deviceEarSide || (['Sağ', 'Sol'].includes(patient.hearingLossSide) && patient.hearingLossSide !== quickSaleForm.deviceEarSide))) {
+      addToast({ type: 'error', message: 'Hasta kaydıyla uyumlu sağ veya sol kulağı seçin.' });
+      return;
+    }
     const saleAmount = Number(item.price);
     if (!Number.isFinite(saleAmount) || saleAmount <= 0) {
       addToast({ type: 'error', message: 'Ürün satış fiyatı geçerli değil. Önce ürün fiyatını düzenleyin.' });
       return;
     }
+    quickSaleInFlight.current = true;
+    setIsSelling(true);
     try {
       await addSale({
         id: `sale-${crypto.randomUUID()}`,
@@ -418,11 +435,15 @@ export default function StockPage() {
         paymentMethod: quickSaleForm.paymentMethod,
         status: 'Tahsil Edildi',
         branchId: patient.branchId,
+        deviceEarSide: item.category === 'Cihaz' ? quickSaleForm.deviceEarSide as 'Sağ' | 'Sol' : undefined,
       }, item.id, quickSaleForm.cashRegisterId.trim() || 'kas-1');
       setShowQuickSaleModal(false);
-      setQuickSaleForm({ patientId: '', stockItemId: '', paymentMethod: 'Nakit', cashRegisterId: 'kas-1' });
+      setQuickSaleForm({ patientId: '', stockItemId: '', deviceEarSide: '', paymentMethod: 'Nakit', cashRegisterId: 'kas-1' });
     } catch {
       // addSale surfaces the database error and keeps the modal open for correction.
+    } finally {
+      quickSaleInFlight.current = false;
+      setIsSelling(false);
     }
   };
 
@@ -1470,6 +1491,12 @@ export default function StockPage() {
               </button>
             </div>
             {adjustmentError && <div role="alert" style={{ padding: '0 20px 16px', color: '#b91c1c', fontSize: 13 }}>{adjustmentError}</div>}
+            {activeItem.category === 'Cihaz' && <button type="button" className={styles.btnClear} disabled={isAdjustingStock} onClick={() => {
+              setNewItemForm(form => ({ ...form, name: activeItem.name, category: activeItem.category, brand: activeItem.brand, model: activeItem.model, serialNo: '', barcode: activeItem.barcode || '', quantity: 1, price: activeItem.price, purchasePrice: activeItem.purchasePrice || 0, branch: activeItem.branchId || '' }));
+              setShowAdjustmentModal(false);
+              setAddProductError('');
+              setShowAddModal(true);
+            }}>Yeni seri numaralı cihaz ekle</button>}
           </div>
         </div>
       )}
@@ -1485,7 +1512,10 @@ export default function StockPage() {
             <form onSubmit={event => void handleQuickSale(event)} style={{ padding: 20, display: 'grid', gap: 12 }}>
               <div>
                 <label htmlFor="quick-sale-patient" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Kayıtlı Hasta</label>
-                <select id="quick-sale-patient" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.patientId} onChange={event => setQuickSaleForm(form => ({ ...form, patientId: event.target.value, stockItemId: '' }))}>
+                <select id="quick-sale-patient" required className={styles.filterSelect} style={{ width: '100%' }} value={quickSaleForm.patientId} onChange={event => {
+                  const patient = quickSalePatients.find(item => item.id === event.target.value);
+                  setQuickSaleForm(form => ({ ...form, patientId: event.target.value, stockItemId: '', deviceEarSide: patient?.hearingLossSide === 'Sağ' || patient?.hearingLossSide === 'Sol' ? patient.hearingLossSide : '' }));
+                }}>
                   <option value="">Satışın bağlanacağı hastayı seçin</option>
                   {quickSalePatients.map(patient => <option key={patient.id} value={patient.id}>{patient.firstName} {patient.lastName} · {patient.phone || patient.tc || 'Kayıtlı hasta'}</option>)}
                 </select>
@@ -1500,6 +1530,14 @@ export default function StockPage() {
                 </select>
                 {quickSalePatient && quickSaleProducts.length === 0 && <small role="status">Bu hastanın şubesinde satışa uygun stok bulunmuyor.</small>}
               </div>
+              {quickSaleProduct?.category === 'Cihaz' && <div>
+                <label htmlFor="quick-sale-ear">Cihazın takılacağı kulak</label>
+                <select id="quick-sale-ear" required className={styles.filterSelect} value={quickSaleForm.deviceEarSide} onChange={event => setQuickSaleForm(form => ({ ...form, deviceEarSide: event.target.value as 'Sağ' | 'Sol' }))}>
+                  <option value="">Kulak seçin</option>
+                  <option value="Sağ" disabled={quickSalePatient?.hearingLossSide === 'Sol'}>Sağ</option>
+                  <option value="Sol" disabled={quickSalePatient?.hearingLossSide === 'Sağ'}>Sol</option>
+                </select>
+              </div>}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label htmlFor="quick-sale-payment" style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Ödeme Yöntemi</label>
@@ -1516,7 +1554,7 @@ export default function StockPage() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8 }}>
                 <button type="button" className={styles.btnClear} onClick={() => setShowQuickSaleModal(false)}>Vazgeç</button>
-                <button type="submit" className={styles.btnPrimaryAction} disabled={!quickSalePatient || !quickSaleProducts.length}>Satışı Onayla</button>
+                <button type="submit" className={styles.btnPrimaryAction} disabled={isSelling || !quickSalePatient || !quickSaleProducts.length}>{isSelling ? 'Kaydediliyor…' : 'Satışı Onayla'}</button>
               </div>
             </form>
           </div>
