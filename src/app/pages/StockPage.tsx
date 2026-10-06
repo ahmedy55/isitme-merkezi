@@ -7,6 +7,7 @@ import { BranchService } from '../services/BranchService';
 import { formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { useDebounce } from '../hooks/useDebounce';
 import { dbFetchStockMovements } from '../lib/database';
+import { matchesInventoryIdentifier } from '../lib/inventorySearch';
 import styles from './StockPage.module.css';
 
 interface DisplayStockItem extends StockItem {
@@ -134,12 +135,12 @@ export default function StockPage() {
 
       // Search term
       if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase();
+        const q = searchTerm.trim().toLocaleLowerCase('tr-TR');
         const matchName = item.name.toLowerCase().includes(q);
         const matchBrand = (item.brand || '').toLowerCase().includes(q);
         const matchModel = (item.model || '').toLowerCase().includes(q);
-        const matchSerial = (item.serialNo || '').toLowerCase().includes(q);
-        const matchBarcode = (item.barcode || '').toLowerCase().includes(q);
+        const matchSerial = matchesInventoryIdentifier(item.serialNo, q);
+        const matchBarcode = matchesInventoryIdentifier(item.barcode, q);
         const matchQuantity = `${item.quantity} adet`.includes(q);
         if (!matchName && !matchBrand && !matchModel && !matchSerial && !matchBarcode && !matchQuantity) return false;
       }

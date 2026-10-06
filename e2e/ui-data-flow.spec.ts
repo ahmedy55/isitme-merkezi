@@ -250,6 +250,18 @@ test('stok hareketi delta olarak kaydedilir ve satır/drawer miktarı anında g�
   await expect(row).toBeVisible();
 });
 
+test('envanter seri numarası araması ayraç ve boşluk farklarını normalize eder', async ({ page }) => {
+  await mockTenantData(page, false, {
+    stockRows: [{ ...stockFixture, serial_no: 'QA SN 1B 001' }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
+  await page.getByPlaceholder('Ürün adı, marka, seri no veya barkod ile ara...').fill('QA-SN-1B-001');
+  const row = page.getByRole('row').filter({ hasText: 'E2E Test Cihazı' });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('QA SN 1B 001');
+});
+
 test('randevu formu gecikmeli yüklenen tek aktif şubeyi seçip kaydı takvime ekler', async ({ page }) => {
   const patientId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
   const appointmentFixture: ExtraFixtures = {
