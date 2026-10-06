@@ -10,6 +10,121 @@
   width: 100%;
 }
 
+.reportPreviewOverlay {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  overflow: auto;
+  padding: 28px 16px;
+  background: rgba(15, 23, 42, 0.68);
+}
+
+.reportPreview {
+  width: min(820px, 100%);
+  min-height: 90vh;
+  margin: 0 auto;
+  padding: 34px 42px;
+  border-radius: 12px;
+  background: #fff;
+  color: #172033;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+}
+
+.reportPreviewHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #08785b;
+}
+
+.reportPreviewHeader p {
+  margin: 0 0 8px;
+  color: #08785b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.reportPreviewHeader h2 {
+  margin: 0 0 8px;
+  font-size: 23px;
+}
+
+.reportPreviewHeader span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.reportCloseButton {
+  align-self: flex-start;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #475569;
+  background: #f1f5f9;
+  cursor: pointer;
+}
+
+.reportPreviewTable {
+  width: 100%;
+  margin-top: 24px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.reportPreviewTable th,
+.reportPreviewTable td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.reportPreviewTable th {
+  width: 30%;
+  color: #475569;
+  font-weight: 600;
+}
+
+.reportPreviewActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .reportPreviewOverlay,
+  .reportPreviewOverlay * {
+    visibility: visible !important;
+  }
+
+  .reportPreviewOverlay {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    padding: 0;
+    background: #fff;
+  }
+
+  .reportPreview {
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .reportCloseButton,
+  .reportPreviewActions {
+    display: none !important;
+  }
+}
+
 /* ── Breadcrumb & Header ── */
 .breadcrumb {
   margin-bottom: 6px;

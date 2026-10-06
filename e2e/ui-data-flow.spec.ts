@@ -561,7 +561,7 @@ test('servis raporu dışa aktarma gerçek, yazdırılabilir rapor görüntüley
   await expect(report.getByRole('button', { name: 'Yazdır / PDF olarak kaydet' })).toBeVisible();
 });
 
-test('tekil servis formu yazdırma rapor görüntüleyicisini açar', async ({ page }) => {
+test('tekil servis formu pop-up gerektirmeden yazdırılabilir rapor görüntüleyicisini açar', async ({ page }) => {
   const patientId = 'abababab-abab-4bab-8bab-abababababab';
   await mockTenantData(page, false, {
     patientRows: [{ id: patientId, organization_id: orgId, branch_id: branchId, first_name: 'E2E', last_name: 'Hasta', phone: '05000000001', patient_status: 'Aktif', deleted_at: null }],
@@ -576,12 +576,14 @@ test('tekil servis formu yazdırma rapor görüntüleyicisini açar', async ({ p
   await page.getByRole('button', { name: 'Teknik Servis' }).click();
   await page.getByRole('row').filter({ hasText: 'E2E Cihaz' }).click();
   await page.getByRole('button', { name: 'Servis Formu Yazdır' }).click();
-  const popupPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Yazdır / PDF İndir' }).click();
-  const report = await popupPromise;
+  const report = page.getByRole('dialog', { name: 'Servis Raporu - E2E Cihaz' });
+  await expect(report).toBeVisible();
   await expect(report.getByRole('heading', { name: 'Servis Raporu - E2E Cihaz' })).toBeVisible();
   await expect(report.getByText('E2E-SN')).toBeVisible();
   await expect(report.getByRole('button', { name: 'Yazdır / PDF olarak kaydet' })).toBeVisible();
+  await report.getByRole('button', { name: 'Kapat', exact: true }).click();
+  await expect(report).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Yazdır / PDF İndir' })).toHaveCount(0);
 });
 

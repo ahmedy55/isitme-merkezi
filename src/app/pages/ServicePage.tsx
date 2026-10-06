@@ -88,6 +88,7 @@ export default function ServicePage() {
   const [showAddPartModal, setShowAddPartModal] = useState(false);
   const [showAddFileModal, setShowAddFileModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [reportPreviewItem, setReportPreviewItem] = useState<ServiceItem | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isCreatingRecord, setIsCreatingRecord] = useState(false);
@@ -1341,7 +1342,8 @@ export default function ServicePage() {
                 type="button"
                 className={styles.btnPrimaryAction}
                 onClick={() => {
-                  if (exportServiceReport()) setShowPrintModal(false);
+                  setReportPreviewItem(selectedItem);
+                  setShowPrintModal(false);
                 }}
               >
                 Yazdır / PDF İndir
@@ -1612,6 +1614,54 @@ export default function ServicePage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {reportPreviewItem && (
+        <div
+          className={styles.reportPreviewOverlay}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Servis Raporu - ${reportPreviewItem.deviceName}`}
+        >
+          <article className={styles.reportPreview}>
+            <header className={styles.reportPreviewHeader}>
+              <div>
+                <p>İŞİTME MERKEZİ · TEKNİK SERVİS</p>
+                <h2>Servis Raporu - {reportPreviewItem.deviceName}</h2>
+                <span>Rapor tarihi: {new Date().toLocaleDateString('tr-TR')}</span>
+              </div>
+              <button
+                type="button"
+                className={styles.reportCloseButton}
+                aria-label="Raporu kapat"
+                onClick={() => setReportPreviewItem(null)}
+              >
+                ✕
+              </button>
+            </header>
+            <table className={styles.reportPreviewTable}>
+              <tbody>
+                <tr><th>Hasta</th><td>{reportPreviewItem.patientName || '—'}</td></tr>
+                <tr><th>Telefon</th><td>{reportPreviewItem.patientPhone || '—'}</td></tr>
+                <tr><th>Cihaz</th><td>{reportPreviewItem.deviceName} ({reportPreviewItem.earSide})</td></tr>
+                <tr><th>Seri No</th><td>{reportPreviewItem.serialNo || '—'}</td></tr>
+                <tr><th>Barkod</th><td>{reportPreviewItem.barcode || '—'}</td></tr>
+                <tr><th>Arıza / Sorun</th><td>{reportPreviewItem.problem || '—'}</td></tr>
+                <tr><th>Durum</th><td>{reportPreviewItem.status}</td></tr>
+                <tr><th>Şube</th><td>{reportPreviewItem.branch || '—'}</td></tr>
+                <tr><th>Teslim Alınma</th><td>{reportPreviewItem.receivedDate || '—'}</td></tr>
+                <tr><th>Tahmini Teslim</th><td>{reportPreviewItem.estimatedDeliveryDate || '—'}</td></tr>
+                <tr><th>Garanti</th><td>{reportPreviewItem.warrantyStatus}</td></tr>
+                <tr><th>Teknisyen</th><td>{reportPreviewItem.technician || '—'}</td></tr>
+                <tr><th>Notlar</th><td>{reportPreviewItem.notes || '—'}</td></tr>
+              </tbody>
+            </table>
+            <footer className={styles.reportPreviewActions}>
+              <button type="button" className={styles.btnSecondaryAction} onClick={() => setReportPreviewItem(null)}>Kapat</button>
+              <button type="button" className={styles.btnPrimaryAction} onClick={() => window.print()}>Yazdır / PDF olarak kaydet</button>
+            </footer>
+          </article>
         </div>
       )}
     </div>
