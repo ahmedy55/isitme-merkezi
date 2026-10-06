@@ -479,7 +479,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const created = await dbInsertAppointment(appointment);
         const pat = patientsList.find(p => p.id === appointment.patientId);
         const patientName = pat ? `${pat.firstName} ${pat.lastName}` : appointment.patientName || 'Bilinmeyen Hasta';
-        const createdWithPatName = { ...created, patientName };
+        const branchObj = branchesList.find(b => b.id === (appointment.branchId || created.branchId));
+        const branchName = appointment.branch || branchObj?.name || created.branch || '';
+        const createdWithPatName = {
+          ...created,
+          patientName,
+          branch: branchName,
+          branchId: appointment.branchId || created.branchId || branchObj?.id
+        };
 
         setAppointmentsList(prev => [...prev, createdWithPatName]);
         addToast({ type: 'success', message: 'Randevu başarıyla oluşturuldu.' });

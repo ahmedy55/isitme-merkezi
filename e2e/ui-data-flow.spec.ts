@@ -1025,7 +1025,7 @@ test('Create a new appointment', async ({ page }) => {
   const fixtures: ExtraFixtures = { patientRows: [], appointmentRows: [] };
   await mockTenantData(page, false, fixtures);
   await signIn(page);
-  await page.getByRole('button', { name: 'Randevular' }).click();
+  await page.getByRole('button', { name: 'Randevular', exact: true }).click();
   await page.getByRole('button', { name: /Yeni Randevu/ }).click();
   await page.getByPlaceholder('Hasta seçin veya arayın...').click();
   await page.getByText('+ 👤 Yeni Hasta Ekle', { exact: true }).click();
@@ -1036,7 +1036,7 @@ test('Create a new appointment', async ({ page }) => {
   expect(fixtures.appointmentRows?.[0].patient_id).toBe(fixtures.patientRows?.[0].id);
   expect(fixtures.appointmentRows?.[0].patient_id).toMatch(/^[0-9a-f-]{36}$/);
   await page.reload();
-  await page.getByRole('button', { name: 'Randevular' }).click();
+  await page.getByRole('button', { name: 'Randevular', exact: true }).click();
   await expect(page.getByText('Yeni Randevu Hastası').first()).toBeVisible();
 });
 
@@ -1399,14 +1399,18 @@ test('Open an appointment from the list and review details', async ({ page }) =>
 });
 
 test('Use quick segments to switch patient directory views', async ({ page }) => {
+  const in2Days = new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10);
+  const in20Days = new Date(Date.now() + 86400000 * 20).toISOString().slice(0, 10);
   await mockTenantData(page, false, {
     patientRows: [
       { id: 'p-seg-1', organization_id: orgId, branch_id: branchId, first_name: 'Ali', last_name: 'Aktif', patient_status: 'Müşteri', phone: '05550001111', deleted_at: null },
       { id: 'p-seg-2', organization_id: orgId, branch_id: branchId, first_name: 'Can', last_name: 'Cihaz', patient_status: 'Müşteri', current_device: 'Phonak L90', phone: '05550002222', deleted_at: null },
       { id: 'p-seg-3', organization_id: orgId, branch_id: branchId, first_name: 'Riza', last_name: 'Randevu', patient_status: 'Müşteri', phone: '05550003333', deleted_at: null },
+      { id: 'p-seg-4', organization_id: orgId, branch_id: branchId, first_name: 'Uzak', last_name: 'Randevu', patient_status: 'Müşteri', phone: '05550004444', deleted_at: null },
     ],
     appointmentRows: [
-      { id: 'apt-seg-3', organization_id: orgId, branch_id: branchId, patient_id: 'p-seg-3', date: '2026-10-20', time: '10:00', status: 'Bekliyor', type: 'Kontrol' },
+      { id: 'apt-seg-3', organization_id: orgId, branch_id: branchId, patient_id: 'p-seg-3', date: in2Days, time: '10:00', status: 'Bekliyor', type: 'Kontrol' },
+      { id: 'apt-seg-4', organization_id: orgId, branch_id: branchId, patient_id: 'p-seg-4', date: in20Days, time: '11:00', status: 'Bekliyor', type: 'Kontrol' },
     ],
   });
   await signIn(page);
@@ -1418,6 +1422,7 @@ test('Use quick segments to switch patient directory views', async ({ page }) =>
   await page.getByRole('button', { name: 'Randevusu Olan' }).click();
   await expect(page.getByText('Sonuç bulunamadı')).not.toBeVisible();
   await expect(page.getByText('Riza Randevu')).toBeVisible();
+  await expect(page.getByText('Uzak Randevu')).not.toBeVisible();
 });
 
 test('Select a multi-branch organization and enter consolidated workspace', async ({ page }) => {
@@ -1509,7 +1514,7 @@ test('Search for a stock item', async ({ page }) => {
 test('Filter the patient directory by status and appointment context', async ({ page }) => {
   await mockTenantData(page, false, {
     patientRows: [
-      { id: 'p-match-1', organization_id: orgId, branch_id: branchId, first_name: 'Randevusu', last_name: 'Var', phone: '05550001001', patient_status: 'Müşteri', last_visit: '2026-10-06', deleted_at: null },
+      { id: 'p-match-1', organization_id: orgId, branch_id: branchId, first_name: 'Randevusu', last_name: 'Var', phone: '05550001001', patient_status: 'Müşteri', current_device: 'Phonak L90', last_visit: '2026-10-06', deleted_at: null },
       { id: 'p-nomatch-2', organization_id: orgId, branch_id: branchId, first_name: 'Randevusu', last_name: 'Yok1', phone: '05550001002', patient_status: 'Müşteri', last_visit: null, deleted_at: null },
       { id: 'p-nomatch-3', organization_id: orgId, branch_id: branchId, first_name: 'Randevusu', last_name: 'Yok2', phone: '05550001003', patient_status: 'Müşteri', last_visit: null, deleted_at: null },
     ],
@@ -1521,8 +1526,11 @@ test('Filter the patient directory by status and appointment context', async ({ 
   await page.getByRole('button', { name: 'Hastalar' }).click();
   await expect(page.getByText('Var')).toBeVisible();
   await expect(page.getByText('Yok1')).toBeVisible();
+  const deviceSelect = page.getByRole('combobox', { name: 'Cihaz durumu filtresi' });
+  await deviceSelect.selectOption('Cihaz kullanıyor');
   const dateInput = page.getByTitle('Tarih aralığı');
   await dateInput.fill('2026-10-06');
+  await page.getByRole('button', { name: 'Ara', exact: true }).click();
   await expect(page.getByText('Var')).toBeVisible();
   await expect(page.getByText('Yok1')).not.toBeVisible();
   await expect(page.getByText('Yok2')).not.toBeVisible();

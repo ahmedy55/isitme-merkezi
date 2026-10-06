@@ -312,9 +312,11 @@ export default function AppointmentsPage() {
   };
 
   const timelineSlots = useMemo<ShowcaseSlot[]>(() => {
-    const liveForDay = visibleAppointments.filter(a => a.date === selectedDateStr);
+    const liveForDay = dateInputVal
+      ? visibleAppointments.filter(a => a.date === dateInputVal)
+      : visibleAppointments;
     return liveForDay.map(aptToSlot);
-  }, [selectedDateStr, visibleAppointments, patientsList]);
+  }, [dateInputVal, visibleAppointments, patientsList]);
 
   const calendarStatusDots = useMemo(() => {
     const colorsByDate = new Map<string, Set<string>>();
@@ -331,7 +333,9 @@ export default function AppointmentsPage() {
     return colorsByDate;
   }, [visibleAppointments]);
 
-  const selectedDayAppointments = filterAppointmentsForDay(visibleAppointments, selectedDateStr);
+  const selectedDayAppointments = dateInputVal
+    ? filterAppointmentsForDay(visibleAppointments, dateInputVal)
+    : visibleAppointments;
   const selectedDateScopedAppointments = filterAppointmentsForDay(scopedAppointments, selectedDateStr);
   const todayDateStr = formatCalendarDate(getIstanbulDate(serverNow));
   const todaySummaryAppointments = appointmentsList.filter(appointment =>
@@ -1293,6 +1297,16 @@ export default function AppointmentsPage() {
           onClose={() => { setShowAddModal(false); setNewAppointmentPatientId(null); }}
           onSave={async (newApt) => {
             await addAppointment(newApt);
+            if (newApt.date) {
+              const parts = newApt.date.split('-').map(Number);
+              if (parts[0] && parts[1]) {
+                const nextDate = new Date(parts[0], parts[1] - 1, parts[2] || 1, 12);
+                setCurrentDate(nextDate);
+                setDateInputVal(newApt.date);
+                setCalendarViewMonth(parts[1] - 1);
+                setCalendarViewYear(parts[0]);
+              }
+            }
             setShowAddModal(false);
             setNewAppointmentPatientId(null);
           }}

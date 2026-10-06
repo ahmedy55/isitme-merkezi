@@ -417,7 +417,15 @@ export default function PatientsPage() {
     stockList.filter(item => item.assignedPatientId).map(item => [item.assignedPatientId as string, item])
   ), [stockList]);
 
-  const patientHasDevice = useCallback((patient: Patient) => Boolean(patient.currentDevice || assignedStockByPatient.has(patient.id)), [assignedStockByPatient]);
+  const patientHasDevice = useCallback((patient: Patient) => Boolean(
+    patient.currentDevice ||
+    (patient as any).current_device ||
+    (patient as any).device ||
+    (patient as any).deviceModel ||
+    (patient as any).currentDeviceModel ||
+    assignedStockByPatient.has(patient.id) ||
+    stockList.some(item => item.assignedPatientId === patient.id)
+  ), [assignedStockByPatient, stockList]);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -555,23 +563,41 @@ export default function PatientsPage() {
       const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
       const matchBranch = filterBranch === 'Tümü' || p.branchId === filterBranch;
       const hasDevice = patientHasDevice(p);
-      const matchDevice = filterDevice === 'Tümü' || (filterDevice === 'Cihaz kullanıyor' ? (hasDevice || Boolean(p.currentDevice)) : (!hasDevice && !p.currentDevice));
-      const patientAppointments = branchAppointments.filter(appointment =>
-        (appointment.patientId ? appointment.patientId === p.id : appointment.patientName === `${p.firstName} ${p.lastName}`) &&
-        !['İptal', 'Gelmedi'].includes(appointment.status)
-      );
-      const hasUpcomingAppointment = patientAppointments.some(appointment =>
-        appointment.date >= new Date().toISOString().slice(0, 10)
-      );
-      const hasAnyAppointment = patientAppointments.length > 0;
+      const matchDevice = filterDevice === 'Tümü' || (filterDevice === 'Cihaz kullanıyor' ? hasDevice : !hasDevice);
+      
+      const pId = p.id;
+      const pFullName = `${p.firstName || (p as any).first_name || ''} ${p.lastName || (p as any).last_name || ''}`.trim().toLowerCase();
+      const patientAppointments = appointmentsList.filter(appointment => {
+        const aptPatientId = appointment.patientId || (appointment as any).patient_id;
+        const aptPatientName = (appointment.patientName || (appointment as any).patient_name || '').trim().toLowerCase();
+        const matchesThisPatient = (aptPatientId && aptPatientId === pId) || (aptPatientName && aptPatientName === pFullName);
+        return matchesThisPatient && !['İptal', 'Gelmedi'].includes(appointment.status);
+      });
+
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const next7Days = new Date(now);
+      next7Days.setDate(next7Days.getDate() + 7);
+      const next7DaysStr = `${next7Days.getFullYear()}-${String(next7Days.getMonth() + 1).padStart(2, '0')}-${String(next7Days.getDate()).padStart(2, '0')}`;
+
+      const hasUpcoming7DaysAppointment = patientAppointments.some(appointment => {
+        const d = appointment.date || (appointment as any).date;
+        return d && d >= todayStr && d <= next7DaysStr;
+      });
+
+      const hasUpcomingAppointment = patientAppointments.some(appointment => {
+        const d = appointment.date || (appointment as any).date;
+        return d && d >= todayStr;
+      });
+
       const matchAppointment = filterAppointment === 'Tümü' ||
-        (filterAppointment === 'Randevusu olan' ? (hasUpcomingAppointment || hasAnyAppointment) : (!hasUpcomingAppointment && !hasAnyAppointment));
+        (filterAppointment === 'Randevusu olan' ? (hasUpcomingAppointment || patientAppointments.length > 0) : (!hasUpcomingAppointment && patientAppointments.length === 0));
 
       const statusStr = (p.patientStatus as string) || '';
       const matchQuickFilter = quickFilter === 'Tümü' ||
         (quickFilter === 'Aktif' && ['Müşteri', 'Satış Hastası', 'Aktif'].includes(statusStr)) ||
-        (quickFilter === 'Cihaz Kullanan' && (hasDevice || Boolean(p.currentDevice))) ||
-        (quickFilter === 'Randevusu Olan' && (hasUpcomingAppointment || hasAnyAppointment)) ||
+        (quickFilter === 'Cihaz Kullanan' && hasDevice) ||
+        (quickFilter === 'Randevusu Olan' && hasUpcoming7DaysAppointment) ||
         (quickFilter === 'Recall Bekleyen' && (p.sgkStatus === 'Yenileme Hakkı Var' || statusStr === 'Takip' || recallList.some(r => r.patientId === p.id && r.status !== 'Tamamlandı'))) ||
         (quickFilter === 'Son 3 Ayda Gelen' && Boolean((p.createdAt || p.lastVisit || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 90); return date.toISOString().slice(0, 10); })())) ||
         (quickFilter === 'Yeni Hastalar' && Boolean((p.createdAt || '') >= (() => { const date = new Date(); date.setDate(date.getDate() - 30); return date.toISOString().slice(0, 10); })())) ||
@@ -581,8 +607,17 @@ export default function PatientsPage() {
       let matchDate = true;
       if (filterStartDate || filterEndDate) {
         const hasMatchingAptDate = patientAppointments.some(a => {
-          if (filterStartDate && a.date < filterStartDate) return false;
-          if (filterEndDate && a.date > filterEndDate) return false;
+          const aptDate = a.date || (a as any).date;
+          if (!aptDate) return false;
+          if (filterStartDate && filterEndDate) {
+            return aptDate >= filterStartDate && aptDate <= filterEndDate;
+          }
+          if (filterStartDate) {
+            return aptDate === filterStartDate || aptDate.startsWith(filterStartDate);
+          }
+          if (filterEndDate) {
+            return aptDate <= filterEndDate;
+          }
           return true;
         });
         matchDate = hasMatchingAptDate;
@@ -590,7 +625,7 @@ export default function PatientsPage() {
       
       return matchSearch && matchLoss && matchStatus && matchSource && matchBranch && matchDevice && matchAppointment && matchQuickFilter && matchDate;
     });
-  }, [branchFilteredPatients, branchAppointments, stockList, patientHasDevice, debouncedSearch, filterLoss, filterStatus, filterSource, filterBranch, filterDevice, filterAppointment, quickFilter, filterStartDate, filterEndDate, recallList]);
+  }, [branchFilteredPatients, appointmentsList, stockList, patientHasDevice, debouncedSearch, filterLoss, filterStatus, filterSource, filterBranch, filterDevice, filterAppointment, quickFilter, filterStartDate, filterEndDate, recallList]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
@@ -843,7 +878,9 @@ export default function PatientsPage() {
                 type="button"
                 className="btn btn-primary btn-sm"
                 style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, fontSize: '0.78rem', borderRadius: 9, whiteSpace: 'nowrap', background: '#12232b', borderColor: '#12232b', color: '#fff' }}
-                onClick={() => { /* search triggers automatically via debounce */ }}
+                onClick={() => {
+                  addToast({ type: 'info', message: 'Filtreler uygulandı.' });
+                }}
               >
                 <IconSearch size={14} /> Ara
               </button>
