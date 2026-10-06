@@ -76,7 +76,16 @@ export const getActiveOrgId = async (): Promise<string | null> => {
 // ═══════════════════════════════════════════════
 // 1. Patients (Hastalar)
 // ═══════════════════════════════════════════════
-export const dbFetchPatients = async () => {
+export const dbDecryptPatientTc = async (patientId: string): Promise<string> => {
+  return executeDbQuery(async () => {
+    if (!patientId) return '';
+    const { data: tcRows, error } = await supabase.rpc('decrypt_patient_tcs', { p_patient_ids: [patientId] });
+    if (error) throw error;
+    return tcRows?.[0]?.tc || '';
+  }, 'dbDecryptPatientTc');
+};
+
+export const dbFetchPatients = async (options?: { decryptTcs?: boolean }) => {
   return executeDbQuery(async () => {
     const rows = await fetchAllPages((from, to) => supabase
       .from('patients')
@@ -87,15 +96,25 @@ export const dbFetchPatients = async () => {
       .range(from, to));
 
     const tcByPatientId = new Map<string, string>();
-    for (const batch of inBatches(rows.map(patient => patient.id), 250)) {
-      const { data: tcRows, error } = await supabase.rpc('decrypt_patient_tcs', { p_patient_ids: batch });
-      if (error) throw error;
-      for (const row of tcRows || []) tcByPatientId.set(row.patient_id, row.tc);
+    const shouldDecrypt = options?.decryptTcs ?? true;
+    
+    if (shouldDecrypt) {
+      for (const batch of inBatches(rows.map(patient => patient.id), 250)) {
+        const { data: tcRows, error } = await supabase.rpc('decrypt_patient_tcs', { p_patient_ids: batch });
+        if (error) throw error;
+        for (const row of tcRows || []) tcByPatientId.set(row.patient_id, row.tc);
+      }
     }
+
     const items = toCamel<any[]>(rows);
-    return items.map(p => ({ ...p, tc: tcByPatientId.get(p.id) || '', timeline: [] }));
+    return items.map(p => ({
+      ...p,
+      tc: shouldDecrypt ? (tcByPatientId.get(p.id) || '') : (p.tc?.startsWith('ENC:') ? '***' : p.tc || ''),
+      timeline: []
+    }));
   }, 'dbFetchPatients');
 };
+
 
 export const dbFetchPatientTimeline = async (patientId: string) => {
   return executeDbQuery(async () => {
@@ -695,7 +714,10 @@ export const dbInsertAuditLog = async (log: any) => {
     const { error } = await supabase
       .from('audit_log')
       .insert([{ ...await writePayload('audit_log',payload), organization_id: orgId }]);
-    if (error) console.error('Audit insert failed',error.code);
+    if (error) {
+      logger.error(`Audit insert failed (${error.code || 'unknown'}): ${error.message}`, undefined, 'Database');
+      throw error;
+    }
   }, 'dbInsertAuditLog');
 };
 

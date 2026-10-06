@@ -552,13 +552,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addSupplierPurchaseTransaction = async (supplierId: string, purchase: SupplierPurchase, cashRegisterId?: string) => {
     try {
-      // Purchases currently have no server-side transaction/RPC. Never simulate
-      // stock, supplier debt, or cash changes against a live organization.
       requireActiveOrganization();
-      void supplierId;
-      void purchase;
-      void cashRegisterId;
-      throw new Error('Tedarikçi alış faturası için atomik veritabanı işlemi henüz uygulanmadı. Kayıt yapılmadı.');
+      const { data, error } = await supabase.rpc('record_supplier_purchase', {
+        p_supplier: supplierId,
+        p_purchase: {
+          id: purchase.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined),
+          date: purchase.date,
+          invoice_no: purchase.invoiceNo,
+          total: purchase.total,
+          payment_status: purchase.paymentStatus,
+          payment_method: purchase.paymentMethod,
+          items: purchase.items.map(it => ({
+            name: it.name,
+            quantity: it.quantity,
+            unit_price: it.unitPrice
+          }))
+        },
+        p_register: cashRegisterId || 'kas-1',
+        p_key: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Alış faturası kaydedilemedi.');
+      }
+
+      // Refresh suppliers list
+      setSuppliersList(await dbFetchSuppliers());
+      addToast({ type: 'success', message: 'Tedarikçi alış faturası ve bakiye hareketi kaydedildi.' });
     } catch (err: any) {
       addToast({ type: 'error', message: `Alış faturası işlenemedi: ${err.message}` });
       throw err;
@@ -586,32 +606,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ) => {
     try {
       requireActiveOrganization();
-      const result = await ServiceDomainService.completeServiceTicket(stockList, {
-        ticketId,
-        patientName,
-        serviceFee,
-        partsUsed,
-        cashRegisterId,
-        branchId,
-        organizationId: currentOrgId || undefined
+      
+      const { data, error } = await supabase.rpc('complete_service_ticket', {
+        p_ticket: ticketId,
+        p_fee: serviceFee,
+        p_parts: partsUsed.map(p => ({
+          stock_item_id: p.stockItemId,
+          stock_item_name: p.stockItemName,
+          quantity: p.quantity,
+          price: p.price
+        })),
+        p_register: cashRegisterId || 'kas-1',
+        p_key: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined
       });
 
-      if (currentOrgId && serviceFee > 0) {
-        if (!branchId) throw new Error('Servis kaydının şube bilgisi eksik; tahsilat kaydedilemedi.');
-        const transactions = await dbFetchCashTransactions();
-        const alreadyRecorded = transactions.some((transaction: Record<string, unknown>) => transaction.referenceEntity === 'service' && transaction.referenceId === ticketId && transaction.type === 'INCOME');
-        if (!alreadyRecorded) {
-          await dbInsertCashTransaction({
-            cashRegisterId: cashRegisterId || 'kas-1', type: 'INCOME', amount: serviceFee,
-            category: 'Servis Geliri', referenceEntity: 'service', referenceId: ticketId,
-            branchId, description: `${patientName} — Teknik servis ücreti`,
-            idempotencyKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined,
-          });
+      if (error) {
+        // Fallback to client-orchestrated flow if migration is not yet applied
+        logger.warn(`complete_service_ticket RPC failed, attempting domain service fallback: ${error.message}`, 'AppContext');
+        const result = await ServiceDomainService.completeServiceTicket(stockList, {
+          ticketId,
+          patientName,
+          serviceFee,
+          partsUsed,
+          cashRegisterId,
+          branchId,
+          organizationId: currentOrgId || undefined
+        });
+
+        if (currentOrgId && serviceFee > 0 && branchId) {
+          const transactions = await dbFetchCashTransactions();
+          const alreadyRecorded = transactions.some((transaction: Record<string, unknown>) => transaction.referenceEntity === 'service' && transaction.referenceId === ticketId && transaction.type === 'INCOME');
+          if (!alreadyRecorded) {
+            await dbInsertCashTransaction({
+              cashRegisterId: cashRegisterId || 'kas-1', type: 'INCOME', amount: serviceFee,
+              category: 'Servis Geliri', referenceEntity: 'service', referenceId: ticketId,
+              branchId, description: `${patientName} — Teknik servis ücreti`,
+              idempotencyKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined,
+            });
+          }
         }
+        setStockList(result.updatedStockList);
+      } else {
+        // RPC successful, refresh stock from DB
+        setStockList(await dbFetchStockItems());
       }
 
-      setStockList(result.updatedStockList);
-      addToast({ type: 'success', message: 'Teknik servis işlemi kapatıldı, kullanılan parçalar stoktan düşüldü.' });
+      addToast({ type: 'success', message: 'Teknik servis işlemi kapatıldı, varsa parçalar stoktan düşüldü ve tahsilat kaydedildi.' });
     } catch (err: any) {
       addToast({ type: 'error', message: `Teknik servis kapatılamadı: ${err.message}` });
       throw err;

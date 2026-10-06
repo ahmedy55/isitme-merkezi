@@ -1,15 +1,18 @@
 import { supabase } from '../lib/supabase';
+import { dbInsertAuditLog } from '../lib/database';
+import { logger } from '../lib/logger';
 
 export interface AuditLogPayload {
   organizationId?: string | null;
   branchId?: string | null;
   userId?: string | null;
+  userName?: string | null;
   action: string;
-  entity: string;
+  module?: string;
+  description?: string;
+  entity?: string;
   entityId?: string | null;
   details?: Record<string, any>;
-  ip?: string;
-  userAgent?: string;
 }
 
 export class AuditService {
@@ -17,25 +20,20 @@ export class AuditService {
    * Log an event to system audit log
    */
   static async log(payload: AuditLogPayload): Promise<void> {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      organization_id: payload.organizationId || null,
-      branch_id: payload.branchId || null,
-      user_id: payload.userId || 'system',
-      action: payload.action,
-      entity: payload.entity,
-      entity_id: payload.entityId || null,
-      details: payload.details ? JSON.stringify(payload.details) : null,
-      ip: payload.ip || 'client-side',
-      user_agent: typeof window !== 'undefined' ? window.navigator.userAgent : 'server-side'
-    };
+    const details = payload.details ? JSON.stringify(payload.details) : undefined;
+    const description = payload.description || (payload.entity ? `${payload.entity}: ${payload.action}` : payload.action);
+    const module = payload.module || (payload.entity === 'branch' ? 'Şubeler' : 'Sistem');
 
     try {
-      if (payload.organizationId) {
-        await supabase.from('audit_log').insert([logEntry]);
-      }
-    } catch {
-      // Audit failures must not leak payloads or database errors into browser logs.
+      await dbInsertAuditLog({
+        action: payload.action,
+        module,
+        description,
+        details,
+        userName: payload.userName
+      });
+    } catch (err: any) {
+      logger.warn(`Audit log kaydı oluşturulamadı: ${err?.message || err}`, 'AuditService');
     }
   }
 
@@ -51,9 +49,11 @@ export class AuditService {
     await this.log({
       userId,
       organizationId,
-      action: 'CHANGE_BRANCH',
-      entity: 'branch',
+      action: 'Şube Değişikliği',
+      module: 'Şubeler',
+      description: `Kullanıcı şube filtresini değiştirdi: ${fromBranch} -> ${toBranch}`,
       details: { fromBranch, toBranch }
     });
   }
 }
+

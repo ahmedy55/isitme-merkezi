@@ -29,5 +29,9 @@ jobs:
       - name: Run Vitest Unit Tests
         run: npm run test
 
+      - name: Run TypeScript Type Check
+        run: npm run typecheck
+
       - name: Next.js Production Build Verification
         run: npm run build
+
