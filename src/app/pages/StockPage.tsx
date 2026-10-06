@@ -80,6 +80,13 @@ export default function StockPage() {
   const [adjustmentQty, setAdjustmentQty] = useState(1);
   const [adjustmentType, setAdjustmentType] = useState<'artir' | 'azalt'>('artir');
   const [adjustmentReason, setAdjustmentReason] = useState('Sayım Düzeltmesi');
+  const [isAdjustingStock, setIsAdjustingStock] = useState(false);
+  const [adjustmentError, setAdjustmentError] = useState('');
+
+  const openStockAdjustment = () => {
+    setAdjustmentError('');
+    setShowAdjustmentModal(true);
+  };
 
   // New Item Form
   const [newItemForm, setNewItemForm] = useState({
@@ -326,13 +333,21 @@ export default function StockPage() {
 
   // Stock Adjustment
   const handleStockAdjustment = async () => {
-    if (!activeItem) return;
+    if (!activeItem || isAdjustingStock) return;
+    if (!Number.isInteger(adjustmentQty) || adjustmentQty < 1) {
+      setAdjustmentError('Hareket miktarı en az 1 adet tam sayı olmalıdır.');
+      return;
+    }
     const change = adjustmentType === 'artir' ? adjustmentQty : -adjustmentQty;
     if (change < 0 && activeItem.quantity + change < 0) {
-      addToast({ type: 'error', message: 'Stok miktarı sıfırın altına düşemez.' });
+      const message = 'Stok miktarı sıfırın altına düşemez.';
+      setAdjustmentError(message);
+      addToast({ type: 'error', message });
       return;
     }
     const newQty = activeItem.quantity + change;
+    setAdjustmentError('');
+    setIsAdjustingStock(true);
     try {
       await adjustStockItem(activeItem.id, change, adjustmentReason, 'Manuel işlem');
       setActiveItem({
@@ -344,9 +359,21 @@ export default function StockPage() {
         },
       });
       setShowAdjustmentModal(false);
+      if (drawerTab === 'hareketler') {
+        try {
+          const movements = await dbFetchStockMovements(activeItem.id);
+          setStockMovements(movements as typeof stockMovements);
+        } catch {
+          addToast({ type: 'info', message: 'Stok güncellendi; hareket geçmişi yenilenemedi. Geçmiş sekmesini yeniden açın.' });
+        }
+      }
       addToast({ type: 'success', message: `${activeItem.name} stok adedi ${newQty} olarak güncellendi.` });
-    } catch {
-      //
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Stok hareketi kaydedilemedi. Lütfen tekrar deneyin.';
+      setAdjustmentError(message);
+      addToast({ type: 'error', message });
+    } finally {
+      setIsAdjustingStock(false);
     }
   };
 
@@ -526,7 +553,7 @@ export default function StockPage() {
           <button
             className={styles.btnCategoryAction}
             onClick={() => {
-              if (activeItem) setShowAdjustmentModal(true);
+              if (activeItem) openStockAdjustment();
               else addToast({ type: 'info', message: 'Lütfen tablodan bir ürün seçin.' });
             }}
           >
@@ -763,7 +790,7 @@ export default function StockPage() {
                                       event.stopPropagation();
                                       setActiveActionMenuId(null);
                                       setActiveItem(item);
-                                      setShowAdjustmentModal(true);
+                                      openStockAdjustment();
                                     }}
                                   >
                                     ⇄ Stok Hareketi Ekle
@@ -987,7 +1014,7 @@ export default function StockPage() {
                     <div className={styles.quickActionsGrid}>
                       <button
                         className={styles.quickActionBtn}
-                        onClick={() => setShowAdjustmentModal(true)}
+                        onClick={openStockAdjustment}
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="17 1 21 5 17 9" />
@@ -1387,9 +1414,12 @@ export default function StockPage() {
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-              <button className={styles.btnClear} onClick={() => setShowAdjustmentModal(false)}>Vazgeç</button>
-              <button className={styles.btnPrimaryAction} onClick={handleStockAdjustment}>Hareketi Uygula</button>
+              <button type="button" className={styles.btnClear} onClick={() => setShowAdjustmentModal(false)}>Vazgeç</button>
+              <button type="button" className={styles.btnPrimaryAction} onClick={() => void handleStockAdjustment()} disabled={isAdjustingStock} aria-busy={isAdjustingStock}>
+                {isAdjustingStock ? 'Kaydediliyor…' : 'Hareketi Uygula'}
+              </button>
             </div>
+            {adjustmentError && <div role="alert" style={{ padding: '0 20px 16px', color: '#b91c1c', fontSize: 13 }}>{adjustmentError}</div>}
           </div>
         </div>
       )}

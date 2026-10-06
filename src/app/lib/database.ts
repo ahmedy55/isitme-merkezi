@@ -407,7 +407,12 @@ export const dbAdjustStockItem = async (itemId: string, delta: number, reason: s
       p_notes: notes,
       p_is_loss: isLoss,
     });
-    if (error) throw new DatabaseError('Stok hareketi kaydedilemedi.', error);
+    if (error) {
+      const message = typeof error.message === 'string' && error.message.trim()
+        ? error.message.trim()
+        : 'Stok hareketi kaydedilemedi. Lütfen tekrar deneyin.';
+      throw new DatabaseError(message, error);
+    }
     return toCamel<any>(data);
   }, 'dbAdjustStockItem');
 };

@@ -13,6 +13,7 @@ const corsHeaders = {
 
 type ExtraFixtures = {
   stockRows?: Record<string, unknown>[];
+  stockMovementRows?: Record<string, unknown>[];
   patientRows?: Record<string, unknown>[];
   recallRows?: Record<string, unknown>[];
   recallInsertBodies?: Record<string, unknown>[];
@@ -25,6 +26,7 @@ type ExtraFixtures = {
   paymentRows?: Record<string, unknown>[];
   paymentInsertBodies?: Record<string, unknown>[];
   failStockInsert?: boolean;
+  failStockAdjustment?: boolean;
   cashBranchIds?: string[];
   expenseBranchIds?: string[];
   invoiceBranchIds?: string[];
@@ -112,11 +114,41 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     }
 
     if (table === 'adjust_stock_item') {
-      const body = route.request().postDataJSON() as { p_item: string; p_delta: number };
+      const body = route.request().postDataJSON() as { p_item: string; p_delta: number; p_reason: string; p_notes?: string; p_is_loss?: boolean };
+      if (fixtures.failStockAdjustment) {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          headers: corsHeaders,
+          body: JSON.stringify({ code: 'P0001', message: 'Stock item is unavailable in this branch' }),
+        });
+        return;
+      }
       const product = fixtures.stockRows?.find(row => row.id === body.p_item);
       const updated = product ? { ...product, quantity: Number(product.quantity || 0) + body.p_delta } : null;
+      if (product && updated) {
+        Object.assign(product, updated);
+        fixtures.stockMovementRows = [{
+          id: '78787878-7878-4787-8787-787878787878',
+          organization_id: orgId,
+          branch_id: product.branch_id,
+          stock_item_id: product.id,
+          stock_item_name: product.name,
+          type: body.p_is_loss ? 'LOSS' : 'ADJUSTMENT',
+          quantity_change: body.p_delta,
+          unit_price: product.price || 0,
+          reference_entity: 'adjustment',
+          reference_id: product.id,
+          notes: `${body.p_reason}${body.p_notes ? `: ${body.p_notes}` : ''}`,
+          created_at: new Date().toISOString(),
+          branches: { name: 'QA Şube' },
+        }, ...(fixtures.stockMovementRows || [])];
+      }
       await route.fulfill({ status: 200, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify(updated) });
       return;
+    }
+    if (table === 'stock_movements') {
+      rows = fixtures.stockMovementRows || [];
     }
     if (table === 'stock_items') {
       if (route.request().method() === 'POST') {
@@ -302,7 +334,7 @@ test('ürün kaydı reddedildiğinde gerçek sunucu doğrulama hatası form içi
   await expect(page.getByRole('heading', { name: 'Yeni Ürün / Stok Kartı Ekle' })).toBeVisible();
 });
 
-test('stok hareketi delta olarak kaydedilir ve satır/drawer miktarı anında güncellenir', async ({ page }) => {
+test('stok hareketi delta ve hareket geçmişi kaydedilir, satır/drawer miktarı anında güncellenir', async ({ page }) => {
   await mockTenantData(page, false, { stockRows: [stockFixture] });
   await signIn(page);
   await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
@@ -312,8 +344,28 @@ test('stok hareketi delta olarak kaydedilir ve satır/drawer miktarı anında g�
   await page.getByText('Hareket Miktarı (Adet)').locator('..').locator('input').fill('3');
   await page.getByRole('button', { name: 'Hareketi Uygula' }).click();
   await expect(row).toContainText('3');
+  await expect(page.getByText('E2E Test Cihazı stok adedi 3 olarak güncellendi.')).toBeVisible();
+  await page.getByRole('button', { name: 'Hareketler', exact: true }).click();
+  await expect(page.getByText('+3 Adet')).toBeVisible();
+  await expect(page.getByText('Sayım Düzeltmesi: Manuel işlem')).toBeVisible();
+  await page.getByRole('button', { name: 'Stok', exact: true }).click();
+  await expect(page.getByText('3 Adet')).toBeVisible();
   await page.getByPlaceholder('Ürün adı, marka, seri no veya barkod ile ara...').fill('3 Adet');
   await expect(row).toBeVisible();
+});
+
+test('stok hareketi RPC hatası görünür olur ve başarısız güncelleme miktarı değiştirmez', async ({ page }) => {
+  await mockTenantData(page, false, { stockRows: [{ ...stockFixture, quantity: 1 }], failStockAdjustment: true });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
+  const row = page.getByRole('row').filter({ hasText: 'E2E Test Cihazı' });
+  await row.getByTitle('İşlemler').click();
+  await page.getByRole('button', { name: /Stok Hareketi Ekle/ }).click();
+  await page.getByText('Hareket Miktarı (Adet)').locator('..').locator('input').fill('3');
+  await page.getByRole('button', { name: 'Hareketi Uygula' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Stock item is unavailable in this branch' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hareketi Uygula' })).toBeVisible();
+  await expect(row).toContainText('1');
 });
 
 test('envanter seri numarası araması ayraç ve boşluk farklarını normalize eder', async ({ page }) => {
