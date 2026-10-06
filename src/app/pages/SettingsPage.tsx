@@ -13,7 +13,7 @@ import {
 import { IntegrationService } from '../services/IntegrationService';
 
 export default function SettingsPage() {
-  const { addToast, currentOrgId } = useApp();
+  const { addToast, currentOrgId, currentUser } = useApp();
   const [activeSection, setActiveSection] = useState('firma');
   const [saving, setSaving] = useState(false);
 
@@ -69,10 +69,16 @@ export default function SettingsPage() {
           email: data.email || s.email,
           address: data.address || s.address
         }));
-        if (data.notification_settings) {
+        if (data.efatura_provider) {
+          setFaturaSettings(s => ({ ...s, provider: data.efatura_provider }));
+        } else if (data.notification_settings) {
           try {
             const parsed = typeof data.notification_settings === 'string' ? JSON.parse(data.notification_settings) : data.notification_settings;
             if (Array.isArray(parsed)) setNotifSettings(parsed);
+            else if (parsed && typeof parsed === 'object') {
+              if (Array.isArray(parsed.items)) setNotifSettings(parsed.items);
+              if (parsed.efatura_provider) setFaturaSettings(s => ({ ...s, provider: parsed.efatura_provider }));
+            }
           } catch { /* ignore */ }
         }
       }
@@ -88,13 +94,29 @@ export default function SettingsPage() {
     }
     setSaving(true);
     try {
-      const { error } = await supabase.from('organization_settings').upsert({
+      let { error } = await supabase.from('organization_settings').upsert({
         organization_id: currentOrgId, ...payload, updated_at: new Date().toISOString()
       }, { onConflict: 'organization_id' });
+
+      if (error && (error.message?.includes('efatura_provider') || error.code === 'PGRST204' || error.code === '42703')) {
+        const { efatura_provider, ...fallbackPayload } = payload;
+        const res = await supabase.from('organization_settings').upsert({
+          organization_id: currentOrgId,
+          ...fallbackPayload,
+          efatura_enabled: Boolean(efatura_provider && efatura_provider !== 'Yok'),
+          notification_settings: JSON.stringify({
+            items: notifSettings,
+            efatura_provider: efatura_provider || 'Yok',
+          }),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'organization_id' });
+        error = res.error;
+      }
+
       if (error) throw error;
       addToast({ type: 'success', message: `${label} başarıyla kaydedildi.` });
-    } catch {
-      addToast({ type: 'error', message: `${label} kaydedilemedi. Lütfen tekrar deneyin.` });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `${label} kaydedilemedi: ${err?.message || 'Lütfen tekrar deneyin.'}` });
     } finally {
       setSaving(false);
     }
@@ -160,7 +182,12 @@ export default function SettingsPage() {
   }, 'ÜTS entegrasyon ayarları');
 
   const handleSaveFatura = () => saveSettingsToDb({
-    efatura_provider: faturaSettings.provider
+    efatura_provider: faturaSettings.provider,
+    efatura_enabled: Boolean(faturaSettings.provider && faturaSettings.provider !== 'Yok'),
+    notification_settings: JSON.stringify({
+      items: notifSettings,
+      efatura_provider: faturaSettings.provider,
+    }),
   }, 'E-Fatura sağlayıcı tercihi');
 
   const handleSaveWhatsapp = () => addToast({
@@ -183,8 +210,38 @@ export default function SettingsPage() {
     }
     setSaving(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: securityForm.newPassword });
-      if (error) throw error;
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const refresh = await supabase.auth.refreshSession();
+        session = refresh.data.session;
+      }
+      let success = false;
+      if (session) {
+        const { error } = await supabase.auth.updateUser({ password: securityForm.newPassword });
+        if (!error) {
+          success = true;
+        } else if (!error.message.includes('Auth session missing') && !error.message.includes('session missing')) {
+          throw error;
+        }
+      }
+      if (!success) {
+        const token = session?.access_token || '';
+        const res = await fetch('/api/change-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            newPassword: securityForm.newPassword,
+            userId: currentUser?.id
+          })
+        });
+        const resData = await res.json();
+        if (!res.ok || !resData.success) {
+          throw new Error(resData.error || 'Şifre güncellenemedi.');
+        }
+      }
       addToast({ type: 'success', message: 'Şifreniz başarıyla güncellendi.' });
       setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: any) {

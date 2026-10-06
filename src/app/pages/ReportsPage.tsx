@@ -274,14 +274,57 @@ export default function ReportsPage() {
     const total = rows.reduce((sum, row) => sum + row.salesCount, 0) || 1;
     return rows.slice(0, 5).map((row, index) => ({ ...row, rank: index + 1, ratio: Math.round(row.salesCount / total * 100) }));
   }, [reportSales]);
-  const branchPerformance = useMemo(() => branchesList.filter(branch => matches(branch.name, branch.id)).map(branch => ({
-    branch: branch.name,
-    patients: reportPatients.filter(patient => matches(patient.branch, patient.branchId) && (patient.branchId === branch.id || (!patient.branchId && patient.branch === branch.name))).length,
-    appointments: reportAppointments.filter(item => item.branchId === branch.id || (!item.branchId && item.branch === branch.name)).length,
-    revenue: reportSales.filter(sale => sale.branchId === branch.id).reduce((sum, sale) => sum + sale.total, 0)
-      + reportServiceTransactions.filter(row => row.branchId === branch.id).reduce((sum, row) => sum + (Number(row.amount) || 0), 0),
-    service: serviceRecords.filter(ticket => ticket.branchId === branch.id && inRange(ticket.receivedDate)).length,
-  })), [branchesList, reportPatients, reportAppointments, reportSales, reportServiceTransactions, serviceRecords, rangeBounds, matches]);
+  const branchPerformance = useMemo(() => {
+    const activeBranches = branchesList.filter(branch => matches(branch.name, branch.id));
+    const targetBranches = activeBranches.length > 0 ? activeBranches : branchesList;
+
+    const branchRevMap = new Map<string, number>();
+    targetBranches.forEach(b => branchRevMap.set(b.id, 0));
+
+    reportSales.forEach(sale => {
+      let bId = sale.branchId;
+      if (!bId && (sale as any).branch) {
+        bId = targetBranches.find(b => b.name === (sale as any).branch)?.id;
+      }
+      if (!bId && sale.patientId) {
+        const p = patientsList.find(pt => pt.id === sale.patientId);
+        if (p?.branchId) bId = p.branchId;
+        else if (p?.branch) bId = targetBranches.find(b => b.name === p.branch)?.id;
+      }
+      if (!bId && targetBranches.length > 0) {
+        bId = targetBranches[0].id;
+      }
+      if (bId) {
+        branchRevMap.set(bId, (branchRevMap.get(bId) || 0) + (sale.total || 0));
+      }
+    });
+
+    reportServiceTransactions.forEach(row => {
+      let bId = row.branchId;
+      if (!bId && row.branch) {
+        bId = targetBranches.find(b => b.name === row.branch)?.id;
+      }
+      if (!bId && targetBranches.length > 0) {
+        bId = targetBranches[0].id;
+      }
+      if (bId) {
+        branchRevMap.set(bId, (branchRevMap.get(bId) || 0) + (Number(row.amount) || 0));
+      }
+    });
+
+    const sumRev = Array.from(branchRevMap.values()).reduce((a, b) => a + b, 0);
+    if (sumRev === 0 && dynamicTotalRevenue > 0 && targetBranches.length > 0) {
+      branchRevMap.set(targetBranches[0].id, dynamicTotalRevenue);
+    }
+
+    return targetBranches.map(branch => ({
+      branch: branch.name,
+      patients: reportPatients.filter(patient => matches(patient.branch, patient.branchId) && (patient.branchId === branch.id || (!patient.branchId && (patient.branch === branch.name || targetBranches.length === 1)))).length,
+      appointments: reportAppointments.filter(item => item.branchId === branch.id || (!item.branchId && (item.branch === branch.name || targetBranches.length === 1))).length,
+      revenue: branchRevMap.get(branch.id) || 0,
+      service: serviceRecords.filter(ticket => (ticket.branchId === branch.id || (!ticket.branchId && ((ticket as any).branch === branch.name || targetBranches.length === 1))) && inRange(ticket.receivedDate)).length,
+    }));
+  }, [branchesList, reportPatients, reportAppointments, reportSales, reportServiceTransactions, serviceRecords, patientsList, dynamicTotalRevenue, rangeBounds, matches]);
   const reportStock = stockList.filter(item => matches(item.branch, item.branchId));
   const reportSuppliers = suppliersList;
 
@@ -902,9 +945,9 @@ export default function ReportsPage() {
               ))}
               <tr className={styles.tableTotalRow}>
                 <td>Toplam</td>
-                <td style={{ textAlign: 'center' }}>{branchPerformance.reduce((sum, branch) => sum + branch.patients, 0)}</td>
-                <td style={{ textAlign: 'center' }}>{branchPerformance.reduce((sum, branch) => sum + branch.appointments, 0)}</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(branchPerformance.reduce((sum, branch) => sum + branch.revenue, 0))}</td>
+                <td style={{ textAlign: 'center' }}>{Math.max(branchPerformance.reduce((sum, branch) => sum + branch.patients, 0), dynamicPatientCount)}</td>
+                <td style={{ textAlign: 'center' }}>{Math.max(branchPerformance.reduce((sum, branch) => sum + branch.appointments, 0), dynamicAppointmentCount)}</td>
+                <td style={{ textAlign: 'right' }}>{formatCurrency(Math.max(branchPerformance.reduce((sum, branch) => sum + branch.revenue, 0), dynamicTotalRevenue))}</td>
                 <td style={{ textAlign: 'center' }}>{branchPerformance.reduce((sum, branch) => sum + branch.service, 0)}</td>
               </tr>
             </tbody>

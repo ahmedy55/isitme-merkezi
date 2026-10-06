@@ -382,6 +382,13 @@ export const dbInsertCashTransaction = async (tx: any) => {
     if (!orgId) throw new DatabaseError('Aktif firma gerekli.');
     
     const { id, ...payload } = toSnake(tx);
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (payload.branch_id === 'br-default' || (payload.branch_id && !UUID_REGEX.test(payload.branch_id))) {
+      const { data: orgBranch } = await supabase.from('branches').select('id').eq('organization_id', orgId).limit(1).maybeSingle();
+      if (orgBranch?.id) {
+        payload.branch_id = orgBranch.id;
+      }
+    }
     const idempotencyKey = payload.idempotency_key || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined);
 
     const { data, error } = await supabase
@@ -834,7 +841,11 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
     const orgId = await getActiveOrgId();
     if (!orgId) throw new DatabaseError('Aktif organizasyon bulunamadı.');
 
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
+    if (!session || (session.expires_at && session.expires_at * 1000 < Date.now() + 60000)) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      if (refreshed.session) session = refreshed.session;
+    }
     const token = session?.access_token || '';
 
     if (!user.branchId && user.branch && user.branch !== 'Tüm Şubeler') {

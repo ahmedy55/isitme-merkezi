@@ -489,7 +489,7 @@ export default function ExpensesPage() {
                         <option value="">Şube seçin</option>
                         {(branchesList.filter(branch => branch.status === 'Aktif').length > 0
                           ? branchesList.filter(branch => branch.status === 'Aktif')
-                          : (branchesList.length > 0 ? branchesList : [{ id: 'br-default', name: 'Merkez', status: 'Aktif' }])
+                          : branchesList
                         ).map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                         {activeBranch.mode === 'all' && <option value="Genel">Genel (Firma ortak gideri)</option>}
                       </select>

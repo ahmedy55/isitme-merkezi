@@ -1085,7 +1085,6 @@ export default function RecallPage() {
                   };
                   try {
                     await addRecallItem(newRecall);
-                    addToast({ type: 'success', message: `${newPatientName.trim()} için hatırlatma başarıyla kaydedildi.` });
                     setShowNewModal(false);
                     setNewPatientId('');
                     setNewPatientName('');

@@ -63,6 +63,7 @@ export default function SgkReceivablesPage() {
   const [pageSize, setPageSize] = useState(10);
   const [selectedDetailInvoice, setSelectedDetailInvoice] = useState<InvoiceRecord | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState<string>('');
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Sync branch with activeBranchId
@@ -182,7 +183,8 @@ export default function SgkReceivablesPage() {
   }, [scopedList, searchTerm, periodFilter]);
   // The payment timeline is a preview of the invoice period selected in the
   // schedule form. Do not keep showing a different period's expected payments.
-  const timelineInvoices = scopedList.filter(invoice => invoice.invoice_month === (periodYearMonth || monthKey()));
+  const activeScheduleKey = selectedCalendarMonth || periodYearMonth || monthKey();
+  const timelineInvoices = scopedList.filter(invoice => invoice.invoice_month === activeScheduleKey || invoice.expected_month === activeScheduleKey);
   const pageCount = Math.max(1, Math.ceil(filteredList.length / pageSize));
   const pagedInvoices = filteredList.slice((tablePage - 1) * pageSize, tablePage * pageSize);
   useEffect(() => setTablePage(1), [searchTerm, periodFilter, pageSize]);
@@ -191,7 +193,7 @@ export default function SgkReceivablesPage() {
   // Dynamic statistics
   const currentMonthKey = monthKey();
   const nextMonthKey = expectedPaymentMonth(currentMonthKey);
-  const paymentTimeline = paymentTimelineMonths(periodYearMonth || currentMonthKey);
+  const paymentTimeline = paymentTimelineMonths(activeScheduleKey);
 
   const thisMonthExpected = scopedList
     .filter(i => i.expected_month === currentMonthKey && i.status === 'Bekliyor')
@@ -615,7 +617,10 @@ export default function SgkReceivablesPage() {
                   </div>
                   <button
                     className={styles.btnViewCalendar}
-                    onClick={() => setShowCalendarModal(true)}
+                    onClick={() => {
+                      setSelectedCalendarMonth(periodYearMonth || currentMonthKey);
+                      setShowCalendarModal(true);
+                    }}
                   >
                     Takvim Gör
                   </button>
@@ -1053,9 +1058,10 @@ export default function SgkReceivablesPage() {
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                 {Array.from({ length: 12 }, (_, idx) => {
-                  const year = Number((periodYearMonth || currentMonthKey).slice(0, 4));
+                  const year = Number((selectedCalendarMonth || periodYearMonth || currentMonthKey).slice(0, 4));
                   const key = `${year}-${String(idx + 1).padStart(2, '0')}`;
-                  const isSelectedMonth = key === currentMonthKey;
+                  const activeSelection = selectedCalendarMonth || periodYearMonth || currentMonthKey;
+                  const isSelectedMonth = key === activeSelection;
                   const monthInvoices = scopedList.filter(invoice => invoice.expected_month === key && invoice.status !== 'Tahsil Edildi');
                   const amount = monthInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
                   const isExpectedPaymentMonth = paymentTimeline.includes(key);
@@ -1063,12 +1069,18 @@ export default function SgkReceivablesPage() {
                     <div
                       key={key}
                       data-payment-month={key}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={monthLabel(key)}
+                      onClick={() => setSelectedCalendarMonth(key)}
                       style={{
                         padding: 12,
                         borderRadius: 10,
                         border: isSelectedMonth ? '2px solid #08785b' : '1px solid #e2e8f0',
                         background: isSelectedMonth ? '#f0fdf8' : '#fafbfc',
-                        textAlign: 'center'
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
                       }}
                     >
                       <div style={{ fontWeight: 700, fontSize: 13, color: isSelectedMonth ? '#08785b' : '#1e293b' }}>{monthLabel(key)}</div>
@@ -1084,7 +1096,18 @@ export default function SgkReceivablesPage() {
               </div>
             </div>
             <div className={styles.modalFooter}>
-              <button className={styles.btnSubmit} onClick={() => setShowCalendarModal(false)}>Tamam</button>
+              <button
+                className={styles.btnSubmit}
+                onClick={() => {
+                  if (selectedCalendarMonth) {
+                    setPeriodYearMonth(selectedCalendarMonth);
+                    setPeriodFilter(selectedCalendarMonth);
+                  }
+                  setShowCalendarModal(false);
+                }}
+              >
+                Tamam
+              </button>
             </div>
           </div>
         </div>

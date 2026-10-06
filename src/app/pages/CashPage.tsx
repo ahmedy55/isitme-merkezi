@@ -47,8 +47,11 @@ export default function CashPage() {
     const list = branchesList.filter(branch => !(branch as any).archivedAt && (branch.status === 'Aktif' || (branch.status as string) === 'active'));
     if (list.length > 0) return list;
     if (branchesList.length > 0) return branchesList.filter(branch => !(branch as any).archivedAt);
-    return [{ id: 'br-default', name: 'Merkez', status: 'Aktif' as const }];
-  }, [branchesList]);
+    if (activeBranch.mode === 'single' && activeBranch.branchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeBranch.branchId)) {
+      return [{ id: activeBranch.branchId, name: activeBranch.branch?.name || 'Merkez', status: 'Aktif' as const }];
+    }
+    return [];
+  }, [branchesList, activeBranch]);
 
   // Active Main Sub-Tab: 'cash' (Kasa & Tahsilat) or 'expenses' (Masraflar)
   const [mainTab, setMainTab] = useState<'cash' | 'expenses' | 'transfers' | 'reports'>(() => currentPage === 'expenses' ? 'expenses' : 'cash');
@@ -283,9 +286,18 @@ export default function CashPage() {
   const handleCreateDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = Number(depositForm.amount);
-    const branchId = activeBranch.mode === 'single' ? activeBranch.branchId : depositForm.branchId;
-    const branchName = activeBranches.find(branch => branch.id === branchId)?.name;
-    if (!currentOrgId || !branchId || !branchName || !depositForm.account.trim() || amount <= 0) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let branchId = activeBranch.mode === 'single' ? activeBranch.branchId : depositForm.branchId;
+    if (!branchId || !UUID_REGEX.test(branchId)) {
+      const realBranch = branchesList.find(b => UUID_REGEX.test(b.id)) || activeBranches.find(b => UUID_REGEX.test(b.id));
+      if (realBranch) {
+        branchId = realBranch.id;
+      }
+    }
+    const branchName = activeBranches.find(branch => branch.id === branchId)?.name
+      || branchesList.find(b => b.id === branchId)?.name
+      || 'Merkez';
+    if (!currentOrgId || !branchId || !depositForm.account.trim() || amount <= 0) {
       addToast({ type: 'error', message: 'Firma, şube, kasa hesabı ve sıfırdan büyük tutar gerekli.' });
       return;
     }

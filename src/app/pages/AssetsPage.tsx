@@ -74,6 +74,8 @@ export default function AssetsPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferBranchId, setTransferBranchId] = useState('');
+  const [transferNote, setTransferNote] = useState('');
 
   // Form states for new item
   const [newAssetForm, setNewAssetForm] = useState({
@@ -1475,23 +1477,95 @@ export default function AssetsPage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Hedef Şube</label>
-                <select className={styles.filterSelect} style={{ width: '100%' }} defaultValue="">
-                  <option value="" disabled>Şube seçin</option>
-                  {activeBranches.filter(branch => branch.name !== activeItem.branch).map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                <select
+                  className={styles.filterSelect}
+                  style={{ width: '100%' }}
+                  value={transferBranchId}
+                  onChange={e => setTransferBranchId(e.target.value)}
+                  aria-label="Hedef Şube"
+                >
+                  <option value="">Şube seçin</option>
+                  {activeBranches.filter(branch => branch.name !== activeItem.branch && branch.id !== activeItem.branchId).map(branch => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Transfer Notu / Teslim Alan</label>
-                <input placeholder="Teslim alan personel veya oda bilgisi..." className={styles.filterSelect} style={{ width: '100%' }} />
+                <input
+                  placeholder="Teslim alan personel veya oda bilgisi..."
+                  className={styles.filterSelect}
+                  style={{ width: '100%' }}
+                  value={transferNote}
+                  onChange={e => setTransferNote(e.target.value)}
+                />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-              <button className={styles.btnClear} onClick={() => setShowTransferModal(false)}>Vazgeç</button>
+              <button className={styles.btnClear} onClick={() => { setShowTransferModal(false); setTransferBranchId(''); setTransferNote(''); }}>Vazgeç</button>
               <button
                 className={styles.btnNewAsset}
-                onClick={() => {
-                  setShowTransferModal(false);
-                  addToast({ type: 'error', message: 'Demirbaş transfer hareket tablosu bağlı değil; transfer kaydedilmedi.' });
+                onClick={async () => {
+                  if (!transferBranchId) {
+                    addToast({ type: 'warning', message: 'Lütfen hedef şubeyi seçin.' });
+                    return;
+                  }
+                  const targetBranch = activeBranches.find(b => b.id === transferBranchId)
+                    || branchesList.find(b => b.id === transferBranchId);
+                  if (!targetBranch) {
+                    addToast({ type: 'error', message: 'Geçersiz hedef şube.' });
+                    return;
+                  }
+                  try {
+                    const record: AssetRecord = {
+                      id: activeItem.id,
+                      name: activeItem.name,
+                      category: activeItem.category,
+                      serialNo: activeItem.serialNo === '—' ? '' : activeItem.serialNo,
+                      branch: targetBranch.name,
+                      branchId: targetBranch.id,
+                      purchaseDate: toIsoDate(activeItem.purchaseDate),
+                      cost: activeItem.cost,
+                      warrantyExpiry: toIsoDate(activeItem.warrantyExpiry),
+                      lastMaintenance: toIsoDate(activeItem.lastCalibrationDate || ''),
+                      maintenanceIntervalMonths: activeItem.calibrationIntervalMonths || 12,
+                      status: activeItem.status,
+                      notes: activeItem.notes,
+                    };
+                    let saved = record;
+                    if (currentOrgId) {
+                      saved = await saveAsset(record);
+                      try {
+                        await createAssetMaintenance({
+                          assetId: activeItem.id,
+                          branchId: targetBranch.id,
+                          recordType: 'Bakım',
+                          maintenanceDate: new Date().toISOString().slice(0, 10),
+                          provider: targetBranch.name,
+                          reportNumber: 'TRANSFER',
+                          notes: transferNote.trim() ? `Şube Transferi: ${activeItem.branch} → ${targetBranch.name}. Not: ${transferNote.trim()}` : `Şube Transferi: ${activeItem.branch} → ${targetBranch.name}`,
+                        });
+                      } catch (historyErr) {
+                        console.warn('Transfer history record optional error', historyErr);
+                      }
+                    }
+                    const updated: DisplayAsset = {
+                      ...activeItem,
+                      branch: targetBranch.name,
+                      branchId: targetBranch.id,
+                    };
+                    setAssetList(prev => prev.map(item => item.id === updated.id ? updated : item));
+                    setActiveItem(updated);
+                    if (currentOrgId) {
+                      void fetchAssetMaintenance(activeItem.id).then(rows => setMaintenanceHistory(rows)).catch(() => {});
+                    }
+                    setShowTransferModal(false);
+                    setTransferBranchId('');
+                    setTransferNote('');
+                    addToast({ type: 'success', message: `${activeItem.name} başarıyla ${targetBranch.name} şubesine transfer edildi.` });
+                  } catch (err: any) {
+                    addToast({ type: 'error', message: err?.message || 'Demirbaş transfer kaydedilemedi.' });
+                  }
                 }}
               >
                 Transferi Onayla
