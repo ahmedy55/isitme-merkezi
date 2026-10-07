@@ -103,9 +103,12 @@ export async function fetchAssetMaintenance(assetId: string): Promise<AssetMaint
 }
 
 export async function fetchPlannedAssetMaintenance(): Promise<AssetMaintenanceRecord[]> {
+  const organizationId = await getActiveOrgId();
+  if (!organizationId) return [];
   const { data, error } = await supabase
     .from('asset_maintenance_records')
     .select('*')
+    .eq('organization_id', organizationId)
     .eq('status', 'planned')
     .order('maintenance_date', { ascending: true })
     .order('created_at', { ascending: true });

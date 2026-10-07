@@ -461,6 +461,9 @@ export default function AssetsPage() {
         notes: maintenanceForm.notes,
       });
       setMaintenanceHistory(previous => [record, ...previous]);
+      if (record.status === 'Planlandı') {
+        setPlannedMaintenance(previous => [record, ...previous.filter(item => item.id !== record.id)]);
+      }
       if (recordType !== 'Kalibrasyon') {
         const maintenanceDate = new Date(`${toIsoDate(record.maintenanceDate)}T00:00:00`);
         const isFuturePlan = maintenanceDate.getTime() > new Date(new Date().toDateString()).getTime();

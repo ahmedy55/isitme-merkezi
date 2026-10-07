@@ -106,7 +106,7 @@ function SvgDonut({
 }
 
 export default function BranchesPage() {
-  const { addToast, setCurrentPage, branchesList, usersList, patientsList, salesList, auditLogList, currentOrgId, addBranch, addUser, updateUser, deleteUser } = useApp();
+  const { addToast, setCurrentPage, logout, branchesList, usersList, patientsList, salesList, auditLogList, currentOrgId, addBranch, addUser, updateUser, deleteUser } = useApp();
   const { matches } = useBranchScope();
 
   // Active Sub-Tab
@@ -275,7 +275,15 @@ export default function BranchesPage() {
     try {
       await addUser(newStaff);
       setShowAddStaffModal(false);
-    } catch { return; }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || '');
+      if (/geçersiz oturum|oturum doğrulanamadı|unauthorized|token.*expired/i.test(message)) {
+        setShowAddStaffModal(false);
+        await logout();
+        addToast({ type: 'warning', message: 'Oturum doğrulanamadı. Güvenliğiniz için çıkış yapıldı; personel eklemek için yeniden giriş yapın.' });
+      }
+      return;
+    }
     setNewStaffForm({
       firstName: '',
       lastName: '',

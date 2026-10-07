@@ -974,9 +974,9 @@ export default function PatientsPage() {
                 const lastTimeline = (patient.timeline || []).slice(-1)[0];
                 const statusLabel = patient.sgkStatus === 'Aktif' ? 'Aktif'
                   : patient.sgkStatus === 'Yenileme Hakkı Var' ? 'Takipte'
+                  : patient.sgkStatus === 'Pasif' ? 'Pasif'
                   : patient.patientStatus === 'Tamir için gelen' ? 'Serviste'
                   : patient.patientStatus === 'Potansiyel' ? 'Yeni'
-                  : patient.sgkStatus === 'Pasif' ? 'Pasif'
                   : 'Aktif';
                 const statusClass = statusLabel === 'Aktif' ? 'success'
                   : statusLabel === 'Takipte' ? 'warning'

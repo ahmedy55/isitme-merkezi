@@ -1579,9 +1579,13 @@ export function NewAppointmentModal({
     const timeStr = `${hourStr}:${minStr}`;
 
     const linkedPatient = patientsList.find(p => p.id === patientIdFinal);
-    const patientBranch = linkedPatient?.branchId
-      ? activeBranches.find(item => item.id === linkedPatient.branchId)
-      : undefined;
+    const patientBranch = activeBranches.find(item => item.id === linkedPatient?.branchId)
+      || activeBranches.find(item => item.name === linkedPatient?.branch);
+    const patientHasBranch = Boolean(linkedPatient?.branchId || linkedPatient?.branch);
+    if (linkedPatient && patientHasBranch && !patientBranch) {
+      addToast?.({ type: 'error', message: 'Hastanın kayıtlı şubesi aktif şubeler arasında değil. Randevu oluşturmadan önce hastanın şube kaydını güncelleyin.' });
+      return;
+    }
     const defaultBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
     const defaultBranch = activeBranches.find(item => item.id === defaultBranchId) || activeBranches[0];
     // appointments.branch_id must match the selected patient's branch (guard_record_branch).
@@ -1589,7 +1593,7 @@ export function NewAppointmentModal({
     const requestedBranchId = patientBranch?.id
       || (activeBranch.mode === 'single' ? activeBranch.branchId : '')
       || (initialAppointment ? (branch || initialAppointment.branchId) : branch);
-    const assignedBranch = activeBranches.find(item => item.id === requestedBranchId) || defaultBranch;
+    const assignedBranch = patientBranch || activeBranches.find(item => item.id === requestedBranchId) || defaultBranch;
     if (!assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için geçerli bir şube bulunamadı.' }); return; }
     const assignedBranchId = assignedBranch.id;
     setSavingAppointment(true);

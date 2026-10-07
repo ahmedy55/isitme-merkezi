@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency, SaleRecord, Expense } from '../data/mockData';
 import { dbFetchCashTransactions, dbInsertCashTransaction } from '../lib/database';
+import { inferCashPaymentMethod } from '../lib/cashPaymentMethod';
 import styles from './CashPage.module.css';
 
 interface CashMovement {
@@ -150,7 +151,7 @@ export default function CashPage() {
           id: row.id, date: row.createdAt ? new Date(row.createdAt).toLocaleString('tr-TR') : '—', dateKey: row.createdAt?.slice(0, 10),
           account: row.cashRegisterId || '—', type: isOutgoing ? 'Çıkış' : 'Giriş', category: row.category || '—',
           description: row.description || '—', patientOrEntity: sale?.patientName || expense?.createdBy || '—',
-          amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || '—',
+          amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || inferCashPaymentMethod(String(row.cashRegisterId || '')),
           status: 'Tahsil Edildi', branch: branch?.name || row.branch || '—', branchId: row.branchId || branch?.id, referenceEntity: row.referenceEntity, referenceId: row.referenceId,
         };
       });
@@ -754,14 +755,14 @@ export default function CashPage() {
                 <select
                   className={styles.filterSelect}
                   style={{ height: 30, minWidth: 100 }}
-                  value={summaryBranch}
+                  value={summaryBranch === 'Tüm Şubeler' ? summaryBranch : (branchesList.find(branch => branch.id === summaryBranch || branch.name === summaryBranch)?.id || summaryBranch)}
                   onChange={event => {
                     setSummaryBranch(event.target.value);
                     setCashSelectedBranch(event.target.value);
                   }}
                 >
                   <option value="Tüm Şubeler">Tüm Şubeler</option>
-                  {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                  {activeBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
                 </select>
               </div>
 
@@ -836,7 +837,7 @@ export default function CashPage() {
                 }}
               >
                 <option value="Tüm Şubeler">Tüm Şubeler</option>
-                {activeBranches.map(branch => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+                {activeBranches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
               </select>
 
               <select

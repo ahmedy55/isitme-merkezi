@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency } from '../data/mockData';
+import { getDashboardChartPeriod } from '../lib/dashboardDateScope';
 import { fetchServiceTickets, ServiceRecord } from '../repositories/ServiceTicketRepository';
 import styles from './DashboardPage.module.css';
 
@@ -115,7 +116,7 @@ export default function DashboardPage() {
     if (range === 'Bu Yıl') start.setMonth(0, 1);
     setActiveTimeRange(range);
     setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
-    const chartPeriod = range === 'Bu Hafta' ? 'Bu Hafta' : 'Bu Ay';
+    const chartPeriod = getDashboardChartPeriod(start, end);
     setAppointmentChartPeriod(chartPeriod);
     setPatientChartPeriod(chartPeriod);
     addToast({ type: 'info', message: `Zaman aralığı: ${range} seçildi` });
@@ -134,13 +135,16 @@ export default function DashboardPage() {
     }
     setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
     setActiveTimeRange('Özel');
+    const chartPeriod = getDashboardChartPeriod(start, end);
+    setAppointmentChartPeriod(chartPeriod);
+    setPatientChartPeriod(chartPeriod);
     setShowDateModal(false);
     addToast({ type: 'success', message: `Dashboard ${formatDate(start)} - ${formatDate(end)} aralığına göre güncellendi.` });
   };
 
   const monthLabels = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
   const reportYear = today.getFullYear();
-  const weeklyTrend = activeTimeRange === 'Bu Hafta' || activeTimeRange === 'Bugün';
+  const weeklyTrend = comparisonDuration <= 7;
   const chartMonths = weeklyTrend
     ? Array.from({ length: Math.min(7, Math.max(1, comparisonDuration)) }, (_, index) => {
       const date = new Date(selectedRange.start);
@@ -594,10 +598,7 @@ export default function DashboardPage() {
               </span>
               <span>Şubelere Göre Özet</span>
             </div>
-            <select className={styles.miniSelect} defaultValue="Bu Ay">
-              <option value="Bu Ay">Bu Ay</option>
-              <option value="Tüm Dönem">Tüm Dönem</option>
-            </select>
+            <span className={styles.miniSelect} aria-label="Uygulanan tarih aralığı" style={{ display: 'inline-flex', alignItems: 'center' }}>{activeTimeRange}</span>
           </div>
 
           <table className={styles.dashTable}>
@@ -834,7 +835,11 @@ export default function DashboardPage() {
                         else start.setFullYear(2000, 0, 1);
                       }
                       setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
-                      setActiveTimeRange(rangeOption === 'Bugün' ? 'Bugün' : rangeOption.startsWith('Bu Ay') ? 'Bu Ay' : rangeOption.startsWith('Bu Yıl') ? 'Bu Yıl' : 'Özel');
+                      const nextRange = rangeOption === 'Bugün' ? 'Bugün' : rangeOption.startsWith('Bu Ay') ? 'Bu Ay' : rangeOption.startsWith('Bu Yıl') ? 'Bu Yıl' : 'Özel';
+                      setActiveTimeRange(nextRange);
+                      const chartPeriod = getDashboardChartPeriod(start, end);
+                      setAppointmentChartPeriod(chartPeriod);
+                      setPatientChartPeriod(chartPeriod);
                       setShowDateModal(false);
                       addToast({ type: 'info', message: `Tarih aralığı güncellendi: ${rangeOption}` });
                     }}
@@ -856,6 +861,10 @@ export default function DashboardPage() {
                   </label>
                 </div>
               </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, fontSize: 13, color: '#334155' }}>
+                <input type="checkbox" checked={showComparison} onChange={event => setShowComparison(event.target.checked)} />
+                Önceki dönemle karşılaştır
+              </label>
             </div>
             <div className={styles.modalFooter}>
               <button 
