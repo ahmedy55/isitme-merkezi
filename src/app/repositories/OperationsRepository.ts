@@ -4,14 +4,14 @@ import { fetchAllPages, getActiveOrgId } from '../lib/database';
 export interface AssetRecord {
   id: string; name: string; category: string; serialNo: string; branch: string;
   branchId?: string; purchaseDate: string; cost: number; warrantyExpiry: string;
-  lastMaintenance: string; maintenanceIntervalMonths: number; status: string; notes?: string;
+  lastMaintenance: string; maintenanceIntervalMonths: number; status: string; notes?: string; assignedTo?: string;
 }
 const assetFromDb = (r: any): AssetRecord => ({
   id: r.id, name: r.name, category: r.category, serialNo: r.serial_no || '',
   branch: r.branches?.name || '', branchId: r.branch_id, purchaseDate: r.purchase_date || '',
   cost: Number(r.purchase_price || 0), warrantyExpiry: r.warranty_expiry || '',
   lastMaintenance: r.last_maintenance || '', maintenanceIntervalMonths: r.maintenance_interval_months || 12,
-  status: r.status, notes: r.notes || '',
+  status: r.status, notes: r.notes || '', assignedTo: r.assigned_to || '',
 });
 export async function fetchAssets(): Promise<AssetRecord[]> {
   try {
@@ -48,6 +48,7 @@ export async function saveAsset(asset: AssetRecord): Promise<AssetRecord> {
     last_maintenance: asset.lastMaintenance || null,
     maintenance_interval_months: asset.maintenanceIntervalMonths,
     status: asset.status,
+    assigned_to: asset.assignedTo?.trim() || null,
     notes: asset.notes || '',
   };
 

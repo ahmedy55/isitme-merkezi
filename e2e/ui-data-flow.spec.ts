@@ -25,6 +25,7 @@ type ExtraFixtures = {
   serviceInsertBodies?: Record<string, unknown>[];
   failServiceInsert?: boolean;
   invoiceRows?: Record<string, unknown>[];
+  hideInvoiceRowsFromList?: boolean;
   paymentRows?: Record<string, unknown>[];
   paymentInsertBodies?: Record<string, unknown>[];
   saleRpcPayloads?: Record<string, unknown>[];
@@ -39,6 +40,7 @@ type ExtraFixtures = {
   assetWarrantyExpiry?: string | null;
   assetStatus?: string;
   additionalAssetRows?: Record<string, unknown>[];
+  assetUpdateBodies?: Record<string, unknown>[];
   transferRows?: Record<string, unknown>[];
   orgSettings?: Record<string, unknown>;
   memberRows?: Record<string, unknown>[];
@@ -363,7 +365,10 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       };
       if (['POST', 'PATCH', 'PUT'].includes(route.request().method())) {
         const body = route.request().postDataJSON();
-        const payload = Array.isArray(body) ? body[0] : body;
+        const payload = (Array.isArray(body) ? body[0] : body) as Record<string, unknown>;
+        const requestedId = url.searchParams.get('id')?.replace(/^eq\./, '') || String(payload.id || existingAsset.id);
+        fixtures.assetUpdateBodies?.push({ ...payload, id: requestedId });
+        existingAsset.id = requestedId;
         Object.assign(existingAsset, payload);
         if (payload.branch_id) {
           existingAsset.branch_id = payload.branch_id;
@@ -383,7 +388,8 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
     } else if (table === 'suppliers') {
       rows = fixtures.supplierRows || [];
     } else if (table === 'sgk_period_invoices') {
-      rows = fixtures.invoiceRows || [];
+      const isInvoiceNumberLookup = url.searchParams.has('invoice_no');
+      rows = isInvoiceNumberLookup || !fixtures.hideInvoiceRowsFromList ? fixtures.invoiceRows || [] : [];
     } else if (table === 'sgk_payment_records') {
       rows = fixtures.paymentRows || [];
     } else if (table === 'patients') {
@@ -1172,6 +1178,10 @@ test('Review appointment reports and download Excel/CSV files', async ({ page })
   const xlsxDownloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Excel Tablosu (.xlsx) İndir' }).click();
   expect((await xlsxDownloadPromise).suggestedFilename()).toMatch(/\.xlsx$/);
+  await page.getByRole('button', { name: 'Rapor İndir' }).click();
+  const pdfDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: /PDF Yönetici Sunumu/ }).click();
+  expect((await pdfDownloadPromise).suggestedFilename()).toMatch(/\.pdf$/);
 });
 
 test('service status, inspection note and warranty changes persist', async ({ page }) => {
@@ -1307,12 +1317,43 @@ test('Use bulk actions on selected assets', async ({ page }) => {
   await checkboxes.nth(0).check();
   await checkboxes.nth(1).check();
   await page.getByRole('button', { name: 'Toplu İşlemler (2 seçili)' }).click();
+  const menu = page.getByRole('menu', { name: 'Toplu demirbaş işlemleri' });
+  await expect(menu.getByRole('menuitem', { name: 'Toplu Zimmet' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Toplu Kalibrasyon' })).toBeVisible();
+  await menu.getByRole('menuitem', { name: 'Toplu Kalibrasyon' }).click();
   const dialog = page.getByRole('dialog', { name: 'Toplu Kalibrasyon' });
   await expect(dialog).toContainText('2 seçili demirbaş');
   await dialog.getByLabel('Kalibrasyon tarihi').fill('2026-11-05');
   await dialog.getByRole('button', { name: 'Toplu Kalibrasyon Kaydet' }).click();
   await expect(page.getByRole('alert').filter({ hasText: '2 demirbaş için kalibrasyon kaydı oluşturuldu.' })).toBeVisible();
   await expect(dialog).toHaveCount(0);
+});
+
+test('Toplu Zimmet assigns every selected asset and persists the custodian', async ({ page }) => {
+  const assetUpdateBodies: Record<string, unknown>[] = [];
+  await mockTenantData(page, true, {
+    assetUpdateBodies,
+    additionalAssetRows: [{
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', organization_id: orgId, branch_id: branchId,
+      name: 'QA Zimmet İkinci Demirbaş', category: 'Klinik Cihaz', model: 'Test Model 2', serial_no: 'PW-ASSIGN-002',
+      purchase_date: '2026-01-11', purchase_price: 9000, warranty_expiry: '2027-01-11', status: 'Aktif', archived_at: null,
+      branches: { name: 'QA Şube' },
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  const checkboxes = page.locator('table tbody tr input[type="checkbox"]');
+  await checkboxes.nth(0).check();
+  await checkboxes.nth(1).check();
+  await page.getByRole('button', { name: 'Toplu İşlemler (2 seçili)' }).click();
+  await page.getByRole('menuitem', { name: 'Toplu Zimmet' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Toplu Zimmet' });
+  await dialog.getByLabel('Zimmet yapılacak personel').fill('Ayşe Yılmaz');
+  await dialog.getByRole('button', { name: 'Zimmeti Kaydet' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: '2 demirbaş Ayşe Yılmaz kişisine zimmetlendi.' })).toBeVisible();
+  expect(assetUpdateBodies).toHaveLength(2);
+  expect(assetUpdateBodies.map(body => body.assigned_to)).toEqual(['Ayşe Yılmaz', 'Ayşe Yılmaz']);
+  expect(new Set(assetUpdateBodies.map(body => body.id))).toEqual(new Set([assetId, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee']));
 });
 
 test('satır üç nokta menüsü drawer açmadan görüntülenir; satır tıklaması drawer açar', async ({ page }) => {
@@ -1498,6 +1539,7 @@ test('Add an SGK period invoice with a duplicate number shows a clear warning', 
   const invoiceBranchIds: string[] = [];
   await mockTenantData(page, false, {
     invoiceBranchIds,
+    hideInvoiceRowsFromList: true,
     invoiceRows: [{ id: 'duplicate-invoice', organization_id: orgId, branch_id: branchId, invoice_month: '2026-09-01', expected_month: '2026-11-01', invoice_no: 'QA-SGK-3B-202609', amount: 25000, status: 'Bekliyor', created_at: '2026-09-01T12:00:00Z' }],
   });
   await signIn(page);
@@ -1505,7 +1547,7 @@ test('Add an SGK period invoice with a duplicate number shows a clear warning', 
   await page.getByPlaceholder('Örn: QA-SGK-3B-202609').fill('QA-SGK-3B-202609');
   await page.locator('form').filter({ has: page.getByPlaceholder('Örn: QA-SGK-3B-202609') }).locator('input[type="number"]').fill('25000');
   await page.getByRole('button', { name: 'Faturayı Kaydet' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: /fatura numarası bu firmada zaten kayıtlı/i })).toBeVisible();
+  await expect(page.locator('#sgk-invoice-number-error')).toContainText(/fatura numarası bu firmada zaten kayıtlı/i);
   expect(invoiceBranchIds).toHaveLength(0);
 });
 
@@ -1550,6 +1592,7 @@ test('Open cash reports and filter metrics by date range', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
   await page.getByRole('button', { name: 'Kasa raporları' }).click();
+  await expect(page.getByRole('group', { name: 'Rapor Tarih Aralığı' })).toBeVisible();
   const startDate = page.getByLabel('Rapor başlangıç tarihi');
   const endDate = page.getByLabel('Rapor bitiş tarihi');
   await startDate.fill('2026-10-05');

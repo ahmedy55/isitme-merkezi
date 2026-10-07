@@ -23,6 +23,7 @@ interface DisplayAsset {
   warrantyExpiry: string;
   cost: number;
   status: string;
+  assignedTo?: string;
   calibrationIntervalMonths?: number;
   lastCalibrationDate?: string;
   nextCalibrationDate?: string;
@@ -86,6 +87,10 @@ export default function AssetsPage() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showBulkMaintenanceModal, setShowBulkMaintenanceModal] = useState(false);
+  const [showBulkActionsMenu, setShowBulkActionsMenu] = useState(false);
+  const [showBulkAssignmentModal, setShowBulkAssignmentModal] = useState(false);
+  const [bulkAssignee, setBulkAssignee] = useState('');
+  const [savingBulkAssignment, setSavingBulkAssignment] = useState(false);
   const [bulkMaintenanceForm, setBulkMaintenanceForm] = useState({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '' });
   const [savingBulkMaintenance, setSavingBulkMaintenance] = useState(false);
   const [transferBranchId, setTransferBranchId] = useState('');
@@ -131,6 +136,7 @@ export default function AssetsPage() {
               warrantyExpiry: formatDate(r.warrantyExpiry || '') || 'Bilgi girilmemiş',
               cost: Number(r.cost) || 0,
               status: normalizeAssetStatus(r.status),
+              assignedTo: r.assignedTo || '',
               calibrationIntervalMonths: r.maintenanceIntervalMonths || 12,
               lastCalibrationDate: formatDate(r.lastMaintenance || ''),
               nextCalibrationDate: getNextMaintenanceDate(r.lastMaintenance, r.maintenanceIntervalMonths)?.toLocaleDateString('tr-TR') || '—',
@@ -537,6 +543,65 @@ export default function AssetsPage() {
     }
   };
 
+  const handleSaveBulkAssignment = async () => {
+    const selectedAssets = assetList.filter(asset => selectedIds.includes(asset.id));
+    const assignee = bulkAssignee.trim();
+    if (!selectedAssets.length) {
+      addToast({ type: 'warning', message: 'Önce zimmet yapılacak demirbaşları seçin.' });
+      return;
+    }
+    if (!assignee) {
+      addToast({ type: 'warning', message: 'Zimmet yapılacak personelin adını girin.' });
+      return;
+    }
+    if (!currentOrgId) {
+      addToast({ type: 'error', message: 'Aktif firma bağlantısı yok; zimmet kaydedilmedi.' });
+      return;
+    }
+
+    setSavingBulkAssignment(true);
+    const updatedAssets: DisplayAsset[] = [];
+    try {
+      for (const asset of selectedAssets) {
+        const record: AssetRecord = {
+          id: asset.id,
+          name: asset.name,
+          category: asset.category === 'Cihaz' ? 'Klinik Cihaz' : asset.category === 'Bilgisayar' ? 'Bilgisayar & Çevre' : asset.category,
+          serialNo: asset.serialNo === '—' ? '' : asset.serialNo,
+          branch: asset.branch,
+          branchId: asset.branchId,
+          purchaseDate: toIsoDate(asset.purchaseDate),
+          cost: asset.cost,
+          warrantyExpiry: toIsoDate(asset.warrantyExpiry),
+          lastMaintenance: toIsoDate(asset.lastCalibrationDate || ''),
+          maintenanceIntervalMonths: asset.calibrationIntervalMonths || 12,
+          status: asset.status,
+          notes: asset.notes,
+          assignedTo: assignee,
+        };
+        const saved = await saveAsset(record);
+        updatedAssets.push({ ...asset, assignedTo: saved.assignedTo || assignee });
+      }
+      const updatedById = new Map(updatedAssets.map(asset => [asset.id, asset]));
+      setAssetList(previous => previous.map(asset => updatedById.get(asset.id) || asset));
+      setActiveItem(previous => previous ? updatedById.get(previous.id) || previous : previous);
+      setShowBulkAssignmentModal(false);
+      setBulkAssignee('');
+      addToast({ type: 'success', message: `${updatedAssets.length} demirbaş ${assignee} kişisine zimmetlendi.` });
+    } catch (error) {
+      if (updatedAssets.length) {
+        const updatedById = new Map(updatedAssets.map(asset => [asset.id, asset]));
+        setAssetList(previous => previous.map(asset => updatedById.get(asset.id) || asset));
+        setActiveItem(previous => previous ? updatedById.get(previous.id) || previous : previous);
+      }
+      addToast({ type: 'error', message: updatedAssets.length
+        ? `${updatedAssets.length} zimmet kaydedildi; kalanlar kaydedilemedi: ${error instanceof Error ? error.message : 'beklenmeyen hata'}`
+        : `Toplu zimmet kaydedilemedi: ${error instanceof Error ? error.message : 'beklenmeyen hata'}` });
+    } finally {
+      setSavingBulkAssignment(false);
+    }
+  };
+
   const handleCompleteMaintenance = async () => {
     if (!activeItem || !maintenanceToComplete || savingCompletion) return;
     setSavingCompletion(true);
@@ -693,20 +758,28 @@ export default function AssetsPage() {
             Bakım Takvimi
           </button>
 
-          <button
-            className={styles.btnCategoryAction}
-            aria-label={selectedIds.length ? `Toplu İşlemler (${selectedIds.length} seçili)` : 'Toplu İşlemler'}
-            aria-haspopup="dialog"
-            aria-expanded={showBulkMaintenanceModal}
-            aria-controls="bulk-calibration-dialog"
-            onClick={() => setShowBulkMaintenanceModal(true)}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path d="M7 15h10M7 9h10" />
-            </svg>
-            Toplu İşlemler{selectedIds.length ? ` (${selectedIds.length})` : ''}
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              className={styles.btnCategoryAction}
+              aria-label={selectedIds.length ? `Toplu İşlemler (${selectedIds.length} seçili)` : 'Toplu İşlemler'}
+              aria-haspopup="menu"
+              aria-expanded={showBulkActionsMenu}
+              aria-controls="asset-bulk-actions-menu"
+              onClick={() => setShowBulkActionsMenu(open => !open)}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M7 15h10M7 9h10" />
+              </svg>
+              Toplu İşlemler{selectedIds.length ? ` (${selectedIds.length})` : ''}
+            </button>
+            {showBulkActionsMenu && (
+              <div id="asset-bulk-actions-menu" role="menu" aria-label="Toplu demirbaş işlemleri" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 30, minWidth: 200, padding: 6, background: '#fff', border: '1px solid #dbe3ea', borderRadius: 10, boxShadow: '0 10px 24px rgba(15,23,42,.14)' }}>
+                <button type="button" role="menuitem" className={styles.dropdownItem} style={{ width: '100%', textAlign: 'left' }} onClick={() => { setShowBulkActionsMenu(false); setShowBulkAssignmentModal(true); }}>Toplu Zimmet</button>
+                <button type="button" role="menuitem" className={styles.dropdownItem} style={{ width: '100%', textAlign: 'left' }} onClick={() => { setShowBulkActionsMenu(false); setShowBulkMaintenanceModal(true); }}>Toplu Kalibrasyon</button>
+              </div>
+            )}
+          </div>
 
           <button
             className={styles.btnCategoryAction}
@@ -1090,6 +1163,10 @@ export default function AssetsPage() {
                       <div className={styles.infoRow}>
                         <span>Şube</span>
                         <strong>{activeItem.branch}</strong>
+                      </div>
+                      <div className={styles.infoRow}>
+                        <span>Zimmetli Personel</span>
+                        <strong>{activeItem.assignedTo || 'Zimmet kaydı yok'}</strong>
                       </div>
                       <div className={styles.infoRow}>
                         <span>Satın Alma Tarihi</span>
@@ -1476,6 +1553,10 @@ export default function AssetsPage() {
                   onChange={e => setActiveItem({ ...activeItem, name: e.target.value })}
                 />
               </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }} htmlFor="asset-assigned-to">Zimmetli Personel</label>
+                <input id="asset-assigned-to" aria-label="Zimmetli Personel" className={styles.filterSelect} style={{ width: '100%' }} value={activeItem.assignedTo || ''} onChange={e => setActiveItem({ ...activeItem, assignedTo: e.target.value })} placeholder="Personel adı (isteğe bağlı)" />
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 4 }}>Değer (₺)</label>
@@ -1594,6 +1675,7 @@ export default function AssetsPage() {
                     maintenanceIntervalMonths: activeItem.calibrationIntervalMonths || 12,
                     status: activeItem.status,
                     notes: activeItem.notes,
+                    assignedTo: activeItem.assignedTo,
                   };
 
                   let saved = record;
@@ -1631,6 +1713,24 @@ export default function AssetsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showBulkAssignmentModal && (
+        <div role="presentation" onClick={() => !savingBulkAssignment && setShowBulkAssignmentModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', zIndex: 1200, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="bulk-assignment-title" onClick={event => event.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480, padding: 22, display: 'grid', gap: 14, boxShadow: '0 20px 40px rgba(0,0,0,.2)' }}>
+            <div>
+              <h2 id="bulk-assignment-title" style={{ margin: 0, fontSize: 18 }}>Toplu Zimmet</h2>
+              <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: 13 }}>{selectedIds.length ? `${selectedIds.length} seçili demirbaş zimmetlenecek.` : 'İşleme devam etmek için önce tablodan demirbaş seçin.'}</p>
+            </div>
+            <label htmlFor="bulk-assignee" style={{ display: 'grid', gap: 5, fontSize: 13 }}>Zimmet yapılacak personel
+              <input id="bulk-assignee" aria-label="Zimmet yapılacak personel" value={bulkAssignee} onChange={event => setBulkAssignee(event.target.value)} className={styles.filterSelect} placeholder="Personel adı" />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className={styles.btnClear} disabled={savingBulkAssignment} onClick={() => setShowBulkAssignmentModal(false)}>İptal</button>
+              <button type="button" className={styles.btnNewAsset} disabled={savingBulkAssignment || !selectedIds.length || !bulkAssignee.trim()} onClick={() => void handleSaveBulkAssignment()}>{savingBulkAssignment ? 'Kaydediliyor…' : 'Zimmeti Kaydet'}</button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -1838,6 +1938,7 @@ export default function AssetsPage() {
                       maintenanceIntervalMonths: activeItem.calibrationIntervalMonths || 12,
                       status: activeItem.status,
                       notes: activeItem.notes,
+                      assignedTo: activeItem.assignedTo,
                     };
                     let saved = record;
                     if (currentOrgId) {

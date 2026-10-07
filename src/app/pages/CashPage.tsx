@@ -1578,7 +1578,7 @@ export default function CashPage() {
           <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
             Erişiminiz olan şubelerin nakit akışı ve gider analizleri; seçilen tarih aralığına göre.
           </p>
-          <div style={{ display: 'flex', alignItems: 'end', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+          <div role="group" aria-label="Rapor Tarih Aralığı" data-testid="cash-report-date-range" style={{ display: 'flex', alignItems: 'end', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#475569' }}>Başlangıç tarihi
               <input aria-label="Rapor başlangıç tarihi" type="date" value={reportStartDate} max={reportEndDate} onChange={event => setReportStartDate(event.target.value)} className={styles.filterSelect} />
             </label>

@@ -54,6 +54,7 @@ export default function SgkReceivablesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [periodYearMonth, setPeriodYearMonth] = useState(() => monthKey());
   const [invoiceNo, setInvoiceNo] = useState('');
+  const [invoiceNoError, setInvoiceNoError] = useState('');
   const [amount, setAmount] = useState('');
   const [branch, setBranch] = useState(activeBranchId || '');
   const [notes, setNotes] = useState('');
@@ -227,6 +228,7 @@ export default function SgkReceivablesPage() {
   // Form Submit
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
+    setInvoiceNoError('');
     if (!invoiceNo.trim() || !amount || Number(amount) <= 0) {
       addToast({ type: 'error', message: 'Lütfen geçerli bir fatura numarası ve tutar girin.' });
       return;
@@ -237,7 +239,9 @@ export default function SgkReceivablesPage() {
       invoice.id !== editingId && invoice.invoice_no.trim().toLocaleUpperCase('tr-TR') === normalizedInvoiceNo,
     );
     if (duplicateInvoice) {
-      addToast({ type: 'error', message: `“${duplicateInvoice.invoice_no}” fatura numarası bu firmada zaten kayıtlı. Farklı bir numara girin.` });
+      const message = `“${duplicateInvoice.invoice_no}” fatura numarası bu firmada zaten kayıtlı. Farklı bir numara girin.`;
+      setInvoiceNoError(message);
+      addToast({ type: 'error', message });
       return;
     }
 
@@ -246,6 +250,26 @@ export default function SgkReceivablesPage() {
       const expMonth = expectedPaymentMonth(periodYearMonth);
       const selectedBranchObj = activeBranches.find(b => b.id === branch);
       if (!currentOrgId || !selectedBranchObj) throw new Error('Geçerli firma ve şube seçin.');
+      if (!editingId) {
+        // The invoice list may still be loading, so check the unique key against
+        // the tenant database before attempting an insert. The constraint below
+        // remains the final race-safe guard.
+        const duplicateResult = await supabase
+          .from('sgk_period_invoices')
+          .select('id, invoice_no')
+          .eq('organization_id', currentOrgId)
+          .eq('invoice_no', invoiceNo.trim())
+          .limit(1)
+          .maybeSingle();
+        if (duplicateResult.error) throw duplicateResult.error;
+        if (duplicateResult.data) {
+          const existingNo = String(duplicateResult.data.invoice_no || invoiceNo.trim());
+          const message = `“${existingNo}” fatura numarası bu firmada zaten kayıtlı. Farklı bir numara girin.`;
+          setInvoiceNoError(message);
+          addToast({ type: 'error', message });
+          return;
+        }
+      }
       const branchName = selectedBranchObj.name;
       const invoicePayload = {
         branch_id: branch,
@@ -288,9 +312,11 @@ export default function SgkReceivablesPage() {
       setNotes('');
     } catch (err: any) {
       const isDuplicate = err?.code === '23505' || /sgk_period_invoices_organization_id_invoice_no_key|duplicate key/i.test(String(err?.message || ''));
-      addToast({ type: 'error', message: isDuplicate
+      const message = isDuplicate
         ? `“${invoiceNo.trim()}” fatura numarası bu firmada zaten kayıtlı. Farklı bir numara girin.`
-        : err.message || 'Fatura kaydedilemedi.' });
+        : err.message || 'Fatura kaydedilemedi.';
+      if (isDuplicate) setInvoiceNoError(message);
+      addToast({ type: 'error', message });
     } finally {
       setSaving(false);
     }
@@ -540,10 +566,13 @@ export default function SgkReceivablesPage() {
                         type="text"
                         placeholder="Örn: QA-SGK-3B-202609"
                         value={invoiceNo}
-                        onChange={e => setInvoiceNo(e.target.value)}
+                        aria-invalid={Boolean(invoiceNoError)}
+                        aria-describedby={invoiceNoError ? 'sgk-invoice-number-error' : undefined}
+                        onChange={e => { setInvoiceNo(e.target.value); setInvoiceNoError(''); }}
                         required
                       />
                     </div>
+                    {invoiceNoError && <div id="sgk-invoice-number-error" role="alert" style={{ marginTop: 5, color: '#b91c1c', fontSize: 12 }}>{invoiceNoError}</div>}
                   </div>
 
                   <div className={styles.inputGroup}>
