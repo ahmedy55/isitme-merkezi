@@ -13,7 +13,8 @@ interface CashMovement {
   date: string;
   dateKey?: string;
   account: string;
-  type: 'Giriş' | 'Çıkış';
+  type: 'Giriş' | 'Çıkış' | 'Transfer';
+  transactionType?: string;
   category: string;
   description: string;
   patientOrEntity: string;
@@ -25,6 +26,14 @@ interface CashMovement {
   referenceEntity?: string;
   referenceId?: string;
 }
+
+const toLocalDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const normalizeDateKey = (value?: string | null) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const localized = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  return localized ? `${localized[3]}-${localized[2].padStart(2, '0')}-${localized[1].padStart(2, '0')}` : '';
+};
 
 interface ExpenseItem {
   id: string;
@@ -56,6 +65,11 @@ export default function CashPage() {
 
   // Active Main Sub-Tab: 'cash' (Kasa & Tahsilat) or 'expenses' (Masraflar)
   const [mainTab, setMainTab] = useState<'cash' | 'expenses' | 'transfers' | 'reports'>(() => currentPage === 'expenses' ? 'expenses' : 'cash');
+  const [reportStartDate, setReportStartDate] = useState(() => {
+    const now = new Date();
+    return toLocalDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
+  });
+  const [reportEndDate, setReportEndDate] = useState(() => toLocalDateKey(new Date()));
   useEffect(() => {
     if (currentPage === 'expenses') setMainTab('expenses');
     else if (currentPage === 'cash') setMainTab('cash');
@@ -146,10 +160,11 @@ export default function CashPage() {
         const expense = row.referenceEntity === 'expense' ? actualExpenses.find(item => item.id === row.referenceId) : undefined;
         const branch = branchesList.find(item => item.id === row.branchId || item.name === row.branch)
           || activeBranches.find(item => item.id === row.branchId || item.name === row.branch);
-        const isOutgoing = ['EXPENSE', 'PAYOUT'].includes(row.type);
+        const transactionType = String(row.type || '').toUpperCase();
+        const isOutgoing = ['EXPENSE', 'PAYOUT', 'REFUND'].includes(transactionType);
         return {
           id: row.id, date: row.createdAt ? new Date(row.createdAt).toLocaleString('tr-TR') : '—', dateKey: row.createdAt?.slice(0, 10),
-          account: row.cashRegisterId || '—', type: isOutgoing ? 'Çıkış' : 'Giriş', category: row.category || '—',
+          account: row.cashRegisterId || '—', type: transactionType === 'TRANSFER' ? 'Transfer' : isOutgoing ? 'Çıkış' : 'Giriş', transactionType, category: row.category || '—',
           description: row.description || '—', patientOrEntity: sale?.patientName || expense?.createdBy || '—',
           amount: Number(row.amount) || 0, paymentMethod: row.paymentMethod || sale?.paymentMethod || expense?.paymentMethod || inferCashPaymentMethod(String(row.cashRegisterId || '')),
           status: 'Tahsil Edildi', branch: branch?.name || row.branch || '—', branchId: row.branchId || branch?.id, referenceEntity: row.referenceEntity, referenceId: row.referenceId,
@@ -205,7 +220,7 @@ export default function CashPage() {
   const cashNetTotal = cashMovements
     .filter(matchesSummaryBranch)
     .reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
-  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const currentMonthKey = toLocalDateKey(new Date()).slice(0, 7);
   const currentMonthMovements = cashMovements.filter(item => matches(item.branch, item.branchId) && matchesSummaryBranch(item) && item.dateKey?.startsWith(currentMonthKey));
   const currentMonthNet = currentMonthMovements.reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
   const currentMonthSales = salesList.filter(sale => sale.date?.startsWith(currentMonthKey)).reduce((sum, sale) => sum + Number(sale.total || 0), 0);
@@ -236,7 +251,8 @@ export default function CashPage() {
   // Transfer Movements & Summary
   const transferMovements = useMemo(() => {
     return cashMovements.filter(item => {
-      const type = (item.type || '').toUpperCase();
+      if (!matches(item.branch, item.branchId)) return false;
+      const type = (item.transactionType || '').toUpperCase();
       const cat = (item.category || '').toLowerCase();
       const acc = (item.account || '').toLowerCase();
       const method = (item.paymentMethod || '').toLowerCase();
@@ -247,7 +263,7 @@ export default function CashPage() {
         || method.includes('havale') || method.includes('eft') || method.includes('banka')
         || desc.includes('transfer') || desc.includes('havale') || desc.includes('eft') || desc.includes('banka');
     });
-  }, [cashMovements]);
+  }, [cashMovements, matches]);
 
   const transferTotalAmount = useMemo(() => {
     return transferMovements.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -256,13 +272,38 @@ export default function CashPage() {
   const havaleEftTotal = useMemo(() => {
     return cashMovements
       .filter(item => {
+        if (!matches(item.branch, item.branchId)) return false;
         const method = (item.paymentMethod || '').toLowerCase();
         const cat = (item.category || '').toLowerCase();
         const acc = (item.account || '').toLowerCase();
-        return method.includes('havale') || method.includes('eft') || cat.includes('havale') || cat.includes('eft') || acc.includes('banka') || (item.type || '').toUpperCase() === 'TRANSFER';
+        return method.includes('havale') || method.includes('eft') || cat.includes('havale') || cat.includes('eft') || acc.includes('banka') || item.transactionType === 'TRANSFER';
       })
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  }, [cashMovements]);
+  }, [cashMovements, matches]);
+
+  const reportDateRangeValid = reportStartDate <= reportEndDate;
+  const reportMovements = useMemo(() => cashMovements.filter(item =>
+    reportDateRangeValid && matches(item.branch, item.branchId) && item.dateKey
+    && item.dateKey >= reportStartDate && item.dateKey <= reportEndDate
+    && (item.type === 'Giriş' || item.type === 'Çıkış'),
+  ), [cashMovements, reportDateRangeValid, reportStartDate, reportEndDate, matches]);
+  const reportIncome = reportMovements.filter(item => item.type === 'Giriş').reduce((sum, item) => sum + item.amount, 0);
+  const reportRecordedExpenses = expensesList.filter(expense => {
+    const dateKey = normalizeDateKey(expense.date);
+    return reportDateRangeValid && dateKey >= reportStartDate && dateKey <= reportEndDate && matches(expense.branch, expense.branchId);
+  }).reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const reportOtherCashOutflows = reportMovements
+    .filter(item => item.type === 'Çıkış' && item.referenceEntity !== 'expense')
+    .reduce((sum, item) => sum + item.amount, 0);
+  const reportExpenseTotal = reportRecordedExpenses + reportOtherCashOutflows;
+  const reportNetProfit = reportIncome - reportExpenseTotal;
+  const reportExpenseIncomeRatio = reportIncome > 0 ? Math.round(reportExpenseTotal / reportIncome * 100) : null;
+  const reportSalesTotal = salesList.filter(sale => {
+    const dateKey = normalizeDateKey(sale.date);
+    return reportDateRangeValid && dateKey >= reportStartDate && dateKey <= reportEndDate && matches(undefined, sale.branchId);
+  }).reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const reportCollectedSales = reportMovements.filter(item => item.type === 'Giriş' && item.referenceEntity === 'sale').reduce((sum, item) => sum + item.amount, 0);
+  const reportCollectionRate = reportSalesTotal > 0 ? Math.round(reportCollectedSales / reportSalesTotal * 100) : null;
 
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
@@ -618,6 +659,7 @@ export default function CashPage() {
 
         <button
           className={`${styles.navTabBtn} ${mainTab === 'reports' ? styles.navTabBtnActive : ''}`}
+          aria-label="Kasa raporları"
           onClick={() => setMainTab('reports')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1534,20 +1576,30 @@ export default function CashPage() {
         <div style={{ background: '#fff', border: '1px solid var(--csh-border)', borderRadius: 14, padding: 24 }}>
           <h3 style={{ margin: '0 0 8px', fontSize: 18, color: '#0f172a' }}>Finansal Kar & Zarar Özeti</h3>
           <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
-            Şube bazında nakit akışı, hakedişler ve gider analizleri.
+            Erişiminiz olan şubelerin nakit akışı ve gider analizleri; seçilen tarih aralığına göre.
           </p>
+          <div style={{ display: 'flex', alignItems: 'end', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+            <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#475569' }}>Başlangıç tarihi
+              <input aria-label="Rapor başlangıç tarihi" type="date" value={reportStartDate} max={reportEndDate} onChange={event => setReportStartDate(event.target.value)} className={styles.filterSelect} />
+            </label>
+            <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#475569' }}>Bitiş tarihi
+              <input aria-label="Rapor bitiş tarihi" type="date" value={reportEndDate} min={reportStartDate} onChange={event => setReportEndDate(event.target.value)} className={styles.filterSelect} />
+            </label>
+            <span style={{ fontSize: 12, color: '#64748b', paddingBottom: 10 }}>Aralık: {reportStartDate} – {reportEndDate}</span>
+          </div>
+          {!reportDateRangeValid && <div role="alert" style={{ marginBottom: 14, color: '#b91c1c' }}>Başlangıç tarihi bitiş tarihinden sonra olamaz.</div>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Aylık Net Kar</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{formatCurrency(currentMonthCollected - currentMonthExpenses)}</div>
+              <div style={{ fontSize: 12, color: '#64748b' }}>Dönem Net Kar</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{formatCurrency(reportNetProfit)}</div>
             </div>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Gider / Gelir Oranı</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#0284c7', marginTop: 4 }}>{currentMonthCollected > 0 ? `%${Math.round(currentMonthExpenses / currentMonthCollected * 100)}` : '—'}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#0284c7', marginTop: 4 }}>{reportExpenseIncomeRatio === null ? '—' : `%${reportExpenseIncomeRatio}`}</div>
             </div>
             <div style={{ padding: 16, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
               <div style={{ fontSize: 12, color: '#64748b' }}>Tahsilat Oranı</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{monthlyCollectionRate === null ? '—' : `%${monthlyCollectionRate}`}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{reportCollectionRate === null ? '—' : `%${reportCollectionRate}`}</div>
             </div>
           </div>
         </div>

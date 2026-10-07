@@ -180,7 +180,7 @@ export interface Supplier {
   email: string;
   address: string;
   taxNo: string;
-  category: 'İşitme Cihazı' | 'Pil & Aksesuar' | 'Kalıp Malzemesi' | 'Teknik Servis' | 'Diğer';
+  category: string;
   status: 'Aktif' | 'Pasif';
   balance: number;
   createdAt: string;

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { supabase } from '../lib/supabase';
+import { fetchAllPages } from '../lib/database';
 import { expectedPaymentMonth, monthKey, monthLabel, monthsUntil, paymentTimelineMonths } from '../lib/sgkSchedule';
 import { formatCurrency } from '../data/mockData';
 import styles from './SgkReceivablesPage.module.css';
@@ -45,6 +46,7 @@ export default function SgkReceivablesPage() {
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([]);
   const [paymentLoadError, setPaymentLoadError] = useState('');
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -129,24 +131,22 @@ export default function SgkReceivablesPage() {
     if (!currentOrgId) {
       setPaymentRecords([]);
       setPaymentLoadError('');
+      setPaymentsLoading(false);
       return;
     }
 
-    void supabase
+    setPaymentsLoading(true);
+    void fetchAllPages((from, to) => supabase
       .from('sgk_payment_records')
       .select('id, invoice_id, branch_id, amount, payment_date, notes, created_at')
       .eq('organization_id', currentOrgId)
       .order('payment_date', { ascending: false })
       .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
+      .range(from, to))
+      .then(data => {
         if (cancelled) return;
-        if (error) {
-          setPaymentRecords([]);
-          setPaymentLoadError(`SGK tahsilat geçmişi yüklenemedi: ${error.message}`);
-          return;
-        }
         setPaymentLoadError('');
-        setPaymentRecords((data || []).map((row: any): PaymentRecord => ({
+        setPaymentRecords(data.map((row: any): PaymentRecord => ({
           id: row.id,
           invoice_id: row.invoice_id,
           branch_id: row.branch_id,
@@ -155,10 +155,18 @@ export default function SgkReceivablesPage() {
           notes: row.notes || '',
           created_at: row.created_at || '',
         })));
+      })
+      .catch(error => {
+        if (cancelled) return;
+        setPaymentRecords([]);
+        setPaymentLoadError(`SGK tahsilat geçmişi yüklenemedi: ${error instanceof Error ? error.message : 'Veriler okunamadı.'}`);
+      })
+      .finally(() => {
+        if (!cancelled) setPaymentsLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [currentOrgId]);
+  }, [currentOrgId, activeTab]);
 
   // Scoped list according to branch scope
   const scopedList = useMemo(() => {
@@ -224,6 +232,15 @@ export default function SgkReceivablesPage() {
       return;
     }
 
+    const normalizedInvoiceNo = invoiceNo.trim().toLocaleUpperCase('tr-TR');
+    const duplicateInvoice = invoices.find(invoice =>
+      invoice.id !== editingId && invoice.invoice_no.trim().toLocaleUpperCase('tr-TR') === normalizedInvoiceNo,
+    );
+    if (duplicateInvoice) {
+      addToast({ type: 'error', message: `“${duplicateInvoice.invoice_no}” fatura numarası bu firmada zaten kayıtlı. Farklı bir numara girin.` });
+      return;
+    }
+
     setSaving(true);
     try {
       const expMonth = expectedPaymentMonth(periodYearMonth);
@@ -270,7 +287,10 @@ export default function SgkReceivablesPage() {
       setAmount('');
       setNotes('');
     } catch (err: any) {
-      addToast({ type: 'error', message: err.message || 'Fatura kaydedilemedi.' });
+      const isDuplicate = err?.code === '23505' || /sgk_period_invoices_organization_id_invoice_no_key|duplicate key/i.test(String(err?.message || ''));
+      addToast({ type: 'error', message: isDuplicate
+        ? `“${invoiceNo.trim()}” fatura numarası bu firmada zaten kayıtlı. Farklı bir numara girin.`
+        : err.message || 'Fatura kaydedilemedi.' });
     } finally {
       setSaving(false);
     }
@@ -900,6 +920,8 @@ export default function SgkReceivablesPage() {
           </p>
           {paymentLoadError ? (
             <div role="alert" style={{ padding: 20, color: '#b91c1c', background: '#fef2f2', borderRadius: 10 }}>{paymentLoadError}</div>
+          ) : paymentsLoading ? (
+            <div role="status" aria-live="polite" style={{ padding: 28, textAlign: 'center', color: '#64748b' }}>SGK tahsilat geçmişi yükleniyor…</div>
           ) : scopedPayments.length === 0 ? (
             <div style={{ padding: 28, textAlign: 'center', background: '#f8fafc', borderRadius: 10, border: '1px dashed #cbd5e1' }}>
               <div style={{ fontSize: 14, fontWeight: 650, color: '#475569' }}>Henüz tamamlanmış tahsilat kaydı bulunmuyor.</div>

@@ -65,6 +65,7 @@ export default function AssetsPage() {
   const [activeItem, setActiveItem] = useState<DisplayAsset | null>(null);
   const [maintenanceHistory, setMaintenanceHistory] = useState<AssetMaintenanceRecord[]>([]);
   const [plannedMaintenance, setPlannedMaintenance] = useState<AssetMaintenanceRecord[]>([]);
+  const [plannedMaintenanceLoading, setPlannedMaintenanceLoading] = useState(false);
   const [maintenanceForm, setMaintenanceForm] = useState({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '', notes: '' });
   const [maintenanceToComplete, setMaintenanceToComplete] = useState<AssetMaintenanceRecord | null>(null);
   const [completionForm, setCompletionForm] = useState({ date: new Date().toISOString().slice(0, 10), notes: '' });
@@ -84,6 +85,9 @@ export default function AssetsPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showBulkMaintenanceModal, setShowBulkMaintenanceModal] = useState(false);
+  const [bulkMaintenanceForm, setBulkMaintenanceForm] = useState({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '' });
+  const [savingBulkMaintenance, setSavingBulkMaintenance] = useState(false);
   const [transferBranchId, setTransferBranchId] = useState('');
   const [transferNote, setTransferNote] = useState('');
 
@@ -244,7 +248,7 @@ export default function AssetsPage() {
       const asset = visibleAssets.get(record.assetId);
       const date = new Date(`${toIsoDate(record.maintenanceDate)}T00:00:00`);
       if (!asset || Number.isNaN(date.getTime()) || date < today || date > horizon) return [];
-      return [{ id: record.id, asset, date: record.maintenanceDate, status: 'Planlandı', description: record.recordType }];
+      return [{ id: record.id, asset, date: record.maintenanceDate, status: 'Planlandı', description: record.recordType, provider: record.provider, notes: record.notes }];
     });
     const assetsWithPlans = new Set(planned.map(item => item.asset.id));
     const calibration = calibrationScheduleItems
@@ -252,14 +256,18 @@ export default function AssetsPage() {
       .flatMap(asset => {
         const dueDate = getCalibrationDueDate(asset);
         if (!dueDate) return [];
-        return [{ id: `calibration-${asset.id}`, asset, date: dueDate.toISOString().slice(0, 10), status: asset.maintenanceStatus, description: 'Kalibrasyon' }];
+        return [{ id: `calibration-${asset.id}`, asset, date: dueDate.toISOString().slice(0, 10), status: asset.maintenanceStatus, description: 'Kalibrasyon', provider: '', notes: '' }];
       });
     return [...planned, ...calibration].sort((a, b) => a.date.localeCompare(b.date));
   }, [assetList, plannedMaintenance, calibrationScheduleItems]);
 
   useEffect(() => {
-    if (!showScheduleModal || !currentOrgId) return;
+    if (!showScheduleModal || !currentOrgId) {
+      setPlannedMaintenanceLoading(false);
+      return;
+    }
     let cancelled = false;
+    setPlannedMaintenanceLoading(true);
     void fetchPlannedAssetMaintenance()
       .then(records => { if (!cancelled) setPlannedMaintenance(records); })
       .catch(error => {
@@ -267,7 +275,8 @@ export default function AssetsPage() {
           setPlannedMaintenance([]);
           addToast({ type: 'error', message: error instanceof Error ? error.message : 'Planlı bakım takvimi yüklenemedi.' });
         }
-      });
+      })
+      .finally(() => { if (!cancelled) setPlannedMaintenanceLoading(false); });
     return () => { cancelled = true; };
   }, [showScheduleModal, currentOrgId, addToast]);
 
@@ -489,6 +498,45 @@ export default function AssetsPage() {
     }
   };
 
+  const handleSaveBulkCalibration = async () => {
+    const selectedAssets = assetList.filter(asset => selectedIds.includes(asset.id));
+    if (!selectedAssets.length) {
+      addToast({ type: 'warning', message: 'Önce işlem yapılacak demirbaşları seçin.' });
+      return;
+    }
+    const missingBranch = selectedAssets.find(asset => !asset.branchId);
+    if (missingBranch) {
+      addToast({ type: 'error', message: `${missingBranch.name} için kayıtlı şube bulunamadığından toplu kalibrasyon başlatılamadı.` });
+      return;
+    }
+    setSavingBulkMaintenance(true);
+    let savedCount = 0;
+    try {
+      for (const asset of selectedAssets) {
+        const record = await createAssetMaintenance({
+          assetId: asset.id,
+          branchId: asset.branchId!,
+          recordType: 'Kalibrasyon',
+          maintenanceDate: bulkMaintenanceForm.date,
+          provider: bulkMaintenanceForm.provider,
+          reportNumber: bulkMaintenanceForm.reportNumber,
+          notes: 'Toplu kalibrasyon kaydı',
+        });
+        savedCount += 1;
+        if (activeItem?.id === asset.id) setMaintenanceHistory(previous => [record, ...previous]);
+      }
+      setShowBulkMaintenanceModal(false);
+      setBulkMaintenanceForm({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '' });
+      addToast({ type: 'success', message: `${savedCount} demirbaş için kalibrasyon kaydı oluşturuldu.` });
+    } catch (error) {
+      addToast({ type: 'error', message: savedCount
+        ? `${savedCount} kayıt oluşturuldu; devamı başarısız: ${error instanceof Error ? error.message : 'beklenmeyen hata'}`
+        : `Toplu kalibrasyon kaydedilemedi: ${error instanceof Error ? error.message : 'beklenmeyen hata'}` });
+    } finally {
+      setSavingBulkMaintenance(false);
+    }
+  };
+
   const handleCompleteMaintenance = async () => {
     if (!activeItem || !maintenanceToComplete || savingCompletion) return;
     setSavingCompletion(true);
@@ -647,13 +695,17 @@ export default function AssetsPage() {
 
           <button
             className={styles.btnCategoryAction}
-            onClick={() => addToast({ type: 'info', message: 'Seçili demirbaşlar için toplu zimmet veya kalibrasyon işlemi seçin.' })}
+            aria-label={selectedIds.length ? `Toplu İşlemler (${selectedIds.length} seçili)` : 'Toplu İşlemler'}
+            aria-haspopup="dialog"
+            aria-expanded={showBulkMaintenanceModal}
+            aria-controls="bulk-calibration-dialog"
+            onClick={() => setShowBulkMaintenanceModal(true)}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="2" y="4" width="20" height="16" rx="2" />
               <path d="M7 15h10M7 9h10" />
             </svg>
-            Toplu İşlemler
+            Toplu İşlemler{selectedIds.length ? ` (${selectedIds.length})` : ''}
           </button>
 
           <button
@@ -1582,6 +1634,34 @@ export default function AssetsPage() {
         </div>
       )}
 
+      {showBulkMaintenanceModal && (
+        <div role="presentation" onClick={() => !savingBulkMaintenance && setShowBulkMaintenanceModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', zIndex: 1200, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <section id="bulk-calibration-dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-calibration-title" onClick={event => event.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480, padding: 22, display: 'grid', gap: 14, boxShadow: '0 20px 40px rgba(0,0,0,.2)' }}>
+            <div>
+              <h2 id="bulk-calibration-title" style={{ margin: 0, fontSize: 18 }}>Toplu Kalibrasyon</h2>
+              <p style={{ margin: '6px 0 0', color: '#64748b', fontSize: 13 }}>
+                {selectedIds.length
+                  ? `${selectedIds.length} seçili demirbaş için kalibrasyon kaydı oluşturulacak.`
+                  : 'İşleme devam etmek için önce tablodan demirbaş seçin.'}
+              </p>
+            </div>
+            <label style={{ display: 'grid', gap: 5, fontSize: 13 }}>Kalibrasyon tarihi
+              <input aria-label="Kalibrasyon tarihi" type="date" value={bulkMaintenanceForm.date} onChange={event => setBulkMaintenanceForm(form => ({ ...form, date: event.target.value }))} className={styles.filterSelect} />
+            </label>
+            <label style={{ display: 'grid', gap: 5, fontSize: 13 }}>Yetkili kuruluş
+              <input aria-label="Yetkili kuruluş" value={bulkMaintenanceForm.provider} onChange={event => setBulkMaintenanceForm(form => ({ ...form, provider: event.target.value }))} className={styles.filterSelect} placeholder="Servis / kuruluş" />
+            </label>
+            <label style={{ display: 'grid', gap: 5, fontSize: 13 }}>Sertifika / rapor no
+              <input aria-label="Sertifika / rapor no" value={bulkMaintenanceForm.reportNumber} onChange={event => setBulkMaintenanceForm(form => ({ ...form, reportNumber: event.target.value }))} className={styles.filterSelect} placeholder="İsteğe bağlı" />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className={styles.btnClear} disabled={savingBulkMaintenance} onClick={() => setShowBulkMaintenanceModal(false)}>İptal</button>
+              <button type="button" className={styles.btnNewAsset} disabled={savingBulkMaintenance || !selectedIds.length} onClick={() => void handleSaveBulkCalibration()}>{savingBulkMaintenance ? 'Kaydediliyor…' : 'Toplu Kalibrasyon Kaydet'}</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* ── MODAL: Bakım Takvimi ── */}
       {showScheduleModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
@@ -1591,12 +1671,18 @@ export default function AssetsPage() {
               <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowScheduleModal(false)}>✕</button>
             </div>
             <div style={{ padding: 20, display: 'grid', gap: 10 }}>
-              {scheduleItems.length === 0 && <div style={{ padding: 12, color: '#64748b' }}>Önümüzdeki 90 gün içinde bakım tarihi olan kayıtlı demirbaş yok.</div>}
+              {plannedMaintenanceLoading ? (
+                <div role="status" aria-live="polite" style={{ padding: 12, color: '#64748b' }}>Bakım takvimi yükleniyor…</div>
+              ) : scheduleItems.length === 0 ? (
+                <div style={{ padding: 12, color: '#64748b' }}>Önümüzdeki 90 gün içinde bakım tarihi olan kayıtlı demirbaş yok.</div>
+              ) : null}
               {scheduleItems.map((s) => (
                 <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                   <div>
                     <div style={{ fontWeight: 650, color: '#0f172a' }}>{s.asset.name} · {s.description}</div>
-                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Hedef Tarih: {formatDate(s.date)}</div>
+                    <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                      Hedef Tarih: {formatDate(s.date)}{s.provider ? ` · ${s.provider}` : ''}
+                    </div>
                   </div>
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: s.status === 'Bakım zamanı geçti' ? '#dc2626' : '#08785b', background: s.status === 'Bakım zamanı geçti' ? '#fee2e2' : '#e6f7f0', padding: '3px 8px', borderRadius: 6 }}>
                     {s.status}

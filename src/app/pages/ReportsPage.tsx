@@ -258,6 +258,29 @@ export default function ReportsPage() {
     reportAppointments.forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
     return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
   }, [reportAppointments]);
+  const appointmentTrend = useMemo(() => {
+    const start = rangeBounds.start ? new Date(`${rangeBounds.start}T00:00:00`) : null;
+    const end = rangeBounds.end ? new Date(`${rangeBounds.end}T00:00:00`) : null;
+    const spanDays = start && end ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1) : 0;
+    const monthly = spanDays > 62;
+    const totals = new Map<string, number>();
+    reportAppointments.forEach(appointment => {
+      const key = dateKey(appointment.date);
+      if (!key) return;
+      const group = monthly ? key.slice(0, 7) : key;
+      totals.set(group, (totals.get(group) || 0) + 1);
+    });
+    const groups = [...totals].sort(([left], [right]) => left.localeCompare(right));
+    const maximum = Math.max(1, ...groups.map(([, value]) => value));
+    return groups.map(([key, value]) => ({
+      key,
+      value,
+      label: monthly
+        ? new Intl.DateTimeFormat('tr-TR', { month: 'short', year: '2-digit' }).format(new Date(`${key}-01T12:00:00`))
+        : new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' }).format(new Date(`${key}T12:00:00`)),
+      height: Math.max(4, value / maximum * 100),
+    }));
+  }, [reportAppointments, rangeBounds]);
   const reportServiceRows = useMemo(() => {
     const totals = new Map<string, number>();
     serviceRecords.filter(item => matches(undefined, item.branchId) && inRange(item.receivedDate)).forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
@@ -392,11 +415,14 @@ export default function ReportsPage() {
       const link = document.createElement('a');
       link.href = url;
       link.download = `${safeName}.${extension}`;
-      link.style.display = 'none';
+      link.setAttribute('aria-hidden', 'true');
+      link.style.position = 'fixed';
+      link.style.left = '-10000px';
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      // Keep the object URL alive while the browser starts consuming the download.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       addToast({ type: 'success', message: `${extension.toUpperCase()} raporu indirildi.` });
       setShowExportModal(false);
     } catch {
@@ -811,6 +837,16 @@ export default function ReportsPage() {
               ))}
             </div>
           </div>
+          <section aria-label="Randevu Trendleri" style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #e2e8f0' }}>
+            <h4 style={{ margin: '0 0 12px', fontSize: 13, color: '#13232c' }}>Randevu Trendi</h4>
+            {appointmentTrend.length ? <div role="img" aria-label={`Randevu trendi, ${dateRange}: ${appointmentTrend.map(point => `${point.label} ${point.value}`).join(', ')}`} style={{ height: 132, display: 'flex', alignItems: 'end', gap: 8, overflowX: 'auto', padding: '0 2px 2px', borderBottom: '1px solid #cbd5e1' }}>
+              {appointmentTrend.map(point => <div key={point.key} title={`${point.label}: ${point.value} randevu`} style={{ minWidth: 32, flex: '1 0 32px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'end', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 10, color: '#334155', fontWeight: 650 }}>{point.value}</span>
+                <div aria-hidden="true" style={{ width: 'min(28px, 80%)', height: `${point.height}%`, minHeight: 4, borderRadius: '5px 5px 0 0', background: '#0d9488' }} />
+                <span style={{ fontSize: 9, color: '#64748b', whiteSpace: 'nowrap' }}>{point.label}</span>
+              </div>)}
+            </div> : <p style={{ margin: 0, color: '#64748b', fontSize: 12 }}>Seçili tarih aralığında randevu trendi için veri yok.</p>}
+          </section>
         </div>
 
         {/* Card 3: Teknik Servis Durumu */}
@@ -1070,6 +1106,7 @@ export default function ReportsPage() {
                 <button
                   type="button"
                   className={styles.btnSecondaryAction}
+                  aria-label="Excel Tablosu (.xlsx) İndir"
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}
                   onClick={() => handleExportReport('Excel (XLSX)')}
                 >
@@ -1083,6 +1120,7 @@ export default function ReportsPage() {
                 <button
                   type="button"
                   className={styles.btnSecondaryAction}
+                  aria-label="Ham Veri (.csv) İndir"
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}
                   onClick={() => handleExportReport('CSV')}
                 >

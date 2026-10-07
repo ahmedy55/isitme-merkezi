@@ -51,7 +51,7 @@ const toServiceRecord = (item: ServiceItem): ServiceRecord => ({
   totalCost: (item.operations || []).reduce((sum, operation) => sum + operation.cost, 0),
   status: item.status === 'Teslime Hazır' ? 'Hazır' : item.status === 'Garanti' ? 'Alındı' : item.status,
   technician: item.technician || '', warrantyRepair: item.warrantyStatus === 'Garanti Kapsamında', notes: item.notes || '',
-  accessoriesTaken: [], complaints: [],
+  accessoriesTaken: [], complaints: [], history: item.history || [],
 });
 
 const escapeHtml = (value: unknown) => String(value ?? '—').replace(/[&<>"']/g, character => ({
@@ -168,7 +168,7 @@ export default function ServicePage() {
           returnedDate: row.returnedDate, status, warrantyStatus: row.warrantyRepair ? 'Garanti Kapsamında' : 'Garanti Dışı',
           deviceType: row.deviceName, notes: row.notes, technician: row.technician,
           branch: branchesList.find(branch => branch.id === row.branchId)?.name || '—', operations: row.operations.map(op => ({ ...op, date: row.receivedDate })),
-          history: [], files: [],
+          history: row.history || [], files: [],
         };
       });
       setRecords(mapped);
@@ -269,7 +269,17 @@ export default function ServicePage() {
     e.preventDefault();
     if (!selectedItem) return;
     const updated = records.map(r => {
-      if (r.id === selectedItem.id) return { ...r, status: statusUpdateVal, notes: statusUpdateNote.trim() ? [r.notes, statusUpdateNote.trim()].filter(Boolean).join('\n') : r.notes };
+      if (r.id === selectedItem.id) return {
+        ...r,
+        status: statusUpdateVal,
+        notes: statusUpdateNote.trim() ? [r.notes, statusUpdateNote.trim()].filter(Boolean).join('\n') : r.notes,
+        history: [{
+          title: `Durum güncellendi: ${statusUpdateVal}`,
+          date: new Date().toISOString(),
+          user: r.technician || 'Kullanıcı',
+          note: statusUpdateNote.trim() || `Servis durumu ${statusUpdateVal} olarak güncellendi.`,
+        }, ...(r.history || [])],
+      };
       return r;
     });
     const refreshed = updated.find(r => r.id === selectedItem.id);
@@ -1537,10 +1547,20 @@ export default function ServicePage() {
               <h2>✏️ Cihaz & Servis Bilgilerini Düzenle</h2>
               <button type="button" className={styles.modalCloseBtn} onClick={() => setShowEditModal(false)}>✕</button>
             </div>
-            <form onSubmit={e => {
+            <form onSubmit={async e => {
               e.preventDefault();
-              setShowEditModal(false);
-              addToast({ type: 'success', message: 'Kayıt bilgileri başarıyla güncellendi.' });
+              if (!currentOrgId || !selectedItem.branchId) {
+                addToast({ type: 'error', message: 'Servis kaydı firma/şube bilgisi eksik olduğu için güncellenemedi.' });
+                return;
+              }
+              try {
+                await saveServiceTicket(currentOrgId, toServiceRecord(selectedItem));
+                setRecords(previous => previous.map(item => item.id === selectedItem.id ? selectedItem : item));
+                setShowEditModal(false);
+                addToast({ type: 'success', message: 'Kayıt bilgileri başarıyla güncellendi.' });
+              } catch (error) {
+                addToast({ type: 'error', message: error instanceof Error ? `Kayıt güncellenemedi: ${error.message}` : 'Kayıt güncellenemedi.' });
+              }
             }}>
               <div className={styles.modalBody}>
                 <div className={styles.formGroup}>
@@ -1580,6 +1600,19 @@ export default function ServicePage() {
                     defaultValue={selectedItem.problem}
                     onChange={e => setSelectedItem({ ...selectedItem, problem: e.target.value })}
                   />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel} htmlFor="service-edit-warranty">Garanti Durumu</label>
+                  <select
+                    id="service-edit-warranty"
+                    aria-label="Garanti Durumu"
+                    className={styles.formSelect}
+                    value={selectedItem.warrantyStatus}
+                    onChange={e => setSelectedItem({ ...selectedItem, warrantyStatus: e.target.value as ServiceItem['warrantyStatus'] })}
+                  >
+                    <option value="Garanti Kapsamında">Garanti Kapsamında</option>
+                    <option value="Garanti Dışı">Garanti Dışı</option>
+                  </select>
                 </div>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Ek Not</label>

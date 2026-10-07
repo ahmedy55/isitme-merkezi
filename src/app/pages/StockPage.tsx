@@ -25,6 +25,7 @@ export default function StockPage() {
   const addToastRef = useRef(addToast);
   useEffect(() => { addToastRef.current = addToast; }, [addToast]);
   const [stockMovements, setStockMovements] = useState<Array<{id: string; type: string; quantityChange: number; createdAt: string; notes?: string; branchName?: string}>>([]);
+  const [stockMovementsLoading, setStockMovementsLoading] = useState(false);
 
   // Envanter yalnızca aktif firmadan yüklenen kayıtları kullanır.
   const allStockItems = useMemo(() => {
@@ -61,10 +62,16 @@ export default function StockPage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!currentOrgId || !activeItem?.id || drawerTab !== 'hareketler') { setStockMovements([]); return; }
+    if (!currentOrgId || !activeItem?.id || drawerTab !== 'hareketler') {
+      setStockMovements([]);
+      setStockMovementsLoading(false);
+      return;
+    }
+    setStockMovementsLoading(true);
     dbFetchStockMovements(activeItem.id)
       .then(rows => { if (!cancelled) setStockMovements(rows as typeof stockMovements); })
-      .catch(error => { if (!cancelled) { setStockMovements([]); addToastRef.current({ type: 'error', message: error instanceof Error ? error.message : 'Stok hareketleri yüklenemedi.' }); } });
+      .catch(error => { if (!cancelled) { setStockMovements([]); addToastRef.current({ type: 'error', message: error instanceof Error ? error.message : 'Stok hareketleri yüklenemedi.' }); } })
+      .finally(() => { if (!cancelled) setStockMovementsLoading(false); });
     return () => { cancelled = true; };
   }, [currentOrgId, activeItem?.id, drawerTab]);
 
@@ -406,11 +413,14 @@ export default function StockPage() {
       });
       setShowAdjustmentModal(false);
       if (drawerTab === 'hareketler') {
+        setStockMovementsLoading(true);
         try {
           const movements = await dbFetchStockMovements(activeItem.id);
           setStockMovements(movements as typeof stockMovements);
         } catch {
           addToast({ type: 'info', message: 'Stok güncellendi; hareket geçmişi yenilenemedi. Geçmiş sekmesini yeniden açın.' });
+        } finally {
+          setStockMovementsLoading(false);
         }
       }
       addToast({ type: 'success', message: `${activeItem.name} stok adedi ${newQty} olarak güncellendi.` });
@@ -1216,7 +1226,7 @@ export default function StockPage() {
 
               {drawerTab === 'hareketler' && (
                 <div style={{ display: 'grid', gap: 8, fontSize: 12.5 }}>
-                  {stockMovements.length ? stockMovements.map(movement => (
+                  {stockMovementsLoading ? <div role="status" aria-live="polite" style={{ padding: 12, color: '#64748b' }}>Stok hareketleri yükleniyor…</div> : stockMovements.length ? stockMovements.map(movement => (
                     <div key={movement.id} style={{ padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 650, color: '#0f172a' }}>
                         <span>{movement.notes || movement.type}</span>

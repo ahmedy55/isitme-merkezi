@@ -38,10 +38,12 @@ type ExtraFixtures = {
   assetSerial?: string;
   assetWarrantyExpiry?: string | null;
   assetStatus?: string;
+  additionalAssetRows?: Record<string, unknown>[];
   transferRows?: Record<string, unknown>[];
   orgSettings?: Record<string, unknown>;
   memberRows?: Record<string, unknown>[];
   branchRows?: Record<string, unknown>[];
+  supplierRows?: Record<string, unknown>[];
 };
 
 function base64Url(value: unknown) {
@@ -114,6 +116,15 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
       const record = { ...(fixtures.patientRows?.find(row => row.id === id) || {}), ...(Array.isArray(body) ? body[0] : body), id };
       fixtures.patientRows = [record, ...(fixtures.patientRows || []).filter(row => row.id !== id)];
       await route.fulfill({ status: 200, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify(method === 'POST' ? [record] : record) });
+      return;
+    }
+
+    if (table === 'suppliers' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      const payload = (Array.isArray(body) ? body[0] : body) as Record<string, unknown>;
+      const row = { ...payload, id: 'abababab-abab-4bab-8bab-abababababab' };
+      fixtures.supplierRows = [row, ...(fixtures.supplierRows || [])];
+      await route.fulfill({ status: 201, contentType: 'application/json', headers: corsHeaders, body: JSON.stringify([row]) });
       return;
     }
 
@@ -257,6 +268,12 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         });
         return;
       }
+      const serviceId = String(body.id || '99999999-9999-4999-8999-999999999999');
+      const currentService = fixtures.serviceRows?.find(row => row.id === serviceId) || {};
+      fixtures.serviceRows = [
+        { ...currentService, ...body, id: serviceId },
+        ...(fixtures.serviceRows || []).filter(row => row.id !== serviceId),
+      ];
       await route.fulfill({
         status: 201,
         contentType: 'application/vnd.pgrst.object+json',
@@ -360,9 +377,11 @@ async function mockTenantData(page: Page, withAsset: boolean, fixtures: ExtraFix
         await route.fulfill({ status: 200, contentType: 'application/vnd.pgrst.object+json', headers: corsHeaders, body: JSON.stringify(existingAsset) });
         return;
       }
-      rows = [existingAsset];
+      rows = [existingAsset, ...(fixtures.additionalAssetRows || [])];
     } else if (table === 'service_tickets') {
       rows = fixtures.serviceRows || [];
+    } else if (table === 'suppliers') {
+      rows = fixtures.supplierRows || [];
     } else if (table === 'sgk_period_invoices') {
       rows = fixtures.invoiceRows || [];
     } else if (table === 'sgk_payment_records') {
@@ -1126,11 +1145,78 @@ test('Create a new appointment', async ({ page }) => {
   await page.getByPlaceholder('Telefon (Örn: 0555...)').fill('05000000001');
   await page.getByRole('button', { name: 'Randevu Oluştur' }).click();
   await expect.poll(() => fixtures.appointmentRows?.length).toBe(1);
+  await expect(page.getByRole('status').filter({ hasText: 'Randevu başarıyla oluşturuldu.' })).toBeVisible();
   expect(fixtures.appointmentRows?.[0].patient_id).toBe(fixtures.patientRows?.[0].id);
   expect(fixtures.appointmentRows?.[0].patient_id).toMatch(/^[0-9a-f-]{36}$/);
   await page.reload();
   await page.getByRole('button', { name: 'Randevular', exact: true }).click();
   await expect(page.getByText('Yeni Randevu Hastası').first()).toBeVisible();
+});
+
+test('Review appointment reports and download Excel/CSV files', async ({ page }) => {
+  await mockTenantData(page, false, {
+    appointmentRows: [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', organization_id: orgId, branch_id: branchId, date: new Date().toISOString().slice(0, 10), time: '10:00', status: 'Bekliyor', patient_name: 'Rapor Hastası' }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Raporlar', exact: true }).click();
+  await page.getByRole('button', { name: /Randevu Raporları/ }).click();
+  await expect(page.getByRole('heading', { name: 'Randevu Trendi' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /Randevu trendi/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Rapor İndir' }).click();
+  const csvDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Ham Veri (.csv) İndir' }).click();
+  expect((await csvDownloadPromise).suggestedFilename()).toMatch(/\.csv$/);
+
+  await page.getByRole('button', { name: 'Rapor İndir' }).click();
+  const xlsxDownloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Excel Tablosu (.xlsx) İndir' }).click();
+  expect((await xlsxDownloadPromise).suggestedFilename()).toMatch(/\.xlsx$/);
+});
+
+test('service status, inspection note and warranty changes persist', async ({ page }) => {
+  const serviceId = '99999999-9999-4999-8999-999999999999';
+  const serviceInsertBodies: Record<string, unknown>[] = [];
+  await mockTenantData(page, false, {
+    serviceInsertBodies,
+    serviceRows: [{
+      id: serviceId, organization_id: orgId, branch_id: branchId, patient_name: 'E2E Hasta',
+      device_name: 'E2E Cihaz', device_serial: 'E2E-SN', barcode: 'E2E-BC', received_date: '2026-09-20',
+      delivered_date: null, complaint: 'Kontrol', service_fee: 0, status: 'Bekliyor', technician: 'Teknik Servis',
+      notes: '', details: { status: 'Tamir Ediliyor', operations: [], warrantyRepair: true, history: [] },
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Teknik Servis' }).click();
+  let serviceRow = page.getByRole('row').filter({ hasText: 'E2E-SN' });
+  await serviceRow.click();
+  await page.getByRole('button', { name: 'Durum Güncelle' }).click();
+  const statusDialog = page.getByRole('dialog', { name: /Servis Durumu Güncelle/ });
+  await statusDialog.locator('select').selectOption('Teslime Hazır');
+  const inspectionNote = 'Teslim öncesi cihaz kontrolü tamamlandı.';
+  await statusDialog.locator('textarea').fill(inspectionNote);
+  await statusDialog.getByRole('button', { name: 'Güncellemeyi Kaydet' }).click();
+  await expect(serviceRow).toContainText('Teslime Hazır');
+  await page.getByRole('button', { name: 'İşlem Geçmişi', exact: true }).click();
+  await expect(page.getByText(inspectionNote, { exact: true })).toBeVisible();
+  expect(serviceInsertBodies.at(-1)).toMatchObject({ details: { status: 'Hazır', history: [{ note: inspectionNote }] } });
+
+  await page.getByRole('button', { name: 'Genel', exact: true }).click();
+  await page.getByRole('button', { name: 'Düzenle', exact: true }).last().click();
+  const editDialog = page.getByRole('heading', { name: 'Cihaz & Servis Bilgilerini Düzenle' }).locator('..').locator('..');
+  await editDialog.getByLabel('Garanti Durumu').selectOption('Garanti Dışı');
+  await editDialog.getByRole('button', { name: 'Kaydet' }).click();
+  await expect(page.locator('span').filter({ hasText: 'Garanti Dışı' }).last()).toBeVisible();
+  expect(serviceInsertBodies.at(-1)).toMatchObject({ details: { warrantyRepair: false } });
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Teknik Servis' }).click();
+  serviceRow = page.getByRole('row').filter({ hasText: 'E2E-SN' });
+  await expect(serviceRow).toContainText('Teslime Hazır');
+  await serviceRow.click();
+  await expect(page.locator('span').filter({ hasText: 'Garanti Dışı' }).last()).toBeVisible();
+  await page.getByRole('button', { name: 'İşlem Geçmişi', exact: true }).click();
+  await expect(page.getByText(inspectionNote, { exact: true })).toBeVisible();
 });
 
 test('Create a new SGK prescription record', async ({ page }) => {
@@ -1172,6 +1258,61 @@ test('Review a service record details view', async ({ page }) => {
   await expect(page.getByText('Kalibrasyon · Test Laboratuvarı')).toBeVisible();
   await expect(page.getByText('Kalibrasyon tamamlandı.')).toBeVisible();
   await expect(page.getByText('Bu demirbaş için kayıtlı bakım/kalibrasyon bilgisi bulunmuyor.')).toHaveCount(0);
+});
+
+test('Open maintenance schedule for an asset', async ({ page }) => {
+  await mockTenantData(page, true, {
+    maintenanceRows: [{
+      id: 'm-plan', organization_id: orgId, branch_id: branchId, asset_id: assetId,
+      record_type: 'Bakım', status: 'planned', maintenance_date: '2026-11-07',
+      provider: 'Planlı E2E Servisi', report_number: 'PLAN-001', notes: 'Planlı kontrol',
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  await page.getByRole('button', { name: 'Bakım Takvimi' }).click();
+  await expect(page.getByText('Planlı E2E Servisi')).toBeVisible();
+});
+
+test('Open stock movement records', async ({ page }) => {
+  await mockTenantData(page, false, {
+    stockRows: [stockFixture],
+    stockMovementRows: [{
+      id: 'movement-1', organization_id: orgId, branch_id: branchId, stock_item_id: stockId,
+      type: 'ADJUSTMENT', quantity_change: 2, created_at: '2026-10-06T10:30:00.000Z',
+      notes: 'Sayım düzeltmesi', branches: { name: 'QA Şube' },
+    }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Stok & Aksesuar' }).click();
+  await page.getByRole('row').filter({ hasText: stockFixture.name }).click();
+  await page.getByRole('button', { name: 'Hareketler', exact: true }).click();
+  await expect(page.getByText('Sayım düzeltmesi')).toBeVisible();
+  await expect(page.getByText('Bu ürün için kaydedilmiş stok hareketi bulunmuyor.')).toHaveCount(0);
+});
+
+test('Use bulk actions on selected assets', async ({ page }) => {
+  await mockTenantData(page, true, {
+    additionalAssetRows: [{
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', organization_id: orgId, branch_id: branchId,
+      name: 'QA İkinci Demirbaş', category: 'Klinik Cihaz', model: 'Test Model 2', serial_no: 'PW-ONLY-002',
+      purchase_date: '2026-01-11', purchase_price: 9000, warranty_expiry: '2027-01-11', status: 'Aktif',
+      archived_at: null, branches: { name: 'QA Şube' },
+    }],
+    maintenanceRows: [],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Demirbaşlar' }).click();
+  const checkboxes = page.locator('table tbody tr input[type="checkbox"]');
+  await checkboxes.nth(0).check();
+  await checkboxes.nth(1).check();
+  await page.getByRole('button', { name: 'Toplu İşlemler (2 seçili)' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Toplu Kalibrasyon' });
+  await expect(dialog).toContainText('2 seçili demirbaş');
+  await dialog.getByLabel('Kalibrasyon tarihi').fill('2026-11-05');
+  await dialog.getByRole('button', { name: 'Toplu Kalibrasyon Kaydet' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: '2 demirbaş için kalibrasyon kaydı oluşturuldu.' })).toBeVisible();
+  await expect(dialog).toHaveCount(0);
 });
 
 test('satır üç nokta menüsü drawer açmadan görüntülenir; satır tıklaması drawer açar', async ({ page }) => {
@@ -1353,6 +1494,21 @@ test('Add an SGK invoice period', async ({ page }) => {
   await expect.poll(() => invoiceBranchIds).toContain(branchId);
 });
 
+test('Add an SGK period invoice with a duplicate number shows a clear warning', async ({ page }) => {
+  const invoiceBranchIds: string[] = [];
+  await mockTenantData(page, false, {
+    invoiceBranchIds,
+    invoiceRows: [{ id: 'duplicate-invoice', organization_id: orgId, branch_id: branchId, invoice_month: '2026-09-01', expected_month: '2026-11-01', invoice_no: 'QA-SGK-3B-202609', amount: 25000, status: 'Bekliyor', created_at: '2026-09-01T12:00:00Z' }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'SGK Ödeme Takvimi' }).click();
+  await page.getByPlaceholder('Örn: QA-SGK-3B-202609').fill('QA-SGK-3B-202609');
+  await page.locator('form').filter({ has: page.getByPlaceholder('Örn: QA-SGK-3B-202609') }).locator('input[type="number"]').fill('25000');
+  await page.getByRole('button', { name: 'Faturayı Kaydet' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: /fatura numarası bu firmada zaten kayıtlı/i })).toBeVisible();
+  expect(invoiceBranchIds).toHaveLength(0);
+});
+
 test('Review collection history for SGK payments', async ({ page }) => {
   const invoiceId = '88888888-8888-4888-8888-888888888888';
   await mockTenantData(page, false, {
@@ -1361,6 +1517,11 @@ test('Review collection history for SGK payments', async ({ page }) => {
   });
   await signIn(page);
   await page.getByRole('button', { name: 'SGK Ödeme Takvimi' }).click();
+  await page.getByRole('button', { name: 'Tahsilat Geçmişi', exact: true }).click();
+  const paymentRow = page.getByRole('row').filter({ hasText: 'QA-SGK-TAHSILAT-01' });
+  await expect(paymentRow).toBeVisible();
+  await expect(paymentRow).toContainText('₺1.500');
+  await expect(page.getByText('Henüz tamamlanmış tahsilat kaydı bulunmuyor.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Fatura Kayıtları', exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: 'QA-SGK-TAHSILAT-01' })).toBeVisible();
   await expect(page.getByText('Tahsil Edildi').first()).toBeVisible();
@@ -1371,15 +1532,43 @@ test('Review collection history for SGK payments', async ({ page }) => {
 test('Review bank transfer records', async ({ page }) => {
   await mockTenantData(page, false, {
     cashRows: [{
-      id: 'tx-1', organization_id: orgId, branch_id: branchId, cash_register_id: 'Ziraat Bankası',
-      type: 'TRANSFER', amount: 5000, category: 'Banka Transferi', description: 'Kasa -> Banka', created_at: new Date().toISOString()
+      id: 'tx-1', organization_id: orgId, branch_id: branchId, cash_register_id: 'Ana Kasa',
+      type: 'TRANSFER', amount: 5000, category: 'Diğer', description: 'Şube içi hareket', created_at: new Date().toISOString()
     }]
   });
   await signIn(page);
   await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
   await page.getByRole('button', { name: 'Banka Transferleri' }).click();
   await expect(page.getByText('Havale-EFT Toplamı')).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: 'Ziraat Bankası' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Ana Kasa' })).toBeVisible();
+});
+
+test('Open cash reports and filter metrics by date range', async ({ page }) => {
+  await mockTenantData(page, false, {
+    cashRows: [{ id: 'report-inflow', organization_id: orgId, branch_id: branchId, cash_register_id: 'Ana Kasa', type: 'INCOME', amount: 750, category: 'Diğer Gelir', description: 'Rapor aralığı testi', created_at: '2026-10-05T12:00:00.000Z' }],
+  });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Kasa, Tahsilat & Masraflar' }).click();
+  await page.getByRole('button', { name: 'Kasa raporları' }).click();
+  const startDate = page.getByLabel('Rapor başlangıç tarihi');
+  const endDate = page.getByLabel('Rapor bitiş tarihi');
+  await startDate.fill('2026-10-05');
+  await endDate.fill('2026-10-05');
+  await expect(page.getByText('₺750', { exact: true })).toBeVisible();
+  await startDate.fill('2026-10-06');
+  await expect(page.getByText('₺0', { exact: true })).toBeVisible();
+});
+
+test('Create a new supplier category', async ({ page }) => {
+  await mockTenantData(page, false);
+  await signIn(page);
+  await page.getByRole('button', { name: 'Tedarikçiler' }).click();
+  await page.getByRole('button', { name: 'Yeni Tedarikçi Ekle' }).click();
+  await page.getByPlaceholder('Örn: Starkey Türkiye').fill('QA Özel Kategori Tedarikçisi');
+  await page.getByLabel('Tedarikçi kategorisi seçin').selectOption('__new_category__');
+  await page.getByLabel('Yeni tedarikçi kategorisi').fill('Dijital Sağlık');
+  await page.getByRole('button', { name: 'Tedarikçiyi Kaydet' }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'QA Özel Kategori Tedarikçisi' })).toContainText('Dijital Sağlık');
 });
 
 test('Add an expense and verify it appears in the expenses view', async ({ page }) => {

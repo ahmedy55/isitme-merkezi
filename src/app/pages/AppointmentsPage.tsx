@@ -112,12 +112,19 @@ export default function AppointmentsPage() {
   // Modals and action dropdown
   const [updatingAppointmentIds, setUpdatingAppointmentIds] = useState<Set<string>>(() => new Set());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [appointmentCreatedMessage, setAppointmentCreatedMessage] = useState('');
   const [newAppointmentPatientId, setNewAppointmentPatientId] = useState<string | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<any | null>(null);
   const [selectedDetailSlot, setSelectedDetailSlot] = useState<ShowcaseSlot | null>(null);
   const [activeSlotMenu, setActiveSlotMenu] = useState<{ id: string; top: number; right: number; patientName: string; phone?: string } | null>(null);
   const slotMenuRef = useRef<HTMLDivElement>(null);
   const hasUserSelectedDate = useRef(false);
+
+  useEffect(() => {
+    if (!appointmentCreatedMessage) return;
+    const timeout = window.setTimeout(() => setAppointmentCreatedMessage(''), 10000);
+    return () => window.clearTimeout(timeout);
+  }, [appointmentCreatedMessage]);
 
   useEffect(() => {
     if (!appointmentCreatePatientId) return;
@@ -454,6 +461,9 @@ export default function AppointmentsPage() {
 
   return (
     <div className={`page ${styles.appointmentsPage}`}>
+      {appointmentCreatedMessage && <div role="status" aria-live="polite" style={{ margin: '0 0 12px', padding: '12px 16px', borderRadius: 10, border: '1px solid #a7f3d0', background: '#ecfdf5', color: '#065f46', fontWeight: 650 }}>
+        {appointmentCreatedMessage}
+      </div>}
       {/* ── Page Header ── */}
       <div className={styles.pageHeading}>
         <div className={styles.headingCopy}>
@@ -1296,7 +1306,8 @@ export default function AppointmentsPage() {
           initialPatientId={newAppointmentPatientId}
           onClose={() => { setShowAddModal(false); setNewAppointmentPatientId(null); }}
           onSave={async (newApt) => {
-            await addAppointment(newApt);
+            await addAppointment(newApt, { showSuccessToast: false });
+            setAppointmentCreatedMessage('Randevu başarıyla oluşturuldu.');
             if (newApt.date) {
               const parts = newApt.date.split('-').map(Number);
               if (parts[0] && parts[1]) {

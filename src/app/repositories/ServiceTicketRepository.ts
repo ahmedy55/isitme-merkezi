@@ -9,6 +9,7 @@ export interface ServiceRecord {
   status: 'Alındı' | 'İnceleniyor' | 'Tamir Ediliyor' | 'Hazır' | 'Teslim Edildi';
   technician: string; warrantyRepair: boolean; notes: string;
   accessoriesTaken?: string[]; complaints?: string[];
+  history?: { title: string; date: string; user: string; note: string }[];
 }
 const statusToDb: Record<ServiceRecord['status'], string> = { 'Alındı': 'Bekliyor', 'İnceleniyor': 'İşlemde', 'Tamir Ediliyor': 'İşlemde', 'Hazır': 'Tamamlandı', 'Teslim Edildi': 'Teslim Edildi' };
 const dbToStatus: Record<string, ServiceRecord['status']> = { 'Bekliyor': 'Alındı', 'İşlemde': 'İnceleniyor', 'Tamamlandı': 'Hazır', 'Teslim Edildi': 'Teslim Edildi' };
@@ -35,6 +36,7 @@ export async function fetchServiceTickets(orgId: string): Promise<ServiceRecord[
     totalCost: Number(row.service_fee), status: row.details?.status || dbToStatus[row.status] || 'Alındı',
     technician: row.technician || '', notes: row.notes || '', operations: row.details?.operations || [],
     estimatedDate: row.details?.estimatedDate || '', warrantyRepair: row.details?.warrantyRepair ?? false,
+    history: Array.isArray(row.details?.history) ? row.details.history : [],
   }));
 }
 export async function saveServiceTicket(orgId: string, record: ServiceRecord): Promise<ServiceRecord> {
@@ -46,7 +48,8 @@ export async function saveServiceTicket(orgId: string, record: ServiceRecord): P
     delivered_date: record.returnedDate, complaint: record.problem || 'Belirtilmedi', service_fee: record.totalCost,
     status: statusToDb[record.status], technician: record.technician, notes: record.notes,
     details: { estimatedDate: record.estimatedDate, operations: record.operations, status: record.status,
-      warrantyRepair: record.warrantyRepair, accessoriesTaken: record.accessoriesTaken, complaints: record.complaints },
+      warrantyRepair: record.warrantyRepair, accessoriesTaken: record.accessoriesTaken, complaints: record.complaints,
+      history: record.history || [] },
   }).select('id').single();
   if (error) throw new Error(error.message || 'Servis kaydı saklanamadı. Bilgileri ve bağlantıyı kontrol edin.');
   if (!data) throw new Error('Veritabanı servis kaydını onaylamadı. Lütfen tekrar deneyin.');

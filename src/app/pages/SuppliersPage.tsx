@@ -11,7 +11,7 @@ export interface SupplierItem {
   subtitle: string;
   initials: string;
   avatarColor: string;
-  category: 'Cihaz' | 'Pil' | 'Aksesuar' | 'Servis' | 'Diğer';
+  category: string;
   contactPerson: string;
   contactTitle?: string;
   phone: string;
@@ -36,7 +36,8 @@ export default function SuppliersPage() {
     const category: SupplierItem['category'] = supplier.category === 'İşitme Cihazı' ? 'Cihaz'
       : supplier.category === 'Pil & Aksesuar' ? 'Pil'
         : supplier.category === 'Teknik Servis' ? 'Servis'
-          : supplier.category === 'Kalıp Malzemesi' ? 'Aksesuar' : 'Diğer';
+          : supplier.category === 'Kalıp Malzemesi' ? 'Aksesuar'
+            : ['Cihaz', 'Pil', 'Aksesuar', 'Servis', 'Diğer'].includes(supplier.category) ? supplier.category : supplier.category || 'Diğer';
     const purchases = supplier.purchases || [];
     return {
       id: supplier.id,
@@ -55,6 +56,10 @@ export default function SuppliersPage() {
       payments: []
     };
   }), [suppliersList]);
+  const supplierCategories = useMemo(() => Array.from(new Set([
+    'Cihaz', 'Pil', 'Aksesuar', 'Servis', 'Diğer',
+    ...suppliers.map(supplier => supplier.category).filter(Boolean),
+  ])), [suppliers]);
   const [filterPill, setFilterPill] = useState<'Tümü' | 'Aktif' | 'Pasif'>('Tümü');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tüm Kategoriler');
@@ -74,12 +79,13 @@ export default function SuppliersPage() {
   const [showMakePaymentModal, setShowMakePaymentModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
+  const [isCreatingSupplierCategory, setIsCreatingSupplierCategory] = useState(false);
 
   // Form states
   const [newSupForm, setNewSupForm] = useState({
     companyName: '',
     subtitle: 'Cihaz Tedarikçisi',
-    category: 'Cihaz' as SupplierItem['category'],
+    category: 'Cihaz',
     contactPerson: '',
     contactTitle: 'Satış Temsilcisi',
     phone: '',
@@ -218,7 +224,12 @@ export default function SuppliersPage() {
       .toUpperCase()
       .substring(0, 2) || 'TD';
 
-    const category = newSupForm.category === 'Cihaz' ? 'İşitme Cihazı' : newSupForm.category === 'Pil' ? 'Pil & Aksesuar' : newSupForm.category === 'Servis' ? 'Teknik Servis' : newSupForm.category === 'Aksesuar' ? 'Kalıp Malzemesi' : 'Diğer';
+    const categoryValue = newSupForm.category.trim();
+    if (!categoryValue) {
+      addToast({ type: 'error', message: 'Bir tedarikçi kategorisi seçin veya yeni kategori adı girin.' });
+      return;
+    }
+    const category = categoryValue === 'Cihaz' ? 'İşitme Cihazı' : categoryValue === 'Pil' ? 'Pil & Aksesuar' : categoryValue === 'Servis' ? 'Teknik Servis' : categoryValue === 'Aksesuar' ? 'Kalıp Malzemesi' : categoryValue;
     try {
       await addSupplier({
         id: crypto.randomUUID(), companyName: newSupForm.companyName.trim(), contactPerson: newSupForm.contactPerson.trim(),
@@ -241,6 +252,7 @@ export default function SuppliersPage() {
       status: 'Aktif',
       notes: ''
     });
+    setIsCreatingSupplierCategory(false);
     addToast({ type: 'success', message: 'Yeni tedarikçi kaydedildi.' });
   };
 
@@ -441,11 +453,7 @@ export default function SuppliersPage() {
           onChange={e => setSelectedCategory(e.target.value)}
         >
           <option value="Tüm Kategoriler">Tüm Kategoriler</option>
-          <option value="Cihaz">Cihaz</option>
-          <option value="Pil">Pil</option>
-          <option value="Aksesuar">Aksesuar</option>
-          <option value="Servis">Servis</option>
-          <option value="Diğer">Diğer</option>
+          {supplierCategories.map(category => <option key={category} value={category}>{category}</option>)}
         </select>
 
         <select
@@ -945,15 +953,34 @@ export default function SuppliersPage() {
                     <label className={styles.formLabel}>Kategori</label>
                     <select
                       className={styles.formSelect}
-                      value={newSupForm.category}
-                      onChange={e => setNewSupForm({ ...newSupForm, category: e.target.value as SupplierItem['category'], subtitle: `${e.target.value} Tedarikçisi` })}
+                      aria-label="Tedarikçi kategorisi seçin"
+                      value={isCreatingSupplierCategory ? '__new_category__' : newSupForm.category}
+                      onChange={e => {
+                        if (e.target.value === '__new_category__') {
+                          setIsCreatingSupplierCategory(true);
+                          setNewSupForm(form => ({ ...form, category: '', subtitle: '' }));
+                        } else {
+                          setIsCreatingSupplierCategory(false);
+                          setNewSupForm(form => ({ ...form, category: e.target.value, subtitle: `${e.target.value} Tedarikçisi` }));
+                        }
+                      }}
                     >
-                      <option value="Cihaz">Cihaz</option>
-                      <option value="Pil">Pil</option>
-                      <option value="Aksesuar">Aksesuar</option>
-                      <option value="Servis">Servis</option>
-                      <option value="Diğer">Diğer</option>
+                      {supplierCategories.map(category => <option key={category} value={category}>{category}</option>)}
+                      <option value="__new_category__">+ Yeni kategori oluştur</option>
                     </select>
+                    {isCreatingSupplierCategory && (
+                      <input
+                        type="text"
+                        aria-label="Yeni tedarikçi kategorisi"
+                        autoFocus
+                        required
+                        maxLength={80}
+                        placeholder="Kategori adını girin"
+                        className={styles.formInput}
+                        value={newSupForm.category}
+                        onChange={event => setNewSupForm(form => ({ ...form, category: event.target.value, subtitle: `${event.target.value} Tedarikçisi` }))}
+                      />
+                    )}
                   </div>
                 </div>
 

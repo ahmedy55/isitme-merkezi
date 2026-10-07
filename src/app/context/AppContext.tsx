@@ -103,7 +103,7 @@ interface AppContextType {
   addPatient: (patient: Pick<Patient, 'firstName' | 'lastName'> & Partial<Patient>) => Promise<Patient>;
   updatePatient: (patient: Patient) => void;
   deletePatient: (id: string) => Promise<boolean>;
-  addAppointment: (appointment: Appointment) => Promise<void>;
+  addAppointment: (appointment: Appointment, options?: { showSuccessToast?: boolean }) => Promise<void>;
   updateAppointment: (appointment: Appointment) => Promise<boolean>;
   updateAppointmentStatus: (id: string, status: Appointment['status']) => Promise<boolean>;
   addSale: (sale: SaleRecord, stockItemId?: string, cashRegisterId?: string) => Promise<void>;
@@ -488,7 +488,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
-  const addAppointment = async (appointment: Appointment) => {
+  const addAppointment = async (appointment: Appointment, options?: { showSuccessToast?: boolean }) => {
     requireActiveOrganization();
     const appointmentValidation = validateAppointmentDateTime(appointment.date, appointment.time);
     if (!appointmentValidation.isValid) {
@@ -510,7 +510,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
 
         setAppointmentsList(prev => [...prev, createdWithPatName]);
-        addToast({ type: 'success', message: 'Randevu başarıyla oluşturuldu.' });
+        if (options?.showSuccessToast !== false) addToast({ type: 'success', message: 'Randevu başarıyla oluşturuldu.' });
         try { await dbInsertAuditLog({ action: 'Randevu Ekleme', module: 'Randevular', description: `Randevu tarihi: ${appointment.date}` }); }
         catch (auditError: any) { logger.warn(`Randevu denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext'); }
       } catch (err: any) {
