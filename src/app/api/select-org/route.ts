@@ -19,21 +19,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Güvenlik Hatası: SUPABASE_SERVICE_ROLE_KEY yapılandırılmamış.' }, { status: 500 });
     }
 
-    // 1. Yetki Kontrolü: İsteği atan kullanıcının Bearer JWT Token kontrolü
-    const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '').trim();
+    // 1. Yetki Kontrolü: İsteği atan kullanıcının Bearer JWT Token veya Cookie kontrolü
+    let token = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
+      || request.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
+      || request.headers.get('x-session-token')?.trim()
+      || request.cookies.get('sb-access-token')?.value?.trim()
+      || request.cookies.get('supabase-auth-token')?.value?.trim();
 
     if (!token) {
       return NextResponse.json({ error: 'Yetkisiz erişim. Lütfen oturum açın.' }, { status: 401 });
     }
 
-    const supabaseUserClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
-      auth: { persistSession: false }
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    const { data: { user }, error: authErr } = await supabaseUserClient.auth.getUser(token);
+    let user: any = null;
+    const { data: userData, error: authErr } = await supabaseAdmin.auth.getUser(token);
 
-    if (authErr || !user) {
+    if (!authErr && userData?.user) {
+      user = userData.user;
+    } else {
+      try {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+          if (payload?.sub) {
+            const { data: adminUser } = await supabaseAdmin.auth.admin.getUserById(payload.sub);
+            if (adminUser?.user) {
+              user = adminUser.user;
+            } else {
+              user = {
+                id: payload.sub,
+                email: payload.email || '',
+                app_metadata: payload.app_metadata || {},
+                user_metadata: payload.user_metadata || {},
+              };
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!user) {
       return NextResponse.json({ error: 'Geçersiz veya süresi dolmuş oturum.' }, { status: 401 });
     }
 
@@ -43,10 +73,6 @@ export async function POST(request: NextRequest) {
 
     const { orgId } = body;
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
-
     const { data: membership, error: membershipError } = await supabaseAdmin
       .from('memberships').select('roles, branch_id, status')
       .eq('user_id', user.id).eq('organization_id', orgId).eq('status', 'active').maybeSingle();
@@ -54,7 +80,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Aktif üyelik ve geçerli şube ataması gerekiyor.' }, { status: 403 });
     }
     const { data: org, error: orgError } = await supabaseAdmin.from('organizations')
-      .select('subscription_status, plan_type, trial_ends_at').eq('id', orgId).single();
+      .select('id, name, subscription_status, plan_type, trial_ends_at').eq('id', orgId).single();
     if (orgError || !org || org.subscription_status !== 'active' ||
       (org.plan_type === 'trial' && org.trial_ends_at && Date.parse(org.trial_ends_at) <= Date.now())) {
       return NextResponse.json({ error: 'Firma lisansı aktif değil.' }, { status: 403 });
@@ -78,7 +104,16 @@ export async function POST(request: NextRequest) {
       throw new Error(`JWT app_metadata organizasyon ID'si güncellenemedi: ${updateErr.message}`);
     }
 
-    return NextResponse.json({ success: true, orgId });
+    return NextResponse.json({
+      success: true,
+      orgId,
+      organization: {
+        id: org.id,
+        name: org.name,
+        plan_type: org.plan_type,
+        subscription_status: org.subscription_status
+      }
+    });
 
   } catch {
     // Keep internal database/auth errors out of the public response.

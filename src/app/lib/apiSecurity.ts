@@ -158,13 +158,27 @@ export async function validateBody<T>(
 // 3. ZOD ŞEMAları — API Route Doğrulama Şemaları
 // ─────────────────────────────────────────────────────────────────
 
+export const VALID_ROLES = [
+  'Firma Yöneticisi',
+  'Şube Yöneticisi',
+  'Şube Müdürü',
+  'Odyolog',
+  'Odyometrist',
+  'Sekreter',
+  'Resepsiyon',
+  'Muhasebe',
+  'Stajyer',
+  'Teknik Servis',
+  'Satış Danışmanı',
+] as const;
+
 export const InviteUserSchema = z.object({
   email: z.string().email('Geçerli bir e-posta adresi giriniz.').max(254),
   firstName: z.string().min(1).max(100).optional(),
   lastName: z.string().min(1).max(100).optional(),
   phone: z.string().max(20).optional(),
   password: z.string().min(8).max(128).optional(),
-  roles: z.array(z.enum(['Firma Yöneticisi', 'Şube Yöneticisi', 'Odyolog', 'Odyometrist', 'Sekreter', 'Resepsiyon', 'Muhasebe'])).min(1, 'En az bir rol seçilmelidir.'),
+  roles: z.array(z.enum(VALID_ROLES)).min(1, 'En az bir rol seçilmelidir.'),
   branchId: z.string().uuid().optional().nullable().or(z.literal('')),
   orgId: z.string().uuid('Geçerli bir organizasyon ID giriniz.'),
 });
@@ -175,3 +189,4 @@ export const SelectOrgSchema = z.object({
 
 export type InviteUserInput = z.infer<typeof InviteUserSchema>;
 export type SelectOrgInput = z.infer<typeof SelectOrgSchema>;
+

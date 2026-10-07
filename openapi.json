@@ -1,0 +1,299 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AudiPro İşitme Merkezi Yönetimi API",
+    "description": "AudiPro platformu için backend API dokümantasyonu. Next.js App Router API rotalarını ve temel servis uç noktalarını içerir.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://audipro.actsoftware.net",
+      "description": "Üretim (Production) Sunucusu"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Yerel Geliştirme (Localhost)"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Supabase oturumundan elde edilen Bearer access token."
+      }
+    },
+    "schemas": {
+      "InviteUserRequest": {
+        "type": "object",
+        "required": ["orgId", "email", "roles"],
+        "properties": {
+          "orgId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Kullanıcının davet edildiği organizasyon ID'si",
+            "example": "1974b2f5-44fa-4dea-9648-b75f7024e319"
+          },
+          "branchId": {
+            "type": "string",
+            "description": "Atanacak şube ID'si (Tüm şubeler için boş bırakılabilir)",
+            "nullable": true,
+            "example": "22222222-2222-4222-8222-222222222222"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "personel@isitmemerkezi.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "Opsiyonel başlangıç şifresi (girilmezse güvenli şifre otomatik üretilir)",
+            "example": "AudiPro#Pass123!"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "Burak"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Akın"
+          },
+          "phone": {
+            "type": "string",
+            "example": "05551234567"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Firma Yöneticisi",
+                "Şube Yöneticisi",
+                "Şube Müdürü",
+                "Odyolog",
+                "Odyometrist",
+                "Sekreter",
+                "Resepsiyon",
+                "Muhasebe",
+                "Stajyer",
+                "Teknik Servis",
+                "Satış Danışmanı"
+              ]
+            },
+            "example": ["Odyometrist"]
+          }
+        }
+      },
+      "InviteUserResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "userId": { "type": "string" },
+              "firstName": { "type": "string" },
+              "lastName": { "type": "string" },
+              "email": { "type": "string" },
+              "roles": { "type": "array", "items": { "type": "string" } },
+              "branch": { "type": "string" },
+              "status": { "type": "string", "example": "Aktif" }
+            }
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["newPassword"],
+        "properties": {
+          "newPassword": {
+            "type": "string",
+            "minLength": 8,
+            "example": "YeniSifre#2026!"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Değiştirilecek kullanıcı ID (Bearer token varsa zorunlu değildir)"
+          }
+        }
+      },
+      "SelectOrgRequest": {
+        "type": "object",
+        "required": ["orgId"],
+        "properties": {
+          "orgId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "1974b2f5-44fa-4dea-9648-b75f7024e319"
+          }
+        }
+      },
+      "QALoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "playwright@example.invalid" },
+          "password": { "type": "string", "example": "playwright-test-password" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "example": "Geçersiz veri veya yetkisiz erişim." }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/invite-user": {
+      "post": {
+        "summary": "Yeni Personel / Kullanıcı Davet Et",
+        "description": "Firma yöneticisi yetkisine sahip bir kullanıcı tarafından yeni bir kullanıcı hesabı ve organizasyon üyeliği tanımlar.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InviteUserRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Personel başarıyla davet edildi ve oluşturuldu.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/InviteUserResponse" }
+              }
+            }
+          },
+          "400": { "description": "Doğrulama veya şube hatası", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Yetkisiz erişim / Oturum yok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "403": { "description": "Firma yöneticisi yetkisi gerekli", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "409": { "description": "E-posta kullanımda veya çakışma var", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "500": { "description": "Sunucu hatası", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/change-password": {
+      "post": {
+        "summary": "Kullanıcı Şifresini Değiştir",
+        "description": "Oturum açmış kullanıcının şifresini günceller.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Şifre başarıyla güncellendi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Şifreniz başarıyla güncellendi." }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Geçersiz şifre (en az 8 karakter)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "401": { "description": "Yetkisiz istek", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/select-org": {
+      "post": {
+        "summary": "Aktif Organizasyon Seç",
+        "description": "Kullanıcının aktif çalışacağı firmayı seçer ve JWT app_metadata claims'ini günceller.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SelectOrgRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Firma seçildi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "orgId": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Bu firmada aktif üyelik bulunmuyor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/api/system-time": {
+      "get": {
+        "summary": "Sistem Zamanını Al",
+        "description": "Sunucunun mevcut ISO UTC zamanını döner. Zaman senkronizasyonu için kullanılır.",
+        "responses": {
+          "200": {
+            "description": "Sunucu zamanı",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "now": { "type": "string", "format": "date-time", "example": "2026-10-07T14:00:00.000Z" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/qa-login": {
+      "post": {
+        "summary": "QA Test Kullanıcısı Girişi",
+        "description": "Otomasyon ve QA test ortamları için test kullanıcısı oluşturur veya senkronize eder.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/QALoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test kullanıcısı hazırlandı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "userId": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

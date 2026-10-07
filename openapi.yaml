@@ -1,0 +1,241 @@
+openapi: 3.0.3
+info:
+  title: AudiPro İşitme Merkezi Yönetimi API
+  description: AudiPro platformu için backend API dokümantasyonu. Next.js App Router API rotalarını ve temel servis uç noktalarını içerir.
+  version: 1.0.0
+servers:
+  - url: https://audipro.actsoftware.net
+    description: Üretim (Production) Sunucusu
+  - url: http://localhost:3000
+    description: Yerel Geliştirme (Localhost)
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase oturumundan elde edilen Bearer access token.
+  schemas:
+    InviteUserRequest:
+      type: object
+      required:
+        - orgId
+        - email
+        - roles
+      properties:
+        orgId:
+          type: string
+          format: uuid
+          example: "1974b2f5-44fa-4dea-9648-b75f7024e319"
+        branchId:
+          type: string
+          nullable: true
+          example: "22222222-2222-4222-8222-222222222222"
+        email:
+          type: string
+          format: email
+          example: "personel@isitmemerkezi.com"
+        password:
+          type: string
+          minLength: 8
+          example: "AudiPro#Pass123!"
+        firstName:
+          type: string
+          example: "Burak"
+        lastName:
+          type: string
+          example: "Akın"
+        phone:
+          type: string
+          example: "05551234567"
+        roles:
+          type: array
+          items:
+            type: string
+            enum:
+              - Firma Yöneticisi
+              - Şube Yöneticisi
+              - Şube Müdürü
+              - Odyolog
+              - Odyometrist
+              - Sekreter
+              - Resepsiyon
+              - Muhasebe
+              - Stajyer
+              - Teknik Servis
+              - Satış Danışmanı
+          example: ["Odyometrist"]
+    InviteUserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            userId:
+              type: string
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
+              type: string
+            roles:
+              type: array
+              items:
+                type: string
+            branch:
+              type: string
+            status:
+              type: string
+              example: "Aktif"
+    ChangePasswordRequest:
+      type: object
+      required:
+        - newPassword
+      properties:
+        newPassword:
+          type: string
+          minLength: 8
+          example: "YeniSifre#2026!"
+        userId:
+          type: string
+          format: uuid
+    SelectOrgRequest:
+      type: object
+      required:
+        - orgId
+      properties:
+        orgId:
+          type: string
+          format: uuid
+          example: "1974b2f5-44fa-4dea-9648-b75f7024e319"
+    QALoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "playwright@example.invalid"
+        password:
+          type: string
+          example: "playwright-test-password"
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Geçersiz veri veya yetkisiz erişim."
+paths:
+  /api/invite-user:
+    post:
+      summary: Yeni Personel / Kullanıcı Davet Et
+      description: Firma yöneticisi yetkisine sahip bir kullanıcı tarafından yeni bir kullanıcı hesabı ve organizasyon üyeliği tanımlar.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteUserRequest'
+      responses:
+        '200':
+          description: Personel başarıyla davet edildi ve oluşturuldu.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteUserResponse'
+        '400':
+          description: Doğrulama veya şube hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Yetkisiz erişim
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Firma yöneticisi yetkisi gerekli
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: E-posta kullanımda veya çakışma var
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Sunucu hatası
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/change-password:
+    post:
+      summary: Kullanıcı Şifresini Değiştir
+      description: Oturum açmış kullanıcının şifresini günceller.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Şifre başarıyla güncellendi.
+        '400':
+          description: Geçersiz şifre
+        '401':
+          description: Yetkisiz istek
+  /api/select-org:
+    post:
+      summary: Aktif Organizasyon Seç
+      description: Kullanıcının aktif çalışacağı firmayı seçer ve JWT claims günceller.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelectOrgRequest'
+      responses:
+        '200':
+          description: Firma seçildi.
+        '403':
+          description: Yetkisiz
+  /api/system-time:
+    get:
+      summary: Sistem Zamanını Al
+      description: Sunucunun mevcut ISO UTC zamanını döner.
+      responses:
+        '200':
+          description: Sunucu zamanı
+  /api/qa-login:
+    post:
+      summary: QA Test Kullanıcısı Girişi
+      description: Otomasyon ve test ortamları için test kullanıcısı oluşturur veya senkronize eder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QALoginRequest'
+      responses:
+        '200':
+          description: Test kullanıcısı hazırlandı.

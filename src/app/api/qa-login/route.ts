@@ -76,7 +76,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, userId });
+    // Authenticate and issue access token for the test runner
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || serviceKey;
+    const authClient = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    const { data: signInData } = await authClient.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    const accessToken = signInData?.session?.access_token || '';
+
+    const response = NextResponse.json({
+      success: true,
+      userId,
+      token: accessToken,
+      access_token: accessToken,
+      session: signInData?.session || null,
+      user: signInData?.user || { id: userId, email }
+    });
+
+    if (accessToken) {
+      response.cookies.set('sb-access-token', accessToken, {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
+
+    return response;
   } catch (err: any) {
     return NextResponse.json({ error: err.message || 'QA login failed.' }, { status: 500 });
   }
