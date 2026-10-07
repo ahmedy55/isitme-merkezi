@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Yetki Kontrolü: İsteği atan kullanıcının Bearer JWT Token veya Cookie kontrolü
-    let token = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
+    const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
       || request.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
       || request.headers.get('x-session-token')?.trim()
       || request.cookies.get('sb-access-token')?.value?.trim()

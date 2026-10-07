@@ -190,14 +190,22 @@ export default function CashPage() {
     });
   }, [cashMovements, cashFilterPill, cashSelectedAccount, cashSelectedBranch, summaryBranch, activeBranches, branchesList, matches]);
 
+  const matchesSummaryBranch = (item: CashMovement) => {
+    if (summaryBranch === 'Tüm Şubeler') return true;
+    const branch = branchesList.find(candidate => candidate.id === summaryBranch || candidate.name === summaryBranch)
+      || activeBranches.find(candidate => candidate.id === summaryBranch || candidate.name === summaryBranch);
+    return branch
+      ? (item.branchId ? item.branchId === branch.id : item.branch === branch.name)
+      : item.branch === summaryBranch || item.branchId === summaryBranch;
+  };
   const getMethodNet = (method: string) => cashMovements
-    .filter(item => (summaryBranch === 'Tüm Şubeler' || item.branch === summaryBranch) && item.paymentMethod === method)
+    .filter(item => matchesSummaryBranch(item) && item.paymentMethod === method)
     .reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
   const cashNetTotal = cashMovements
-    .filter(item => summaryBranch === 'Tüm Şubeler' || item.branch === summaryBranch)
+    .filter(matchesSummaryBranch)
     .reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
   const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const currentMonthMovements = cashMovements.filter(item => matches(item.branch, item.branchId) && item.dateKey?.startsWith(currentMonthKey));
+  const currentMonthMovements = cashMovements.filter(item => matches(item.branch, item.branchId) && matchesSummaryBranch(item) && item.dateKey?.startsWith(currentMonthKey));
   const currentMonthNet = currentMonthMovements.reduce((total, item) => total + (item.type === 'Giriş' ? item.amount : -item.amount), 0);
   const currentMonthSales = salesList.filter(sale => sale.date?.startsWith(currentMonthKey)).reduce((sum, sale) => sum + Number(sale.total || 0), 0);
   const currentMonthCollected = currentMonthMovements.filter(item => item.type === 'Giriş').reduce((sum, item) => sum + item.amount, 0);

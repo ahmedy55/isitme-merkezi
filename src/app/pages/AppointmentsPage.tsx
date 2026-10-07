@@ -1579,11 +1579,16 @@ export function NewAppointmentModal({
     const timeStr = `${hourStr}:${minStr}`;
 
     const linkedPatient = patientsList.find(p => p.id === patientIdFinal);
+    const patientBranch = linkedPatient?.branchId
+      ? activeBranches.find(item => item.id === linkedPatient.branchId)
+      : undefined;
     const defaultBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
     const defaultBranch = activeBranches.find(item => item.id === defaultBranchId) || activeBranches[0];
-    const requestedBranchId = activeBranch.mode === 'single'
-      ? activeBranch.branchId
-      : (initialAppointment ? (branch || initialAppointment.branchId) : (linkedPatient?.branchId || branch));
+    // appointments.branch_id must match the selected patient's branch (guard_record_branch).
+    // A single-branch UI context must not overwrite that parent relationship.
+    const requestedBranchId = patientBranch?.id
+      || (activeBranch.mode === 'single' ? activeBranch.branchId : '')
+      || (initialAppointment ? (branch || initialAppointment.branchId) : branch);
     const assignedBranch = activeBranches.find(item => item.id === requestedBranchId) || defaultBranch;
     if (!assignedBranch) { addToast?.({ type: 'error', message: 'Randevu için geçerli bir şube bulunamadı.' }); return; }
     const assignedBranchId = assignedBranch.id;

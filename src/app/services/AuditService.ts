@@ -1,4 +1,3 @@
-import { supabase } from '../lib/supabase';
 import { dbInsertAuditLog } from '../lib/database';
 import { logger } from '../lib/logger';
 
@@ -22,12 +21,12 @@ export class AuditService {
   static async log(payload: AuditLogPayload): Promise<void> {
     const details = payload.details ? JSON.stringify(payload.details) : undefined;
     const description = payload.description || (payload.entity ? `${payload.entity}: ${payload.action}` : payload.action);
-    const module = payload.module || (payload.entity === 'branch' ? 'Şubeler' : 'Sistem');
+    const moduleName = payload.module || (payload.entity === 'branch' ? 'Şubeler' : 'Sistem');
 
     try {
       await dbInsertAuditLog({
         action: payload.action,
-        module,
+        module: moduleName,
         description,
         details,
         userName: payload.userName

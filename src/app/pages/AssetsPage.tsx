@@ -8,7 +8,7 @@ import { formatCurrency, formatDate } from '../data/mockData';
 import { getNextMaintenanceDate } from '../lib/assetMaintenance';
 import { normalizeAssetCategory, normalizeAssetStatus } from '../lib/assetFilters';
 import { matchesInventoryIdentifier } from '../lib/inventorySearch';
-import { archiveAsset, AssetMaintenanceRecord, AssetRecord, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
+import { archiveAsset, AssetMaintenanceRecord, AssetRecord, completeAssetMaintenance, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
 import styles from './AssetsPage.module.css';
 
 interface DisplayAsset {
@@ -41,6 +41,12 @@ export default function AssetsPage() {
   const { addToast, currentOrgId, branchesList } = useApp();
   const { activeBranch } = useBranch();
   const activeBranches = useMemo(() => branchesList.filter(branch => branch.status === 'Aktif' || (branch.status as string) === 'active'), [branchesList]);
+  const getCalibrationDueDate = (asset: DisplayAsset) => {
+    const value = toIsoDate(asset.nextCalibrationDate || '');
+    if (!value) return null;
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
 
   // Asset list state
   const [assetList, setAssetList] = useState<DisplayAsset[]>([]);
@@ -59,6 +65,9 @@ export default function AssetsPage() {
   const [activeItem, setActiveItem] = useState<DisplayAsset | null>(null);
   const [maintenanceHistory, setMaintenanceHistory] = useState<AssetMaintenanceRecord[]>([]);
   const [maintenanceForm, setMaintenanceForm] = useState({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '', notes: '' });
+  const [maintenanceToComplete, setMaintenanceToComplete] = useState<AssetMaintenanceRecord | null>(null);
+  const [completionForm, setCompletionForm] = useState({ date: new Date().toISOString().slice(0, 10), notes: '' });
+  const [savingCompletion, setSavingCompletion] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [drawerTab, setDrawerTab] = useState<'genel' | 'garanti' | 'bakim' | 'dosyalar' | 'gecmis'>('genel');
@@ -167,9 +176,10 @@ export default function AssetsPage() {
       }
 
       // Dropdown status
-      if (selectedStatus !== 'Tüm Durumlar' && item.status !== selectedStatus) {
-        return false;
-      }
+      if (selectedStatus === 'Kalibrasyon Zamanı') {
+        const dueDate = getCalibrationDueDate(item);
+        if (!dueDate || dueDate.getTime() - Date.now() > 90 * 24 * 60 * 60 * 1000) return false;
+      } else if (selectedStatus !== 'Tüm Durumlar' && item.status !== selectedStatus) return false;
 
       // Search term
       if (searchTerm.trim()) {
@@ -214,11 +224,13 @@ export default function AssetsPage() {
   const totalAssetsCount = filteredAssets.length;
   const totalAssetsValue = filteredAssets.reduce((sum, asset) => sum + asset.cost, 0);
   const inMaintenanceCount = filteredAssets.filter(asset => asset.status === 'Bakımda' || asset.status === 'Onarımda').length;
-  const calibrationWarningCount = filteredAssets.filter(asset => asset.nextCalibrationDate && new Date(asset.nextCalibrationDate.split('.').reverse().join('-')) <= new Date()).length;
+  const calibrationWarningCount = filteredAssets.filter(asset => {
+    const dueDate = getCalibrationDueDate(asset);
+    return dueDate && dueDate.getTime() - Date.now() <= 90 * 24 * 60 * 60 * 1000;
+  }).length;
   const calibrationScheduleItems = assetList.filter(asset => {
-    const parts = asset.nextCalibrationDate?.split('.');
-    if (!parts || parts.length !== 3) return false;
-    const dueDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T23:59:59`);
+    const dueDate = getCalibrationDueDate(asset);
+    if (!dueDate) return false;
     return !Number.isNaN(dueDate.getTime()) && dueDate.getTime() - Date.now() <= 90 * 24 * 60 * 60 * 1000;
   });
 
@@ -413,7 +425,17 @@ export default function AssetsPage() {
       });
       setMaintenanceHistory(previous => [record, ...previous]);
       if (recordType !== 'Kalibrasyon') {
-        const updatedItem = { ...activeItem, lastCalibrationDate: formatDate(record.maintenanceDate), maintenanceStatus: 'Bakım kaydı var' };
+        const maintenanceDate = new Date(`${toIsoDate(record.maintenanceDate)}T00:00:00`);
+        const isFuturePlan = maintenanceDate.getTime() > new Date(new Date().toDateString()).getTime();
+        const nextDate = isFuturePlan
+          ? maintenanceDate
+          : getNextMaintenanceDate(record.maintenanceDate, activeItem.calibrationIntervalMonths || 12);
+        const updatedItem = {
+          ...activeItem,
+          lastCalibrationDate: formatDate(record.maintenanceDate),
+          nextCalibrationDate: nextDate?.toLocaleDateString('tr-TR') || '—',
+          maintenanceStatus: isFuturePlan ? 'Planlandı' : 'Bakım kaydı var',
+        };
         setActiveItem(updatedItem);
         setAssetList(previous => previous.map(item => item.id === updatedItem.id ? updatedItem : item));
       }
@@ -424,6 +446,34 @@ export default function AssetsPage() {
       addToast({ type: 'success', message: `${recordType} kaydı demirbaş geçmişine eklendi.` });
     } catch (error) {
       addToast({ type: 'error', message: error instanceof Error ? error.message : 'Demirbaş işlem kaydı kaydedilemedi.' });
+    }
+  };
+
+  const handleCompleteMaintenance = async () => {
+    if (!activeItem || !maintenanceToComplete || savingCompletion) return;
+    setSavingCompletion(true);
+    try {
+      const updated = await completeAssetMaintenance({
+        id: maintenanceToComplete.id,
+        assetId: activeItem.id,
+        maintenanceDate: completionForm.date,
+        notes: completionForm.notes,
+      });
+      setMaintenanceHistory(previous => previous.map(record => record.id === updated.id ? updated : record));
+      const formattedDate = formatDate(updated.maintenanceDate);
+      setActiveItem(previous => previous && previous.id === activeItem.id
+        ? { ...previous, lastCalibrationDate: formattedDate, maintenanceStatus: 'Bakım kaydı var' }
+        : previous);
+      setAssetList(previous => previous.map(asset => asset.id === activeItem.id
+        ? { ...asset, lastCalibrationDate: formattedDate, maintenanceStatus: 'Bakım kaydı var' }
+        : asset));
+      setMaintenanceToComplete(null);
+      setCompletionForm({ date: new Date().toISOString().slice(0, 10), notes: '' });
+      addToast({ type: 'success', message: 'Bakım tamamlandı ve demirbaş geçmişine kaydedildi.' });
+    } catch (error) {
+      addToast({ type: 'error', message: error instanceof Error ? `Bakım tamamlanamadı: ${error.message}` : 'Bakım tamamlanamadı.' });
+    } finally {
+      setSavingCompletion(false);
     }
   };
 
@@ -508,7 +558,7 @@ export default function AssetsPage() {
         </div>
 
         {/* Card 4: Kalibrasyon Uyarısı */}
-        <div className={styles.statCard} onClick={() => setShowScheduleModal(true)}>
+        <div className={styles.statCard} role="button" tabIndex={0} aria-label="Kalibrasyon zamanı gelen demirbaşları filtrele" onClick={() => setSelectedStatus('Kalibrasyon Zamanı')} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedStatus('Kalibrasyon Zamanı'); } }}>
           <div className={`${styles.statIcon} ${styles.iconRed}`}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -619,6 +669,7 @@ export default function AssetsPage() {
           <option value="Hek/Iskarta">Hek/Iskarta</option>
           <option value="Hurda">Hurda</option>
           <option value="Satıldı">Satıldı</option>
+          <option value="Kalibrasyon Zamanı">Kalibrasyon Zamanı</option>
         </select>
 
         <select
@@ -1104,8 +1155,9 @@ export default function AssetsPage() {
                 <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
                   {maintenanceHistory.map(record => <div key={record.id} style={{ padding: 12, background: '#f8fafc', borderRadius: 8 }}>
                     <strong>{record.recordType}{record.provider ? ` · ${record.provider}` : ''}</strong>
-                    <div>{formatDate(record.maintenanceDate)}{record.reportNumber ? ` · Rapor: ${record.reportNumber}` : ''}</div>
+                    <div>{formatDate(record.maintenanceDate)}{record.reportNumber ? ` · Rapor: ${record.reportNumber}` : ''} · {record.status}</div>
                     {record.notes && <p>{record.notes}</p>}
+                    {record.status === 'Planlandı' && <button className={styles.btnFilter} type="button" onClick={() => { setMaintenanceToComplete(record); setCompletionForm({ date: new Date().toISOString().slice(0, 10), notes: '' }); }}>Bakımı Tamamla</button>}
                   </div>)}
                   {maintenanceHistory.length === 0 && <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                     <div style={{ color: '#64748b' }}>Bu demirbaş için kayıtlı bakım/kalibrasyon bilgisi bulunmuyor.</div>
@@ -1458,6 +1510,8 @@ export default function AssetsPage() {
                       saved = await saveAsset(record);
                     } catch (err) {
                       console.warn('saveAsset in edit modal warning:', err);
+                      addToast({ type: 'error', message: err instanceof Error ? `Demirbaş bilgileri kaydedilemedi: ${err.message}` : 'Demirbaş bilgileri kaydedilemedi.' });
+                      return;
                     }
                   }
 
@@ -1559,6 +1613,26 @@ export default function AssetsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {maintenanceToComplete && activeItem && (
+        <div role="presentation" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1100, display: 'grid', placeItems: 'center', padding: 20 }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="complete-maintenance-title" style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+              <h3 id="complete-maintenance-title" style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Bakım Kaydını Tamamla</h3>
+              <button type="button" aria-label="Kapat" style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setMaintenanceToComplete(null)}>✕</button>
+            </div>
+            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
+              <div style={{ fontWeight: 650 }}>{activeItem.name} · {maintenanceToComplete.recordType}</div>
+              <label style={{ display: 'grid', gap: 5 }}>Tamamlanma Tarihi<input aria-label="Tamamlanma Tarihi" type="date" value={completionForm.date} onChange={event => setCompletionForm(form => ({ ...form, date: event.target.value }))} className={styles.filterSelect} /></label>
+              <label style={{ display: 'grid', gap: 5 }}>Tamamlanma Notu<textarea aria-label="Tamamlanma Notu" value={completionForm.notes} onChange={event => setCompletionForm(form => ({ ...form, notes: event.target.value }))} className={styles.filterSelect} style={{ minHeight: 80 }} /></label>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button type="button" className={styles.btnClear} onClick={() => setMaintenanceToComplete(null)}>İptal</button>
+              <button type="button" className={styles.btnNewAsset} disabled={savingCompletion} onClick={() => void handleCompleteMaintenance()}>{savingCompletion ? 'Kaydediliyor…' : 'Tamamlandı Olarak Kaydet'}</button>
+            </div>
+          </section>
         </div>
       )}
 

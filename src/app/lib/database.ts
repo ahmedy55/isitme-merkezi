@@ -846,7 +846,6 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
       const { data: refreshed } = await supabase.auth.refreshSession();
       if (refreshed.session) session = refreshed.session;
     }
-    const token = session?.access_token || '';
 
     if (!user.branchId && user.branch && user.branch !== 'Tüm Şubeler') {
       const { data: branch } = await supabase.from('branches').select('id').eq('organization_id', orgId).eq('name', user.branch).maybeSingle();
@@ -855,13 +854,7 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
       }
     }
     const tempPassword = user.password || `AudiPro#${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}!Aa1`;
-    const res = await fetch('/api/invite-user', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
+    const invitePayload = JSON.stringify({
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
@@ -870,8 +863,31 @@ export const dbInsertMembership = async (user: any): Promise<SystemUser> => {
         password: tempPassword,
         branchId: user.branchId || null,
         orgId
-      })
+      });
+    const sendInvite = (accessToken: string) => fetch('/api/invite-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: invitePayload
     });
+
+    if (!session?.access_token) {
+      throw new DatabaseError('Oturum doğrulanamadı. Lütfen yeniden giriş yapıp tekrar deneyin.');
+    }
+
+    let res = await sendInvite(session.access_token);
+    // Auth tokens may be rotated in another tab while the local expiry timestamp
+    // still looks valid. A 401 is safe to retry once because auth is checked before
+    // the invite endpoint performs any write.
+    if (res.status === 401) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshed.session?.access_token) {
+        session = refreshed.session;
+        res = await sendInvite(session.access_token);
+      }
+    }
 
     const resData = await res.json();
     if (!res.ok || !resData.success) {

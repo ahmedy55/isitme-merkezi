@@ -71,6 +71,7 @@ export interface AssetMaintenanceRecord {
   id: string;
   assetId: string;
   recordType: 'Bakım' | 'Onarım' | 'Kalibrasyon';
+  status: 'Planlandı' | 'Tamamlandı' | 'İptal';
   maintenanceDate: string;
   provider: string;
   reportNumber?: string;
@@ -82,6 +83,7 @@ const maintenanceFromDb = (row: any): AssetMaintenanceRecord => ({
   id: row.id,
   assetId: row.asset_id,
   recordType: row.record_type,
+  status: row.status === 'planned' ? 'Planlandı' : row.status === 'cancelled' ? 'İptal' : 'Tamamlandı',
   maintenanceDate: row.maintenance_date,
   provider: row.provider || '',
   reportNumber: row.report_number || '',
@@ -112,6 +114,7 @@ export async function createAssetMaintenance(input: {
     branch_id: input.branchId,
     asset_id: input.assetId,
     record_type: input.recordType,
+    status: new Date(`${input.maintenanceDate}T00:00:00`).getTime() > new Date(new Date().toDateString()).getTime() ? 'planned' : 'completed',
     maintenance_date: input.maintenanceDate,
     provider: input.provider.trim(),
     report_number: input.reportNumber.trim() || null,
@@ -119,6 +122,18 @@ export async function createAssetMaintenance(input: {
     created_by: user?.id || null,
   }).select('*').single();
   if (error || !data) throw new Error(error?.message || 'Demirbaş işlem kaydı doğrulanamadı.');
+  return maintenanceFromDb(data);
+}
+
+export async function completeAssetMaintenance(input: {
+  id: string; assetId: string; maintenanceDate: string; notes: string;
+}): Promise<AssetMaintenanceRecord> {
+  const { data, error } = await supabase.from('asset_maintenance_records').update({
+    status: 'completed',
+    maintenance_date: input.maintenanceDate,
+    notes: input.notes.trim(),
+  }).eq('id', input.id).eq('asset_id', input.assetId).eq('status', 'planned').select('*').maybeSingle();
+  if (error || !data) throw new Error(error?.message || 'Planlı bakım tamamlanamadı; kayıt bulunamadı veya yetki yok.');
   return maintenanceFromDb(data);
 }
 

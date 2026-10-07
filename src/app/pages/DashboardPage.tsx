@@ -34,6 +34,7 @@ export default function DashboardPage() {
     return `${formatDate(start)} - ${formatDate(today)}`;
   });
   const [showDateModal, setShowDateModal] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
   const toDateInput = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   const [customStartDate, setCustomStartDate] = useState(() => toDateInput(new Date(today.getFullYear(), today.getMonth(), 1)));
   const [customEndDate, setCustomEndDate] = useState(() => toDateInput(today));
@@ -63,6 +64,19 @@ export default function DashboardPage() {
   const rangeServiceRecords = serviceRecords.filter(record =>
     matches(undefined, record.branchId) && inSelectedRange(record.receivedDate),
   );
+  const comparisonDuration = Math.max(1, Math.ceil((selectedRange.end.getTime() - selectedRange.start.getTime()) / 86400000) + 1);
+  const previousRangeEnd = new Date(selectedRange.start);
+  previousRangeEnd.setDate(previousRangeEnd.getDate() - 1);
+  const previousRangeStart = new Date(previousRangeEnd);
+  previousRangeStart.setDate(previousRangeStart.getDate() - comparisonDuration + 1);
+  const previousRangeSales = salesList.filter(sale => matches(undefined, sale.branchId) && sale.date && (() => {
+    const date = new Date(`${sale.date.slice(0, 10)}T00:00:00`);
+    return date >= previousRangeStart && date <= previousRangeEnd;
+  })());
+  const previousRangeAppointments = appointmentsList.filter(appointment => matches(appointment.branch, appointment.branchId) && appointment.date && (() => {
+    const date = new Date(`${appointment.date.slice(0, 10)}T00:00:00`);
+    return date >= previousRangeStart && date <= previousRangeEnd;
+  })());
   const serviceCount = rangeServiceRecords.length;
   const serviceStatusCounts = {
     waiting: rangeServiceRecords.filter(record => record.status === 'Alındı').length,
@@ -101,6 +115,9 @@ export default function DashboardPage() {
     if (range === 'Bu Yıl') start.setMonth(0, 1);
     setActiveTimeRange(range);
     setDateRangeText(`${formatDate(start)} - ${formatDate(end)}`);
+    const chartPeriod = range === 'Bu Hafta' ? 'Bu Hafta' : 'Bu Ay';
+    setAppointmentChartPeriod(chartPeriod);
+    setPatientChartPeriod(chartPeriod);
     addToast({ type: 'info', message: `Zaman aralığı: ${range} seçildi` });
   };
 
@@ -123,15 +140,22 @@ export default function DashboardPage() {
 
   const monthLabels = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
   const reportYear = today.getFullYear();
-  const chartMonths = Array.from({ length: 12 }, (_, index) => {
-    const date = new Date(selectedRange.end.getFullYear(), selectedRange.end.getMonth() - (11 - index), 1);
-    return { year: date.getFullYear(), month: date.getMonth(), label: monthLabels[date.getMonth()] };
-  });
-  const monthlyValues = chartMonths.map(({ year, month }) => rangeSales
-    .filter(sale => sale.date.slice(0, 7) === `${year}-${String(month + 1).padStart(2, '0')}`)
+  const weeklyTrend = activeTimeRange === 'Bu Hafta' || activeTimeRange === 'Bugün';
+  const chartMonths = weeklyTrend
+    ? Array.from({ length: Math.min(7, Math.max(1, comparisonDuration)) }, (_, index) => {
+      const date = new Date(selectedRange.start);
+      date.setDate(date.getDate() + index);
+      return { year: date.getFullYear(), month: date.getMonth(), label: new Intl.DateTimeFormat('tr-TR', { weekday: 'short' }).format(date), key: toDateInput(date) };
+    })
+    : Array.from({ length: 12 }, (_, index) => {
+      const date = new Date(selectedRange.end.getFullYear(), selectedRange.end.getMonth() - (11 - index), 1);
+      return { year: date.getFullYear(), month: date.getMonth(), label: monthLabels[date.getMonth()], key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` };
+    });
+  const trendValues = chartMonths.map(point => rangeSales
+    .filter(sale => weeklyTrend ? sale.date.slice(0, 10) === point.key : sale.date.slice(0, 7) === point.key)
     .reduce((sum, sale) => sum + (dashboardChartMetric === 'Ciro' ? sale.total : sale.items.reduce((qty, item) => qty + item.quantity, 0)), 0));
-  const monthlyMax = Math.max(...monthlyValues, 1);
-  const monthlyData = chartMonths.map((item, index) => ({ month: item.label, value: monthlyValues[index], height: monthlyValues[index] / monthlyMax * 108, isCurrent: index === 11 }));
+  const trendMax = Math.max(...trendValues, 1);
+  const monthlyData = chartMonths.map((item, index) => ({ month: weeklyTrend ? `${item.label} ${item.key.slice(8, 10)}` : item.label, value: trendValues[index], height: trendValues[index] / trendMax * 108, isCurrent: index === chartMonths.length - 1 }));
   const selectedChartMonthIndex = Math.min(activeChartMonthIndex, monthlyData.length - 1);
   const selectedChartMonth = monthlyData[selectedChartMonthIndex];
 
@@ -208,6 +232,10 @@ export default function DashboardPage() {
             </svg>
           </button>
 
+          <button type="button" className={styles.dateRangeBtn} aria-expanded={showComparison} onClick={() => setShowComparison(value => !value)}>
+            {showComparison ? 'Karşılaştırmayı Gizle' : 'Karşılaştır'}
+          </button>
+
           <div className={styles.timePills}>
             {(['Bugün', 'Bu Hafta', 'Bu Ay', 'Bu Yıl'] as const).map(pill => (
               <button
@@ -224,6 +252,15 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {showComparison && (
+        <section aria-label="Önceki dönem karşılaştırması" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, margin: '0 0 18px' }}>
+          <div className={styles.statCard}><span>Önceki dönem</span><strong>{formatDate(previousRangeStart)} - {formatDate(previousRangeEnd)}</strong></div>
+          <div className={styles.statCard}><span>Önceki dönem cirosu</span><strong>{formatCurrency(previousRangeSales.reduce((total, sale) => total + Number(sale.total || 0), 0))}</strong></div>
+          <div className={styles.statCard}><span>Önceki dönem randevuları</span><strong>{previousRangeAppointments.length}</strong></div>
+          <div className={styles.statCard}><span>Seçili dönem ciro farkı</span><strong>{formatCurrency(dashboardRevenue - previousRangeSales.reduce((total, sale) => total + Number(sale.total || 0), 0))}</strong></div>
+        </section>
+      )}
 
       {/* ── 5 Stat Cards in Row ── */}
       <div className={styles.statsGrid}>
@@ -331,7 +368,7 @@ export default function DashboardPage() {
                   <line x1="6" y1="20" x2="6" y2="14"></line>
                 </svg>
               </span>
-              <span>Aylık Ciro Trendi</span>
+              <span>{weeklyTrend ? 'Günlük Ciro Trendi' : 'Aylık Ciro Trendi'}</span>
             </div>
             <select className={styles.miniSelect} value={dashboardChartMetric} onChange={event => setDashboardChartMetric(event.target.value as 'Ciro' | 'Adet')}>
               <option value="Ciro">Ciro</option>
@@ -348,22 +385,22 @@ export default function DashboardPage() {
 
             <svg className={styles.barChartSvg} viewBox="0 0 460 140" preserveAspectRatio="none">
               {/* Grid lines and Y axis */}
-              <text x="28" y="15" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax) : `${Math.round(monthlyMax)} adet`}</text>
+              <text x="28" y="15" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax) : `${Math.round(trendMax)} adet`}</text>
               <line x1="34" y1="12" x2="450" y2="12" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
-              <text x="28" y="42" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax * .75) : `${Math.round(monthlyMax * .75)} adet`}</text>
+              <text x="28" y="42" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax * .75) : `${Math.round(trendMax * .75)} adet`}</text>
               <line x1="34" y1="39" x2="450" y2="39" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
-              <text x="28" y="69" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax * .5) : `${Math.round(monthlyMax * .5)} adet`}</text>
+              <text x="28" y="69" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax * .5) : `${Math.round(trendMax * .5)} adet`}</text>
               <line x1="34" y1="66" x2="450" y2="66" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
-              <text x="28" y="96" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(monthlyMax * .25) : `${Math.round(monthlyMax * .25)} adet`}</text>
+              <text x="28" y="96" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax * .25) : `${Math.round(trendMax * .25)} adet`}</text>
               <line x1="34" y1="93" x2="450" y2="93" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
 
               <text x="28" y="122" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? '₺0' : '0 adet'}</text>
               <line x1="34" y1="120" x2="450" y2="120" stroke="#E5E7EB" strokeWidth="1" />
 
-              {/* Monthly Bars */}
+              {/* Period-aware bars: months for broad ranges and days for this week. */}
               {monthlyData.map((item, idx) => {
                 const xPos = 48 + idx * 34;
                 const barWidth = 16;
@@ -372,11 +409,11 @@ export default function DashboardPage() {
 
                 return (
                   <g
-                    key={`${chartMonths[idx].year}-${item.month}`}
+                    key={chartMonths[idx].key}
                     className={styles.chartBarGroup}
                     tabIndex={0}
                     role="button"
-                    aria-label={`${item.month} ${chartMonths[idx].year}: ${dashboardChartMetric === 'Ciro' ? formatCurrency(item.value) : `${item.value} adet`}`}
+                    aria-label={`${item.month}: ${dashboardChartMetric === 'Ciro' ? formatCurrency(item.value) : `${item.value} adet`}`}
                     onMouseEnter={() => setActiveChartMonthIndex(idx)}
                     onFocus={() => setActiveChartMonthIndex(idx)}
                   >
