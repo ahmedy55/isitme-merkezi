@@ -72,7 +72,12 @@ function AppContent() {
   }
 
   if (currentPage === 'password-recovery') {
-    return <PasswordRecoveryPage />;
+    return (
+      <>
+        <PasswordRecoveryPage />
+        {toasts.length > 0 && renderToastContainer()}
+      </>
+    );
   }
 
   if (currentPage === 'org-select') {
