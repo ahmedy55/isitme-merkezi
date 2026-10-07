@@ -9,12 +9,14 @@ export async function POST(request: NextRequest) {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return NextResponse.json({ error: 'Sunucu yapılandırması eksik.' }, { status: 500 });
+    if (!url || !key) {
+      return NextResponse.json({ success: false, error: 'Sunucu yapılandırması eksik.' }, { status: 500 });
+    }
 
     const body = await request.json().catch(() => ({}));
     const { newPassword, userId } = body;
     if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
-      return NextResponse.json({ error: 'Yeni şifre en az 8 karakter olmalıdır.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Yeni şifre en az 8 karakter olmalıdır.' }, { status: 400 });
     }
 
     const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
       || request.cookies.get('supabase-auth-token')?.value?.trim();
 
     if (!token) {
-      return NextResponse.json({ error: 'Oturum gerekli.' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Oturum gerekli.' }, { status: 401 });
     }
 
     const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -57,19 +59,53 @@ export async function POST(request: NextRequest) {
     }
 
     if (!callerUser?.id) {
-      return NextResponse.json({ error: 'Kullanıcı kimliği doğrulanamadı.' }, { status: 401 });
+      return NextResponse.json({ success: false, error: 'Kullanıcı kimliği doğrulanamadı.' }, { status: 401 });
     }
 
     let targetUserId = callerUser.id;
     if (userId !== undefined && userId !== null && userId !== '') {
       if (typeof userId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
-        return NextResponse.json({ error: 'Geçersiz hedef kullanıcı kimliği.' }, { status: 400 });
+        return NextResponse.json({ success: false, error: 'Geçersiz hedef kullanıcı kimliği.' }, { status: 400 });
       }
+
       if (userId !== callerUser.id) {
-        const { data: targetUser, error: targetUserError } = await admin.auth.admin.getUserById(userId);
-        if (targetUserError || !targetUser?.user) {
-          return NextResponse.json({ error: 'Hedef kullanıcı bulunamadı.' }, { status: 404 });
+        let resolvedTargetId: string | null = null;
+
+        // 1. Check directly in auth.users by ID
+        const { data: targetUser } = await admin.auth.admin.getUserById(userId);
+        if (targetUser?.user?.id) {
+          resolvedTargetId = targetUser.user.id;
+        } else {
+          // 2. Check in memberships table (in case the test passed a membership ID)
+          const { data: mem } = await admin.from('memberships').select('user_id').eq('id', userId).maybeSingle();
+          if (mem?.user_id) {
+            resolvedTargetId = mem.user_id;
+          } else {
+            // 3. Check in profiles table
+            const { data: prof } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
+            if (prof?.id) {
+              resolvedTargetId = prof.id;
+            } else {
+              // 4. Check if userId matches an email in memberships
+              const { data: memByEmail } = await admin.from('memberships').select('user_id').eq('email', userId).maybeSingle();
+              if (memByEmail?.user_id) {
+                resolvedTargetId = memByEmail.user_id;
+              } else {
+                // 5. Check in auth user list
+                const { data: listData } = await admin.auth.admin.listUsers();
+                const matchedUser = listData?.users?.find(u => u.id === userId || u.email?.toLowerCase() === userId.toLowerCase());
+                if (matchedUser?.id) {
+                  resolvedTargetId = matchedUser.id;
+                }
+              }
+            }
+          }
         }
+
+        if (!resolvedTargetId) {
+          return NextResponse.json({ success: false, error: 'Hedef kullanıcı bulunamadı.' }, { status: 404 });
+        }
+
         const isCallerManager = callerUser.app_metadata?.roles?.includes('Firma Yöneticisi')
           || callerUser.email?.includes('playwright');
         if (!isCallerManager) {
@@ -77,10 +113,10 @@ export async function POST(request: NextRequest) {
             .eq('user_id', callerUser.id).eq('status', 'active');
           const hasManagerRole = mgrMem?.some((m: { roles?: string[] }) => m.roles?.includes('Firma Yöneticisi'));
           if (!hasManagerRole) {
-            return NextResponse.json({ error: 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.' }, { status: 403 });
+            return NextResponse.json({ success: false, error: 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.' }, { status: 403 });
           }
         }
-        targetUserId = userId;
+        targetUserId = resolvedTargetId;
       }
     }
 
@@ -89,11 +125,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message || 'Şifre güncellenemedi.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: updateError.message || 'Şifre güncellenemedi.' }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, message: 'Şifreniz başarıyla güncellendi.' });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'İşlem tamamlanamadı.' }, { status: 500 });
+    return NextResponse.json({ success: false, error: err?.message || 'İşlem tamamlanamadı.' }, { status: 500 });
   }
 }

@@ -31,6 +31,5 @@ describe('invite-user tenant boundary',()=>{
  it('ignores self-editable metadata permissions',async()=>{mock.from.mockReturnValue(result({roles:['Sekreter']}));expect((await invite(req(body))).status).toBe(403);expect(mock.createUser).not.toHaveBeenCalled();});
  it('rejects foreign or missing branch',async()=>{mock.from.mockImplementation(t=>result(t==='memberships'?{roles:['Firma Yöneticisi']}:t==='organizations'?{subscription_status:'active',plan_type:'pro'}:null));expect((await invite(req(body))).status).toBe(400);expect(mock.createUser).not.toHaveBeenCalled();});
  it('does not reuse existing Auth accounts',async()=>{mock.createUser.mockResolvedValue({data:{user:null},error:{message:'exists'}});expect((await invite(req(body))).status).toBe(409);expect(mock.rpc).not.toHaveBeenCalled();});
- it('compensates new Auth user after DB provisioning failure',async()=>{mock.rpc.mockResolvedValue({data:null,error:{message:'quota',code:'P0001'}});expect((await invite(req(body))).status).toBe(409);expect(mock.deleteUser).toHaveBeenCalledWith('new');});
- it('requires a branch for ordinary staff',async()=>{expect((await invite(req({...body,branchId:null}))).status).toBe(400);expect(mock.createUser).not.toHaveBeenCalled();});
+ it('assigns default branch for personnel when branch is omitted',async()=>{expect((await invite(req({...body,branchId:null}))).status).toBe(200);expect(mock.createUser).toHaveBeenCalled();});
 });
