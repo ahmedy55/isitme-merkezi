@@ -133,6 +133,9 @@ components:
         success:
           type: boolean
           example: false
+        message:
+          type: string
+          example: "Geçersiz veri veya yetkisiz erişim."
         error:
           type: string
           example: "Geçersiz veri veya yetkisiz erişim."

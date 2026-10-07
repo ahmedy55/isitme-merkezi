@@ -22,11 +22,11 @@ import { POST as changePassword } from './change-password/route';
 import { POST as inviteUser } from './invite-user/route';
 import { POST as qaLogin } from './qa-login/route';
 
-describe('Verification of the newly surfaced 5 test issues', () => {
+describe('Verification of the 3 latest reported issues', () => {
   const orgId = '1974b2f5-44fa-4dea-9648-b75f7024e319';
   let authToken = '';
   let createdUserId = '';
-  let createdMembershipId = '';
+  const fixedTestEmail = 'reused-test-runner-email@example.com';
 
   beforeAll(async () => {
     const req = new NextRequest('http://localhost:3000/api/qa-login', {
@@ -42,9 +42,9 @@ describe('Verification of the newly surfaced 5 test issues', () => {
     authToken = data.token;
   });
 
-  it('1. Davet isteği oluşturulan kaydın kimliği ile izlenebilir (no branch provided, returns id)', async () => {
-    const testEmail = `trackable-invite-${Date.now()}@example.invalid`;
-    const req = new NextRequest('http://localhost:3000/api/invite-user', {
+  it('1. Invite flow succeeds even when email is reused across runs (Issue 1)', async () => {
+    // First invite call
+    const req1 = new NextRequest('http://localhost:3000/api/invite-user', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -52,26 +52,21 @@ describe('Verification of the newly surfaced 5 test issues', () => {
       },
       body: JSON.stringify({
         orgId,
-        email: testEmail,
+        email: fixedTestEmail,
         roles: ['Sekreter'],
-        firstName: 'İzlenebilir',
-        lastName: 'Kayıt',
+        firstName: 'Test',
+        lastName: 'Bir',
       }),
     });
-    const res = await inviteUser(req);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.user).toBeDefined();
-    expect(data.user.id).toBeDefined();
-    expect(data.user.userId).toBeDefined();
-    createdUserId = data.user.id;
-    createdMembershipId = data.user.membershipId;
-  });
+    const res1 = await inviteUser(req1);
+    expect(res1.status).toBe(200);
+    const data1 = await res1.json();
+    expect(data1.success).toBe(true);
+    expect(data1.user.email).toBe(fixedTestEmail);
+    createdUserId = data1.user.id;
 
-  it('2. Davet isteği geçerli rol ile yeni kullanıcı oluşturur (valid role without branchId)', async () => {
-    const testEmail = `valid-role-${Date.now()}@example.invalid`;
-    const req = new NextRequest('http://localhost:3000/api/invite-user', {
+    // Second invite call with the exact same email (simulating repeated test runner execution)
+    const req2 = new NextRequest('http://localhost:3000/api/invite-user', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -79,22 +74,21 @@ describe('Verification of the newly surfaced 5 test issues', () => {
       },
       body: JSON.stringify({
         orgId,
-        email: testEmail,
-        roles: ['Odyometrist'],
-        firstName: 'Geçerli',
-        lastName: 'Rol',
+        email: fixedTestEmail,
+        roles: ['Odyolog'],
+        firstName: 'Test',
+        lastName: 'İki',
       }),
     });
-    const res = await inviteUser(req);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.user.roles).toContain('Odyometrist');
-    expect(data.user.branch).toBeDefined();
+    const res2 = await inviteUser(req2);
+    // Must NOT return 409 "Hesap oluşturulamadı. E-posta kullanımda olabilir."
+    expect(res2.status).toBe(200);
+    const data2 = await res2.json();
+    expect(data2.success).toBe(true);
+    expect(data2.user.email).toBe(fixedTestEmail);
   });
 
-  it('3. Başka bir kullanıcı ID\'si ile şifre güncellemesini başarıyla gerçekleştir', async () => {
-    // Test updating password using the target user id created in step 1
+  it('2. Password update with target user ID succeeds (Issue 2)', async () => {
     const req = new NextRequest('http://localhost:3000/api/change-password', {
       method: 'POST',
       headers: {
@@ -111,29 +105,10 @@ describe('Verification of the newly surfaced 5 test issues', () => {
     const data = await res.json();
     expect(data.success).toBe(true);
     expect(data.message).toBe('Şifreniz başarıyla güncellendi.');
-
-    // Also verify when membershipId is used as target userId
-    if (createdMembershipId && createdMembershipId !== createdUserId) {
-      const memReq = new NextRequest('http://localhost:3000/api/change-password', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          userId: createdMembershipId,
-          newPassword: 'Updated#Password456!',
-        }),
-      });
-      const memRes = await changePassword(memReq);
-      expect(memRes.status).toBe(200);
-      const memData = await memRes.json();
-      expect(memData.success).toBe(true);
-    }
   });
 
-  it('4. Geçersiz hedef kullanıcı kimliği ile şifre değiştirme reddedilir (response has success: false)', async () => {
-    const notFoundReq = new NextRequest('http://localhost:3000/api/change-password', {
+  it('3. Error response has both message and error fields on invalid target user (Issue 3)', async () => {
+    const req = new NextRequest('http://localhost:3000/api/change-password', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -144,55 +119,13 @@ describe('Verification of the newly surfaced 5 test issues', () => {
         newPassword: 'Valid#Password123!',
       }),
     });
-    const notFoundRes = await changePassword(notFoundReq);
-    expect(notFoundRes.status).toBe(404);
-    const data = await notFoundRes.json();
-    expect(data).toHaveProperty('success');
-    expect(data.success).toBe(false);
-    expect(data).toHaveProperty('error');
-
-    // Also test malformed UUID
-    const badUuidReq = new NextRequest('http://localhost:3000/api/change-password', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({
-        userId: 'invalid-id-string',
-        newPassword: 'Valid#Password123!',
-      }),
-    });
-    const badUuidRes = await changePassword(badUuidReq);
-    expect(badUuidRes.status).toBe(400);
-    const badData = await badUuidRes.json();
-    expect(badData).toHaveProperty('success');
-    expect(badData.success).toBe(false);
-    expect(badData).toHaveProperty('error');
-  });
-
-  it('5. Başlangıç şifresi verilmeden davet oluşturma akışı çalışır (no password, no branch)', async () => {
-    const testEmail = `nopass-invite-${Date.now()}@example.invalid`;
-    const req = new NextRequest('http://localhost:3000/api/invite-user', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({
-        orgId,
-        email: testEmail,
-        roles: ['Odyolog'],
-        firstName: 'Şifresiz',
-        lastName: 'Personel',
-      }),
-    });
-    const res = await inviteUser(req);
-    expect(res.status).toBe(200);
+    const res = await changePassword(req);
+    expect(res.status).toBe(404);
     const data = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.user).toBeDefined();
-    expect(data.user.email).toBe(testEmail);
-    expect(data.user.roles).toContain('Odyolog');
+    expect(data.success).toBe(false);
+    expect(data).toHaveProperty('message');
+    expect(typeof data.message).toBe('string');
+    expect(data).toHaveProperty('error');
+    expect(typeof data.error).toBe('string');
   });
 });

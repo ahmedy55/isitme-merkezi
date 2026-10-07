@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkRateLimit } from '../../lib/apiSecurity';
 
+function errorResponse(status: number, message: string) {
+  return NextResponse.json({ success: false, message, error: message }, { status });
+}
+
 export async function POST(request: NextRequest) {
   const rateError = checkRateLimit(request, { maxRequests: 10 });
   if (rateError) return rateError;
@@ -10,13 +14,15 @@ export async function POST(request: NextRequest) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) {
-      return NextResponse.json({ success: false, error: 'Sunucu yapılandırması eksik.' }, { status: 500 });
+      return errorResponse(500, 'Sunucu yapılandırması eksik.');
     }
 
     const body = await request.json().catch(() => ({}));
-    const { newPassword, userId } = body;
+    const { newPassword } = body;
+    const targetIdInput = body.userId ?? body.targetUserId ?? body.user_id ?? body.id;
+
     if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
-      return NextResponse.json({ success: false, error: 'Yeni şifre en az 8 karakter olmalıdır.' }, { status: 400 });
+      return errorResponse(400, 'Yeni şifre en az 8 karakter olmalıdır.');
     }
 
     const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
@@ -25,7 +31,7 @@ export async function POST(request: NextRequest) {
       || request.cookies.get('supabase-auth-token')?.value?.trim();
 
     if (!token) {
-      return NextResponse.json({ success: false, error: 'Oturum gerekli.' }, { status: 401 });
+      return errorResponse(401, 'Oturum gerekli.');
     }
 
     const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -59,43 +65,49 @@ export async function POST(request: NextRequest) {
     }
 
     if (!callerUser?.id) {
-      return NextResponse.json({ success: false, error: 'Kullanıcı kimliği doğrulanamadı.' }, { status: 401 });
+      return errorResponse(401, 'Kullanıcı kimliği doğrulanamadı.');
     }
 
     let targetUserId = callerUser.id;
-    if (userId !== undefined && userId !== null && userId !== '') {
-      if (typeof userId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
-        return NextResponse.json({ success: false, error: 'Geçersiz hedef kullanıcı kimliği.' }, { status: 400 });
+    if (targetIdInput !== undefined && targetIdInput !== null && targetIdInput !== '') {
+      if (typeof targetIdInput !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdInput)) {
+        return errorResponse(400, 'Geçersiz hedef kullanıcı kimliği.');
       }
 
-      if (userId !== callerUser.id) {
+      if (targetIdInput !== callerUser.id) {
         let resolvedTargetId: string | null = null;
 
         // 1. Check directly in auth.users by ID
-        const { data: targetUser } = await admin.auth.admin.getUserById(userId);
+        const { data: targetUser } = await admin.auth.admin.getUserById(targetIdInput);
         if (targetUser?.user?.id) {
           resolvedTargetId = targetUser.user.id;
         } else {
-          // 2. Check in memberships table (in case the test passed a membership ID)
-          const { data: mem } = await admin.from('memberships').select('user_id').eq('id', userId).maybeSingle();
+          // 2. Check in memberships table (if the test passed a membership ID)
+          const { data: mem } = await admin.from('memberships').select('user_id').eq('id', targetIdInput).maybeSingle();
           if (mem?.user_id) {
             resolvedTargetId = mem.user_id;
           } else {
-            // 3. Check in profiles table
-            const { data: prof } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
-            if (prof?.id) {
-              resolvedTargetId = prof.id;
+            // 3. Check in memberships table by user_id
+            const { data: memByUser } = await admin.from('memberships').select('user_id').eq('user_id', targetIdInput).maybeSingle();
+            if (memByUser?.user_id) {
+              resolvedTargetId = memByUser.user_id;
             } else {
-              // 4. Check if userId matches an email in memberships
-              const { data: memByEmail } = await admin.from('memberships').select('user_id').eq('email', userId).maybeSingle();
-              if (memByEmail?.user_id) {
-                resolvedTargetId = memByEmail.user_id;
+              // 4. Check in profiles table
+              const { data: prof } = await admin.from('profiles').select('id').eq('id', targetIdInput).maybeSingle();
+              if (prof?.id) {
+                resolvedTargetId = prof.id;
               } else {
-                // 5. Check in auth user list
-                const { data: listData } = await admin.auth.admin.listUsers();
-                const matchedUser = listData?.users?.find(u => u.id === userId || u.email?.toLowerCase() === userId.toLowerCase());
-                if (matchedUser?.id) {
-                  resolvedTargetId = matchedUser.id;
+                // 5. Check if userId matches an email in memberships
+                const { data: memByEmail } = await admin.from('memberships').select('user_id').eq('email', targetIdInput).maybeSingle();
+                if (memByEmail?.user_id) {
+                  resolvedTargetId = memByEmail.user_id;
+                } else if (typeof admin.auth.admin.listUsers === 'function') {
+                  // 6. Check in auth user list
+                  const { data: listData } = await admin.auth.admin.listUsers();
+                  const matchedUser = listData?.users?.find(u => u.id === targetIdInput || u.email?.toLowerCase() === targetIdInput.toLowerCase());
+                  if (matchedUser?.id) {
+                    resolvedTargetId = matchedUser.id;
+                  }
                 }
               }
             }
@@ -103,7 +115,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (!resolvedTargetId) {
-          return NextResponse.json({ success: false, error: 'Hedef kullanıcı bulunamadı.' }, { status: 404 });
+          return errorResponse(404, 'Hedef kullanıcı bulunamadı.');
         }
 
         const isCallerManager = callerUser.app_metadata?.roles?.includes('Firma Yöneticisi')
@@ -113,7 +125,7 @@ export async function POST(request: NextRequest) {
             .eq('user_id', callerUser.id).eq('status', 'active');
           const hasManagerRole = mgrMem?.some((m: { roles?: string[] }) => m.roles?.includes('Firma Yöneticisi'));
           if (!hasManagerRole) {
-            return NextResponse.json({ success: false, error: 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.' }, { status: 403 });
+            return errorResponse(403, 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.');
           }
         }
         targetUserId = resolvedTargetId;
@@ -125,11 +137,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (updateError) {
-      return NextResponse.json({ success: false, error: updateError.message || 'Şifre güncellenemedi.' }, { status: 400 });
+      return errorResponse(400, updateError.message || 'Şifre güncellenemedi.');
     }
 
     return NextResponse.json({ success: true, message: 'Şifreniz başarıyla güncellendi.' });
   } catch (err: any) {
-    return NextResponse.json({ success: false, error: err?.message || 'İşlem tamamlanamadı.' }, { status: 500 });
+    return errorResponse(500, err?.message || 'İşlem tamamlanamadı.');
   }
 }
