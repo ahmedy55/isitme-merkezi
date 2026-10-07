@@ -1586,6 +1586,10 @@ export function NewAppointmentModal({
       addToast?.({ type: 'error', message: 'Hastanın kayıtlı şubesi aktif şubeler arasında değil. Randevu oluşturmadan önce hastanın şube kaydını güncelleyin.' });
       return;
     }
+    if (linkedPatient && patientBranch && branch && branch !== patientBranch.id) {
+      addToast?.({ type: 'error', message: `Seçilen hasta ${patientBranch.name} şubesine kayıtlı. Randevu şubesini hasta şubesiyle eşleştirin.` });
+      return;
+    }
     const defaultBranchId = activeBranch.mode === 'single' ? activeBranch.branchId : '';
     const defaultBranch = activeBranches.find(item => item.id === defaultBranchId) || activeBranches[0];
     // appointments.branch_id must match the selected patient's branch (guard_record_branch).
@@ -1727,6 +1731,9 @@ export function NewAppointmentModal({
                               key={p.id}
                               onClick={() => {
                                 setSelectedPatient({ id: p.id, name: fullName, phone: p.phone || '' });
+                                const patientBranch = activeBranches.find(item => item.id === p.branchId)
+                                  || activeBranches.find(item => item.name === p.branch);
+                                if (patientBranch) setBranch(patientBranch.id);
                                 setIsPatientDropdownOpen(false);
                               }}
                               style={{
