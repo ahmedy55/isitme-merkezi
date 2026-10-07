@@ -11,6 +11,9 @@ export async function POST(request: NextRequest) {
   if (rateError) return rateError;
 
   try {
+    const { data: body, error: validationError } = await validateBody(request, InviteUserSchema);
+    if (validationError) return validationError;
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) {
@@ -28,66 +31,22 @@ export async function POST(request: NextRequest) {
 
     const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
-    let user: any = null;
     const { data: userData, error: authError } = await admin.auth.getUser(token);
-    if (!authError && userData?.user) {
-      user = userData.user;
-    } else {
-      try {
-        const parts = token.split('.');
-        if (parts.length >= 2) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
-          if (payload?.sub) {
-            const { data: adminUser } = await admin.auth.admin.getUserById(payload.sub);
-            if (adminUser?.user) {
-              user = adminUser.user;
-            } else {
-              user = {
-                id: payload.sub,
-                email: payload.email || 'playwright@example.invalid',
-                app_metadata: payload.app_metadata || {},
-                user_metadata: payload.user_metadata || {},
-              };
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (!user) {
+    const user = !authError ? userData?.user : null;
+    if (!user?.id) {
       return errorResponse(401, 'Geçersiz oturum.');
     }
 
-    const { data: body, error: validationError } = await validateBody(request, InviteUserSchema);
-    if (validationError) return validationError;
-
     const { orgId, branchId, roles, email, password, firstName, lastName, phone } = body;
 
-    let targetOrgId = orgId;
-    if (!targetOrgId) {
-      targetOrgId = user.app_metadata?.organization_id;
-      if (!targetOrgId) {
-        const { data: userMem } = await admin.from('memberships').select('organization_id')
-          .eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle();
-        targetOrgId = userMem?.organization_id;
-      }
-      if (!targetOrgId) {
-        const { data: firstOrg } = await admin.from('organizations').select('id')
-          .eq('subscription_status', 'active').limit(1).maybeSingle();
-        targetOrgId = firstOrg?.id || '1974b2f5-44fa-4dea-9648-b75f7024e319';
-      }
-    }
+    const targetOrgId = orgId || user.app_metadata?.organization_id;
+    if (!targetOrgId) return errorResponse(400, 'Geçerli bir firma seçilmelidir.');
 
-    const { data: member } = await admin.from('memberships').select('roles')
+    const { data: member, error: memberError } = await admin.from('memberships').select('roles')
       .eq('user_id', user.id).eq('organization_id', targetOrgId).eq('status', 'active').maybeSingle();
 
-    const isManager = member?.roles?.includes('Firma Yöneticisi')
-      || user.app_metadata?.roles?.includes('Firma Yöneticisi')
-      || (user.email && user.email.includes('playwright'));
-
-    if (!isManager) {
+    if (memberError) return errorResponse(500, 'Üyelik yetkisi doğrulanamadı.');
+    if (!member?.roles?.includes('Firma Yöneticisi')) {
       return errorResponse(403, 'Firma yöneticisi yetkisi gerekli.');
     }
 
@@ -130,17 +89,6 @@ export async function POST(request: NextRequest) {
         if (bByName) branch = bByName;
       }
 
-      // Recognize standard QA fixture branch ID
-      if (!branch && resolvedBranchId === '22222222-2222-4222-8222-222222222222') {
-        const { data: fixtureBranch } = await admin.from('branches').insert({
-          id: resolvedBranchId,
-          organization_id: targetOrgId,
-          name: 'QA Test Şubesi Fixture',
-          status: 'active'
-        }).select('id, name, status').maybeSingle();
-        if (fixtureBranch) branch = fixtureBranch;
-      }
-
       if (!branch || (branch.status && !['active', 'aktif'].includes(branch.status.toLowerCase()))) {
         return errorResponse(400, 'Geçersiz şube.');
       }
@@ -163,63 +111,20 @@ export async function POST(request: NextRequest) {
       if (defaultBranch) {
         resolvedBranchId = defaultBranch.id;
         branchName = defaultBranch.name || 'Ana Şube';
-      } else {
-        const { data: createdBranch } = await admin.from('branches').insert({
-          organization_id: targetOrgId,
-          name: 'Merkez Şube',
-          status: 'active'
-        }).select('id, name').maybeSingle();
-        if (createdBranch) {
-          resolvedBranchId = createdBranch.id;
-          branchName = createdBranch.name;
-        }
       }
     }
 
-    // Ensure manager actor has membership record in org if recognized via JWT metadata
-    if (!member) {
-      await admin.from('memberships').insert({
-        user_id: user.id,
-        organization_id: targetOrgId,
-        roles: ['Firma Yöneticisi'],
-        status: 'active',
-        email: user.email,
-        first_name: 'Firma',
-        last_name: 'Yöneticisi'
-      });
-    }
-
-    // Auto-generate password if omitted
-    const userPassword = (password && password.trim()) || `AudiPro#${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}!Aa1`;
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
-      password: userPassword,
+      password,
       email_confirm: true,
       app_metadata: { organization_id: targetOrgId, branch_id: resolvedBranchId, roles },
       user_metadata: { first_name: firstName || '', last_name: lastName || '' },
     });
 
     let uid: string;
-    let isReusedAccount = false;
     if (createError || !created?.user) {
-      // In automated QA test suites where emails are reused across runs, locate and re-sync existing account
-      let existingUser: any = null;
-      if (typeof admin.auth.admin.listUsers === 'function') {
-        const { data: listData } = await admin.auth.admin.listUsers();
-        existingUser = listData?.users?.find((u: { email?: string }) => u.email?.toLowerCase() === email.trim().toLowerCase());
-      }
-      if (existingUser) {
-        uid = existingUser.id;
-        isReusedAccount = true;
-        await admin.auth.admin.updateUserById(uid, {
-          password: userPassword,
-          email_confirm: true,
-          app_metadata: { organization_id: targetOrgId, branch_id: resolvedBranchId, roles },
-          user_metadata: { first_name: firstName || '', last_name: lastName || '' },
-        });
-      } else {
-        return errorResponse(409, 'Hesap oluşturulamadı. E-posta kullanımda olabilir.');
-      }
+      return errorResponse(409, 'Hesap oluşturulamadı. E-posta kullanımda olabilir.');
     } else {
       uid = created.user.id;
     }
@@ -237,66 +142,13 @@ export async function POST(request: NextRequest) {
       p_phone: phone || '',
     });
 
-    if (!provisionError && rpcMembership) {
-      membership = rpcMembership;
-    } else {
-      // Reconcile provisioning if duplicate profile or concurrent membership constraint occurred
-      try {
-        await admin.from('profiles').upsert({
-          id: uid,
-          first_name: firstName || '',
-          last_name: lastName || '',
-          phone: phone || '',
-        });
-
-        const { data: existingMem } = await admin.from('memberships')
-          .select('id')
-          .eq('user_id', uid)
-          .eq('organization_id', targetOrgId)
-          .maybeSingle();
-
-        if (existingMem) {
-          const { data: updatedMem } = await admin.from('memberships').update({
-            branch_id: resolvedBranchId,
-            roles: effectiveRoles,
-            email: email.trim().toLowerCase(),
-            first_name: firstName || '',
-            last_name: lastName || '',
-            phone: phone || '',
-            status: 'active',
-          }).eq('id', existingMem.id).select().maybeSingle();
-          if (updatedMem) membership = updatedMem;
-        } else {
-          const { data: directMem, error: directMemErr } = await admin.from('memberships').insert({
-            user_id: uid,
-            organization_id: targetOrgId,
-            branch_id: resolvedBranchId,
-            roles: effectiveRoles,
-            email: email.trim().toLowerCase(),
-            first_name: firstName || '',
-            last_name: lastName || '',
-            phone: phone || '',
-            status: 'active',
-          }).select().maybeSingle();
-          if (!directMemErr && directMem) {
-            membership = directMem;
-          }
-        }
-      } catch {
-        // keep fallback logic below
-      }
-    }
+    if (!provisionError && rpcMembership) membership = rpcMembership;
 
     if (!membership) {
-      if (!provisionError?.code || !/^(22|23|P0)/.test(provisionError.code)) {
-        console.error('Provisioning reconciliation required');
-        return errorResponse(503, 'İşlem sonucu belirsiz; tekrar denemeden yönetici üyelik kaydını kontrol etmelidir.');
-      }
-      if (!isReusedAccount) {
-        const { error: cleanupError } = await admin.auth.admin.deleteUser(uid);
-        if (cleanupError) console.error('Unlinked Auth account requires cleanup');
-      }
-      return errorResponse(409, 'Üyelik oluşturulamadı; firma limitini ve şube atamasını kontrol edin.');
+      const { error: cleanupError } = await admin.auth.admin.deleteUser(uid);
+      if (cleanupError) console.error('Unlinked Auth account requires cleanup');
+      return errorResponse(provisionError?.code && /^(22|23|P0)/.test(provisionError.code) ? 409 : 503,
+        'Üyelik oluşturulamadı; firma limitini ve şube atamasını kontrol edin.');
     }
 
     const joinedAt = membership.joined_at ? membership.joined_at.split('T')[0] : new Date().toISOString().split('T')[0];

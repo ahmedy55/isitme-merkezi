@@ -9,7 +9,7 @@ const org='00000000-0000-4000-8000-000000000001',branch='00000000-0000-4000-8000
 const requester={id:'actor',app_metadata:{roles:['Firma Yöneticisi']},user_metadata:{roles:['Firma Yöneticisi']}};
 function result(data: unknown,error: unknown=null){const chain: Record<string,unknown>={};for(const key of ['select','eq','single','maybeSingle'])chain[key]=()=>chain;chain.then=(resolve:(v:unknown)=>unknown)=>Promise.resolve({data,error}).then(resolve);return chain;}
 function req(body: unknown,token=true){return new NextRequest('http://localhost/api/test',{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:'Bearer valid'}:{})},body:JSON.stringify(body)});}
-const body={orgId:org,branchId:branch,roles:['Sekreter'],email:'new@example.invalid',password:'a-long-password',firstName:'New',lastName:'User'};
+const body={orgId:org,branchId:branch,roles:['Sekreter'],email:'new@example.invalid',password:'a-long-password',firstName:'New',lastName:'User',phone:'05551234567'};
 beforeEach(()=>{
  vi.clearAllMocks();process.env.NEXT_PUBLIC_SUPABASE_URL='https://example.supabase.co';process.env.SUPABASE_SERVICE_ROLE_KEY='test-only';
  mock.getUser.mockResolvedValue({data:{user:requester},error:null});

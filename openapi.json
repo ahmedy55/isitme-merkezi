@@ -27,7 +27,7 @@
     "schemas": {
       "InviteUserRequest": {
         "type": "object",
-        "required": ["orgId", "email", "roles"],
+        "required": ["email", "roles", "password", "firstName", "lastName", "phone"],
         "properties": {
           "orgId": {
             "type": "string",
@@ -49,19 +49,23 @@
           "password": {
             "type": "string",
             "minLength": 8,
-            "description": "Opsiyonel başlangıç şifresi (girilmezse güvenli şifre otomatik üretilir)",
+            "description": "Zorunlu başlangıç şifresi.",
             "example": "AudiPro#Pass123!"
           },
           "firstName": {
             "type": "string",
+            "minLength": 1,
             "example": "Burak"
           },
           "lastName": {
             "type": "string",
+            "minLength": 1,
             "example": "Akın"
           },
           "phone": {
             "type": "string",
+            "minLength": 1,
+            "maxLength": 20,
             "example": "05551234567"
           },
           "roles": {
@@ -134,14 +138,6 @@
             "format": "uuid",
             "example": "1974b2f5-44fa-4dea-9648-b75f7024e319"
           }
-        }
-      },
-      "QALoginRequest": {
-        "type": "object",
-        "required": ["email", "password"],
-        "properties": {
-          "email": { "type": "string", "format": "email", "example": "playwright@example.invalid" },
-          "password": { "type": "string", "example": "playwright-test-password" }
         }
       },
       "ErrorResponse": {
@@ -271,35 +267,5 @@
         }
       }
     },
-    "/api/qa-login": {
-      "post": {
-        "summary": "QA Test Kullanıcısı Girişi",
-        "description": "Otomasyon ve QA test ortamları için test kullanıcısı oluşturur veya senkronize eder.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/QALoginRequest" }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Test kullanıcısı hazırlandı.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean", "example": true },
-                    "userId": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
   }
 }

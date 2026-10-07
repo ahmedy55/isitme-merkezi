@@ -6,168 +6,93 @@ function errorResponse(status: number, message: string) {
   return NextResponse.json({ success: false, message, error: message }, { status });
 }
 
+function getBearerToken(request: NextRequest) {
+  return request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
+    || request.cookies.get('sb-access-token')?.value?.trim()
+    || request.cookies.get('supabase-auth-token')?.value?.trim();
+}
+
 export async function POST(request: NextRequest) {
   const rateError = checkRateLimit(request, { maxRequests: 10 });
   if (rateError) return rateError;
 
   try {
+    const body = await request.json().catch(() => ({}));
+    const newPassword = body?.newPassword;
+    const targetIdInput = body?.userId ?? body?.targetUserId ?? body?.user_id ?? body?.id;
+
+    if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 128) {
+      return errorResponse(400, 'Yeni şifre 8-128 karakter arasında olmalıdır.');
+    }
+    if (targetIdInput !== undefined && targetIdInput !== null && targetIdInput !== ''
+      && (typeof targetIdInput !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdInput))) {
+      return errorResponse(400, 'Geçersiz hedef kullanıcı kimliği.');
+    }
+
+    const token = getBearerToken(request);
+    if (!token) return errorResponse(401, 'Oturum gerekli.');
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) {
-      return errorResponse(500, 'Sunucu yapılandırması eksik.');
-    }
-
-    const body = await request.json().catch(() => ({}));
-    const { newPassword } = body;
-    const targetIdInput = body.userId ?? body.targetUserId ?? body.user_id ?? body.id;
-
-    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
-      return errorResponse(400, 'Yeni şifre en az 8 karakter olmalıdır.');
-    }
-
-    const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
-      || request.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1]?.trim()
-      || request.cookies.get('sb-access-token')?.value?.trim()
-      || request.cookies.get('supabase-auth-token')?.value?.trim();
-
-    if (!token) {
-      return errorResponse(401, 'Oturum gerekli.');
-    }
+    if (!url || !key) return errorResponse(500, 'Sunucu yapılandırması eksik.');
 
     const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data: userData, error: authError } = await admin.auth.getUser(token);
+    const caller = !authError ? userData?.user : null;
+    if (!caller?.id) return errorResponse(401, 'Kullanıcı kimliği doğrulanamadı.');
 
-    let callerUser: any = null;
-    const { data: userData } = await admin.auth.getUser(token);
-    if (userData?.user?.id) {
-      callerUser = userData.user;
-    } else {
-      try {
-        const parts = token.split('.');
-        if (parts.length >= 2) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
-          if (payload?.sub) {
-            const { data: adminUser } = await admin.auth.admin.getUserById(payload.sub);
-            if (adminUser?.user) {
-              callerUser = adminUser.user;
-            } else {
-              callerUser = {
-                id: payload.sub,
-                email: payload.email,
-                app_metadata: payload.app_metadata || {},
-                user_metadata: payload.user_metadata || {},
-              };
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
+    const targetInput = targetIdInput || caller.id;
+    let targetUserId = caller.id;
 
-    if (!callerUser?.id) {
-      return errorResponse(401, 'Kullanıcı kimliği doğrulanamadı.');
-    }
+    if (targetInput !== caller.id) {
+      // Manager authority must come from an active database membership, never token metadata.
+      const { data: callerMemberships, error: callerMembershipError } = await admin.from('memberships')
+        .select('organization_id, roles')
+        .eq('user_id', caller.id)
+        .eq('status', 'active');
+      if (callerMembershipError) return errorResponse(500, 'Kullanıcı yetkisi doğrulanamadı.');
 
-    let targetUserId = callerUser.id;
-    if (targetIdInput !== undefined && targetIdInput !== null && targetIdInput !== '') {
-      if (typeof targetIdInput !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetIdInput)) {
-        return errorResponse(400, 'Geçersiz hedef kullanıcı kimliği.');
+      const managerOrgIds = (callerMemberships || [])
+        .filter((membership: { organization_id?: string; roles?: string[] }) => membership.roles?.includes('Firma Yöneticisi'))
+        .map((membership: { organization_id?: string }) => membership.organization_id)
+        .filter((id: string | undefined): id is string => Boolean(id));
+      if (managerOrgIds.length === 0) {
+        return errorResponse(403, 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.');
       }
 
-      if (targetIdInput !== callerUser.id) {
-        const isCallerManager = callerUser.app_metadata?.roles?.includes('Firma Yöneticisi')
-          || callerUser.email?.includes('playwright');
-        let hasManagerPrivilege = isCallerManager;
-        if (!hasManagerPrivilege) {
-          const { data: mgrMem } = await admin.from('memberships').select('roles')
-            .eq('user_id', callerUser.id).eq('status', 'active');
-          hasManagerPrivilege = mgrMem?.some((m: { roles?: string[] }) => m.roles?.includes('Firma Yöneticisi'));
-        }
-        if (!hasManagerPrivilege) {
-          return errorResponse(403, 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.');
-        }
-
-        let resolvedTargetId: string | null = null;
-
-        // 1. Check directly in auth.users by ID
-        const { data: targetUser } = await admin.auth.admin.getUserById(targetIdInput);
-        if (targetUser?.user?.id) {
-          resolvedTargetId = targetUser.user.id;
-        } else {
-          // 2. Check in memberships table (if the test passed a membership ID)
-          const { data: mem } = await admin.from('memberships').select('user_id').eq('id', targetIdInput).maybeSingle();
-          if (mem?.user_id) {
-            resolvedTargetId = mem.user_id;
-          } else {
-            // 3. Check in memberships table by user_id
-            const { data: memByUser } = await admin.from('memberships').select('user_id').eq('user_id', targetIdInput).maybeSingle();
-            if (memByUser?.user_id) {
-              resolvedTargetId = memByUser.user_id;
-            } else {
-              // 4. Check in profiles table
-              const { data: prof } = await admin.from('profiles').select('id').eq('id', targetIdInput).maybeSingle();
-              if (prof?.id) {
-                resolvedTargetId = prof.id;
-              } else {
-                // 5. Check if userId matches an email in memberships
-                const { data: memByEmail } = await admin.from('memberships').select('user_id').eq('email', targetIdInput).maybeSingle();
-                if (memByEmail?.user_id) {
-                  resolvedTargetId = memByEmail.user_id;
-                } else if (typeof admin.auth.admin.listUsers === 'function') {
-                  // 6. Check in auth user list
-                  const { data: listData } = await admin.auth.admin.listUsers();
-                  const matchedUser = listData?.users?.find(u => u.id === targetIdInput || u.email?.toLowerCase() === targetIdInput.toLowerCase());
-                  if (matchedUser?.id) {
-                    resolvedTargetId = matchedUser.id;
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // 7. If target user is not found, auto-provision test user with this ID for authorized managers
-        if (!resolvedTargetId) {
-          try {
-            const dummyEmail = `target-${targetIdInput.slice(0, 8)}@test-fixture.invalid`;
-            const { data: autoTarget } = await admin.auth.admin.createUser({
-              id: targetIdInput,
-              email: dummyEmail,
-              password: newPassword,
-              email_confirm: true,
-              app_metadata: { roles: ['Sekreter'] },
-              user_metadata: { first_name: 'Target', last_name: 'User' },
-            });
-            if (autoTarget?.user?.id) {
-              resolvedTargetId = autoTarget.user.id;
-            }
-          } catch {
-            // fallback
-          }
-        }
-
-        if (!resolvedTargetId) {
-          return errorResponse(404, 'Hedef kullanıcı bulunamadı.');
-        }
-
-        targetUserId = resolvedTargetId;
+      // Accept either the auth user UUID or a membership UUID returned by the user-management API.
+      const { data: targetAuth } = await admin.auth.admin.getUserById(targetInput);
+      let resolvedTargetId = targetAuth?.user?.id || null;
+      if (!resolvedTargetId) {
+        const { data: membership } = await admin.from('memberships').select('user_id')
+          .eq('id', targetInput).in('organization_id', managerOrgIds).eq('status', 'active').maybeSingle();
+        resolvedTargetId = membership?.user_id || null;
       }
+      if (!resolvedTargetId) return errorResponse(404, 'Hedef kullanıcı bulunamadı.');
+
+      // A valid auth account is not sufficient: the target must be an active member of
+      // an organization in which the caller is an active manager.
+      const { data: targetMembership, error: targetMembershipError } = await admin.from('memberships')
+        .select('user_id')
+        .eq('user_id', resolvedTargetId)
+        .in('organization_id', managerOrgIds)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      if (targetMembershipError) return errorResponse(500, 'Hedef kullanıcı yetkisi doğrulanamadı.');
+      if (!targetMembership?.user_id) return errorResponse(404, 'Hedef kullanıcı bulunamadı.');
+      targetUserId = resolvedTargetId;
     }
 
-    const { error: updateError } = await admin.auth.admin.updateUserById(targetUserId, {
-      password: newPassword,
-    });
-
-    if (updateError) {
-      return errorResponse(400, updateError.message || 'Şifre güncellenemedi.');
-    }
+    const { error: updateError } = await admin.auth.admin.updateUserById(targetUserId, { password: newPassword });
+    if (updateError) return errorResponse(400, updateError.message || 'Şifre güncellenemedi.');
 
     return NextResponse.json({
       success: true,
       message: 'Şifreniz başarıyla güncellendi.',
       userId: targetUserId,
     });
-  } catch (err: any) {
-    return errorResponse(500, err?.message || 'İşlem tamamlanamadı.');
+  } catch {
+    return errorResponse(500, 'İşlem tamamlanamadı.');
   }
 }

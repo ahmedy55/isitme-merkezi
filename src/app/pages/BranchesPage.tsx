@@ -239,6 +239,10 @@ export default function BranchesPage() {
       addToast({ type: 'error', message: 'Ad ve soyad zorunludur.' });
       return;
     }
+    if (!newStaffForm.phone.trim()) {
+      addToast({ type: 'error', message: 'Telefon numarası zorunludur.' });
+      return;
+    }
     const isManagerRole = newStaffForm.role === 'Firma Yöneticisi';
     const foundBranch = branchesList.find(branch => branch.name === newStaffForm.branch || branch.id === newStaffForm.branch);
     let assignedBranchId = foundBranch?.id || null;
@@ -973,9 +977,10 @@ export default function BranchesPage() {
                     />
                   </div>
                   <div className={styles.formGroup}>
-                    <label className={styles.formLabel}>Telefon</label>
+                    <label className={styles.formLabel}>Telefon *</label>
                     <input
                       type="text"
+                      required
                       placeholder="05XX XXX XX XX"
                       className={styles.formInput}
                       value={newStaffForm.phone}

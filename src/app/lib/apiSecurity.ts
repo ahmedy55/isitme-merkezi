@@ -179,10 +179,10 @@ export const VALID_ROLES = [
 
 export const InviteUserSchema = z.object({
   email: z.string().email('Geçerli bir e-posta adresi giriniz.').max(254),
-  firstName: z.string().min(1).max(100).optional(),
-  lastName: z.string().min(1).max(100).optional(),
-  phone: z.string().max(20).optional(),
-  password: z.string().min(8, 'Şifre en az 8 karakter olmalıdır.').max(128).optional().nullable().or(z.literal('')),
+  firstName: z.string().trim().min(1, 'Ad zorunludur.').max(100),
+  lastName: z.string().trim().min(1, 'Soyad zorunludur.').max(100),
+  phone: z.string().trim().min(1, 'Telefon zorunludur.').max(20),
+  password: z.string().min(8, 'Başlangıç şifresi en az 8 karakter olmalıdır.').max(128),
   roles: z.array(z.enum(VALID_ROLES)).min(1, 'En az bir rol seçilmelidir.'),
   branchId: z.string().uuid().optional().nullable().or(z.literal('')),
   orgId: z.string().uuid('Geçerli bir organizasyon ID giriniz.').optional().nullable().or(z.literal('')),

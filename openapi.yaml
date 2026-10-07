@@ -19,9 +19,12 @@ components:
     InviteUserRequest:
       type: object
       required:
-        - orgId
         - email
         - roles
+        - password
+        - firstName
+        - lastName
+        - phone
       properties:
         orgId:
           type: string
@@ -38,15 +41,20 @@ components:
         password:
           type: string
           minLength: 8
+          description: Zorunlu başlangıç şifresi.
           example: "AudiPro#Pass123!"
         firstName:
           type: string
+          minLength: 1
           example: "Burak"
         lastName:
           type: string
+          minLength: 1
           example: "Akın"
         phone:
           type: string
+          minLength: 1
+          maxLength: 20
           example: "05551234567"
         roles:
           type: array
@@ -126,19 +134,6 @@ components:
           type: string
           format: uuid
           example: "1974b2f5-44fa-4dea-9648-b75f7024e319"
-    QALoginRequest:
-      type: object
-      required:
-        - email
-        - password
-      properties:
-        email:
-          type: string
-          format: email
-          example: "playwright@example.invalid"
-        password:
-          type: string
-          example: "playwright-test-password"
     ErrorResponse:
       type: object
       properties:
@@ -244,16 +239,3 @@ paths:
       responses:
         '200':
           description: Sunucu zamanı
-  /api/qa-login:
-    post:
-      summary: QA Test Kullanıcısı Girişi
-      description: Otomasyon ve test ortamları için test kullanıcısı oluşturur veya senkronize eder.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/QALoginRequest'
-      responses:
-        '200':
-          description: Test kullanıcısı hazırlandı.
