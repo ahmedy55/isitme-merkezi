@@ -123,6 +123,15 @@ describe('invite-user request validation', () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
+  it('rejects a missing organization id before side effects', async () => {
+    const { orgId: _orgId, ...withoutOrgId } = validInvite;
+    const response = await inviteUser(request('http://localhost/api/invite-user', withoutOrgId));
+
+    expect(response.status).toBe(400);
+    expect(mocks.createUser).not.toHaveBeenCalled();
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
   it('creates an invitation only when all required fields are valid', async () => {
     const response = await inviteUser(request('http://localhost/api/invite-user', validInvite));
 

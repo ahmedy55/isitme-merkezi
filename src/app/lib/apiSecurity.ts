@@ -185,7 +185,7 @@ export const InviteUserSchema = z.object({
   password: z.string().min(8, 'Başlangıç şifresi en az 8 karakter olmalıdır.').max(128),
   roles: z.array(z.enum(VALID_ROLES)).min(1, 'En az bir rol seçilmelidir.'),
   branchId: z.string().uuid().optional().nullable().or(z.literal('')),
-  orgId: z.string().uuid('Geçerli bir organizasyon ID giriniz.').optional().nullable().or(z.literal('')),
+  orgId: z.string().uuid('Geçerli bir organizasyon ID giriniz.'),
 });
 
 export const SelectOrgSchema = z.object({

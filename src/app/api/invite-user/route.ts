@@ -39,8 +39,7 @@ export async function POST(request: NextRequest) {
 
     const { orgId, branchId, roles, email, password, firstName, lastName, phone } = body;
 
-    const targetOrgId = orgId || user.app_metadata?.organization_id;
-    if (!targetOrgId) return errorResponse(400, 'Geçerli bir firma seçilmelidir.');
+    const targetOrgId = orgId;
 
     const { data: member, error: memberError } = await admin.from('memberships').select('roles')
       .eq('user_id', user.id).eq('organization_id', targetOrgId).eq('status', 'active').maybeSingle();

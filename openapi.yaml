@@ -19,6 +19,7 @@ components:
     InviteUserRequest:
       type: object
       required:
+        - orgId
         - email
         - roles
         - password

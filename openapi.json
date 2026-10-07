@@ -27,7 +27,7 @@
     "schemas": {
       "InviteUserRequest": {
         "type": "object",
-        "required": ["email", "roles", "password", "firstName", "lastName", "phone"],
+        "required": ["orgId", "email", "roles", "password", "firstName", "lastName", "phone"],
         "properties": {
           "orgId": {
             "type": "string",
