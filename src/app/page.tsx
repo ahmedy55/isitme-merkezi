@@ -33,6 +33,7 @@ const ActivityLogPage = dynamic(() => import('./pages/ActivityLogPage'), { loadi
 const BranchActivitiesPage = dynamic(() => import('./pages/BranchActivitiesPage'), { loading: pageLoading });
 const ProfilePage = dynamic(() => import('./pages/ProfilePage'), { loading: pageLoading });
 const LoginPage = dynamic(() => import('./pages/LoginPage'), { loading: pageLoading });
+const PasswordRecoveryPage = dynamic(() => import('./pages/PasswordRecoveryPage'), { loading: pageLoading });
 const OrgSelectPage = dynamic(() => import('./pages/OrgSelectPage'), { loading: pageLoading });
 
 function ToastIcon({ type }: { type: string }) {
@@ -68,6 +69,10 @@ function AppContent() {
         {toasts.length > 0 && renderToastContainer()}
       </>
     );
+  }
+
+  if (currentPage === 'password-recovery') {
+    return <PasswordRecoveryPage />;
   }
 
   if (currentPage === 'org-select') {

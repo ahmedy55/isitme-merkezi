@@ -49,6 +49,7 @@ type Page =
   | 'branch-activities'
   | 'profile'
   | 'login'
+  | 'password-recovery'
   | 'org-select';
 
 interface Toast {
@@ -297,6 +298,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let authVersion = 0;
     const applySession = async (user: any) => {
       const version = ++authVersion;
+      const recoveryRequested = typeof window !== 'undefined' && (
+        new URLSearchParams(window.location.search).get('mode') === 'reset' ||
+        new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type') === 'recovery'
+      );
+      if (recoveryRequested) {
+        if (disposed || version !== authVersion) return;
+        setCurrentUser(user ? { ...user, membership: null } : null);
+        setCurrentOrgId(null);
+        setCurrentPage('password-recovery', true);
+        return;
+      }
       let membership = null;
       const orgId = user?.app_metadata?.organization_id;
       if (user && orgId) {
@@ -323,8 +335,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     supabase.auth.getUser().then(({data})=>applySession(data.user));
     // Do not await Supabase queries inside its Auth callback (auth lock deadlock).
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
-      setTimeout(()=>{ if(!disposed) void applySession(session?.user || null); },0);
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      setTimeout(()=>{
+        if(disposed) return;
+        if(event === 'PASSWORD_RECOVERY') {
+          setCurrentUser(session?.user ? { ...session.user, membership: null } : null);
+          setCurrentOrgId(null);
+          setCurrentPage('password-recovery', true);
+          return;
+        }
+        void applySession(session?.user || null);
+      },0);
     });
 
     return () => {

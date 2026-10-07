@@ -8,6 +8,29 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoverySent, setRecoverySent] = useState(false);
+
+  const handlePasswordRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      addToast({ type: 'warning', message: 'Şifre sıfırlama bağlantısı için e-posta adresinizi girin.' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const redirectTo = `${window.location.origin}/?mode=reset`;
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
+      if (error) throw error;
+      setRecoverySent(true);
+    } catch (err: any) {
+      addToast({ type: 'error', message: err.message || 'Şifre sıfırlama e-postası gönderilemedi.' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,7 +169,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <form onSubmit={showRecovery ? handlePasswordRecovery : handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* E-posta */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--gray-300, #d1d5db)', letterSpacing: '0.3px' }}>
@@ -181,8 +204,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Şifre */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {!showRecovery && <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--gray-300, #d1d5db)', letterSpacing: '0.3px' }}>
                 ŞİFRE
@@ -247,7 +269,13 @@ export default function LoginPage() {
                 )}
               </button>
             </div>
-          </div>
+          </div>}
+
+          {showRecovery && recoverySent && (
+            <p role="status" style={{ color: 'var(--gray-300, #d1d5db)', fontSize: '0.85rem', margin: 0 }}>
+              Hesap mevcutsa şifre sıfırlama bağlantısı e-posta adresinize gönderildi. Bağlantı açılmazsa yeni bir bağlantı isteyin.
+            </p>
+          )}
 
           {/* Giriş Yap Butonu */}
           <button
@@ -281,7 +309,14 @@ export default function LoginPage() {
                 borderRadius: '50%',
                 animation: 'spin 0.8s linear infinite'
               }} />
-            ) : 'Giriş Yap'}
+            ) : showRecovery ? 'Sıfırlama Bağlantısı Gönder' : 'Giriş Yap'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowRecovery(value => !value); setRecoverySent(false); }}
+            style={{ background: 'transparent', border: 0, color: 'var(--gray-300, #d1d5db)', cursor: 'pointer', fontSize: '0.85rem', padding: 4 }}
+          >
+            {showRecovery ? 'Giriş ekranına dön' : 'Şifremi unuttum'}
           </button>
         </form>
       </div>
