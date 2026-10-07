@@ -27,7 +27,7 @@
     "schemas": {
       "InviteUserRequest": {
         "type": "object",
-        "required": ["orgId", "email", "roles"],
+        "required": ["orgId", "email", "roles", "password"],
         "properties": {
           "orgId": {
             "type": "string",
@@ -90,6 +90,9 @@
         "type": "object",
         "properties": {
           "success": { "type": "boolean", "example": true },
+          "id": { "type": "string", "format": "uuid", "example": "bb724554-0606-4b1b-a5cb-3144e7652b22" },
+          "userId": { "type": "string", "format": "uuid", "example": "bb724554-0606-4b1b-a5cb-3144e7652b22" },
+          "message": { "type": "string", "example": "Kullanıcı daveti başarıyla oluşturuldu." },
           "user": {
             "type": "object",
             "properties": {
@@ -117,7 +120,8 @@
           "userId": {
             "type": "string",
             "format": "uuid",
-            "description": "Değiştirilecek kullanıcı ID (Bearer token varsa zorunlu değildir)"
+            "description": "Değiştirilecek kullanıcı ID (Bearer token varsa zorunlu değildir)",
+            "example": "212a6a5a-6b0d-43b0-88f1-edcf09c620ec"
           }
         }
       },

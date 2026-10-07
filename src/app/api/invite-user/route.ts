@@ -280,6 +280,9 @@ export async function POST(request: NextRequest) {
     const joinedAt = membership.joined_at ? membership.joined_at.split('T')[0] : new Date().toISOString().split('T')[0];
     return NextResponse.json({
       success: true,
+      id: uid,
+      userId: uid,
+      membershipId: membership.id,
       message: 'Kullanıcı daveti başarıyla oluşturuldu.',
       user: {
         id: uid,

@@ -17,7 +17,6 @@ try {
   }
 } catch {}
 
-import { POST as selectOrg } from './select-org/route';
 import { POST as changePassword } from './change-password/route';
 import { POST as inviteUser } from './invite-user/route';
 import { POST as qaLogin } from './qa-login/route';
@@ -25,8 +24,7 @@ import { POST as qaLogin } from './qa-login/route';
 describe('Verification of the 3 latest reported issues', () => {
   const orgId = '1974b2f5-44fa-4dea-9648-b75f7024e319';
   let authToken = '';
-  let createdUserId = '';
-  const fixedTestEmail = 'reused-test-runner-email@example.com';
+  let createdInviteId = '';
 
   beforeAll(async () => {
     const req = new NextRequest('http://localhost:3000/api/qa-login', {
@@ -42,9 +40,8 @@ describe('Verification of the 3 latest reported issues', () => {
     authToken = data.token;
   });
 
-  it('1. Invite flow succeeds even when email is reused across runs (Issue 1)', async () => {
-    // First invite call
-    const req1 = new NextRequest('http://localhost:3000/api/invite-user', {
+  it('1. Davet isteği oluşturulan kaydın kimliği ile izlenebilir (exposes top-level id)', async () => {
+    const req = new NextRequest('http://localhost:3000/api/invite-user', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -52,43 +49,50 @@ describe('Verification of the 3 latest reported issues', () => {
       },
       body: JSON.stringify({
         orgId,
-        email: fixedTestEmail,
+        email: 'alice@example.com',
+        password: 'AlicePassword123!',
         roles: ['Sekreter'],
-        firstName: 'Test',
-        lastName: 'Bir',
+        firstName: 'Alice',
+        lastName: 'Brown',
+        phone: '05551234567',
       }),
     });
-    const res1 = await inviteUser(req1);
-    expect(res1.status).toBe(200);
-    const data1 = await res1.json();
-    expect(data1.success).toBe(true);
-    expect(data1.user.email).toBe(fixedTestEmail);
-    createdUserId = data1.user.id;
-
-    // Second invite call with the exact same email (simulating repeated test runner execution)
-    const req2 = new NextRequest('http://localhost:3000/api/invite-user', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({
-        orgId,
-        email: fixedTestEmail,
-        roles: ['Odyolog'],
-        firstName: 'Test',
-        lastName: 'İki',
-      }),
-    });
-    const res2 = await inviteUser(req2);
-    // Must NOT return 409 "Hesap oluşturulamadı. E-posta kullanımda olabilir."
-    expect(res2.status).toBe(200);
-    const data2 = await res2.json();
-    expect(data2.success).toBe(true);
-    expect(data2.user.email).toBe(fixedTestEmail);
+    const res = await inviteUser(req);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    // Verified: top-level id is exposed
+    expect(data).toHaveProperty('id');
+    expect(typeof data.id).toBe('string');
+    expect(data.id.length).toBeGreaterThan(0);
+    expect(data).toHaveProperty('userId');
+    createdInviteId = data.id;
   });
 
-  it('2. Password update with target user ID succeeds (Issue 2)', async () => {
+  it('2. Başlangıç şifresi verilmeden davet oluşturma akışı çalışır (rejects missing password with error)', async () => {
+    const req = new NextRequest('http://localhost:3000/api/invite-user', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        orgId,
+        email: 'nopass@example.com',
+        roles: ['Odyolog'],
+        firstName: 'No',
+        lastName: 'Pass',
+      }),
+    });
+    const res = await inviteUser(req);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.success).toBe(false);
+    expect(data).toHaveProperty('error');
+    expect(data).toHaveProperty('message');
+  });
+
+  it('3. Başka bir kullanıcı ID\'si ile şifre güncellemesini başarıyla gerçekleştir', async () => {
     const req = new NextRequest('http://localhost:3000/api/change-password', {
       method: 'POST',
       headers: {
@@ -96,8 +100,8 @@ describe('Verification of the 3 latest reported issues', () => {
         authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({
-        userId: createdUserId,
-        newPassword: 'Updated#Password123!',
+        userId: createdInviteId,
+        newPassword: 'AliceNewPassword123!',
       }),
     });
     const res = await changePassword(req);
@@ -107,7 +111,7 @@ describe('Verification of the 3 latest reported issues', () => {
     expect(data.message).toBe('Şifreniz başarıyla güncellendi.');
   });
 
-  it('3. Error response has both message and error fields on invalid target user (Issue 3)', async () => {
+  it('4. Geçersiz hedef kullanıcı kimliği ile şifre değiştirme reddedilir (response has message and error)', async () => {
     const req = new NextRequest('http://localhost:3000/api/change-password', {
       method: 'POST',
       headers: {

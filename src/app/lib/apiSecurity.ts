@@ -136,7 +136,12 @@ export async function validateBody<T>(
       return {
         data: null,
         error: NextResponse.json(
-          { success: false, error: 'Geçersiz veri formatı.', details },
+          {
+            success: false,
+            message: 'Geçersiz veri formatı: ' + details.join(', '),
+            error: 'Geçersiz veri formatı.',
+            details
+          },
           { status: 400 }
         ),
       };
@@ -147,7 +152,7 @@ export async function validateBody<T>(
     return {
       data: null,
       error: NextResponse.json(
-        { success: false, error: 'Geçersiz JSON formatı.' },
+        { success: false, message: 'Geçersiz JSON formatı.', error: 'Geçersiz JSON formatı.' },
         { status: 400 }
       ),
     };
@@ -177,7 +182,7 @@ export const InviteUserSchema = z.object({
   firstName: z.string().min(1).max(100).optional(),
   lastName: z.string().min(1).max(100).optional(),
   phone: z.string().max(20).optional(),
-  password: z.string().min(8).max(128).optional(),
+  password: z.string().min(8, 'Şifre en az 8 karakter olmalıdır.').max(128),
   roles: z.array(z.enum(VALID_ROLES)).min(1, 'En az bir rol seçilmelidir.'),
   branchId: z.string().uuid().optional().nullable().or(z.literal('')),
   orgId: z.string().uuid('Geçerli bir organizasyon ID giriniz.'),
