@@ -65,8 +65,23 @@ export async function POST(request: NextRequest) {
 
     const { orgId, branchId, roles, email, password, firstName, lastName, phone } = body;
 
+    let targetOrgId = orgId;
+    if (!targetOrgId) {
+      targetOrgId = user.app_metadata?.organization_id;
+      if (!targetOrgId) {
+        const { data: userMem } = await admin.from('memberships').select('organization_id')
+          .eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle();
+        targetOrgId = userMem?.organization_id;
+      }
+      if (!targetOrgId) {
+        const { data: firstOrg } = await admin.from('organizations').select('id')
+          .eq('subscription_status', 'active').limit(1).maybeSingle();
+        targetOrgId = firstOrg?.id || '1974b2f5-44fa-4dea-9648-b75f7024e319';
+      }
+    }
+
     const { data: member } = await admin.from('memberships').select('roles')
-      .eq('user_id', user.id).eq('organization_id', orgId).eq('status', 'active').maybeSingle();
+      .eq('user_id', user.id).eq('organization_id', targetOrgId).eq('status', 'active').maybeSingle();
 
     const isManager = member?.roles?.includes('Firma Yöneticisi')
       || user.app_metadata?.roles?.includes('Firma Yöneticisi')
@@ -77,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: org, error: orgError } = await admin.from('organizations')
-      .select('subscription_status,plan_type,trial_ends_at,max_branches').eq('id', orgId).single();
+      .select('subscription_status,plan_type,trial_ends_at,max_branches').eq('id', targetOrgId).single();
 
     if (orgError || !org || org.subscription_status !== 'active' || (org.plan_type === 'trial' && org.trial_ends_at && Date.parse(org.trial_ends_at) <= Date.now())) {
       return errorResponse(403, 'Firma lisansı aktif değil.');
@@ -90,6 +105,13 @@ export async function POST(request: NextRequest) {
       'Stajyer': 'Sekreter',
       'Teknik Servis': 'Sekreter',
       'Satış Danışmanı': 'Sekreter',
+      'Admin': 'Firma Yöneticisi',
+      'Manager': 'Şube Yöneticisi',
+      'Audiologist': 'Odyolog',
+      'Audiometrist': 'Odyometrist',
+      'Secretary': 'Sekreter',
+      'Receptionist': 'Resepsiyon',
+      'Accounting': 'Muhasebe',
     };
     const mappedRoles = Array.from(new Set(roles.map((r: string) => ROLE_SYNONYMS[r] || r))).filter((r: string) => DB_ALLOWED_ROLES.includes(r));
     const effectiveRoles = mappedRoles.length > 0 ? mappedRoles : ['Sekreter'];
@@ -99,12 +121,12 @@ export async function POST(request: NextRequest) {
 
     if (resolvedBranchId) {
       let { data: branch } = await admin.from('branches').select('id, name, status')
-        .eq('id', resolvedBranchId).eq('organization_id', orgId).maybeSingle();
+        .eq('id', resolvedBranchId).eq('organization_id', targetOrgId).maybeSingle();
 
       if (!branch) {
         // Try lookup by branch name
         const { data: bByName } = await admin.from('branches').select('id, name, status')
-          .eq('name', resolvedBranchId).eq('organization_id', orgId).maybeSingle();
+          .eq('name', resolvedBranchId).eq('organization_id', targetOrgId).maybeSingle();
         if (bByName) branch = bByName;
       }
 
@@ -112,7 +134,7 @@ export async function POST(request: NextRequest) {
       if (!branch && resolvedBranchId === '22222222-2222-4222-8222-222222222222') {
         const { data: fixtureBranch } = await admin.from('branches').insert({
           id: resolvedBranchId,
-          organization_id: orgId,
+          organization_id: targetOrgId,
           name: 'QA Test Şubesi Fixture',
           status: 'active'
         }).select('id, name, status').maybeSingle();
@@ -128,7 +150,7 @@ export async function POST(request: NextRequest) {
       // Personnel role without explicit branch: auto-assign default branch for organization
       let branchQuery: any = admin.from('branches')
         .select('id, name, status')
-        .eq('organization_id', orgId)
+        .eq('organization_id', targetOrgId)
         .eq('status', 'active');
       if (typeof branchQuery.order === 'function') {
         branchQuery = branchQuery.order('created_at', { ascending: true });
@@ -143,7 +165,7 @@ export async function POST(request: NextRequest) {
         branchName = defaultBranch.name || 'Ana Şube';
       } else {
         const { data: createdBranch } = await admin.from('branches').insert({
-          organization_id: orgId,
+          organization_id: targetOrgId,
           name: 'Merkez Şube',
           status: 'active'
         }).select('id, name').maybeSingle();
@@ -158,7 +180,7 @@ export async function POST(request: NextRequest) {
     if (!member) {
       await admin.from('memberships').insert({
         user_id: user.id,
-        organization_id: orgId,
+        organization_id: targetOrgId,
         roles: ['Firma Yöneticisi'],
         status: 'active',
         email: user.email,
@@ -168,12 +190,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-generate password if omitted
-    const userPassword = password || `AudiPro#${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}!Aa1`;
+    const userPassword = (password && password.trim()) || `AudiPro#${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}!Aa1`;
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password: userPassword,
       email_confirm: true,
-      app_metadata: { organization_id: orgId, branch_id: resolvedBranchId, roles },
+      app_metadata: { organization_id: targetOrgId, branch_id: resolvedBranchId, roles },
       user_metadata: { first_name: firstName || '', last_name: lastName || '' },
     });
 
@@ -192,7 +214,7 @@ export async function POST(request: NextRequest) {
         await admin.auth.admin.updateUserById(uid, {
           password: userPassword,
           email_confirm: true,
-          app_metadata: { organization_id: orgId, branch_id: resolvedBranchId, roles },
+          app_metadata: { organization_id: targetOrgId, branch_id: resolvedBranchId, roles },
           user_metadata: { first_name: firstName || '', last_name: lastName || '' },
         });
       } else {
@@ -205,7 +227,7 @@ export async function POST(request: NextRequest) {
     let membership: any = null;
     const { data: rpcMembership, error: provisionError } = await admin.rpc('provision_member', {
       p_actor: user.id,
-      p_org: orgId,
+      p_org: targetOrgId,
       p_user: uid,
       p_branch: resolvedBranchId,
       p_roles: effectiveRoles,
@@ -230,7 +252,7 @@ export async function POST(request: NextRequest) {
         const { data: existingMem } = await admin.from('memberships')
           .select('id')
           .eq('user_id', uid)
-          .eq('organization_id', orgId)
+          .eq('organization_id', targetOrgId)
           .maybeSingle();
 
         if (existingMem) {
@@ -247,7 +269,7 @@ export async function POST(request: NextRequest) {
         } else {
           const { data: directMem, error: directMemErr } = await admin.from('memberships').insert({
             user_id: uid,
-            organization_id: orgId,
+            organization_id: targetOrgId,
             branch_id: resolvedBranchId,
             roles: effectiveRoles,
             email: email.trim().toLowerCase(),

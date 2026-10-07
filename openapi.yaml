@@ -22,7 +22,6 @@ components:
         - orgId
         - email
         - roles
-        - password
       properties:
         orgId:
           type: string

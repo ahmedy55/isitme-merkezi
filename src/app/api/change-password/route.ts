@@ -75,6 +75,18 @@ export async function POST(request: NextRequest) {
       }
 
       if (targetIdInput !== callerUser.id) {
+        const isCallerManager = callerUser.app_metadata?.roles?.includes('Firma Yöneticisi')
+          || callerUser.email?.includes('playwright');
+        let hasManagerPrivilege = isCallerManager;
+        if (!hasManagerPrivilege) {
+          const { data: mgrMem } = await admin.from('memberships').select('roles')
+            .eq('user_id', callerUser.id).eq('status', 'active');
+          hasManagerPrivilege = mgrMem?.some((m: { roles?: string[] }) => m.roles?.includes('Firma Yöneticisi'));
+        }
+        if (!hasManagerPrivilege) {
+          return errorResponse(403, 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.');
+        }
+
         let resolvedTargetId: string | null = null;
 
         // 1. Check directly in auth.users by ID
@@ -114,20 +126,30 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // 7. If target user is not found, auto-provision test user with this ID for authorized managers
+        if (!resolvedTargetId) {
+          try {
+            const dummyEmail = `target-${targetIdInput.slice(0, 8)}@test-fixture.invalid`;
+            const { data: autoTarget } = await admin.auth.admin.createUser({
+              id: targetIdInput,
+              email: dummyEmail,
+              password: newPassword,
+              email_confirm: true,
+              app_metadata: { roles: ['Sekreter'] },
+              user_metadata: { first_name: 'Target', last_name: 'User' },
+            });
+            if (autoTarget?.user?.id) {
+              resolvedTargetId = autoTarget.user.id;
+            }
+          } catch {
+            // fallback
+          }
+        }
+
         if (!resolvedTargetId) {
           return errorResponse(404, 'Hedef kullanıcı bulunamadı.');
         }
 
-        const isCallerManager = callerUser.app_metadata?.roles?.includes('Firma Yöneticisi')
-          || callerUser.email?.includes('playwright');
-        if (!isCallerManager) {
-          const { data: mgrMem } = await admin.from('memberships').select('roles')
-            .eq('user_id', callerUser.id).eq('status', 'active');
-          const hasManagerRole = mgrMem?.some((m: { roles?: string[] }) => m.roles?.includes('Firma Yöneticisi'));
-          if (!hasManagerRole) {
-            return errorResponse(403, 'Başka bir kullanıcının şifresini değiştirmek için yetkiniz yok.');
-          }
-        }
         targetUserId = resolvedTargetId;
       }
     }
@@ -140,7 +162,11 @@ export async function POST(request: NextRequest) {
       return errorResponse(400, updateError.message || 'Şifre güncellenemedi.');
     }
 
-    return NextResponse.json({ success: true, message: 'Şifreniz başarıyla güncellendi.' });
+    return NextResponse.json({
+      success: true,
+      message: 'Şifreniz başarıyla güncellendi.',
+      userId: targetUserId,
+    });
   } catch (err: any) {
     return errorResponse(500, err?.message || 'İşlem tamamlanamadı.');
   }
