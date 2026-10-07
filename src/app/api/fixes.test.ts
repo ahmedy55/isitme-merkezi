@@ -35,6 +35,7 @@ vi.mock('../lib/apiSecurity', async () => {
 
 import { POST as changePassword } from './change-password/route';
 import { POST as inviteUser } from './invite-user/route';
+import { POST as qaLogin } from './qa-login/route';
 
 const orgId = '00000000-0000-4000-8000-000000000001';
 const branchId = '00000000-0000-4000-8000-000000000011';
@@ -71,6 +72,14 @@ const validInvite = {
   phone: '05551234567',
   roles: ['Sekreter'],
 };
+
+describe('retired QA login endpoint', () => {
+  it('returns a JSON 404 without creating or authenticating a user', async () => {
+    const response = await qaLogin();
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ success: false });
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
