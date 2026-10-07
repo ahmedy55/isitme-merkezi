@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency } from '../data/mockData';
 import styles from './ReportsPage.module.css';
+import { createReportPdf } from '../lib/reportPdf';
 import { fetchServiceTickets, type ServiceRecord } from '../repositories/ServiceTicketRepository';
 import { dbFetchCashTransactions } from '../lib/database';
 
@@ -379,17 +380,23 @@ export default function ReportsPage() {
         blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         extension = 'xlsx';
       } else {
-        const popup = window.open('', '_blank');
-        if (!popup) throw new Error('PDF çıktısı için açılır pencereye izin verin.');
-        popup.document.write(`<html lang="tr"><head><title>İşitme Merkezi Raporu</title><meta charset="utf-8"><style>body{font:14px Arial,sans-serif;padding:32px;color:#152b2a}h1{font-size:22px}table{border-collapse:collapse;width:100%}td{padding:9px;border-bottom:1px solid #ddd}td:first-child{font-weight:bold;width:35%}</style></head><body><h1>Raporlama & Analitik</h1><p>${dateRange}</p><table>${rows.slice(2).map(row => `<tr><td>${row[0]}</td><td>${row[1]}</td></tr>`).join('')}</table><script>window.onload=()=>window.print()</script></body></html>`);
-        popup.document.close();
-        addToast({ type: 'success', message: 'Yazdır penceresi açıldı; hedef olarak PDF seçebilirsiniz.' });
-        setShowExportModal(false);
-        return;
+        blob = createReportPdf([
+          'AudiPro - Raporlama ve Analitik',
+          `Tarih araligi: ${dateRange}`,
+          '',
+          ...rows.slice(2).map(([label, value]) => `${label}: ${value}`),
+        ]);
+        extension = 'pdf';
       }
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `${safeName}.${extension}`; link.click();
-      URL.revokeObjectURL(url);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeName}.${extension}`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
       addToast({ type: 'success', message: `${extension.toUpperCase()} raporu indirildi.` });
       setShowExportModal(false);
     } catch {

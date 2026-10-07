@@ -8,7 +8,7 @@ import { formatCurrency, formatDate } from '../data/mockData';
 import { getNextMaintenanceDate } from '../lib/assetMaintenance';
 import { normalizeAssetCategory, normalizeAssetStatus } from '../lib/assetFilters';
 import { matchesInventoryIdentifier } from '../lib/inventorySearch';
-import { archiveAsset, AssetMaintenanceRecord, AssetRecord, completeAssetMaintenance, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, saveAsset } from '../repositories/OperationsRepository';
+import { archiveAsset, AssetMaintenanceRecord, AssetRecord, completeAssetMaintenance, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, fetchPlannedAssetMaintenance, saveAsset } from '../repositories/OperationsRepository';
 import styles from './AssetsPage.module.css';
 
 interface DisplayAsset {
@@ -64,6 +64,7 @@ export default function AssetsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeItem, setActiveItem] = useState<DisplayAsset | null>(null);
   const [maintenanceHistory, setMaintenanceHistory] = useState<AssetMaintenanceRecord[]>([]);
+  const [plannedMaintenance, setPlannedMaintenance] = useState<AssetMaintenanceRecord[]>([]);
   const [maintenanceForm, setMaintenanceForm] = useState({ date: new Date().toISOString().slice(0, 10), provider: '', reportNumber: '', notes: '' });
   const [maintenanceToComplete, setMaintenanceToComplete] = useState<AssetMaintenanceRecord | null>(null);
   const [completionForm, setCompletionForm] = useState({ date: new Date().toISOString().slice(0, 10), notes: '' });
@@ -233,6 +234,42 @@ export default function AssetsPage() {
     if (!dueDate) return false;
     return !Number.isNaN(dueDate.getTime()) && dueDate.getTime() - Date.now() <= 90 * 24 * 60 * 60 * 1000;
   });
+  const scheduleItems = useMemo(() => {
+    const visibleAssets = new Map(assetList.map(asset => [asset.id, asset]));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const horizon = new Date(today);
+    horizon.setDate(horizon.getDate() + 90);
+    const planned = plannedMaintenance.flatMap(record => {
+      const asset = visibleAssets.get(record.assetId);
+      const date = new Date(`${toIsoDate(record.maintenanceDate)}T00:00:00`);
+      if (!asset || Number.isNaN(date.getTime()) || date < today || date > horizon) return [];
+      return [{ id: record.id, asset, date: record.maintenanceDate, status: 'Planlandı', description: record.recordType }];
+    });
+    const assetsWithPlans = new Set(planned.map(item => item.asset.id));
+    const calibration = calibrationScheduleItems
+      .filter(asset => !assetsWithPlans.has(asset.id))
+      .flatMap(asset => {
+        const dueDate = getCalibrationDueDate(asset);
+        if (!dueDate) return [];
+        return [{ id: `calibration-${asset.id}`, asset, date: dueDate.toISOString().slice(0, 10), status: asset.maintenanceStatus, description: 'Kalibrasyon' }];
+      });
+    return [...planned, ...calibration].sort((a, b) => a.date.localeCompare(b.date));
+  }, [assetList, plannedMaintenance, calibrationScheduleItems]);
+
+  useEffect(() => {
+    if (!showScheduleModal || !currentOrgId) return;
+    let cancelled = false;
+    void fetchPlannedAssetMaintenance()
+      .then(records => { if (!cancelled) setPlannedMaintenance(records); })
+      .catch(error => {
+        if (!cancelled) {
+          setPlannedMaintenance([]);
+          addToast({ type: 'error', message: error instanceof Error ? error.message : 'Planlı bakım takvimi yüklenemedi.' });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [showScheduleModal, currentOrgId, addToast]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -427,17 +464,17 @@ export default function AssetsPage() {
       if (recordType !== 'Kalibrasyon') {
         const maintenanceDate = new Date(`${toIsoDate(record.maintenanceDate)}T00:00:00`);
         const isFuturePlan = maintenanceDate.getTime() > new Date(new Date().toDateString()).getTime();
-        const nextDate = isFuturePlan
-          ? maintenanceDate
-          : getNextMaintenanceDate(record.maintenanceDate, activeItem.calibrationIntervalMonths || 12);
-        const updatedItem = {
-          ...activeItem,
-          lastCalibrationDate: formatDate(record.maintenanceDate),
-          nextCalibrationDate: nextDate?.toLocaleDateString('tr-TR') || '—',
-          maintenanceStatus: isFuturePlan ? 'Planlandı' : 'Bakım kaydı var',
-        };
-        setActiveItem(updatedItem);
-        setAssetList(previous => previous.map(item => item.id === updatedItem.id ? updatedItem : item));
+        if (!isFuturePlan) {
+          const nextDate = getNextMaintenanceDate(record.maintenanceDate, activeItem.calibrationIntervalMonths || 12);
+          const updatedItem = {
+            ...activeItem,
+            lastCalibrationDate: formatDate(record.maintenanceDate),
+            nextCalibrationDate: nextDate?.toLocaleDateString('tr-TR') || '—',
+            maintenanceStatus: 'Bakım kaydı var',
+          };
+          setActiveItem(updatedItem);
+          setAssetList(previous => previous.map(item => item.id === updatedItem.id ? updatedItem : item));
+        }
       }
       setDrawerTab('gecmis');
       setShowMaintenanceModal(false);
@@ -1551,15 +1588,15 @@ export default function AssetsPage() {
               <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowScheduleModal(false)}>✕</button>
             </div>
             <div style={{ padding: 20, display: 'grid', gap: 10 }}>
-              {calibrationScheduleItems.length === 0 && <div style={{ padding: 12, color: '#64748b' }}>Önümüzdeki 90 gün içinde bakım tarihi olan kayıtlı demirbaş yok.</div>}
-              {calibrationScheduleItems.map((s) => (
+              {scheduleItems.length === 0 && <div style={{ padding: 12, color: '#64748b' }}>Önümüzdeki 90 gün içinde bakım tarihi olan kayıtlı demirbaş yok.</div>}
+              {scheduleItems.map((s) => (
                 <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
                   <div>
-                    <div style={{ fontWeight: 650, color: '#0f172a' }}>{s.name}</div>
-                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Hedef Tarih: {s.nextCalibrationDate}</div>
+                    <div style={{ fontWeight: 650, color: '#0f172a' }}>{s.asset.name} · {s.description}</div>
+                    <div style={{ fontSize: 11.5, color: '#64748b' }}>Hedef Tarih: {formatDate(s.date)}</div>
                   </div>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: s.maintenanceStatus === 'Bakım zamanı geçti' ? '#dc2626' : '#08785b', background: s.maintenanceStatus === 'Bakım zamanı geçti' ? '#fee2e2' : '#e6f7f0', padding: '3px 8px', borderRadius: 6 }}>
-                    {s.maintenanceStatus}
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: s.status === 'Bakım zamanı geçti' ? '#dc2626' : '#08785b', background: s.status === 'Bakım zamanı geçti' ? '#fee2e2' : '#e6f7f0', padding: '3px 8px', borderRadius: 6 }}>
+                    {s.status}
                   </span>
                 </div>
               ))}

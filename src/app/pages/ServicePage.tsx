@@ -1162,8 +1162,11 @@ export default function ServicePage() {
             <form onSubmit={handleSaveStatusUpdate}>
               <div className={styles.modalBody}>
                 <div className={styles.formGroup}>
-                  <label className={styles.formLabel}>Yeni Durum Seçin</label>
+                  <label className={styles.formLabel} htmlFor="service-status-select">Yeni Durum Seçin</label>
                   <select
+                    id="service-status-select"
+                    name="serviceStatus"
+                    aria-label="Yeni Durum Seçin"
                     className={styles.formSelect}
                     value={statusUpdateVal}
                     onChange={e => setStatusUpdateVal(e.target.value as ServiceItem['status'])}

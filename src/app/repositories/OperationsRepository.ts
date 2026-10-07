@@ -102,6 +102,17 @@ export async function fetchAssetMaintenance(assetId: string): Promise<AssetMaint
   return (data || []).map(maintenanceFromDb);
 }
 
+export async function fetchPlannedAssetMaintenance(): Promise<AssetMaintenanceRecord[]> {
+  const { data, error } = await supabase
+    .from('asset_maintenance_records')
+    .select('*')
+    .eq('status', 'planned')
+    .order('maintenance_date', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message || 'Planlı bakım takvimi yüklenemedi.');
+  return (data || []).map(maintenanceFromDb);
+}
+
 export async function createAssetMaintenance(input: {
   assetId: string; branchId: string; recordType: AssetMaintenanceRecord['recordType'];
   maintenanceDate: string; provider: string; reportNumber: string; notes: string;
