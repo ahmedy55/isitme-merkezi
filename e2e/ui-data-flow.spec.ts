@@ -1186,6 +1186,14 @@ test('Review appointment reports and download Excel/CSV files', async ({ page })
   await page.getByRole('button', { name: /PDF Yönetici Sunumu/ }).click();
   const pdfDownload = await pdfDownloadPromise;
   expect(pdfDownload.suggestedFilename()).toMatch(/^AudiPro_Yonetim_Raporu_\d{4}-\d{2}-\d{2}\.pdf$/);
+
+  // Test custom two-date range picker
+  await page.locator('div[class*="dateFilterBox"]').click();
+  await expect(page.getByRole('heading', { name: 'Tarih Aralığı Seç' })).toBeVisible();
+  await page.getByTestId('reports-custom-start-date').fill('2026-02-01');
+  await page.getByTestId('reports-custom-end-date').fill('2026-05-31');
+  await page.getByTestId('reports-apply-custom-date').click();
+  await expect(page.locator('div[class*="dateFilterBox"]')).toContainText('01.02.2026 - 31.05.2026');
 });
 
 test('service status, inspection note and warranty changes persist', async ({ page }) => {

@@ -122,6 +122,48 @@ export default function ReportsPage() {
     const [start, end] = dateRange.split(' - ').map(dateKey);
     return { start, end };
   }, [dateRange]);
+
+  // Modals state
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+
+  const [customStartDate, setCustomStartDate] = useState(() => {
+    const [start] = dateRange.split(' - ').map(dateKey);
+    return start || `${new Date().getFullYear()}-01-01`;
+  });
+  const [customEndDate, setCustomEndDate] = useState(() => {
+    const [, end] = dateRange.split(' - ').map(dateKey);
+    return end || `${new Date().getFullYear()}-12-31`;
+  });
+
+  useEffect(() => {
+    if (showDateModal) {
+      if (rangeBounds.start) setCustomStartDate(rangeBounds.start);
+      if (rangeBounds.end) setCustomEndDate(rangeBounds.end);
+    }
+  }, [showDateModal, rangeBounds.start, rangeBounds.end]);
+
+  const handleApplyCustomDateRange = () => {
+    if (!customStartDate || !customEndDate) {
+      addToast({ type: 'error', message: 'Lütfen hem başlangıç hem de bitiş tarihini seçin.' });
+      return;
+    }
+    let startIso = customStartDate;
+    let endIso = customEndDate;
+    if (startIso > endIso) {
+      [startIso, endIso] = [endIso, startIso];
+      setCustomStartDate(startIso);
+      setCustomEndDate(endIso);
+    }
+    const [sy, sm, sd] = startIso.split('-');
+    const [ey, em, ed] = endIso.split('-');
+    const formattedRange = `${sd.padStart(2, '0')}.${sm.padStart(2, '0')}.${sy} - ${ed.padStart(2, '0')}.${em.padStart(2, '0')}.${ey}`;
+    setDateRange(formattedRange);
+    setSelectedPeriod('Özel');
+    setShowDateModal(false);
+    addToast({ type: 'success', message: `Tarih aralığı güncellendi: ${formattedRange}` });
+  };
   const inRange = (value?: string) => {
     const key = dateKey(value);
     return Boolean(key && (!rangeBounds.start || key >= rangeBounds.start) && (!rangeBounds.end || key <= rangeBounds.end));
@@ -211,11 +253,6 @@ export default function ReportsPage() {
     });
     return () => { active = false; };
   }, [currentOrgId]);
-
-  // Modals state
-  const [showCompareModal, setShowCompareModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [showDateModal, setShowDateModal] = useState(false);
 
   // 12 Months Bar Chart Data
   const monthNames = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
@@ -1285,50 +1322,93 @@ export default function ReportsPage() {
       {/* ── MODAL 3: Tarih Aralığı Seçici ── */}
       {showDateModal && (
         <div className={styles.modalOverlay} onClick={() => setShowDateModal(false)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
             <div className={styles.modalHeader}>
               <h2>📅 Tarih Aralığı Seç</h2>
               <button type="button" className={styles.modalCloseBtn} onClick={() => setShowDateModal(false)}>✕</button>
             </div>
             <div className={styles.modalBody}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {(() => {
-                  const now = new Date();
-                  const day = new Date(now); day.setHours(0, 0, 0, 0);
-                  const week = new Date(day); week.setDate(week.getDate() - 6);
-                  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                  const threeMonths = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-                  const yearStart = new Date(now.getFullYear(), 0, 1);
-                  const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
-                  const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31);
-                  return [
-                    { label: 'Bugün', val: `${formatRangeDate(day)} - ${formatRangeDate(day)}` },
-                    { label: 'Son 7 Gün', val: `${formatRangeDate(week)} - ${formatRangeDate(day)}` },
-                    { label: 'Bu Ay', val: `${formatRangeDate(monthStart)} - ${formatRangeDate(day)}` },
-                    { label: 'Son 3 Ay', val: `${formatRangeDate(threeMonths)} - ${formatRangeDate(day)}` },
-                    { label: `Bu Yıl (${now.getFullYear()})`, val: `${formatRangeDate(yearStart)} - ${formatRangeDate(day)}` },
-                    { label: `Geçen Yıl (${now.getFullYear() - 1})`, val: `${formatRangeDate(lastYearStart)} - ${formatRangeDate(lastYearEnd)}` }
-                  ];
-                })().map(opt => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    className={styles.btnSecondaryAction}
-                    style={{ fontSize: 12, padding: '10px 8px' }}
-                    onClick={() => {
-                      setDateRange(opt.val);
-                      setSelectedPeriod('Özel');
-                      setShowDateModal(false);
-                      addToast({ type: 'info', message: `Tarih aralığı: ${opt.label} olarak seçildi.` });
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              <div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 8 }}>
+                  Hızlı Seçenekler
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {(() => {
+                    const now = new Date();
+                    const day = new Date(now); day.setHours(0, 0, 0, 0);
+                    const week = new Date(day); week.setDate(week.getDate() - 6);
+                    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const threeMonths = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+                    const yearStart = new Date(now.getFullYear(), 0, 1);
+                    const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
+                    const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31);
+                    return [
+                      { label: 'Bugün', val: `${formatRangeDate(day)} - ${formatRangeDate(day)}`, start: day, end: day },
+                      { label: 'Son 7 Gün', val: `${formatRangeDate(week)} - ${formatRangeDate(day)}`, start: week, end: day },
+                      { label: 'Bu Ay', val: `${formatRangeDate(monthStart)} - ${formatRangeDate(day)}`, start: monthStart, end: day },
+                      { label: 'Son 3 Ay', val: `${formatRangeDate(threeMonths)} - ${formatRangeDate(day)}`, start: threeMonths, end: day },
+                      { label: `Bu Yıl (${now.getFullYear()})`, val: `${formatRangeDate(yearStart)} - ${formatRangeDate(day)}`, start: yearStart, end: day },
+                      { label: `Geçen Yıl (${now.getFullYear() - 1})`, val: `${formatRangeDate(lastYearStart)} - ${formatRangeDate(lastYearEnd)}`, start: lastYearStart, end: lastYearEnd }
+                    ];
+                  })().map(opt => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      className={styles.btnSecondaryAction}
+                      style={{ fontSize: 12, padding: '9px 10px', justifyContent: 'center' }}
+                      onClick={() => {
+                        setDateRange(opt.val);
+                        setSelectedPeriod('Özel');
+                        const sKey = dateKey(formatRangeDate(opt.start));
+                        const eKey = dateKey(formatRangeDate(opt.end));
+                        if (sKey) setCustomStartDate(sKey);
+                        if (eKey) setCustomEndDate(eKey);
+                        setShowDateModal(false);
+                        addToast({ type: 'info', message: `Tarih aralığı: ${opt.label} olarak seçildi.` });
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.customDateSection}>
+                <h4>İki Tarih Arası (Özel Seçim)</h4>
+                <div className={styles.customDateGrid}>
+                  <label className={styles.customDateField}>
+                    <span>Başlangıç Tarihi</span>
+                    <input
+                      type="date"
+                      data-testid="reports-custom-start-date"
+                      className={styles.customDateInput}
+                      value={customStartDate}
+                      onChange={e => setCustomStartDate(e.target.value)}
+                    />
+                  </label>
+                  <label className={styles.customDateField}>
+                    <span>Bitiş Tarihi</span>
+                    <input
+                      type="date"
+                      data-testid="reports-custom-end-date"
+                      className={styles.customDateInput}
+                      value={customEndDate}
+                      onChange={e => setCustomEndDate(e.target.value)}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
-            <div className={styles.modalFooter}>
+            <div className={styles.modalFooter} style={{ justifyContent: 'space-between' }}>
               <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowDateModal(false)}>İptal</button>
+              <button
+                type="button"
+                data-testid="reports-apply-custom-date"
+                className={styles.btnPrimaryAction}
+                onClick={handleApplyCustomDateRange}
+              >
+                Tarih Aralığını Uygula
+              </button>
             </div>
           </div>
         </div>
