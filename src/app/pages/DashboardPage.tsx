@@ -382,31 +382,31 @@ export default function DashboardPage() {
 
           <div className={styles.barChartWrap}>
             {/* Tooltip Bubble */}
-            <div className={styles.tooltipBubble} style={{ left: `${((48 + selectedChartMonthIndex * 34 + 8) / 460) * 100}%` }}>
+            <div className={styles.tooltipBubble} style={{ left: `${((68 + selectedChartMonthIndex * 34 + 8) / 495) * 100}%` }}>
               <div className={styles.tooltipMonth}>{chartMonths[selectedChartMonthIndex].label} {chartMonths[selectedChartMonthIndex].year}</div>
               <div className={styles.tooltipValue}>{dashboardChartMetric === 'Ciro' ? formatCurrency(selectedChartMonth.value) : `${selectedChartMonth.value} adet`}</div>
             </div>
 
-            <svg className={styles.barChartSvg} viewBox="0 0 460 140" preserveAspectRatio="none">
+            <svg className={styles.barChartSvg} viewBox="0 0 495 140" preserveAspectRatio="none">
               {/* Grid lines and Y axis */}
-              <text x="28" y="15" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax) : `${Math.round(trendMax)} adet`}</text>
-              <line x1="34" y1="12" x2="450" y2="12" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
+              <text x="56" y="15" fill="#374151" fontSize="9.5" fontWeight="600" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(Math.round(trendMax)) : `${Math.round(trendMax)} adet`}</text>
+              <line x1="62" y1="12" x2="485" y2="12" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3,3" />
 
-              <text x="28" y="42" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax * .75) : `${Math.round(trendMax * .75)} adet`}</text>
-              <line x1="34" y1="39" x2="450" y2="39" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
+              <text x="56" y="42" fill="#374151" fontSize="9.5" fontWeight="600" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(Math.round(trendMax * .75)) : `${Math.round(trendMax * .75)} adet`}</text>
+              <line x1="62" y1="39" x2="485" y2="39" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3,3" />
 
-              <text x="28" y="69" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax * .5) : `${Math.round(trendMax * .5)} adet`}</text>
-              <line x1="34" y1="66" x2="450" y2="66" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
+              <text x="56" y="69" fill="#374151" fontSize="9.5" fontWeight="600" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(Math.round(trendMax * .5)) : `${Math.round(trendMax * .5)} adet`}</text>
+              <line x1="62" y1="66" x2="485" y2="66" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3,3" />
 
-              <text x="28" y="96" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(trendMax * .25) : `${Math.round(trendMax * .25)} adet`}</text>
-              <line x1="34" y1="93" x2="450" y2="93" stroke="#F3F4F6" strokeWidth="1" strokeDasharray="2,2" />
+              <text x="56" y="96" fill="#374151" fontSize="9.5" fontWeight="600" textAnchor="end">{dashboardChartMetric === 'Ciro' ? formatCurrency(Math.round(trendMax * .25)) : `${Math.round(trendMax * .25)} adet`}</text>
+              <line x1="62" y1="93" x2="485" y2="93" stroke="#E2E8F0" strokeWidth="1" strokeDasharray="3,3" />
 
-              <text x="28" y="122" fill="#9CA3AF" fontSize="9" textAnchor="end">{dashboardChartMetric === 'Ciro' ? '₺0' : '0 adet'}</text>
-              <line x1="34" y1="120" x2="450" y2="120" stroke="#E5E7EB" strokeWidth="1" />
+              <text x="56" y="122" fill="#374151" fontSize="9.5" fontWeight="600" textAnchor="end">{dashboardChartMetric === 'Ciro' ? '₺0' : '0 adet'}</text>
+              <line x1="62" y1="120" x2="485" y2="120" stroke="#CBD5E1" strokeWidth="1.2" />
 
               {/* Period-aware bars: months for broad ranges and days for this week. */}
               {monthlyData.map((item, idx) => {
-                const xPos = 48 + idx * 34;
+                const xPos = 68 + idx * 34;
                 const barWidth = 16;
                 const barHeight = item.height;
                 const yPos = 120 - barHeight;
@@ -433,9 +433,9 @@ export default function DashboardPage() {
                     <text
                       x={xPos + barWidth / 2}
                       y="134"
-                      fill={idx === selectedChartMonthIndex ? '#08785B' : '#6B7280'}
+                      fill={idx === selectedChartMonthIndex ? '#08785B' : '#4B5563'}
                       fontSize="9.5"
-                      fontWeight={idx === selectedChartMonthIndex ? '700' : '500'}
+                      fontWeight={idx === selectedChartMonthIndex ? '700' : '600'}
                       textAnchor="middle"
                     >
                       {item.month}
