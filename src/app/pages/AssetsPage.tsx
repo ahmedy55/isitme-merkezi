@@ -9,7 +9,18 @@ import { getNextMaintenanceDate } from '../lib/assetMaintenance';
 import { normalizeAssetCategory, normalizeAssetStatus } from '../lib/assetFilters';
 import { matchesInventoryIdentifier } from '../lib/inventorySearch';
 import { archiveAsset, AssetMaintenanceRecord, AssetRecord, completeAssetMaintenance, createAssetMaintenance, fetchAssetMaintenance, fetchAssets, fetchPlannedAssetMaintenance, saveAsset } from '../repositories/OperationsRepository';
+import { createReportPdf } from '../lib/reportPdf';
+import { downloadFile } from '../lib/downloadFile';
 import styles from './AssetsPage.module.css';
+
+let cachedExcelJS: typeof import('exceljs') | null = null;
+const getExcelJS = async () => {
+  if (!cachedExcelJS) {
+    const mod = await import('exceljs');
+    cachedExcelJS = (mod.default || mod) as unknown as typeof import('exceljs');
+  }
+  return cachedExcelJS;
+};
 
 interface DisplayAsset {
   id: string;
@@ -85,6 +96,7 @@ export default function AssetsPage() {
   const [showCalibrationModal, setShowCalibrationModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showBulkMaintenanceModal, setShowBulkMaintenanceModal] = useState(false);
   const [showBulkActionsMenu, setShowBulkActionsMenu] = useState(false);
@@ -297,6 +309,219 @@ export default function AssetsPage() {
   const handleToggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  // ── EXPORT FUNCTIONS ──
+  const exportAssetPdf = () => {
+    setIsExporting(true);
+    try {
+      const targetAssets = filteredAssets.length > 0 ? filteredAssets : assetList;
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const totalValue = targetAssets.reduce((sum, a) => sum + (a.cost || 0), 0);
+      const pad = (str: string, len: number) => (str || '').padEnd(len).slice(0, len);
+      const padR = (str: string, len: number) => (str || '').padStart(len).slice(0, len);
+      const sep = '='.repeat(84);
+      const dash = '-'.repeat(84);
+
+      // Category breakdown
+      const categoryTotals: Record<string, { count: number; total: number }> = {};
+      targetAssets.forEach(a => {
+        const cat = a.category || 'Diğer';
+        if (!categoryTotals[cat]) categoryTotals[cat] = { count: 0, total: 0 };
+        categoryTotals[cat].count += 1;
+        categoryTotals[cat].total += (a.cost || 0);
+      });
+
+      const activeCount = targetAssets.filter(a => a.status === 'Aktif').length;
+      const maintenanceCount = targetAssets.filter(a => a.status === 'Bakımda' || a.status === 'Onarımda').length;
+
+      const lines: string[] = [
+        sep,
+        '         AUDIPRO ISITME MERKEZI - DEMIRBAS VE KLINIK CIHAZ RAPORU',
+        sep,
+        `Rapor Tarihi: ${dateFormatted}   |   Toplam Demirbas: ${targetAssets.length} Adet`,
+        `Sube: ${selectedBranch || 'Tum Subeler'}   |   Kategori: ${selectedCategory || 'Tumu'}`,
+        `Toplam Envanter Degeri: TRY ${totalValue.toLocaleString('tr-TR')}   |   Durum: Onayli Dokum`,
+        '',
+        dash,
+        '1. DEMIRBAS VE ENVANTER KPI OZETI',
+        dash,
+        `  Toplam Kayitli Demirbas : ${targetAssets.length} adet`,
+        `  Toplam Envanter Degeri  : TRY ${totalValue.toLocaleString('tr-TR')}`,
+        `  Faal / Aktif Cihaz Sayisi: ${activeCount} adet (${targetAssets.length ? Math.round((activeCount / targetAssets.length) * 100) : 0}%)`,
+        `  Bakimda / Onarimda Cihaz: ${maintenanceCount} adet`,
+        `  Ortalama Demirbas Degeri: TRY ${(targetAssets.length ? Math.round(totalValue / targetAssets.length) : 0).toLocaleString('tr-TR')}`,
+        '',
+        dash,
+        '2. KATEGORI BAZLI DAGILIM',
+        dash,
+        `${pad('KATEGORI', 26)} ${padR('ADET', 12)} ${padR('TOPLAM DEGER', 22)} ${padR('PAY %', 10)}`,
+        dash,
+      ];
+
+      Object.entries(categoryTotals).forEach(([cat, stat]) => {
+        const share = totalValue > 0 ? Math.round((stat.total / totalValue) * 100) : 0;
+        lines.push(`${pad(cat, 26)} ${padR(`${stat.count} adet`, 12)} ${padR(`TRY ${stat.total.toLocaleString('tr-TR')}`, 22)} ${padR(`%${share}`, 10)}`);
+      });
+
+      lines.push(dash);
+      lines.push('');
+      lines.push(dash);
+      lines.push('3. DEMIRBAS VE CIHAZ ENVENTER LISTESI');
+      lines.push(dash);
+      lines.push(`${pad('DEMIRBAS ADI', 20)} ${pad('KATEGORI', 12)} ${pad('SUBE', 13)} ${pad('SERI NO', 12)} ${pad('DURUM', 10)} ${padR('DEGER', 12)}`);
+      lines.push(dash);
+
+      targetAssets.forEach(a => {
+        lines.push(
+          `${pad(a.name || '-', 20)} ${pad(a.category || '-', 12)} ${pad(a.branch || '-', 13)} ${pad(a.serialNo || '-', 12)} ${pad(a.status || '-', 10)} ${padR(`TRY ${(a.cost || 0).toLocaleString('tr-TR')}`, 12)}`
+        );
+      });
+
+      lines.push(dash);
+      lines.push(`TOPLAM DEMIRBAS DEGERI: TRY ${totalValue.toLocaleString('tr-TR')}`);
+      lines.push(sep);
+
+      const blob = createReportPdf(lines);
+      downloadFile(blob, `AudiPro_Demirbas_Raporu_${dateStamp}.pdf`);
+      addToast({ type: 'success', message: 'Demirbaş envanter raporu PDF (.pdf) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('PDF indirme hatası:', err);
+      addToast({ type: 'error', message: 'PDF raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportAssetExcel = async () => {
+    setIsExporting(true);
+    try {
+      const targetAssets = filteredAssets.length > 0 ? filteredAssets : assetList;
+      const ExcelJS = await getExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'AudiPro İşitme Merkezi';
+
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const totalValue = targetAssets.reduce((sum, a) => sum + (a.cost || 0), 0);
+
+      // Sheet 1: Demirbaş Listesi
+      const worksheet = workbook.addWorksheet('Demirbaş Envanteri');
+      worksheet.columns = [
+        { width: 24 }, // Demirbaş Adı
+        { width: 20 }, // Marka / Model
+        { width: 16 }, // Kategori
+        { width: 18 }, // Şube
+        { width: 18 }, // Seri No
+        { width: 16 }, // Satın Alma Tarihi
+        { width: 16 }, // Garanti Bitişi
+        { width: 14 }, // Durum
+        { width: 18 }, // Envanter Değeri (TRY)
+        { width: 18 }, // Zimmetli Kişi
+        { width: 18 }, // Kalibrasyon Tarihi
+        { width: 26 }, // Notlar
+      ];
+
+      // Header Title
+      worksheet.mergeCells('A1:L1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'AUDİPRO İŞİTME MERKEZİ - DEMİRBAŞ & ENVANTER RAPORU';
+      titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(1).height = 32;
+
+      // Subtitle
+      worksheet.mergeCells('A2:L2');
+      const subCell = worksheet.getCell('A2');
+      subCell.value = `Rapor Tarihi: ${dateFormatted}   |   Toplam Demirbaş: ${targetAssets.length} Adet   |   Toplam Değer: TRY ${totalValue.toLocaleString('tr-TR')}   |   Şube: ${selectedBranch || 'Tüm Şubeler'}`;
+      subCell.font = { italic: true, size: 10, color: { argb: 'FF475569' } };
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(2).height = 22;
+
+      worksheet.addRow([]); // empty row
+
+      const headers = [
+        'Demirbaş Adı', 'Marka / Model', 'Kategori', 'Şube', 'Seri No',
+        'Satın Alma Tarihi', 'Garanti Bitişi', 'Durum', 'Değer (TRY)',
+        'Zimmetli Kişi', 'Sonraki Kalibrasyon', 'Notlar'
+      ];
+      const headerRow = worksheet.addRow(headers);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF134E4A' } };
+      headerRow.height = 26;
+
+      targetAssets.forEach((item, index) => {
+        const dataRow = worksheet.addRow([
+          item.name || '—',
+          item.brandModel || '—',
+          item.category || '—',
+          item.branch || '—',
+          item.serialNo || '—',
+          item.purchaseDate || '—',
+          item.warrantyExpiry || '—',
+          item.status || 'Aktif',
+          item.cost || 0,
+          item.assignedTo || '—',
+          item.nextCalibrationDate || '—',
+          item.notes || '—'
+        ]);
+
+        if (index % 2 === 1) {
+          dataRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+
+        for (let col = 1; col <= 12; col++) {
+          dataRow.getCell(col).border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+          };
+        }
+      });
+
+      // Total Row
+      const totalRow = worksheet.addRow([
+        'GENEL TOPLAM', '', '', '', '', '', '', '',
+        totalValue, '', '', ''
+      ]);
+      totalRow.font = { bold: true };
+      totalRow.height = 24;
+
+      // Sheet 2: Kategori ve Durum Özeti
+      const summarySheet = workbook.addWorksheet('Kategori & Durum Özeti');
+      summarySheet.columns = [{ width: 26 }, { width: 16 }, { width: 22 }, { width: 16 }];
+      summarySheet.addRow(['KATEGORİ', 'ADET', 'TOPLAM DEĞER (TRY)', 'PAY (%)']).font = { bold: true };
+
+      const categoryTotals: Record<string, { count: number; total: number }> = {};
+      targetAssets.forEach(a => {
+        const cat = a.category || 'Diğer';
+        if (!categoryTotals[cat]) categoryTotals[cat] = { count: 0, total: 0 };
+        categoryTotals[cat].count += 1;
+        categoryTotals[cat].total += (a.cost || 0);
+      });
+
+      Object.entries(categoryTotals).forEach(([cat, stat]) => {
+        const share = totalValue > 0 ? Math.round((stat.total / totalValue) * 100) : 0;
+        summarySheet.addRow([cat, `${stat.count} adet`, stat.total, `%${share}`]);
+      });
+
+      summarySheet.addRow([]);
+      const sTot = summarySheet.addRow(['TOPLAM DEMİRBAŞ', `${targetAssets.length} adet`, totalValue, '%100']);
+      sTot.font = { bold: true };
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      downloadFile(blob, `AudiPro_Demirbas_Raporu_${dateStamp}.xlsx`);
+      addToast({ type: 'success', message: 'Demirbaş envanter raporu Excel tablosu (.xlsx) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('Excel indirme hatası:', err);
+      addToast({ type: 'error', message: 'Excel raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleRowClick = (item: DisplayAsset) => {
@@ -2037,38 +2262,83 @@ export default function AssetsPage() {
         </div>
       )}
 
-      {/* ── MODAL: Rapor ── */}
+      {/* ── MODAL: Demirbaş Raporu ── */}
       {showReportModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }}>
-          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20 }} onClick={() => setShowReportModal(false)}>
+          <div style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 540, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
-              <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Demirbaş Envanter ve Amortisman Raporu</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>📊</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>Demirbaş Envanter ve Faaliyet Raporu</h3>
+                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>Klinik ekipmanları, donanım envanteri ve kalibrasyon dökümü</div>
+                </div>
+              </div>
               <button style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }} onClick={() => setShowReportModal(false)}>✕</button>
             </div>
-            <div style={{ padding: 20, display: 'grid', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
+            <div style={{ padding: 20, display: 'grid', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <div style={{ padding: 14, background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Kayıtlı Demirbaş</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 4 }}>{totalAssetsCount} Adet</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>{totalAssetsCount} Adet</div>
                 </div>
-                <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Değer</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{formatCurrency(totalAssetsValue)}</div>
+                <div style={{ padding: 14, background: '#f0fdf4', borderRadius: 10, border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: 12, color: '#16a34a' }}>Toplam Envanter Değeri</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a', marginTop: 2 }}>{formatCurrency(totalAssetsValue)}</div>
                 </div>
-                <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, textAlign: 'center' }}>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Faal Cihaz Oranı</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb', marginTop: 4 }}>{totalAssetsCount ? `%${((filteredAssets.filter(asset => asset.status === 'Aktif').length / totalAssetsCount) * 100).toFixed(1)}` : '—'}</div>
+                <div style={{ padding: 14, background: '#eff6ff', borderRadius: 10, border: '1px solid #bfdbfe' }}>
+                  <div style={{ fontSize: 12, color: '#2563eb' }}>Faal Cihaz Oranı</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb', marginTop: 2 }}>{totalAssetsCount ? `%${((filteredAssets.filter(asset => asset.status === 'Aktif').length / totalAssetsCount) * 100).toFixed(1)}` : '—'}</div>
+                </div>
+                <div style={{ padding: 14, background: '#fef3c7', borderRadius: 10, border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: 12, color: '#b45309' }}>Bakımdaki / Kalibrasyon</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#b45309', marginTop: 2 }}>
+                    {inMaintenanceCount} Bakımda · {calibrationWarningCount} Kalibrasyon
+                  </div>
+                </div>
+              </div>
+
+              {/* Rapor İndirme Seçenekleri */}
+              <div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 8 }}>
+                  Raporu İndir
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <button
+                    type="button"
+                    data-testid="export-asset-pdf"
+                    className={styles.btnClear}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderColor: '#cbd5e1', borderRadius: 10, cursor: 'pointer' }}
+                    onClick={exportAssetPdf}
+                  >
+                    <span style={{ fontSize: 18 }}>📕</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5, color: '#0f172a' }}>PDF Raporu (.pdf)</strong>
+                      <span style={{ fontSize: 10.5, color: '#64748b' }}>Resmi demirbaş dökümü</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="export-asset-excel"
+                    className={styles.btnNewAsset}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, cursor: 'pointer' }}
+                    onClick={exportAssetExcel}
+                  >
+                    <span style={{ fontSize: 18 }}>📗</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5 }}>Excel Tablosu (.xlsx)</strong>
+                      <span style={{ fontSize: 10.5, opacity: 0.9 }}>Detaylı envanter tablosu</span>
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-              <button
-                className={styles.btnClear}
-                onClick={() => addToast({ type: 'error', message: 'Rapor dışa aktarma henüz bağlı değil; dosya oluşturulmadı.' })}
-              >
-                📥 PDF Olarak İndir
-              </button>
-              <button className={styles.btnNewAsset} onClick={() => setShowReportModal(false)}>Kapat</button>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button type="button" className={styles.btnClear} onClick={() => setShowReportModal(false)}>Kapat</button>
             </div>
           </div>
         </div>

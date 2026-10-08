@@ -8,7 +8,18 @@ import { formatCurrency, type StockItem, type Patient } from '../data/mockData';
 import { useDebounce } from '../hooks/useDebounce';
 import { dbFetchStockMovements } from '../lib/database';
 import { matchesInventoryIdentifier } from '../lib/inventorySearch';
+import { createReportPdf } from '../lib/reportPdf';
+import { downloadFile } from '../lib/downloadFile';
 import styles from './StockPage.module.css';
+
+let cachedExcelJS: typeof import('exceljs') | null = null;
+const getExcelJS = async () => {
+  if (!cachedExcelJS) {
+    const mod = await import('exceljs');
+    cachedExcelJS = (mod.default || mod) as unknown as typeof import('exceljs');
+  }
+  return cachedExcelJS;
+};
 
 interface DisplayStockItem extends StockItem {
   branchStockBreakdown?: { [branchName: string]: number };
@@ -86,6 +97,7 @@ export default function StockPage() {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   useEffect(() => {
     if (!showEditModal) setActiveItem(current => current ? allStockItems.find(item => item.id === current.id) || null : null);
   }, [allStockItems, showEditModal]);
@@ -238,6 +250,191 @@ export default function StockPage() {
       setSelectedIds([]);
     }
   };
+
+  // ── EXPORT FUNCTIONS ──
+  const exportStockPdf = () => {
+    setIsExporting(true);
+    try {
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const totalUnits = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
+      const pad = (str: string, len: number) => (str || '').padEnd(len).slice(0, len);
+      const padR = (str: string, len: number) => (str || '').padStart(len).slice(0, len);
+      const sep = '='.repeat(84);
+      const dash = '-'.repeat(84);
+
+      // Category breakdown
+      const categoryTotals: Record<string, { count: number; units: number; val: number }> = {};
+      scopedStockItems.forEach(item => {
+        const cat = item.category || 'Diğer';
+        if (!categoryTotals[cat]) categoryTotals[cat] = { count: 0, units: 0, val: 0 };
+        categoryTotals[cat].count += 1;
+        categoryTotals[cat].units += Math.max(0, Number(item.quantity) || 0);
+        categoryTotals[cat].val += (Math.max(0, Number(item.quantity) || 0) * (item.price || 0));
+      });
+
+      const lines: string[] = [
+        sep,
+        '         AUDIPRO ISITME MERKEZI - STOK VE ENVANTER RAPORU',
+        sep,
+        `Rapor Tarihi: ${dateFormatted}   |   Toplam Cesit: ${scopedStockItems.length} Kalem`,
+        `Firma/Sube: ${selectedBranch || 'Tum Subeler'}   |   Toplam Adet: ${totalUnits} Adet`,
+        `Toplam Stok Degeri: TRY ${totalStockValue.toLocaleString('tr-TR')}   |   Durum: Onayli Dokum`,
+        '',
+        dash,
+        '1. STOK VE ENVANTER KPI OZETI',
+        dash,
+        `  Toplam Urun Cesidi      : ${scopedStockItems.length} cesit`,
+        `  Toplam Fiziksel Adet    : ${totalUnits} adet`,
+        `  Toplam Envanter Degeri  : TRY ${totalStockValue.toLocaleString('tr-TR')}`,
+        `  Kritik Stok Uyarisi     : ${scopedStockItems.filter(i => (i.quantity || 0) > 0 && (i.quantity || 0) <= (i.criticalLevel || 5)).length} urun`,
+        `  Tukenen / Stoksuz Urun  : ${scopedStockItems.filter(i => (i.quantity || 0) <= 0).length} urun`,
+        '',
+        dash,
+        '2. KATEGORI BAZLI DAGILIM',
+        dash,
+        `${pad('KATEGORI', 26)} ${padR('CESIT', 8)} ${padR('FIZIKSEL ADET', 16)} ${padR('TOPLAM DEGER', 20)}`,
+        dash,
+      ];
+
+      Object.entries(categoryTotals).forEach(([cat, stat]) => {
+        lines.push(`${pad(cat, 26)} ${padR(`${stat.count}`, 8)} ${padR(`${stat.units} adet`, 16)} ${padR(`TRY ${stat.val.toLocaleString('tr-TR')}`, 20)}`);
+      });
+
+      lines.push(dash);
+      lines.push('');
+      lines.push(dash);
+      lines.push('3. STOK VE ENVANTER DETAY LISTESI');
+      lines.push(dash);
+      lines.push(`${pad('URUN ADI', 22)} ${pad('KATEGORI', 14)} ${pad('SUBE', 13)} ${padR('ADET', 8)} ${padR('BIRIM FIYAT', 13)} ${padR('TOPLAM', 12)}`);
+      lines.push(dash);
+
+    scopedStockItems.forEach(item => {
+      const qty = Math.max(0, Number(item.quantity) || 0);
+      const total = qty * (item.price || 0);
+      lines.push(
+        `${pad(item.name || '-', 22)} ${pad(item.category || '-', 14)} ${pad(item.branch || '-', 13)} ${padR(`${qty}`, 8)} ${padR(`TRY ${item.price || 0}`, 13)} ${padR(`TRY ${total}`, 12)}`
+      );
+    });
+
+    lines.push(dash);
+    lines.push(`TOPLAM ENVANTER DEGERI: TRY ${totalStockValue.toLocaleString('tr-TR')}`);
+    lines.push(sep);
+
+    const blob = createReportPdf(lines);
+    downloadFile(blob, `AudiPro_Stok_Envanter_Raporu_${dateStamp}.pdf`);
+    addToast({ type: 'success', message: 'Stok envanter raporu PDF (.pdf) olarak başarıyla indirildi.' });
+  } catch (err) {
+    console.error('PDF indirme hatası:', err);
+    addToast({ type: 'error', message: 'PDF raporu oluşturulurken hata meydana geldi.' });
+  } finally {
+    setIsExporting(false);
+  }
+};
+
+const exportStockExcel = async () => {
+  setIsExporting(true);
+  try {
+    const ExcelJS = await getExcelJS();
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'AudiPro İşitme Merkezi';
+
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const dateFormatted = new Date().toLocaleDateString('tr-TR');
+    const totalUnits = scopedStockItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0);
+
+    // Sheet 1: Stok Envanteri
+    const worksheet = workbook.addWorksheet('Stok Envanteri');
+    worksheet.columns = [
+      { width: 26 }, // Ürün Adı
+      { width: 18 }, // Kategori
+      { width: 18 }, // Marka
+      { width: 18 }, // Şube
+      { width: 14 }, // Seri / Barkod
+      { width: 12 }, // Stok Adedi
+      { width: 14 }, // Kritik Seviye
+      { width: 16 }, // Birim Fiyat (TRY)
+      { width: 18 }, // Toplam Değer (TRY)
+      { width: 14 }, // Durum
+    ];
+
+    // Header Title
+    worksheet.mergeCells('A1:J1');
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = 'AUDİPRO İŞİTME MERKEZİ - STOK VE ENVANTER RAPORU';
+    titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(1).height = 32;
+
+    // Subtitle
+    worksheet.mergeCells('A2:J2');
+    const subCell = worksheet.getCell('A2');
+    subCell.value = `Rapor Tarihi: ${dateFormatted}   |   Toplam Çeşit: ${scopedStockItems.length} Kalem   |   Toplam Adet: ${totalUnits}   |   Toplam Değer: TRY ${totalStockValue.toLocaleString('tr-TR')}`;
+    subCell.font = { italic: true, size: 10, color: { argb: 'FF475569' } };
+    subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(2).height = 22;
+
+    worksheet.addRow([]); // empty row
+
+    const headers = [
+      'Ürün Adı', 'Kategori', 'Marka', 'Şube', 'Seri / Barkod',
+      'Stok Adedi', 'Kritik Seviye', 'Birim Fiyat (TRY)', 'Toplam Değer (TRY)', 'Durum'
+    ];
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF134E4A' } };
+    headerRow.height = 26;
+
+    scopedStockItems.forEach((item, index) => {
+      const qty = Math.max(0, Number(item.quantity) || 0);
+      const rowTotal = qty * (item.price || 0);
+      const dataRow = worksheet.addRow([
+        item.name || '—',
+        item.category || '—',
+        item.brand || '—',
+        item.branch || '—',
+        item.barcode || item.serialNo || '—',
+        qty,
+        item.criticalLevel || 5,
+        item.price || 0,
+        rowTotal,
+        qty <= 0 ? 'Tükendi' : qty <= (item.criticalLevel || 5) ? 'Kritik' : 'Stokta'
+      ]);
+
+      if (index % 2 === 1) {
+        dataRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
+
+      for (let col = 1; col <= 10; col++) {
+        dataRow.getCell(col).border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+      }
+    });
+
+    const totalRow = worksheet.addRow([
+      'GENEL TOPLAM', '', '', '', '',
+      totalUnits, '', '', totalStockValue, ''
+    ]);
+    totalRow.font = { bold: true };
+    totalRow.height = 24;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    downloadFile(blob, `AudiPro_Stok_Envanter_Raporu_${dateStamp}.xlsx`);
+    addToast({ type: 'success', message: 'Stok envanter raporu Excel tablosu (.xlsx) olarak başarıyla indirildi.' });
+  } catch (err) {
+    console.error('Excel indirme hatası:', err);
+    addToast({ type: 'error', message: 'Excel raporu oluşturulurken hata meydana geldi.' });
+  } finally {
+    setIsExporting(false);
+  }
+};
+
 
   const handleToggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1722,14 +1919,42 @@ export default function StockPage() {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-              <button
-                className={styles.btnClear}
-                onClick={() => addToast({ type: 'error', message: 'PDF dışa aktarma henüz bağlı değil; dosya oluşturulmadı.' })}
-              >
-                📥 PDF İndir
-              </button>
-              <button className={styles.btnPrimaryAction} onClick={() => setShowReportModal(false)}>Kapat</button>
+            <div style={{ padding: '0 20px 20px', display: 'grid', gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block' }}>Raporu İndir</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <button
+                  type="button"
+                  data-testid="export-stock-pdf"
+                  className={styles.btnClear}
+                  disabled={isExporting}
+                  style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderColor: '#cbd5e1', borderRadius: 10, cursor: 'pointer' }}
+                  onClick={exportStockPdf}
+                >
+                  <span style={{ fontSize: 18 }}>📕</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <strong style={{ display: 'block', fontSize: 12.5, color: '#0f172a' }}>PDF Raporu (.pdf)</strong>
+                    <span style={{ fontSize: 10.5, color: '#64748b' }}>Resmi stok dökümü</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="export-stock-excel"
+                  className={styles.btnPrimaryAction}
+                  disabled={isExporting}
+                  style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, cursor: 'pointer' }}
+                  onClick={exportStockExcel}
+                >
+                  <span style={{ fontSize: 18 }}>📗</span>
+                  <div style={{ textAlign: 'left' }}>
+                    <strong style={{ display: 'block', fontSize: 12.5 }}>Excel Tablosu (.xlsx)</strong>
+                    <span style={{ fontSize: 10.5, opacity: 0.9 }}>Detaylı tablo dökümü</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button className={styles.btnClear} onClick={() => setShowReportModal(false)}>Kapat</button>
             </div>
           </div>
         </div>

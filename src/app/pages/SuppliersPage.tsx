@@ -3,7 +3,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../data/mockData';
+import { createReportPdf } from '../lib/reportPdf';
+import { downloadFile } from '../lib/downloadFile';
 import styles from './SuppliersPage.module.css';
+
+let cachedExcelJS: typeof import('exceljs') | null = null;
+const getExcelJS = async () => {
+  if (!cachedExcelJS) {
+    const mod = await import('exceljs');
+    cachedExcelJS = (mod.default || mod) as unknown as typeof import('exceljs');
+  }
+  return cachedExcelJS;
+};
 
 export interface SupplierItem {
   id: string;
@@ -78,6 +89,7 @@ export default function SuppliersPage() {
   const [showAddInvoiceModal, setShowAddInvoiceModal] = useState(false);
   const [showMakePaymentModal, setShowMakePaymentModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
   const [isCreatingSupplierCategory, setIsCreatingSupplierCategory] = useState(false);
 
@@ -183,6 +195,166 @@ export default function SuppliersPage() {
     setSelectedSupplier(item);
     if (!selectedRowIds.includes(item.id)) {
       setSelectedRowIds([item.id]);
+    }
+  };
+
+  // ── EXPORT FUNCTIONS ──
+  const exportSupplierPdf = () => {
+    setIsExporting(true);
+    try {
+      const targetSuppliers = filteredSuppliers.length > 0 ? filteredSuppliers : suppliers;
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const totalBalance = targetSuppliers.reduce((sum, s) => sum + (s.balance || 0), 0);
+      const totalPurchases = targetSuppliers.reduce((sum, s) => sum + (s.totalPurchases || 0), 0);
+      const pad = (str: string, len: number) => (str || '').padEnd(len).slice(0, len);
+      const padR = (str: string, len: number) => (str || '').padStart(len).slice(0, len);
+      const sep = '='.repeat(84);
+      const dash = '-'.repeat(84);
+
+      const lines: string[] = [
+        sep,
+        '         AUDIPRO ISITME MERKEZI - TEDARIKCI VE SATICI CARI RAPORU',
+        sep,
+        `Rapor Tarihi: ${dateFormatted}   |   Toplam Tedarikci: ${targetSuppliers.length} Firma`,
+        `Filtre Kategori: ${selectedCategory || 'Tumu'}   |   Durum: Onayli Dokum`,
+        `Toplam Bakiye Borc: TRY ${totalBalance.toLocaleString('tr-TR')}   |   Alim Hacmi: TRY ${totalPurchases.toLocaleString('tr-TR')}`,
+        '',
+        dash,
+        '1. TEDARIKCI VE CARI KPI OZETI',
+        dash,
+        `  Toplam Tedarikci Sayisi : ${targetSuppliers.length} firma`,
+        `  Toplam Borc / Bakiye    : TRY ${totalBalance.toLocaleString('tr-TR')}`,
+        `  Toplam Alim Hacmi       : TRY ${totalPurchases.toLocaleString('tr-TR')}`,
+        `  Aktif Tedarikci Orani   : %${targetSuppliers.length ? Math.round((targetSuppliers.filter(s => s.status === 'Aktif').length / targetSuppliers.length) * 100) : 0}`,
+        '',
+        dash,
+        '2. TEDARIKCI LISTESI VE BAKIYELER',
+        dash,
+        `${pad('FIRMA ADI', 24)} ${pad('KATEGORI', 14)} ${pad('YETKILI', 16)} ${pad('TELEFON', 14)} ${padR('BAKIYE', 12)}`,
+        dash,
+      ];
+
+      targetSuppliers.forEach(s => {
+        lines.push(
+          `${pad(s.companyName || '-', 24)} ${pad(s.category || '-', 14)} ${pad(s.contactPerson || '-', 16)} ${pad(s.phone || '-', 14)} ${padR(`TRY ${(s.balance || 0).toLocaleString('tr-TR')}`, 12)}`
+        );
+      });
+
+      lines.push(dash);
+      lines.push(`TOPLAM BAKIYE BORC: TRY ${totalBalance.toLocaleString('tr-TR')}`);
+      lines.push(sep);
+
+      const blob = createReportPdf(lines);
+      downloadFile(blob, `AudiPro_Tedarikci_Cari_Raporu_${dateStamp}.pdf`);
+      addToast({ type: 'success', message: 'Tedarikçi raporu PDF (.pdf) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('PDF indirme hatası:', err);
+      addToast({ type: 'error', message: 'PDF raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportSupplierExcel = async () => {
+    setIsExporting(true);
+    try {
+      const targetSuppliers = filteredSuppliers.length > 0 ? filteredSuppliers : suppliers;
+      const ExcelJS = await getExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'AudiPro İşitme Merkezi';
+
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const totalBalance = targetSuppliers.reduce((sum, s) => sum + (s.balance || 0), 0);
+
+      // Sheet 1: Tedarikçiler
+      const worksheet = workbook.addWorksheet('Tedarikçi Listesi');
+      worksheet.columns = [
+        { width: 28 }, // Firma Adı
+        { width: 18 }, // Kategori
+        { width: 20 }, // Yetkili Kişi
+        { width: 16 }, // Unvan
+        { width: 16 }, // Telefon
+        { width: 22 }, // E-Posta
+        { width: 16 }, // Vergi No
+        { width: 14 }, // Durum
+        { width: 18 }, // Bakiye Borç (TRY)
+        { width: 18 }, // Toplam Alım (TRY)
+      ];
+
+      // Header Title
+      worksheet.mergeCells('A1:J1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'AUDİPRO İŞİTME MERKEZİ - TEDARİKÇİ CARİ RAPORU';
+      titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(1).height = 32;
+
+      // Subtitle
+      worksheet.mergeCells('A2:J2');
+      const subCell = worksheet.getCell('A2');
+      subCell.value = `Rapor Tarihi: ${dateFormatted}   |   Toplam Tedarikçi: ${targetSuppliers.length} Firma   |   Toplam Bakiye Borç: TRY ${totalBalance.toLocaleString('tr-TR')}`;
+      subCell.font = { italic: true, size: 10, color: { argb: 'FF475569' } };
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(2).height = 22;
+
+      worksheet.addRow([]); // empty row
+
+      const headers = [
+        'Firma Adı', 'Kategori', 'Yetkili Kişi', 'Unvan', 'Telefon',
+        'E-Posta', 'Vergi No', 'Durum', 'Bakiye Borç (TRY)', 'Toplam Alım (TRY)'
+      ];
+      const headerRow = worksheet.addRow(headers);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF134E4A' } };
+      headerRow.height = 26;
+
+      targetSuppliers.forEach((item, index) => {
+        const dataRow = worksheet.addRow([
+          item.companyName || '—',
+          item.category || '—',
+          item.contactPerson || '—',
+          item.contactTitle || '—',
+          item.phone || '—',
+          item.email || '—',
+          item.taxNo || '—',
+          item.status || 'Aktif',
+          item.balance || 0,
+          item.totalPurchases || 0
+        ]);
+
+        if (index % 2 === 1) {
+          dataRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+
+        for (let col = 1; col <= 10; col++) {
+          dataRow.getCell(col).border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+          };
+        }
+      });
+
+      const totalRow = worksheet.addRow([
+        'GENEL TOPLAM', '', '', '', '', '', '', '',
+        totalBalance, targetSuppliers.reduce((s, item) => s + (item.totalPurchases || 0), 0)
+      ]);
+      totalRow.font = { bold: true };
+      totalRow.height = 24;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      downloadFile(blob, `AudiPro_Tedarikci_Cari_Raporu_${dateStamp}.xlsx`);
+      addToast({ type: 'success', message: 'Tedarikçi raporu Excel tablosu (.xlsx) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('Excel indirme hatası:', err);
+      addToast({ type: 'error', message: 'Excel raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -1303,18 +1475,45 @@ export default function SuppliersPage() {
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#7e22ce' }}>{suppliers.length ? Math.round(suppliers.filter(s => s.status === 'Aktif').length / suppliers.length * 100) : 0}%</div>
                 </div>
               </div>
+
+              {/* Rapor İndirme Seçenekleri */}
+              <div style={{ marginTop: 16 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 8 }}>Raporu İndir</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <button
+                    type="button"
+                    data-testid="export-supplier-pdf"
+                    className={styles.btnSecondaryAction}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', justifyContent: 'center', gap: 8, borderColor: '#cbd5e1' }}
+                    onClick={exportSupplierPdf}
+                  >
+                    <span style={{ fontSize: 18 }}>📕</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5, color: '#0f172a' }}>PDF Raporu (.pdf)</strong>
+                      <span style={{ fontSize: 10.5, color: '#64748b' }}>Resmi cari dökümü</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="export-supplier-excel"
+                    className={styles.btnPrimaryAction}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', justifyContent: 'center', gap: 8 }}
+                    onClick={exportSupplierExcel}
+                  >
+                    <span style={{ fontSize: 18 }}>📗</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5 }}>Excel Tablosu (.xlsx)</strong>
+                      <span style={{ fontSize: 10.5, opacity: 0.9 }}>Detaylı tablo dökümü</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
             </div>
             <div className={styles.modalFooter}>
               <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowReportModal(false)}>Kapat</button>
-              <button
-                type="button"
-                className={styles.btnPrimaryAction}
-                onClick={() => {
-                  addToast({ type: 'error', message: 'PDF dışa aktarma henüz bağlı değil; rapor dosyası oluşturulmadı.' });
-                }}
-              >
-                Raporu İndir (PDF)
-              </button>
             </div>
           </div>
         </div>
