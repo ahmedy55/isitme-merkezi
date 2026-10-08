@@ -1194,6 +1194,25 @@ test('Review appointment reports and download Excel/CSV files', async ({ page })
   await page.getByTestId('reports-custom-end-date').fill('2026-05-31');
   await page.getByTestId('reports-apply-custom-date').click();
   await expect(page.locator('div[class*="dateFilterBox"]')).toContainText('01.02.2026 - 31.05.2026');
+
+  // Test Period Comparison Modal and Downloads
+  await page.getByRole('button', { name: 'Karşılaştır' }).click();
+  await expect(page.getByRole('heading', { name: 'Dönemsel Karşılaştırma Analizi' })).toBeVisible();
+  await page.getByTestId('compare-a-start-date').fill('2026-01-01');
+  await page.getByTestId('compare-a-end-date').fill('2026-12-31');
+  await page.getByTestId('compare-b-start-date').fill('2025-01-01');
+  await page.getByTestId('compare-b-end-date').fill('2025-12-31');
+
+  const compareExcelDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('download-compare-excel').click();
+  const compareExcelDownload = await compareExcelDownloadPromise;
+  expect(compareExcelDownload.suggestedFilename()).toMatch(/^AudiPro_Donemsel_Karsilastirma_\d{4}-\d{2}-\d{2}\.xlsx$/);
+
+  await page.getByRole('button', { name: 'Karşılaştır' }).click();
+  const compareCsvDownloadPromise = page.waitForEvent('download');
+  await page.getByTestId('download-compare-csv').click();
+  const compareCsvDownload = await compareCsvDownloadPromise;
+  expect(compareCsvDownload.suggestedFilename()).toMatch(/^AudiPro_Donemsel_Karsilastirma_\d{4}-\d{2}-\d{2}\.csv$/);
 });
 
 test('service status, inspection note and warranty changes persist', async ({ page }) => {

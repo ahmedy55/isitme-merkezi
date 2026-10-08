@@ -35,6 +35,12 @@ const dateKey = (value?: string) => {
   return tr ? `${tr[3]}-${tr[2].padStart(2, '0')}-${tr[1].padStart(2, '0')}` : '';
 };
 const formatRangeDate = (date: Date) => new Intl.DateTimeFormat('tr-TR').format(date);
+const formatIsoToDisplay = (isoStr?: string) => {
+  if (!isoStr) return '—';
+  const match = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return isoStr;
+  return `${match[3]}.${match[2]}.${match[1]}`;
+};
 
 // ── Reusable Pure SVG Donut Component ──
 function SvgDonut({
@@ -144,6 +150,33 @@ export default function ReportsPage() {
     }
   }, [showDateModal, rangeBounds.start, rangeBounds.end]);
 
+  // Comparison period states
+  const [compareAStart, setCompareAStart] = useState(() => {
+    const [start] = dateRange.split(' - ').map(dateKey);
+    return start || `${new Date().getFullYear()}-01-01`;
+  });
+  const [compareAEnd, setCompareAEnd] = useState(() => {
+    const [, end] = dateRange.split(' - ').map(dateKey);
+    return end || `${new Date().getFullYear()}-12-31`;
+  });
+  const [compareBStart, setCompareBStart] = useState(() => {
+    const y = new Date().getFullYear() - 1;
+    return `${y}-01-01`;
+  });
+  const [compareBEnd, setCompareBEnd] = useState(() => {
+    const y = new Date().getFullYear() - 1;
+    return `${y}-12-31`;
+  });
+
+  useEffect(() => {
+    if (showCompareModal) {
+      if (rangeBounds.start) setCompareAStart(rangeBounds.start);
+      if (rangeBounds.end) setCompareAEnd(rangeBounds.end);
+      if (previousRangeBounds.start) setCompareBStart(previousRangeBounds.start);
+      if (previousRangeBounds.end) setCompareBEnd(previousRangeBounds.end);
+    }
+  }, [showCompareModal]);
+
   const handleApplyCustomDateRange = () => {
     if (!customStartDate || !customEndDate) {
       addToast({ type: 'error', message: 'Lütfen hem başlangıç hem de bitiş tarihini seçin.' });
@@ -222,12 +255,213 @@ export default function ReportsPage() {
   const previousPatientCount = previousPatients.length;
   const previousDeviceCount = previousSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((qty, item) => qty + item.quantity, 0), 0);
   const percentageChange = (current: number, previous: number) => previous ? `${current >= previous ? '+' : ''}%${Math.round((current - previous) / previous * 100)}` : 'Önceki dönemde veri yok';
-  const compareRows = [
-    { label: 'Toplam Ciro', current: dynamicTotalRevenue, previous: previousRevenue, format: formatCurrency },
-    { label: 'Toplam Hasta', current: dynamicPatientCount, previous: previousPatientCount, format: (value: number) => String(value) },
-    { label: 'Cihaz Satışı', current: dynamicDeviceSalesCount, previous: previousDeviceCount, format: (value: number) => `${value} Adet` },
-    { label: 'Teknik Servis Geliri', current: dynamicServiceRevenue, previous: previousServiceRevenue, format: formatCurrency },
-  ];
+
+  // Dynamic Comparison Calculator for any two custom date ranges
+  const calculateMetricsForRange = (startIso: string, endIso: string) => {
+    const isWithin = (val?: string) => {
+      const k = dateKey(val);
+      return Boolean(k && (!startIso || k >= startIso) && (!endIso || k <= endIso));
+    };
+
+    const periodSales = scopedSales.filter(s => isWithin(s.date));
+    const periodExpenses = scopedExpenses.filter(e => isWithin(e.date));
+    const periodPatients = scopedPatients.filter(p => isWithin(p.createdAt));
+    const periodAppointments = scopedAppointments.filter(a => isWithin(a.date));
+
+    const periodServiceTx = reportCashTransactions.filter(row => row.type === 'INCOME'
+      && row.referenceEntity === 'service'
+      && matches(undefined, row.branchId)
+      && isWithin(row.createdAt));
+
+    const periodSalesServiceRevenue = periodSales.reduce((sum, sale) => sum + sale.items
+      .filter(item => item.type === 'Servis Geliri')
+      .reduce((lineSum, item) => lineSum + item.price * item.quantity, 0), 0);
+
+    const serviceRevenue = periodSalesServiceRevenue + periodServiceTx.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+    const totalRevenue = periodSales.reduce((sum, sale) => sum + (sale.total || 0), 0)
+      + periodServiceTx.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+    const totalExpenses = periodExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+    const netProfit = totalRevenue - totalExpenses;
+    const patientCount = periodPatients.length;
+    const appointmentCount = periodAppointments.length;
+    const deviceSalesCount = periodSales.reduce((sum, sale) => sum + sale.items.filter(item => item.type === 'Cihaz').reduce((count, item) => count + item.quantity, 0), 0);
+
+    return {
+      totalRevenue,
+      totalExpenses,
+      netProfit,
+      patientCount,
+      appointmentCount,
+      deviceSalesCount,
+      serviceRevenue,
+    };
+  };
+
+  const dynamicCompareRows = useMemo(() => {
+    let aStart = compareAStart;
+    let aEnd = compareAEnd;
+    if (aStart && aEnd && aStart > aEnd) [aStart, aEnd] = [aEnd, aStart];
+
+    let bStart = compareBStart;
+    let bEnd = compareBEnd;
+    if (bStart && bEnd && bStart > bEnd) [bStart, bEnd] = [bEnd, bStart];
+
+    const a = calculateMetricsForRange(aStart, aEnd);
+    const b = calculateMetricsForRange(bStart, bEnd);
+
+    const computeChange = (current: number, previous: number) => {
+      if (previous === 0) {
+        if (current === 0) return 'Değişim yok';
+        return '+%100 (Yeni)';
+      }
+      const pct = Math.round(((current - previous) / previous) * 100);
+      return `${pct >= 0 ? '+' : ''}%${pct}`;
+    };
+
+    return [
+      { label: 'Toplam Ciro', a: a.totalRevenue, b: b.totalRevenue, diff: a.totalRevenue - b.totalRevenue, change: computeChange(a.totalRevenue, b.totalRevenue), format: formatCurrency, higherIsBetter: true },
+      { label: 'Toplam Gider', a: a.totalExpenses, b: b.totalExpenses, diff: a.totalExpenses - b.totalExpenses, change: computeChange(a.totalExpenses, b.totalExpenses), format: formatCurrency, higherIsBetter: false },
+      { label: 'Net Faaliyet Kârı', a: a.netProfit, b: b.netProfit, diff: a.netProfit - b.netProfit, change: computeChange(a.netProfit, b.netProfit), format: formatCurrency, higherIsBetter: true },
+      { label: 'Kayıtlı Hasta Sayısı', a: a.patientCount, b: b.patientCount, diff: a.patientCount - b.patientCount, change: computeChange(a.patientCount, b.patientCount), format: (v: number) => `${v} Hasta`, higherIsBetter: true },
+      { label: 'Toplam Randevu', a: a.appointmentCount, b: b.appointmentCount, diff: a.appointmentCount - b.appointmentCount, change: computeChange(a.appointmentCount, b.appointmentCount), format: (v: number) => `${v} Randevu`, higherIsBetter: true },
+      { label: 'Cihaz Satışı', a: a.deviceSalesCount, b: b.deviceSalesCount, diff: a.deviceSalesCount - b.deviceSalesCount, change: computeChange(a.deviceSalesCount, b.deviceSalesCount), format: (v: number) => `${v} Adet`, higherIsBetter: true },
+      { label: 'Teknik Servis Geliri', a: a.serviceRevenue, b: b.serviceRevenue, diff: a.serviceRevenue - b.serviceRevenue, change: computeChange(a.serviceRevenue, b.serviceRevenue), format: formatCurrency, higherIsBetter: true },
+    ];
+  }, [compareAStart, compareAEnd, compareBStart, compareBEnd, scopedSales, scopedExpenses, scopedPatients, scopedAppointments, reportCashTransactions, matches]);
+
+  const setComparePreset = (type: string) => {
+    const now = new Date();
+    if (type === 'year-vs-last-year') {
+      const y = now.getFullYear();
+      setCompareAStart(`${y}-01-01`);
+      setCompareAEnd(`${y}-12-31`);
+      setCompareBStart(`${y - 1}-01-01`);
+      setCompareBEnd(`${y - 1}-12-31`);
+    } else if (type === 'month-vs-last-month') {
+      const y = now.getFullYear();
+      const m = now.getMonth();
+      const aStart = new Date(y, m, 1);
+      const aEnd = new Date(y, m + 1, 0);
+      const bStart = new Date(y, m - 1, 1);
+      const bEnd = new Date(y, m, 0);
+      setCompareAStart(aStart.toISOString().slice(0, 10));
+      setCompareAEnd(aEnd.toISOString().slice(0, 10));
+      setCompareBStart(bStart.toISOString().slice(0, 10));
+      setCompareBEnd(bEnd.toISOString().slice(0, 10));
+    } else if (type === 'last-30-days') {
+      const aEnd = new Date(now);
+      const aStart = new Date(now); aStart.setDate(aStart.getDate() - 29);
+      const bEnd = new Date(aStart); bEnd.setDate(bEnd.getDate() - 1);
+      const bStart = new Date(bEnd); bStart.setDate(bStart.getDate() - 29);
+      setCompareAStart(aStart.toISOString().slice(0, 10));
+      setCompareAEnd(aEnd.toISOString().slice(0, 10));
+      setCompareBStart(bStart.toISOString().slice(0, 10));
+      setCompareBEnd(bEnd.toISOString().slice(0, 10));
+    } else if (type === 'last-3-months') {
+      const aEnd = new Date(now);
+      const aStart = new Date(now); aStart.setMonth(aStart.getMonth() - 3);
+      const bEnd = new Date(aStart); bEnd.setDate(bEnd.getDate() - 1);
+      const bStart = new Date(bEnd); bStart.setMonth(bStart.getMonth() - 3);
+      setCompareAStart(aStart.toISOString().slice(0, 10));
+      setCompareAEnd(aEnd.toISOString().slice(0, 10));
+      setCompareBStart(bStart.toISOString().slice(0, 10));
+      setCompareBEnd(bEnd.toISOString().slice(0, 10));
+    }
+  };
+
+  const handleExportComparison = async (format: 'XLSX' | 'CSV') => {
+    try {
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const aLabel = `${formatIsoToDisplay(compareAStart)} - ${formatIsoToDisplay(compareAEnd)}`;
+      const bLabel = `${formatIsoToDisplay(compareBStart)} - ${formatIsoToDisplay(compareBEnd)}`;
+      const rows = [
+        ['Metrik', `A Dönemi (${aLabel})`, `B Dönemi (${bLabel})`, 'Net Fark', 'Değişim Oranı'],
+        ...dynamicCompareRows.map(row => [
+          row.label,
+          row.format(row.a),
+          row.format(row.b),
+          row.diff >= 0 ? `+${row.format(row.diff)}` : `-${row.format(Math.abs(row.diff))}`,
+          row.change
+        ])
+      ];
+
+      if (format === 'CSV') {
+        const headerLines = [
+          `"AUDIPRO İŞİTME MERKEZİ - DÖNEMSEL KARŞILAŞTIRMA ANALİZİ";;;;`,
+          `"A Dönemi: ${aLabel}";"B Dönemi: ${bLabel}";"Rapor Tarihi: ${new Date().toLocaleDateString('tr-TR')}";;`,
+          ``
+        ];
+        const csvContent = headerLines.join('\r\n') + '\r\n' + rows.map(r => r.map(v => `"${String(v ?? '').replaceAll('"', '""')}"`).join(';')).join('\r\n');
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8' });
+        downloadFile(blob, `AudiPro_Donemsel_Karsilastirma_${dateStamp}.csv`);
+        addToast({ type: 'success', message: 'Karşılaştırma CSV tablosu (.csv) olarak başarıyla indirildi.' });
+      } else {
+        const ExcelJS = await getExcelJS();
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'AudiPro İşitme Merkezi';
+        const worksheet = workbook.addWorksheet('Karşılaştırma');
+        worksheet.columns = [
+          { width: 28 }, // Metrik
+          { width: 26 }, // A Dönemi
+          { width: 26 }, // B Dönemi
+          { width: 20 }, // Net Fark
+          { width: 18 }, // Değişim Oranı
+        ];
+
+        // Header Title
+        worksheet.mergeCells('A1:E1');
+        const titleCell = worksheet.getCell('A1');
+        titleCell.value = 'AUDIPRO İŞİTME MERKEZİ - DÖNEMSEL KARŞILAŞTIRMA ANALİZİ';
+        titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        worksheet.getRow(1).height = 32;
+
+        // Subtitle
+        worksheet.mergeCells('A2:E2');
+        const subCell = worksheet.getCell('A2');
+        subCell.value = `A Dönemi: ${aLabel}   |   B Dönemi: ${bLabel}   |   Rapor Tarihi: ${new Date().toLocaleDateString('tr-TR')}`;
+        subCell.font = { italic: true, size: 10, color: { argb: 'FF475569' } };
+        subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        worksheet.getRow(2).height = 22;
+
+        worksheet.addRow([]); // empty row
+
+        const headerRow = worksheet.addRow(['Metrik', `A Dönemi (${aLabel})`, `B Dönemi (${bLabel})`, 'Net Fark', 'Değişim Oranı']);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF134E4A' } };
+        headerRow.height = 26;
+
+        dynamicCompareRows.forEach(row => {
+          const dataRow = worksheet.addRow([
+            row.label,
+            row.format(row.a),
+            row.format(row.b),
+            row.diff >= 0 ? `+${row.format(row.diff)}` : `-${row.format(Math.abs(row.diff))}`,
+            row.change
+          ]);
+          dataRow.getCell(1).font = { bold: true };
+          [1, 2, 3, 4, 5].forEach(col => {
+            dataRow.getCell(col).border = {
+              top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+              right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+            };
+          });
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        downloadFile(blob, `AudiPro_Donemsel_Karsilastirma_${dateStamp}.xlsx`);
+        addToast({ type: 'success', message: 'Karşılaştırma Excel tablosu (.xlsx) olarak başarıyla indirildi.' });
+      }
+      setShowCompareModal(false);
+    } catch (err) {
+      console.error('Karşılaştırma dışa aktarma hatası:', err);
+      addToast({ type: 'error', message: 'Karşılaştırma raporu indirilemedi.' });
+    }
+  };
   const [chartMetric, setChartMetric] = useState('Ciro');
   const [showMonthlyTable, setShowMonthlyTable] = useState(false);
   const [hoveredMonth, setHoveredMonth] = useState<string | null>(null);
@@ -1183,58 +1417,199 @@ export default function ReportsPage() {
       {/* ── MODAL 1: Karşılaştır Modalı ── */}
       {showCompareModal && (
         <div className={styles.modalOverlay} onClick={() => setShowCompareModal(false)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
             <div className={styles.modalHeader}>
-              <h2>📊 Dönemsel Karşılaştırma Analizi</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 20 }}>📊</span>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 16 }}>Dönemsel Karşılaştırma Analizi</h2>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>İki bağımsız tarih aralığını karşılaştırın ve analizi dışa aktarın</div>
+                </div>
+              </div>
               <button type="button" className={styles.modalCloseBtn} onClick={() => setShowCompareModal(false)}>✕</button>
             </div>
-            <div className={styles.modalBody}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>A Dönemi (Mevcut)</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{rangeBounds.start || '—'} – {rangeBounds.end || '—'}</div>
+            <div className={styles.modalBody} style={{ padding: '16px 20px', maxHeight: 'calc(90vh - 130px)', overflowY: 'auto' }}>
+              {/* Hızlı Karşılaştırma Şablonları */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Hızlı Kıyaslama:</span>
+                <button
+                  type="button"
+                  className={styles.btnSecondaryAction}
+                  style={{ fontSize: 11, padding: '4px 10px', minHeight: 28, height: 28 }}
+                  onClick={() => setComparePreset('year-vs-last-year')}
+                >
+                  Bu Yıl vs Geçen Yıl
+                </button>
+                <button
+                  type="button"
+                  className={styles.btnSecondaryAction}
+                  style={{ fontSize: 11, padding: '4px 10px', minHeight: 28, height: 28 }}
+                  onClick={() => setComparePreset('month-vs-last-month')}
+                >
+                  Bu Ay vs Geçen Ay
+                </button>
+                <button
+                  type="button"
+                  className={styles.btnSecondaryAction}
+                  style={{ fontSize: 11, padding: '4px 10px', minHeight: 28, height: 28 }}
+                  onClick={() => setComparePreset('last-30-days')}
+                >
+                  Son 30 Gün vs Önceki 30 Gün
+                </button>
+                <button
+                  type="button"
+                  className={styles.btnSecondaryAction}
+                  style={{ fontSize: 11, padding: '4px 10px', minHeight: 28, height: 28 }}
+                  onClick={() => setComparePreset('last-3-months')}
+                >
+                  Son 3 Ay vs Önceki 3 Ay
+                </button>
+              </div>
+
+              {/* İki Dönem Seçici Kartları */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                {/* A Dönemi */}
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px 14px', borderRadius: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#166534' }}>🅰️ A Dönemi (Hedef)</span>
+                    <span style={{ fontSize: 10, color: '#15803d', fontWeight: 600 }}>{formatIsoToDisplay(compareAStart)} – {formatIsoToDisplay(compareAEnd)}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <span style={{ fontSize: 10, color: '#166534', display: 'block', marginBottom: 3, fontWeight: 600 }}>Başlangıç</span>
+                      <input
+                        type="date"
+                        data-testid="compare-a-start-date"
+                        className={styles.customDateInput}
+                        style={{ height: 34, fontSize: 12, background: '#ffffff', borderColor: '#86efac' }}
+                        value={compareAStart}
+                        onChange={e => setCompareAStart(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 10, color: '#166534', display: 'block', marginBottom: 3, fontWeight: 600 }}>Bitiş</span>
+                      <input
+                        type="date"
+                        data-testid="compare-a-end-date"
+                        className={styles.customDateInput}
+                        style={{ height: 34, fontSize: 12, background: '#ffffff', borderColor: '#86efac' }}
+                        value={compareAEnd}
+                        onChange={e => setCompareAEnd(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div style={{ background: '#f8fafc', padding: 12, borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>B Dönemi (Geçmiş)</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{previousRangeBounds.start || '—'} – {previousRangeBounds.end || '—'}</div>
+
+                {/* B Dönemi */}
+                <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '12px 14px', borderRadius: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>🅱️ B Dönemi (Kıyas)</span>
+                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{formatIsoToDisplay(compareBStart)} – {formatIsoToDisplay(compareBEnd)}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <span style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 3, fontWeight: 600 }}>Başlangıç</span>
+                      <input
+                        type="date"
+                        data-testid="compare-b-start-date"
+                        className={styles.customDateInput}
+                        style={{ height: 34, fontSize: 12, background: '#ffffff' }}
+                        value={compareBStart}
+                        onChange={e => setCompareBStart(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 10, color: '#475569', display: 'block', marginBottom: 3, fontWeight: 600 }}>Bitiş</span>
+                      <input
+                        type="date"
+                        data-testid="compare-b-end-date"
+                        className={styles.customDateInput}
+                        style={{ height: 34, fontSize: 12, background: '#ffffff' }}
+                        value={compareBEnd}
+                        onChange={e => setCompareBEnd(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <table className={styles.perfTable}>
-                <thead>
-                  <tr>
-                    <th>METRİK</th>
-                    <th style={{ textAlign: 'right' }}>Mevcut dönem</th>
-                    <th style={{ textAlign: 'right' }}>Önceki dönem</th>
-                    <th style={{ textAlign: 'right' }}>DEĞİŞİM</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {compareRows.map(row => <tr key={row.label}>
-                    <td style={{ fontWeight: 600 }}>{row.label}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{row.format(row.current)}</td>
-                    <td style={{ textAlign: 'right' }}>{row.format(row.previous)}</td>
-                    <td style={{ textAlign: 'right', color: '#64748b', fontWeight: 700 }}>{percentageChange(row.current, row.previous)}</td>
-                  </tr>)}
-                </tbody>
-              </table>
+              {/* Karşılaştırma Tablosu */}
+              <div style={{ border: '1px solid var(--rep-border)', borderRadius: 10, overflow: 'hidden' }}>
+                <table className={styles.perfTable} style={{ margin: 0 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th style={{ padding: '10px 12px' }}>METRİK</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', color: '#166534' }}>A DÖNEMİ</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', color: '#475569' }}>B DÖNEMİ</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px' }}>FARK</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px' }}>DEĞİŞİM</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dynamicCompareRows.map(row => {
+                      const isPositive = row.diff > 0;
+                      const isNegative = row.diff < 0;
+                      const badgeColor = row.higherIsBetter
+                        ? (isPositive ? '#166534' : isNegative ? '#991b1b' : '#64748b')
+                        : (isPositive ? '#991b1b' : isNegative ? '#166534' : '#64748b');
+                      const badgeBg = row.higherIsBetter
+                        ? (isPositive ? '#dcfce7' : isNegative ? '#fee2e2' : '#f1f5f9')
+                        : (isPositive ? '#fee2e2' : isNegative ? '#dcfce7' : '#f1f5f9');
+
+                      return (
+                        <tr key={row.label}>
+                          <td style={{ fontWeight: 600, padding: '10px 12px', color: '#0f172a' }}>{row.label}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, padding: '10px 12px', color: '#166534' }}>
+                            {row.format(row.a)}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '10px 12px', color: '#475569' }}>
+                            {row.format(row.b)}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: row.diff >= 0 ? '#0f766e' : '#e11d48' }}>
+                            {row.diff >= 0 ? `+${row.format(row.diff)}` : `-${row.format(Math.abs(row.diff))}`}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '10px 12px' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: badgeBg,
+                              color: badgeColor
+                            }}>
+                              {row.change}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className={styles.modalFooter}>
+            <div className={styles.modalFooter} style={{ justifyContent: 'space-between', padding: '12px 20px', borderTop: '1px solid var(--rep-border)', background: '#f8fafc' }}>
               <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowCompareModal(false)}>Kapat</button>
-              <button
-                type="button"
-                className={styles.btnPrimaryAction}
-                onClick={() => {
-                  const rows = [['Metrik', 'Mevcut dönem', 'Önceki dönem', 'Değişim'], ...compareRows.map(row => [row.label, row.format(row.current), row.format(row.previous), percentageChange(row.current, row.previous)])];
-                  const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
-                  const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
-                  downloadFile(blob, 'donemsel-karsilastirma.csv');
-                  addToast({ type: 'success', message: 'Dönem karşılaştırması CSV olarak indirildi.' });
-                  setShowCompareModal(false);
-                }}
-              >
-                Karşılaştırmayı İndir
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  data-testid="download-compare-csv"
+                  className={styles.btnSecondaryAction}
+                  style={{ gap: 6 }}
+                  onClick={() => handleExportComparison('CSV')}
+                >
+                  <span>📄</span> Ham Veri (.csv)
+                </button>
+                <button
+                  type="button"
+                  data-testid="download-compare-excel"
+                  className={styles.btnPrimaryAction}
+                  style={{ gap: 6 }}
+                  onClick={() => handleExportComparison('XLSX')}
+                >
+                  <span>📗</span> Karşılaştırmayı İndir (.xlsx)
+                </button>
+              </div>
             </div>
           </div>
         </div>
