@@ -6,7 +6,18 @@ import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency, getAvatarColor, getInitials } from '../data/mockData';
 import { fetchServiceTickets, saveServiceTicket, type ServiceRecord } from '../repositories/ServiceTicketRepository';
 import { dbFetchCashTransactions } from '../lib/database';
+import { createReportPdf } from '../lib/reportPdf';
+import { downloadFile } from '../lib/downloadFile';
 import styles from './ServicePage.module.css';
+
+let cachedExcelJS: typeof import('exceljs') | null = null;
+const getExcelJS = async () => {
+  if (!cachedExcelJS) {
+    const mod = await import('exceljs');
+    cachedExcelJS = (mod.default || mod) as unknown as typeof import('exceljs');
+  }
+  return cachedExcelJS;
+};
 
 export interface ServiceItem {
   id: string;
@@ -92,35 +103,181 @@ export default function ServicePage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [isCreatingRecord, setIsCreatingRecord] = useState(false);
   const [createRecordError, setCreateRecordError] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
 
-  const exportServiceReport = () => {
-    const item = selectedItem;
-    const reportTitle = item ? `Servis Raporu - ${item.deviceName}` : 'Aylık Servis Faaliyet Raporu';
-    const reportRows = item
-      ? [
-          ['Hasta', item.patientName], ['Telefon', item.patientPhone], ['Cihaz', `${item.deviceName} (${item.earSide})`],
-          ['Seri No', item.serialNo], ['Barkod', item.barcode],
-          ['Arıza / Sorun', item.problem], ['Durum', item.status], ['Şube', item.branch],
-          ['Teslim Alınma', item.receivedDate], ['Tahmini Teslim', item.estimatedDeliveryDate],
-          ['Garanti', item.warrantyStatus], ['Teknisyen', item.technician], ['Notlar', item.notes],
-        ]
-      : [
-          ['Toplam Kayıt', `${records.length} adet`],
-          ['Başarı ile Teslim Edilen', `${records.filter(record => record.status === 'Teslim Edildi').length} adet`],
-          ['Garanti Kapsamı Oranı', `%${warrantyRate}`],
-        ];
-    const content = reportRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('');
-    const popup = window.open('', '_blank');
-    if (!popup) {
-      addToast({ type: 'error', message: 'Rapor penceresi açılamadı. Tarayıcı açılır pencere iznini etkinleştirip tekrar deneyin.' });
-      return false;
+  const exportServiceExcel = async () => {
+    setIsExporting(true);
+    try {
+      const ExcelJS = await getExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'AudiPro İşitme Merkezi';
+
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+
+      // Sheet 1: Servis Kayıtları
+      const worksheet = workbook.addWorksheet('Servis Kayıtları');
+      worksheet.columns = [
+        { width: 14 }, // Kayıt Tarihi
+        { width: 22 }, // Hasta Adı
+        { width: 16 }, // Telefon
+        { width: 18 }, // Şube
+        { width: 24 }, // Cihaz Adı
+        { width: 14 }, // Taraf
+        { width: 16 }, // Seri No
+        { width: 16 }, // Barkod
+        { width: 26 }, // Arıza / Sorun
+        { width: 16 }, // Durum
+        { width: 20 }, // Garanti Durumu
+        { width: 18 }, // Teknisyen
+        { width: 16 }, // Servis Tutarı
+        { width: 16 }, // Tahmini Teslim
+        { width: 26 }, // Notlar
+      ];
+
+      // Header Title
+      worksheet.mergeCells('A1:O1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'AUDIPRO İŞİTME MERKEZİ - TEKNİK SERVİS FAALİYET RAPORU';
+      titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(1).height = 32;
+
+      // Subtitle
+      worksheet.mergeCells('A2:O2');
+      const subCell = worksheet.getCell('A2');
+      subCell.value = `Rapor Tarihi: ${dateFormatted}   |   Toplam Kayıt: ${records.length} Adet   |   Teslim Edilen: ${records.filter(r => r.status === 'Teslim Edildi').length} Adet   |   Garanti Oranı: %${warrantyRate}`;
+      subCell.font = { italic: true, size: 10, color: { argb: 'FF475569' } };
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(2).height = 22;
+
+      worksheet.addRow([]); // empty row
+
+      const headers = [
+        'Kayıt Tarihi', 'Hasta Adı', 'Telefon', 'Şube', 'Cihaz Adı', 'Taraf',
+        'Seri No', 'Barkod', 'Arıza / Sorun', 'Durum', 'Garanti Durumu',
+        'Teknisyen', 'Servis Tutarı', 'Tahmini Teslim', 'Notlar'
+      ];
+      const headerRow = worksheet.addRow(headers);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF134E4A' } };
+      headerRow.height = 26;
+
+      records.forEach((item, index) => {
+        const totalCost = (item.operations || []).reduce((sum, op) => sum + (op.cost || 0), 0);
+        const dataRow = worksheet.addRow([
+          item.receivedDate || '—',
+          item.patientName || '—',
+          item.patientPhone || '—',
+          item.branch || 'Merkez',
+          item.deviceName || '—',
+          item.earSide || '—',
+          item.serialNo || '—',
+          item.barcode || '—',
+          item.problem || '—',
+          item.status || '—',
+          item.warrantyStatus || '—',
+          item.technician || '—',
+          formatCurrency(totalCost),
+          item.estimatedDeliveryDate || '—',
+          item.notes || '—'
+        ]);
+
+        if (index % 2 === 1) {
+          dataRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+
+        for (let col = 1; col <= 15; col++) {
+          dataRow.getCell(col).border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+          };
+        }
+      });
+
+      // Sheet 2: Özet İstatistikler
+      const summarySheet = workbook.addWorksheet('Özet İstatistikler');
+      summarySheet.columns = [{ width: 28 }, { width: 20 }];
+      summarySheet.addRow(['METRİK', 'DEĞER']).font = { bold: true };
+      summarySheet.addRow(['Toplam Servis Kaydı', `${records.length} adet`]);
+      summarySheet.addRow(['Başarı ile Teslim Edilen', `${records.filter(r => r.status === 'Teslim Edildi').length} adet`]);
+      summarySheet.addRow(['Teslime Hazır', `${records.filter(r => r.status === 'Teslime Hazır').length} adet`]);
+      summarySheet.addRow(['Tamir Edilen / İşlemde', `${records.filter(r => r.status === 'Tamir Ediliyor').length} adet`]);
+      summarySheet.addRow(['İnceleniyor', `${records.filter(r => r.status === 'İnceleniyor').length} adet`]);
+      summarySheet.addRow(['Yeni Alınan', `${records.filter(r => r.status === 'Alındı').length} adet`]);
+      summarySheet.addRow(['Garanti Kapsamı Oranı', `%${warrantyRate}`]);
+      const totalRev = records.reduce((sum, r) => sum + (r.operations || []).reduce((s, op) => s + (op.cost || 0), 0), 0);
+      summarySheet.addRow(['Toplam Tahakkuk Eden Servis Tutarı', formatCurrency(totalRev)]);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      downloadFile(blob, `AudiPro_Teknik_Servis_Raporu_${dateStamp}.xlsx`);
+      addToast({ type: 'success', message: 'Teknik servis raporu Excel tablosu (.xlsx) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('Excel indirme hatası:', err);
+      addToast({ type: 'error', message: 'Excel raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
     }
-    popup.opener = null;
-    popup.document.open();
-    popup.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(reportTitle)}</title><style>body{font:14px Arial,sans-serif;color:#172033;margin:40px auto;max-width:800px;padding:0 24px}h1{font-size:22px;border-bottom:2px solid #08785b;padding-bottom:12px}p{color:#64748b}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{text-align:left;border-bottom:1px solid #dbe3ea;padding:12px;vertical-align:top}th{width:30%;color:#475569}.actions{margin:20px 0}@media print{body{margin:0;max-width:none}.actions{display:none}}</style></head><body><div class="actions"><button onclick="window.print()">Yazdır / PDF olarak kaydet</button></div><h1>${escapeHtml(reportTitle)}</h1><p>Oluşturulma: ${escapeHtml(new Date().toLocaleString('tr-TR'))}</p><table><tbody>${content}</tbody></table></body></html>`);
-    popup.document.close();
-    popup.focus();
-    return true;
+  };
+
+  const exportServicePdf = () => {
+    setIsExporting(true);
+    try {
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const pad = (str: string, len: number) => (str || '').padEnd(len).slice(0, len);
+      const padR = (str: string, len: number) => (str || '').padStart(len).slice(0, len);
+      const sep = '='.repeat(84);
+      const dash = '-'.repeat(84);
+
+      const lines: string[] = [
+        sep,
+        '         AUDIPRO ISITME MERKEZI - TEKNIK SERVIS FAALIYET RAPORU',
+        sep,
+        `Rapor Tarihi: ${dateFormatted}   |   Toplam Kayit: ${records.length} Adet`,
+        `Firma/Sube: ${selectedBranch || 'Tum Subeler'}   |   Durum: Onayli Resmi Servis Dokumu`,
+        '',
+        dash,
+        '1. SERVIS PERFORMANS VE KPI OZETI',
+        dash,
+        `  Toplam Servis Kaydi     : ${records.length} adet`,
+        `  Basari ile Teslim Edilen: ${records.filter(r => r.status === 'Teslim Edildi').length} adet`,
+        `  Teslime Hazir           : ${records.filter(r => r.status === 'Teslime Hazır').length} adet`,
+        `  Tamir Edilen            : ${records.filter(r => r.status === 'Tamir Ediliyor').length} adet`,
+        `  Incelenen               : ${records.filter(r => r.status === 'İnceleniyor').length} adet`,
+        `  Garanti Kapsami Orani   : %${warrantyRate}`,
+        '',
+        dash,
+        '2. SERVIS KAYITLARI LISTESI',
+        dash,
+        `${pad('TARIH', 11)} ${pad('HASTA', 18)} ${pad('CIHAZ', 18)} ${pad('SERI NO', 12)} ${pad('DURUM', 13)} ${padR('TUTAR', 10)}`,
+        dash,
+      ];
+
+      records.forEach(item => {
+        const cost = (item.operations || []).reduce((sum, op) => sum + (op.cost || 0), 0);
+        lines.push(
+          `${pad(item.receivedDate || '-', 11)} ${pad(item.patientName || '-', 18)} ${pad(item.deviceName || '-', 18)} ${pad(item.serialNo || '-', 12)} ${pad(item.status || '-', 13)} ${padR(cost ? `TRY ${cost}` : '-', 10)}`
+        );
+      });
+
+      lines.push(dash);
+      lines.push(`TOPLAM KAYIT: ${records.length} ADET`);
+      lines.push(sep);
+
+      const blob = createReportPdf(lines);
+      downloadFile(blob, `AudiPro_Teknik_Servis_Raporu_${dateStamp}.pdf`);
+      addToast({ type: 'success', message: 'Teknik servis raporu PDF (.pdf) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('PDF indirme hatası:', err);
+      addToast({ type: 'error', message: 'PDF raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Form states
@@ -1351,40 +1508,79 @@ export default function ServicePage() {
       {/* ── MODAL 5: Servis Raporu ── */}
       {showReportModal && (
         <div className={styles.modalOverlay} onClick={() => setShowReportModal(false)}>
-          <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
             <div className={styles.modalHeader}>
-              <h2>📊 Aylık Servis Faaliyet Raporu</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 20 }}>📊</span>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 16 }}>Servis Faaliyet Raporu</h2>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Teknik servis operasyon ve garanti analizleri</div>
+                </div>
+              </div>
               <button type="button" className={styles.modalCloseBtn} onClick={() => setShowReportModal(false)}>✕</button>
             </div>
             <div className={styles.modalBody}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10 }}>
+                <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Kayıt</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{records.length} adet</div>
                 </div>
-                <div style={{ background: '#f0fdf4', padding: 14, borderRadius: 10 }}>
+                <div style={{ background: '#f0fdf4', padding: 14, borderRadius: 10, border: '1px solid #bbf7d0' }}>
                   <div style={{ fontSize: 12, color: '#16a34a' }}>Başarı ile Teslim Edilen</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a' }}>{records.filter(r => r.status === 'Teslim Edildi').length} adet</div>
                 </div>
-                <div style={{ background: '#eff6ff', padding: 14, borderRadius: 10 }}>
+                <div style={{ background: '#eff6ff', padding: 14, borderRadius: 10, border: '1px solid #bfdbfe' }}>
                   <div style={{ fontSize: 12, color: '#2563eb' }}>Garanti Kapsamı Oranı</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#2563eb' }}>%{warrantyRate}</div>
                 </div>
-                <div style={{ background: '#fef3c7', padding: 14, borderRadius: 10 }}>
-                  <div style={{ fontSize: 12, color: '#b45309' }}>Ortalama Onarım Süresi</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#b45309' }}>—</div>
+                <div style={{ background: '#fef3c7', padding: 14, borderRadius: 10, border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: 12, color: '#b45309' }}>İşlemdeki / Hazır Cihaz</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#b45309' }}>
+                    {records.filter(r => ['Tamir Ediliyor', 'Teslime Hazır', 'İnceleniyor'].includes(r.status)).length} adet
+                  </div>
+                </div>
+              </div>
+
+              {/* Rapor İndirme Seçenekleri */}
+              <div style={{ marginTop: 16 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 8 }}>
+                  Raporu İndir
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <button
+                    type="button"
+                    data-testid="export-service-pdf"
+                    className={styles.btnSecondaryAction}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', justifyContent: 'center', gap: 8, borderColor: '#cbd5e1' }}
+                    onClick={exportServicePdf}
+                  >
+                    <span style={{ fontSize: 18 }}>📕</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5, color: '#0f172a' }}>PDF Raporu (.pdf)</strong>
+                      <span style={{ fontSize: 10.5, color: '#64748b' }}>Özet resmi servis dökümü</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="export-service-excel"
+                    className={styles.btnPrimaryAction}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', justifyContent: 'center', gap: 8 }}
+                    onClick={exportServiceExcel}
+                  >
+                    <span style={{ fontSize: 18 }}>📗</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5 }}>Excel Tablosu (.xlsx)</strong>
+                      <span style={{ fontSize: 10.5, opacity: 0.9 }}>Detaylı tablo dökümü</span>
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>
-            <div className={styles.modalFooter}>
+            <div className={styles.modalFooter} style={{ justifyContent: 'flex-end' }}>
               <button type="button" className={styles.btnSecondaryAction} onClick={() => setShowReportModal(false)}>Kapat</button>
-              <button
-                type="button"
-                className={styles.btnPrimaryAction}
-                onClick={exportServiceReport}
-              >
-                Raporu Dışa Aktar
-              </button>
             </div>
           </div>
         </div>
