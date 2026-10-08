@@ -42,6 +42,20 @@ const formatIsoToDisplay = (isoStr?: string) => {
   return `${match[3]}.${match[2]}.${match[1]}`;
 };
 
+export type CardPeriodType = 'Genel Dönem' | 'Bu Yıl' | 'Son 6 Ay' | 'Bu Ay' | 'Özel';
+
+export interface CardFilterState {
+  period: CardPeriodType;
+  startDate: string;
+  endDate: string;
+}
+
+const defaultCardFilter = (): CardFilterState => ({
+  period: 'Genel Dönem',
+  startDate: '',
+  endDate: '',
+});
+
 // ── Reusable Pure SVG Donut Component ──
 function SvgDonut({
   size = 150,
@@ -176,6 +190,229 @@ export default function ReportsPage() {
       if (previousRangeBounds.end) setCompareBEnd(previousRangeBounds.end);
     }
   }, [showCompareModal]);
+
+  // Card-specific filter states for individual analytics cards
+  const [patientSourceFilter, setPatientSourceFilter] = useState<CardFilterState>(defaultCardFilter);
+  const [appointmentFilter, setAppointmentFilter] = useState<CardFilterState>(defaultCardFilter);
+  const [serviceFilter, setServiceFilter] = useState<CardFilterState>(defaultCardFilter);
+  const [topDevicesFilter, setTopDevicesFilter] = useState<CardFilterState>(defaultCardFilter);
+  const [branchPerfFilter, setBranchPerfFilter] = useState<CardFilterState>(defaultCardFilter);
+  const [revenueDistFilter, setRevenueDistFilter] = useState<CardFilterState>(defaultCardFilter);
+
+  const [cardDateModal, setCardDateModal] = useState<{
+    isOpen: boolean;
+    cardId: 'patientSource' | 'appointment' | 'service' | 'topDevices' | 'branchPerf' | 'revenueDist';
+    cardTitle: string;
+    startDate: string;
+    endDate: string;
+  }>({
+    isOpen: false,
+    cardId: 'patientSource',
+    cardTitle: '',
+    startDate: '',
+    endDate: '',
+  });
+
+  const getCardBounds = (filter: CardFilterState) => {
+    if (filter.period === 'Bu Yıl') {
+      const y = new Date().getFullYear();
+      return { start: `${y}-01-01`, end: `${y}-12-31` };
+    }
+    if (filter.period === 'Bu Ay') {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+      return { start: `${y}-${m}-01`, end: `${y}-${m}-${String(lastDay).padStart(2, '0')}` };
+    }
+    if (filter.period === 'Son 6 Ay') {
+      const now = new Date();
+      const end = now.toISOString().slice(0, 10);
+      const startObj = new Date(now);
+      startObj.setMonth(startObj.getMonth() - 5, 1);
+      const start = startObj.toISOString().slice(0, 10);
+      return { start, end };
+    }
+    if (filter.period === 'Özel' && filter.startDate && filter.endDate) {
+      return { start: filter.startDate, end: filter.endDate };
+    }
+    return { start: rangeBounds.start || '', end: rangeBounds.end || '' };
+  };
+
+  const isDateInBounds = (val?: string, bounds?: { start?: string; end?: string }) => {
+    const k = dateKey(val);
+    return Boolean(k && (!bounds?.start || k >= bounds.start) && (!bounds?.end || k <= bounds.end));
+  };
+
+  const openCardDateModal = (
+    cardId: 'patientSource' | 'appointment' | 'service' | 'topDevices' | 'branchPerf' | 'revenueDist',
+    cardTitle: string
+  ) => {
+    let current = defaultCardFilter();
+    if (cardId === 'patientSource') current = patientSourceFilter;
+    else if (cardId === 'appointment') current = appointmentFilter;
+    else if (cardId === 'service') current = serviceFilter;
+    else if (cardId === 'topDevices') current = topDevicesFilter;
+    else if (cardId === 'branchPerf') current = branchPerfFilter;
+    else if (cardId === 'revenueDist') current = revenueDistFilter;
+
+    const effective = getCardBounds(current);
+    setCardDateModal({
+      isOpen: true,
+      cardId,
+      cardTitle,
+      startDate: current.startDate || effective.start || `${new Date().getFullYear()}-01-01`,
+      endDate: current.endDate || effective.end || `${new Date().getFullYear()}-12-31`,
+    });
+  };
+
+  const handleCardPeriodChange = (
+    cardId: 'patientSource' | 'appointment' | 'service' | 'topDevices' | 'branchPerf' | 'revenueDist',
+    cardTitle: string,
+    newPeriod: string
+  ) => {
+    if (newPeriod === 'Özel') {
+      openCardDateModal(cardId, cardTitle);
+      return;
+    }
+
+    const updated: CardFilterState = {
+      period: newPeriod as CardPeriodType,
+      startDate: '',
+      endDate: '',
+    };
+
+    if (cardId === 'patientSource') setPatientSourceFilter(updated);
+    else if (cardId === 'appointment') setAppointmentFilter(updated);
+    else if (cardId === 'service') setServiceFilter(updated);
+    else if (cardId === 'topDevices') setTopDevicesFilter(updated);
+    else if (cardId === 'branchPerf') setBranchPerfFilter(updated);
+    else if (cardId === 'revenueDist') setRevenueDistFilter(updated);
+
+    addToast({ type: 'info', message: `${cardTitle}: "${newPeriod}" filtresi uygulandı.` });
+  };
+
+  const handleApplyCardCustomDate = () => {
+    if (!cardDateModal.startDate || !cardDateModal.endDate) {
+      addToast({ type: 'error', message: 'Lütfen hem başlangıç hem de bitiş tarihini seçin.' });
+      return;
+    }
+    let s = cardDateModal.startDate;
+    let e = cardDateModal.endDate;
+    if (s > e) [s, e] = [e, s];
+
+    const updated: CardFilterState = {
+      period: 'Özel',
+      startDate: s,
+      endDate: e,
+    };
+
+    const id = cardDateModal.cardId;
+    if (id === 'patientSource') setPatientSourceFilter(updated);
+    else if (id === 'appointment') setAppointmentFilter(updated);
+    else if (id === 'service') setServiceFilter(updated);
+    else if (id === 'topDevices') setTopDevicesFilter(updated);
+    else if (id === 'branchPerf') setBranchPerfFilter(updated);
+    else if (id === 'revenueDist') setRevenueDistFilter(updated);
+
+    addToast({ type: 'success', message: `${cardDateModal.cardTitle} için özel tarih uygulandı: ${formatIsoToDisplay(s)} – ${formatIsoToDisplay(e)}` });
+    setCardDateModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleResetCardToGlobal = () => {
+    const updated: CardFilterState = {
+      period: 'Genel Dönem',
+      startDate: '',
+      endDate: '',
+    };
+
+    const id = cardDateModal.cardId;
+    if (id === 'patientSource') setPatientSourceFilter(updated);
+    else if (id === 'appointment') setAppointmentFilter(updated);
+    else if (id === 'service') setServiceFilter(updated);
+    else if (id === 'topDevices') setTopDevicesFilter(updated);
+    else if (id === 'branchPerf') setBranchPerfFilter(updated);
+    else if (id === 'revenueDist') setRevenueDistFilter(updated);
+
+    addToast({ type: 'info', message: `${cardDateModal.cardTitle} genel rapor dönemine sıfırlandı.` });
+    setCardDateModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const renderCardPeriodControl = (
+    cardId: 'patientSource' | 'appointment' | 'service' | 'topDevices' | 'branchPerf' | 'revenueDist',
+    cardTitle: string,
+    filter: CardFilterState,
+    allowSixMonths = false
+  ) => {
+    const isCustom = filter.period === 'Özel';
+    const hasCustomDates = isCustom && filter.startDate && filter.endDate;
+    const customLabel = hasCustomDates
+      ? `Özel (${formatIsoToDisplay(filter.startDate)} - ${formatIsoToDisplay(filter.endDate)})`
+      : 'Özel (Tarih Seç)...';
+
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {hasCustomDates && (
+          <span
+            title="Özel tarih aralığını düzenlemek için tıklayın"
+            style={{
+              fontSize: 10,
+              padding: '2px 6px',
+              borderRadius: 4,
+              background: '#ccfbf1',
+              color: '#0f766e',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: '1px solid #99f6e4',
+              whiteSpace: 'nowrap',
+            }}
+            onClick={() => openCardDateModal(cardId, cardTitle)}
+          >
+            {formatIsoToDisplay(filter.startDate)} – {formatIsoToDisplay(filter.endDate)}
+          </span>
+        )}
+        <select
+          className={styles.miniSelect}
+          data-testid={`card-select-${cardId}`}
+          aria-label={`${cardTitle} dönem seçimi`}
+          value={filter.period}
+          onChange={e => handleCardPeriodChange(cardId, cardTitle, e.target.value)}
+          style={{
+            borderColor: isCustom ? '#0d9488' : undefined,
+            background: isCustom ? '#f0fdfa' : undefined,
+            color: isCustom ? '#0f766e' : undefined,
+            fontWeight: isCustom ? 600 : undefined,
+          }}
+        >
+          <option value="Genel Dönem">Genel ({dateRange})</option>
+          <option value="Bu Yıl">Bu Yıl</option>
+          {allowSixMonths && <option value="Son 6 Ay">Son 6 Ay</option>}
+          <option value="Bu Ay">Bu Ay</option>
+          <option value="Özel">{customLabel}</option>
+        </select>
+        <button
+          type="button"
+          className={styles.btnMiniIcon}
+          data-testid={`card-calendar-btn-${cardId}`}
+          title={`${cardTitle} için özel tarih aralığı seç`}
+          aria-label={`${cardTitle} için özel tarih aralığı seç`}
+          onClick={() => openCardDateModal(cardId, cardTitle)}
+          style={{
+            background: isCustom ? '#0d9488' : undefined,
+            color: isCustom ? '#ffffff' : undefined,
+            borderColor: isCustom ? '#0d9488' : undefined,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        </button>
+      </div>
+    );
+  };
 
   const handleApplyCustomDateRange = () => {
     if (!customStartDate || !customEndDate) {
@@ -508,10 +745,14 @@ export default function ReportsPage() {
   const chartTitle = chartMetric === 'Satış Adedi' ? 'Aylık Satış Adedi' : chartMetric === 'Karlılık' ? 'Aylık Karlılık' : 'Aylık Ciro Trendi';
   const chartTickValues = Array.from({ length: 6 }, (_, index) => Math.round(chartScaleMax * (5 - index) / 5));
 
-  // Gelir Dağılımı Donut Data
+  // Gelir Dağılımı Donut Data (Card Filter Reactive)
   const revenueDistributionSlices: DonutSlice[] = useMemo(() => {
+    const cardBounds = getCardBounds(revenueDistFilter);
+    const cardSales = scopedSales.filter(sale => isDateInBounds(sale.date, cardBounds));
+    const cardServiceTx = reportCashTransactions.filter(row => row.type === 'INCOME' && row.referenceEntity === 'service'
+      && matches(undefined, row.branchId) && isDateInBounds(row.createdAt, cardBounds));
     const totals = new Map<string, number>();
-    reportSales.forEach(sale => {
+    cardSales.forEach(sale => {
       const lineTotals = sale.items.map(item => Math.max(0, item.price * item.quantity));
       const lineTotal = lineTotals.reduce((sum, value) => sum + value, 0);
       sale.items.forEach((item, index) => {
@@ -520,41 +761,55 @@ export default function ReportsPage() {
         totals.set(label, (totals.get(label) || 0) + allocated);
       });
     });
-    reportServiceTransactions.forEach(row => {
+    cardServiceTx.forEach(row => {
       totals.set('Teknik Servis', (totals.get('Teknik Servis') || 0) + (Number(row.amount) || 0));
     });
     if (!totals.size) return [];
-    if (reportServiceTransactions.length && !totals.has('Teknik Servis')) totals.set('Teknik Servis', reportServiceTransactions.reduce((sum, row) => sum + (Number(row.amount) || 0), 0));
+    if (cardServiceTx.length && !totals.has('Teknik Servis')) totals.set('Teknik Servis', cardServiceTx.reduce((sum, row) => sum + (Number(row.amount) || 0), 0));
     return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
-  }, [reportSales, reportServiceTransactions]);
-  const reportSourceRows = useMemo(() => {
+  }, [scopedSales, reportCashTransactions, revenueDistFilter, rangeBounds, matches]);
+
+  const cardRevenueTotal = useMemo(() => {
+    return revenueDistributionSlices.reduce((sum, s) => sum + s.value, 0);
+  }, [revenueDistributionSlices]);
+
+  // Hasta Kaynak Dağılımı (Card Filter Reactive)
+  const cardPatientSourceData = useMemo(() => {
+    const cardBounds = getCardBounds(patientSourceFilter);
+    const cardPatients = scopedPatients.filter(patient => isDateInBounds(patient.createdAt, cardBounds));
     const totals = new Map<string, number>();
-    reportPatients.forEach(patient => {
+    cardPatients.forEach(patient => {
       const source = patient.source || 'Belirtilmemiş';
       totals.set(source, (totals.get(source) || 0) + 1);
     });
-    return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
-  }, [reportPatients]);
-  const reportAppointmentRows = useMemo(() => {
+    const rows = [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
+    return { patients: cardPatients, rows };
+  }, [scopedPatients, patientSourceFilter, rangeBounds]);
+  const reportSourceRows = cardPatientSourceData.rows;
+  const cardPatientsCount = cardPatientSourceData.patients.length;
+
+  // Randevu Durumu (Card Filter Reactive)
+  const cardAppointmentData = useMemo(() => {
+    const cardBounds = getCardBounds(appointmentFilter);
+    const cardAppointments = scopedAppointments.filter(item => isDateInBounds(item.date, cardBounds));
     const totals = new Map<string, number>();
-    reportAppointments.forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
-    return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
-  }, [reportAppointments]);
-  const appointmentTrend = useMemo(() => {
-    const start = rangeBounds.start ? new Date(`${rangeBounds.start}T00:00:00`) : null;
-    const end = rangeBounds.end ? new Date(`${rangeBounds.end}T00:00:00`) : null;
+    cardAppointments.forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
+    const rows = [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
+
+    const start = cardBounds.start ? new Date(`${cardBounds.start}T00:00:00`) : null;
+    const end = cardBounds.end ? new Date(`${cardBounds.end}T00:00:00`) : null;
     const spanDays = start && end ? Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1) : 0;
     const monthly = spanDays > 62;
-    const totals = new Map<string, number>();
-    reportAppointments.forEach(appointment => {
+    const trendTotals = new Map<string, number>();
+    cardAppointments.forEach(appointment => {
       const key = dateKey(appointment.date);
       if (!key) return;
       const group = monthly ? key.slice(0, 7) : key;
-      totals.set(group, (totals.get(group) || 0) + 1);
+      trendTotals.set(group, (trendTotals.get(group) || 0) + 1);
     });
-    const groups = [...totals].sort(([left], [right]) => left.localeCompare(right));
+    const groups = [...trendTotals].sort(([left], [right]) => left.localeCompare(right));
     const maximum = Math.max(1, ...groups.map(([, value]) => value));
-    return groups.map(([key, value]) => ({
+    const trend = groups.map(([key, value]) => ({
       key,
       value,
       label: monthly
@@ -562,15 +817,31 @@ export default function ReportsPage() {
         : new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' }).format(new Date(`${key}T12:00:00`)),
       height: Math.max(4, value / maximum * 100),
     }));
-  }, [reportAppointments, rangeBounds]);
-  const reportServiceRows = useMemo(() => {
+
+    return { appointments: cardAppointments, rows, trend };
+  }, [scopedAppointments, appointmentFilter, rangeBounds]);
+  const reportAppointmentRows = cardAppointmentData.rows;
+  const appointmentTrend = cardAppointmentData.trend;
+  const cardAppointmentsCount = cardAppointmentData.appointments.length;
+
+  // Teknik Servis Durumu (Card Filter Reactive)
+  const cardServiceData = useMemo(() => {
+    const cardBounds = getCardBounds(serviceFilter);
+    const cardTickets = serviceRecords.filter(item => matches(undefined, item.branchId) && isDateInBounds(item.receivedDate, cardBounds));
     const totals = new Map<string, number>();
-    serviceRecords.filter(item => matches(undefined, item.branchId) && inRange(item.receivedDate)).forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
-    return [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
-  }, [serviceRecords, rangeBounds, matches]);
+    cardTickets.forEach(item => totals.set(item.status, (totals.get(item.status) || 0) + 1));
+    const rows = [...totals].map(([label, value], index) => ({ label, value, color: REPORT_COLORS[index % REPORT_COLORS.length] }));
+    return { tickets: cardTickets, rows, totalCount: cardTickets.length };
+  }, [serviceRecords, serviceFilter, rangeBounds, matches]);
+  const reportServiceRows = cardServiceData.rows;
+  const cardServiceCount = cardServiceData.totalCount;
+
+  // En Çok Satılan Cihazlar (Card Filter Reactive)
   const topDevices = useMemo(() => {
+    const cardBounds = getCardBounds(topDevicesFilter);
+    const cardSales = scopedSales.filter(sale => isDateInBounds(sale.date, cardBounds));
     const totals = new Map<string, { salesCount: number; revenue: number }>();
-    reportSales.forEach(sale => sale.items.filter(item => item.type === 'Cihaz').forEach(item => {
+    cardSales.forEach(sale => sale.items.filter(item => item.type === 'Cihaz').forEach(item => {
       const current = totals.get(item.name) || { salesCount: 0, revenue: 0 };
       current.salesCount += item.quantity;
       current.revenue += item.price * item.quantity;
@@ -579,15 +850,25 @@ export default function ReportsPage() {
     const rows = [...totals].map(([name, value]) => ({ name, ...value })).sort((a, b) => b.salesCount - a.salesCount);
     const total = rows.reduce((sum, row) => sum + row.salesCount, 0) || 1;
     return rows.slice(0, 5).map((row, index) => ({ ...row, rank: index + 1, ratio: Math.round(row.salesCount / total * 100) }));
-  }, [reportSales]);
-  const branchPerformance = useMemo(() => {
+  }, [scopedSales, topDevicesFilter, rangeBounds]);
+
+  // Şube Bazlı Performans (Card Filter Reactive)
+  const cardBranchPerformance = useMemo(() => {
+    const cardBounds = getCardBounds(branchPerfFilter);
     const activeBranches = branchesList.filter(branch => matches(branch.name, branch.id));
     const targetBranches = activeBranches.length > 0 ? activeBranches : branchesList;
+
+    const cardSales = scopedSales.filter(sale => isDateInBounds(sale.date, cardBounds));
+    const cardPatients = scopedPatients.filter(patient => isDateInBounds(patient.createdAt, cardBounds));
+    const cardAppointments = scopedAppointments.filter(appointment => isDateInBounds(appointment.date, cardBounds));
+    const cardServiceTickets = serviceRecords.filter(ticket => isDateInBounds(ticket.receivedDate, cardBounds));
+    const cardServiceTx = reportCashTransactions.filter(row => row.type === 'INCOME' && row.referenceEntity === 'service'
+      && matches(undefined, row.branchId) && isDateInBounds(row.createdAt, cardBounds));
 
     const branchRevMap = new Map<string, number>();
     targetBranches.forEach(b => branchRevMap.set(b.id, 0));
 
-    reportSales.forEach(sale => {
+    cardSales.forEach(sale => {
       let bId = sale.branchId;
       if (!bId && (sale as any).branch) {
         bId = targetBranches.find(b => b.name === (sale as any).branch)?.id;
@@ -605,7 +886,7 @@ export default function ReportsPage() {
       }
     });
 
-    reportServiceTransactions.forEach(row => {
+    cardServiceTx.forEach(row => {
       let bId = row.branchId;
       if (!bId && row.branch) {
         bId = targetBranches.find(b => b.name === row.branch)?.id;
@@ -618,24 +899,39 @@ export default function ReportsPage() {
       }
     });
 
+    const cardTotalRevenue = cardSales.reduce((sum, sale) => sum + (sale.total || 0), 0)
+      + cardServiceTx.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
     const sumRev = Array.from(branchRevMap.values()).reduce((a, b) => a + b, 0);
-    if (sumRev === 0 && dynamicTotalRevenue > 0 && targetBranches.length > 0) {
-      branchRevMap.set(targetBranches[0].id, dynamicTotalRevenue);
+    if (sumRev === 0 && cardTotalRevenue > 0 && targetBranches.length > 0) {
+      branchRevMap.set(targetBranches[0].id, cardTotalRevenue);
     }
 
-    return targetBranches.map(branch => ({
+    const rows = targetBranches.map(branch => ({
       branch: branch.name,
-      patients: reportPatients.filter(patient => matches(patient.branch, patient.branchId) && (patient.branchId === branch.id || (!patient.branchId && (patient.branch === branch.name || targetBranches.length === 1)))).length,
-      appointments: reportAppointments.filter(item => item.branchId === branch.id || (!item.branchId && (item.branch === branch.name || targetBranches.length === 1))).length,
+      patients: cardPatients.filter(patient => matches(patient.branch, patient.branchId) && (patient.branchId === branch.id || (!patient.branchId && (patient.branch === branch.name || targetBranches.length === 1)))).length,
+      appointments: cardAppointments.filter(item => item.branchId === branch.id || (!item.branchId && (item.branch === branch.name || targetBranches.length === 1))).length,
       revenue: branchRevMap.get(branch.id) || 0,
-      service: serviceRecords.filter(ticket => (ticket.branchId === branch.id || (!ticket.branchId && ((ticket as any).branch === branch.name || targetBranches.length === 1))) && inRange(ticket.receivedDate)).length,
+      service: cardServiceTickets.filter(ticket => (ticket.branchId === branch.id || (!ticket.branchId && ((ticket as any).branch === branch.name || targetBranches.length === 1)))).length,
     }));
-  }, [branchesList, reportPatients, reportAppointments, reportSales, reportServiceTransactions, serviceRecords, patientsList, dynamicTotalRevenue, rangeBounds, matches]);
+
+    return {
+      rows,
+      totalPatients: cardPatients.length,
+      totalAppointments: cardAppointments.length,
+      totalRevenue: cardTotalRevenue,
+      totalService: cardServiceTickets.length,
+    };
+  }, [branchesList, scopedPatients, scopedAppointments, scopedSales, reportCashTransactions, serviceRecords, patientsList, branchPerfFilter, rangeBounds, matches]);
+  const branchPerformance = cardBranchPerformance.rows;
   const reportStock = stockList.filter(item => matches(item.branch, item.branchId));
   const reportSuppliers = suppliersList;
 
   const applyReportPeriod = (period: string) => {
-    if (period === 'Özel') { setShowDateModal(true); return; }
+    if (period === 'Özel') {
+      setSelectedPeriod('Özel');
+      setShowDateModal(true);
+      return;
+    }
     const now = new Date();
     const start = new Date(now);
     const end = new Date(now);
@@ -1114,12 +1410,7 @@ export default function ReportsPage() {
               <h3>Gelir Dağılımı</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
-                <option value="Bu Yıl">Bu Yıl</option>
-                <option value="Son 6 Ay">Son 6 Ay</option>
-                <option value="Bu Ay">Bu Ay</option>
-                <option value="Özel">Özel</option>
-              </select>
+              {renderCardPeriodControl('revenueDist', 'Gelir Dağılımı', revenueDistFilter, true)}
             </div>
           </div>
 
@@ -1128,14 +1419,17 @@ export default function ReportsPage() {
               size={154}
               strokeWidth={22}
               slices={revenueDistributionSlices}
-              centerValue={formatCurrency(dynamicTotalRevenue)}
+              centerValue={formatCurrency(revenueDistFilter.period === 'Genel Dönem' ? dynamicTotalRevenue : cardRevenueTotal)}
               centerLabel="Toplam Ciro"
             />
 
             <div className={styles.legendList}>
               {revenueDistributionSlices.length ? revenueDistributionSlices.map(slice => <div className={styles.legendItem} key={slice.label}>
                 <div className={styles.legendLabelWrap}><span className={styles.legendColorDot} style={{ background: slice.color }}></span><span>{slice.label}</span></div>
-                <div className={styles.legendNumbers}><span className={styles.legendPct}>%{dynamicTotalRevenue ? Math.round(slice.value / dynamicTotalRevenue * 100) : 0}</span><span className={styles.legendAmount}>{formatCurrency(slice.value)}</span></div>
+                <div className={styles.legendNumbers}>
+                  <span className={styles.legendPct}>%{(revenueDistFilter.period === 'Genel Dönem' ? dynamicTotalRevenue : cardRevenueTotal) ? Math.round(slice.value / (revenueDistFilter.period === 'Genel Dönem' ? dynamicTotalRevenue : cardRevenueTotal) * 100) : 0}</span>
+                  <span className={styles.legendAmount}>{formatCurrency(slice.value)}</span>
+                </div>
               </div>) : <div className={styles.emptyState}>Bu tarih aralığında gelir kaydı yok.</div>}
             </div>
           </div>
@@ -1156,11 +1450,7 @@ export default function ReportsPage() {
               <h3>Hasta Kaynak Dağılımı</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
-                <option value="Bu Yıl">Bu Yıl</option>
-                <option value="Bu Ay">Bu Ay</option>
-                <option value="Özel">Özel</option>
-              </select>
+              {renderCardPeriodControl('patientSource', 'Hasta Kaynak Dağılımı', patientSourceFilter)}
             </div>
           </div>
 
@@ -1169,7 +1459,7 @@ export default function ReportsPage() {
               size={120}
               strokeWidth={18}
               slices={reportSourceRows}
-              centerValue={reportPatients.length}
+              centerValue={cardPatientsCount}
               centerLabel="Toplam Hasta"
             />
 
@@ -1182,7 +1472,7 @@ export default function ReportsPage() {
                   </div>
                   <div className={styles.legendNumbers} style={{ gap: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
-                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{reportPatients.length ? Math.round(item.value / reportPatients.length * 100) : 0}</span>
+                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{cardPatientsCount ? Math.round(item.value / cardPatientsCount * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -1203,11 +1493,7 @@ export default function ReportsPage() {
               <h3>Randevu Durumu</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
-                <option value="Bu Yıl">Bu Yıl</option>
-                <option value="Bu Ay">Bu Ay</option>
-                <option value="Özel">Özel</option>
-              </select>
+              {renderCardPeriodControl('appointment', 'Randevu Durumu', appointmentFilter)}
             </div>
           </div>
 
@@ -1216,7 +1502,7 @@ export default function ReportsPage() {
               size={120}
               strokeWidth={18}
               slices={reportAppointmentRows}
-              centerValue={reportAppointments.length}
+              centerValue={cardAppointmentsCount}
               centerLabel="Toplam Randevu"
             />
 
@@ -1229,7 +1515,7 @@ export default function ReportsPage() {
                   </div>
                   <div className={styles.legendNumbers} style={{ gap: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
-                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{reportAppointments.length ? Math.round(item.value / reportAppointments.length * 100) : 0}</span>
+                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{cardAppointmentsCount ? Math.round(item.value / cardAppointmentsCount * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -1237,7 +1523,7 @@ export default function ReportsPage() {
           </div>
           <section aria-label="Randevu Trendleri" style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #e2e8f0' }}>
             <h4 style={{ margin: '0 0 12px', fontSize: 13, color: '#13232c' }}>Randevu Trendi</h4>
-            {appointmentTrend.length ? <div role="img" aria-label={`Randevu trendi, ${dateRange}: ${appointmentTrend.map(point => `${point.label} ${point.value}`).join(', ')}`} style={{ height: 132, display: 'flex', alignItems: 'end', gap: 8, overflowX: 'auto', padding: '0 2px 2px', borderBottom: '1px solid #cbd5e1' }}>
+            {appointmentTrend.length ? <div role="img" aria-label={`Randevu trendi: ${appointmentTrend.map(point => `${point.label} ${point.value}`).join(', ')}`} style={{ height: 132, display: 'flex', alignItems: 'end', gap: 8, overflowX: 'auto', padding: '0 2px 2px', borderBottom: '1px solid #cbd5e1' }}>
               {appointmentTrend.map(point => <div key={point.key} title={`${point.label}: ${point.value} randevu`} style={{ minWidth: 32, flex: '1 0 32px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'end', alignItems: 'center', gap: 5 }}>
                 <span style={{ fontSize: 10, color: '#334155', fontWeight: 650 }}>{point.value}</span>
                 <div aria-hidden="true" style={{ width: 'min(28px, 80%)', height: `${point.height}%`, minHeight: 4, borderRadius: '5px 5px 0 0', background: '#0d9488' }} />
@@ -1257,11 +1543,7 @@ export default function ReportsPage() {
               <h3>Teknik Servis Durumu</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
-                <option value="Bu Yıl">Bu Yıl</option>
-                <option value="Bu Ay">Bu Ay</option>
-                <option value="Özel">Özel</option>
-              </select>
+              {renderCardPeriodControl('service', 'Teknik Servis Durumu', serviceFilter)}
             </div>
           </div>
 
@@ -1270,7 +1552,7 @@ export default function ReportsPage() {
               size={120}
               strokeWidth={18}
               slices={reportServiceRows}
-              centerValue={reportServiceRows.reduce((sum, item) => sum + item.value, 0)}
+              centerValue={cardServiceCount}
               centerLabel="Toplam Servis"
             />
 
@@ -1283,7 +1565,7 @@ export default function ReportsPage() {
                   </div>
                   <div className={styles.legendNumbers} style={{ gap: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{item.value}</span>
-                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{reportServiceRows.length ? Math.round(item.value / reportServiceRows.reduce((sum, row) => sum + row.value, 0) * 100) : 0}</span>
+                    <span className={styles.legendPct} style={{ fontSize: 10 }}>%{cardServiceCount ? Math.round(item.value / cardServiceCount * 100) : 0}</span>
                   </div>
                 </div>
               ))}
@@ -1306,12 +1588,7 @@ export default function ReportsPage() {
               <h3>En Çok Satılan Cihazlar</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
-                <option value="Bu Yıl">Bu Yıl</option>
-                <option value="Son 6 Ay">Son 6 Ay</option>
-                <option value="Bu Ay">Bu Ay</option>
-                <option value="Özel">Özel</option>
-              </select>
+              {renderCardPeriodControl('topDevices', 'En Çok Satılan Cihazlar', topDevicesFilter, true)}
             </div>
           </div>
 
@@ -1355,12 +1632,7 @@ export default function ReportsPage() {
               <h3>Şube Bazlı Performans</h3>
             </div>
             <div className={styles.cardControls}>
-              <select className={styles.miniSelect} value={selectedPeriod} onChange={e => applyReportPeriod(e.target.value)}>
-                <option value="Bu Yıl">Bu Yıl</option>
-                <option value="Son 6 Ay">Son 6 Ay</option>
-                <option value="Bu Ay">Bu Ay</option>
-                <option value="Özel">Özel</option>
-              </select>
+              {renderCardPeriodControl('branchPerf', 'Şube Bazlı Performans', branchPerfFilter, true)}
             </div>
           </div>
 
@@ -1386,10 +1658,10 @@ export default function ReportsPage() {
               ))}
               <tr className={styles.tableTotalRow}>
                 <td>Toplam</td>
-                <td style={{ textAlign: 'center' }}>{Math.max(branchPerformance.reduce((sum, branch) => sum + branch.patients, 0), dynamicPatientCount)}</td>
-                <td style={{ textAlign: 'center' }}>{Math.max(branchPerformance.reduce((sum, branch) => sum + branch.appointments, 0), dynamicAppointmentCount)}</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(Math.max(branchPerformance.reduce((sum, branch) => sum + branch.revenue, 0), dynamicTotalRevenue))}</td>
-                <td style={{ textAlign: 'center' }}>{branchPerformance.reduce((sum, branch) => sum + branch.service, 0)}</td>
+                <td style={{ textAlign: 'center' }}>{cardBranchPerformance.totalPatients}</td>
+                <td style={{ textAlign: 'center' }}>{cardBranchPerformance.totalAppointments}</td>
+                <td style={{ textAlign: 'right' }}>{formatCurrency(cardBranchPerformance.totalRevenue)}</td>
+                <td style={{ textAlign: 'center' }}>{cardBranchPerformance.totalService}</td>
               </tr>
             </tbody>
           </table>
@@ -1784,6 +2056,143 @@ export default function ReportsPage() {
               >
                 Tarih Aralığını Uygula
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── MODAL 4: Kart Özel Tarih Aralığı Seçici ── */}
+      {cardDateModal.isOpen && (
+        <div className={styles.modalOverlay} onClick={() => setCardDateModal(prev => ({ ...prev, isOpen: false }))}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 20 }}>📅</span>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 16 }}>{cardDateModal.cardTitle}</h2>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>Bu kart için bağımsız özel tarih aralığı belirleyin</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={styles.modalCloseBtn}
+                onClick={() => setCardDateModal(prev => ({ ...prev, isOpen: false }))}
+              >
+                ✕
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 8 }}>
+                  Hızlı Seçenekler
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {(() => {
+                    const now = new Date();
+                    const y = now.getFullYear();
+                    const m = now.getMonth();
+                    const monthStart = new Date(y, m, 1);
+                    const monthEnd = new Date(y, m + 1, 0);
+                    const last30Start = new Date(now); last30Start.setDate(last30Start.getDate() - 29);
+                    const last3MonthsStart = new Date(y, m - 2, 1);
+                    const yearStart = new Date(y, 0, 1);
+                    const yearEnd = new Date(y, 11, 31);
+                    const lastYearStart = new Date(y - 1, 0, 1);
+                    const lastYearEnd = new Date(y - 1, 11, 31);
+                    return [
+                      { label: 'Bu Ay', start: monthStart.toISOString().slice(0, 10), end: monthEnd.toISOString().slice(0, 10) },
+                      { label: 'Son 30 Gün', start: last30Start.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) },
+                      { label: 'Son 3 Ay', start: last3MonthsStart.toISOString().slice(0, 10), end: now.toISOString().slice(0, 10) },
+                      { label: `Bu Yıl (${y})`, start: yearStart.toISOString().slice(0, 10), end: yearEnd.toISOString().slice(0, 10) },
+                      { label: `Geçen Yıl (${y - 1})`, start: lastYearStart.toISOString().slice(0, 10), end: lastYearEnd.toISOString().slice(0, 10) },
+                    ];
+                  })().map(opt => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      className={styles.btnSecondaryAction}
+                      style={{ fontSize: 11, padding: '7px 8px', justifyContent: 'center', whiteSpace: 'nowrap' }}
+                      onClick={() => {
+                        setCardDateModal(prev => ({
+                          ...prev,
+                          startDate: opt.start,
+                          endDate: opt.end,
+                        }));
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={styles.btnSecondaryAction}
+                    style={{ fontSize: 11, padding: '7px 8px', justifyContent: 'center', color: '#0f766e', fontWeight: 600 }}
+                    onClick={() => {
+                      if (rangeBounds.start && rangeBounds.end) {
+                        setCardDateModal(prev => ({
+                          ...prev,
+                          startDate: rangeBounds.start,
+                          endDate: rangeBounds.end,
+                        }));
+                      }
+                    }}
+                  >
+                    Genel Dönem
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.customDateSection} style={{ marginTop: 14 }}>
+                <h4>Özel Tarih Aralığı (Başlangıç &amp; Bitiş)</h4>
+                <div className={styles.customDateGrid}>
+                  <label className={styles.customDateField}>
+                    <span>Başlangıç Tarihi</span>
+                    <input
+                      type="date"
+                      data-testid="card-custom-start-date"
+                      className={styles.customDateInput}
+                      value={cardDateModal.startDate}
+                      onChange={e => setCardDateModal(prev => ({ ...prev, startDate: e.target.value }))}
+                    />
+                  </label>
+                  <label className={styles.customDateField}>
+                    <span>Bitiş Tarihi</span>
+                    <input
+                      type="date"
+                      data-testid="card-custom-end-date"
+                      className={styles.customDateInput}
+                      value={cardDateModal.endDate}
+                      onChange={e => setCardDateModal(prev => ({ ...prev, endDate: e.target.value }))}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className={styles.modalFooter} style={{ justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                className={styles.btnSecondaryAction}
+                onClick={handleResetCardToGlobal}
+                title="Genel rapor dönemine dön"
+              >
+                Genel Döneme Sıfırla
+              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  className={styles.btnSecondaryAction}
+                  onClick={() => setCardDateModal(prev => ({ ...prev, isOpen: false }))}
+                >
+                  İptal
+                </button>
+                <button
+                  type="button"
+                  data-testid="card-apply-custom-date"
+                  className={styles.btnPrimaryAction}
+                  onClick={handleApplyCardCustomDate}
+                >
+                  Tarih Aralığını Uygula
+                </button>
+              </div>
             </div>
           </div>
         </div>

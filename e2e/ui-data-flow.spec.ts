@@ -1213,6 +1213,22 @@ test('Review appointment reports and download Excel/CSV files', async ({ page })
   await page.getByTestId('download-compare-csv').click();
   const compareCsvDownload = await compareCsvDownloadPromise;
   expect(compareCsvDownload.suggestedFilename()).toMatch(/^AudiPro_Donemsel_Karsilastirma_\d{4}-\d{2}-\d{2}\.csv$/);
+
+  // Test card-specific custom date range picker on Hasta Kaynak Dağılımı
+  await page.getByTestId('card-calendar-btn-patientSource').click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Hasta Kaynak Dağılımı' })).toBeVisible();
+  await page.getByTestId('card-custom-start-date').fill('2026-06-01');
+  await page.getByTestId('card-custom-end-date').fill('2026-09-30');
+  await page.getByTestId('card-apply-custom-date').click();
+  await expect(page.getByTestId('card-select-patientSource')).toContainText('Özel');
+
+  // Test card-specific custom date picker on Randevu Durumu via dropdown selection
+  await page.getByTestId('card-select-appointment').selectOption('Özel');
+  await expect(page.getByRole('heading', { level: 2, name: 'Randevu Durumu' })).toBeVisible();
+  await page.getByTestId('card-custom-start-date').fill('2026-05-01');
+  await page.getByTestId('card-custom-end-date').fill('2026-08-31');
+  await page.getByTestId('card-apply-custom-date').click();
+  await expect(page.getByTestId('card-select-appointment')).toContainText('Özel');
 });
 
 test('service status, inspection note and warranty changes persist', async ({ page }) => {
