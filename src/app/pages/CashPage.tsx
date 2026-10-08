@@ -6,7 +6,18 @@ import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency, SaleRecord, Expense } from '../data/mockData';
 import { dbFetchCashTransactions, dbInsertCashTransaction } from '../lib/database';
 import { inferCashPaymentMethod } from '../lib/cashPaymentMethod';
+import { createReportPdf } from '../lib/reportPdf';
+import { downloadFile } from '../lib/downloadFile';
 import styles from './CashPage.module.css';
+
+let cachedExcelJS: typeof import('exceljs') | null = null;
+const getExcelJS = async () => {
+  if (!cachedExcelJS) {
+    const mod = await import('exceljs');
+    cachedExcelJS = (mod.default || mod) as unknown as typeof import('exceljs');
+  }
+  return cachedExcelJS;
+};
 
 interface CashMovement {
   id: string;
@@ -130,6 +141,8 @@ export default function CashPage() {
   const [showNewSaleModal, setShowNewSaleModal] = useState(false);
   const [showNewExpenseModal, setShowNewExpenseModal] = useState(false);
   const [showEditExpenseModal, setShowEditExpenseModal] = useState(false);
+  const [showExpenseReportModal, setShowExpenseReportModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   // New Sale Form State
@@ -358,6 +371,321 @@ export default function CashPage() {
   useEffect(() => setCashPage(page => Math.min(page, cashPageCount)), [cashPageCount]);
   useEffect(() => setExpensePage(page => Math.min(page, expensePageCount)), [expensePageCount]);
 
+  // ── EXPORT FUNCTIONS ──
+  const exportExpensePdf = () => {
+    setIsExporting(true);
+    try {
+      const targetExpenses = filteredExpenses.length > 0 ? filteredExpenses : expenses;
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const totalAmount = targetExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      const pad = (str: string, len: number) => (str || '').padEnd(len).slice(0, len);
+      const padR = (str: string, len: number) => (str || '').padStart(len).slice(0, len);
+      const sep = '='.repeat(84);
+      const dash = '-'.repeat(84);
+
+      // Category breakdown
+      const categoryTotals: Record<string, { count: number; total: number }> = {};
+      targetExpenses.forEach(e => {
+        const cat = e.category || 'Diğer';
+        if (!categoryTotals[cat]) categoryTotals[cat] = { count: 0, total: 0 };
+        categoryTotals[cat].count += 1;
+        categoryTotals[cat].total += (e.amount || 0);
+      });
+
+      const lines: string[] = [
+        sep,
+        '         AUDIPRO ISITME MERKEZI - MASRAF VE GIDER RAPORU',
+        sep,
+        `Rapor Tarihi: ${dateFormatted}   |   Toplam Kayit: ${targetExpenses.length} Adet`,
+        `Firma/Sube: ${expenseSelectedBranch || 'Tum Subeler'}   |   Kategori: ${expenseSelectedCategory || 'Tumu'}`,
+        `Toplam Harcama: TRY ${totalAmount.toLocaleString('tr-TR')}   |   Durum: Onayli Resmi Gider Dokumu`,
+        '',
+        dash,
+        '1. GIDER VE HARCAMA KPI OZETI',
+        dash,
+        `  Toplam Harcama Tutari   : TRY ${totalAmount.toLocaleString('tr-TR')}`,
+        `  Toplam Islem / Kayit    : ${targetExpenses.length} adet`,
+        `  Ortalama Islem Tutari   : TRY ${(targetExpenses.length ? Math.round(totalAmount / targetExpenses.length) : 0).toLocaleString('tr-TR')}`,
+        `  En Yuksek Gider Kalemi  : ${highestExpenseCategory.category} (TRY ${highestExpenseCategory.total.toLocaleString('tr-TR')})`,
+        '',
+        dash,
+        '2. KATEGORI BAZLI GIDER DAGILIMI',
+        dash,
+        `${pad('KATEGORI', 26)} ${padR('ISLEM ADEDI', 14)} ${padR('TOPLAM TUTAR', 20)} ${padR('PAY %', 10)}`,
+        dash,
+      ];
+
+      Object.entries(categoryTotals).forEach(([cat, stat]) => {
+        const share = totalAmount > 0 ? Math.round((stat.total / totalAmount) * 100) : 0;
+        lines.push(`${pad(cat, 26)} ${padR(`${stat.count} adet`, 14)} ${padR(`TRY ${stat.total.toLocaleString('tr-TR')}`, 20)} ${padR(`%${share}`, 10)}`);
+      });
+
+      lines.push(dash);
+      lines.push('');
+      lines.push(dash);
+      lines.push('3. GIDER VE MASRAF DETAY LISTESI');
+      lines.push(dash);
+      lines.push(`${pad('TARIH', 11)} ${pad('ACIKLAMA', 22)} ${pad('KATEGORI', 14)} ${pad('SUBE', 14)} ${padR('TUTAR', 12)}`);
+      lines.push(dash);
+
+      targetExpenses.forEach(e => {
+        lines.push(
+          `${pad(e.date || '-', 11)} ${pad(e.description || '-', 22)} ${pad(e.category || '-', 14)} ${pad(e.branch || '-', 14)} ${padR(`TRY ${(e.amount || 0).toLocaleString('tr-TR')}`, 12)}`
+        );
+      });
+
+      lines.push(dash);
+      lines.push(`TOPLAM GIDER TUTARI: TRY ${totalAmount.toLocaleString('tr-TR')}`);
+      lines.push(sep);
+
+      const blob = createReportPdf(lines);
+      downloadFile(blob, `AudiPro_Gider_Masraf_Raporu_${dateStamp}.pdf`);
+      addToast({ type: 'success', message: 'Masraf ve gider raporu PDF (.pdf) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('PDF indirme hatası:', err);
+      addToast({ type: 'error', message: 'PDF raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportExpenseExcel = async () => {
+    setIsExporting(true);
+    try {
+      const targetExpenses = filteredExpenses.length > 0 ? filteredExpenses : expenses;
+      const ExcelJS = await getExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'AudiPro İşitme Merkezi';
+
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+      const totalAmount = targetExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      // Sheet 1: Gider Kayıtları
+      const worksheet = workbook.addWorksheet('Gider Kayıtları');
+      worksheet.columns = [
+        { width: 14 }, // Tarih
+        { width: 28 }, // Açıklama
+        { width: 18 }, // Kategori
+        { width: 22 }, // Tedarikçi / Muhatap
+        { width: 18 }, // Fatura / Fiş No
+        { width: 16 }, // Ödeme Yöntemi
+        { width: 18 }, // Şube
+        { width: 14 }, // Durum
+        { width: 18 }, // Tutar (TRY)
+        { width: 26 }, // Notlar
+      ];
+
+      // Header Title
+      worksheet.mergeCells('A1:J1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'AUDİPRO İŞİTME MERKEZİ - MASRAF & GİDER RAPORU';
+      titleCell.font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(1).height = 32;
+
+      // Subtitle
+      worksheet.mergeCells('A2:J2');
+      const subCell = worksheet.getCell('A2');
+      subCell.value = `Rapor Tarihi: ${dateFormatted}   |   Toplam Kayıt: ${targetExpenses.length} Adet   |   Toplam Harcama: TRY ${totalAmount.toLocaleString('tr-TR')}   |   Şube: ${expenseSelectedBranch || 'Tüm Şubeler'}`;
+      subCell.font = { italic: true, size: 10, color: { argb: 'FF475569' } };
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(2).height = 22;
+
+      worksheet.addRow([]); // empty row
+
+      const headers = [
+        'Tarih', 'Açıklama', 'Kategori', 'Tedarikçi / Muhatap',
+        'Fatura / Fiş No', 'Ödeme Yöntemi', 'Şube', 'Durum',
+        'Tutar (TRY)', 'Notlar'
+      ];
+      const headerRow = worksheet.addRow(headers);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF134E4A' } };
+      headerRow.height = 26;
+
+      targetExpenses.forEach((item, index) => {
+        const dataRow = worksheet.addRow([
+          item.date || '—',
+          item.description || '—',
+          item.category || '—',
+          item.supplier || '—',
+          item.invoiceNo || '—',
+          item.paymentMethod || '—',
+          item.branch || '—',
+          item.status || 'Ödendi',
+          item.amount || 0,
+          item.notes || '—'
+        ]);
+
+        if (index % 2 === 1) {
+          dataRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+
+        for (let col = 1; col <= 10; col++) {
+          dataRow.getCell(col).border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+          };
+        }
+      });
+
+      // Summary Total Row
+      const totalRow = worksheet.addRow([
+        'GENEL TOPLAM', '', '', '', '', '', '', '',
+        totalAmount, ''
+      ]);
+      totalRow.font = { bold: true };
+      totalRow.height = 24;
+
+      // Sheet 2: Kategori & Harcama Özeti
+      const summarySheet = workbook.addWorksheet('Kategori Dağılımı');
+      summarySheet.columns = [{ width: 28 }, { width: 16 }, { width: 22 }, { width: 16 }];
+      summarySheet.addRow(['KATEGORİ', 'İŞLEM SAYISI', 'TOPLAM TUTAR (TRY)', 'HARCAMA PAYI (%)']).font = { bold: true };
+
+      const categoryTotals: Record<string, { count: number; total: number }> = {};
+      targetExpenses.forEach(e => {
+        const cat = e.category || 'Diğer';
+        if (!categoryTotals[cat]) categoryTotals[cat] = { count: 0, total: 0 };
+        categoryTotals[cat].count += 1;
+        categoryTotals[cat].total += (e.amount || 0);
+      });
+
+      Object.entries(categoryTotals).forEach(([cat, stat]) => {
+        const share = totalAmount > 0 ? Math.round((stat.total / totalAmount) * 100) : 0;
+        summarySheet.addRow([cat, `${stat.count} adet`, stat.total, `%${share}`]);
+      });
+
+      summarySheet.addRow([]);
+      const summaryTotalRow = summarySheet.addRow(['TOPLAM GİDER', `${targetExpenses.length} adet`, totalAmount, '%100']);
+      summaryTotalRow.font = { bold: true };
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      downloadFile(blob, `AudiPro_Gider_Masraf_Raporu_${dateStamp}.xlsx`);
+      addToast({ type: 'success', message: 'Masraf ve gider raporu Excel tablosu (.xlsx) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('Excel indirme hatası:', err);
+      addToast({ type: 'error', message: 'Excel raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportCashReportPdf = () => {
+    setIsExporting(true);
+    try {
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const pad = (str: string, len: number) => (str || '').padEnd(len).slice(0, len);
+      const padR = (str: string, len: number) => (str || '').padStart(len).slice(0, len);
+      const sep = '='.repeat(84);
+      const dash = '-'.repeat(84);
+
+      const lines: string[] = [
+        sep,
+        '         AUDIPRO ISITME MERKEZI - KASA VE FINANSAL KAR/ZARAR RAPORU',
+        sep,
+        `Tarih Araligi: ${reportStartDate} - ${reportEndDate}   |   Olusturulma: ${new Date().toLocaleDateString('tr-TR')}`,
+        `Firma/Sube: ${summaryBranch || 'Tum Subeler'}   |   Durum: Onayli Finansal Dokum`,
+        '',
+        dash,
+        '1. DONEM FINANSAL PERFORMANS VE NET KAR/ZARAR',
+        dash,
+        `  Toplam Kasa Girisi (Gelir)  : TRY ${reportIncome.toLocaleString('tr-TR')}`,
+        `  Toplam Gider ve Cikislar    : TRY ${reportExpenseTotal.toLocaleString('tr-TR')}`,
+        `  Donem Net Kari              : TRY ${reportNetProfit.toLocaleString('tr-TR')}`,
+        `  Gider / Gelir Orani         : ${reportExpenseIncomeRatio !== null ? `%${reportExpenseIncomeRatio}` : '-'}`,
+        `  Tahsilat Orani              : ${reportCollectionRate !== null ? `%${reportCollectionRate}` : '-'}`,
+        '',
+        dash,
+        '2. KASA HAREKETLERI LISTESI',
+        dash,
+        `${pad('TARIH', 11)} ${pad('ISLEM', 8)} ${pad('KATEGORI', 14)} ${pad('HESAP', 12)} ${pad('SUBE', 14)} ${padR('TUTAR', 14)}`,
+        dash,
+      ];
+
+      reportMovements.forEach(item => {
+        lines.push(
+          `${pad(item.dateKey || '-', 11)} ${pad(item.type, 8)} ${pad(item.category || '-', 14)} ${pad(item.account || '-', 12)} ${pad(item.branch || '-', 14)} ${padR(`TRY ${item.amount.toLocaleString('tr-TR')}`, 14)}`
+        );
+      });
+
+      lines.push(dash);
+      lines.push(`TOPLAM HAREKET: ${reportMovements.length} ADET   |   NET BAKIYE: TRY ${reportNetProfit.toLocaleString('tr-TR')}`);
+      lines.push(sep);
+
+      const blob = createReportPdf(lines);
+      downloadFile(blob, `AudiPro_Kasa_Finansal_Rapor_${dateStamp}.pdf`);
+      addToast({ type: 'success', message: 'Kasa raporu PDF (.pdf) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('PDF indirme hatası:', err);
+      addToast({ type: 'error', message: 'PDF raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportCashReportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const ExcelJS = await getExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'AudiPro İşitme Merkezi';
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const dateFormatted = new Date().toLocaleDateString('tr-TR');
+
+      // Sheet 1: Özet Kar Zarar
+      const summarySheet = workbook.addWorksheet('Finansal Özet');
+      summarySheet.columns = [{ width: 32 }, { width: 22 }];
+      summarySheet.addRow(['METRİK', 'DEĞER']).font = { bold: true };
+      summarySheet.addRow(['Rapor Tarih Aralığı', `${reportStartDate} – ${reportEndDate}`]);
+      summarySheet.addRow(['Rapor Oluşturulma', dateFormatted]);
+      summarySheet.addRow(['Toplam Gelir (Giriş)', reportIncome]);
+      summarySheet.addRow(['Toplam Gider ve Çıkış', reportExpenseTotal]);
+      summarySheet.addRow(['Dönem Net Kar', reportNetProfit]);
+      summarySheet.addRow(['Gider / Gelir Oranı', reportExpenseIncomeRatio !== null ? `%${reportExpenseIncomeRatio}` : '—']);
+      summarySheet.addRow(['Tahsilat Oranı', reportCollectionRate !== null ? `%${reportCollectionRate}` : '—']);
+
+      // Sheet 2: Kasa Hareketleri
+      const movesSheet = workbook.addWorksheet('Kasa Hareketleri');
+      movesSheet.columns = [
+        { width: 14 }, { width: 10 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 18 }, { width: 16 }
+      ];
+      const hRow = movesSheet.addRow(['Tarih', 'Tür', 'Kategori', 'Hesap', 'Ödeme Şekli', 'Şube', 'Tutar (TRY)']);
+      hRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      hRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF134E4A' } };
+
+      reportMovements.forEach((item, idx) => {
+        const row = movesSheet.addRow([
+          item.dateKey || item.date || '—',
+          item.type,
+          item.category || '—',
+          item.account || '—',
+          item.paymentMethod || '—',
+          item.branch || '—',
+          item.amount
+        ]);
+        if (idx % 2 === 1) {
+          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      downloadFile(blob, `AudiPro_Kasa_Finansal_Rapor_${dateStamp}.xlsx`);
+      addToast({ type: 'success', message: 'Kasa raporu Excel (.xlsx) olarak başarıyla indirildi.' });
+    } catch (err) {
+      console.error('Excel indirme hatası:', err);
+      addToast({ type: 'error', message: 'Excel raporu oluşturulurken hata meydana geldi.' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Handle Create Deposit/Withdrawal
   const handleCreateDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -566,8 +894,10 @@ export default function CashPage() {
           {mainTab === 'expenses' ? (
             <>
               <button
+                type="button"
                 className={styles.btnSecondaryAction}
-                onClick={() => addToast({ type: 'info', message: 'Gider analitiği ve rapor dökümü hazırlanıyor...' })}
+                data-testid="expense-report-btn"
+                onClick={() => setShowExpenseReportModal(true)}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="18" y1="20" x2="18" y2="10" />
@@ -1703,6 +2033,33 @@ export default function CashPage() {
               <div style={{ fontSize: 22, fontWeight: 700, color: '#08785b', marginTop: 4 }}>{reportCollectionRate === null ? '—' : `%${reportCollectionRate}`}</div>
             </div>
           </div>
+
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'block' }}>Kasa & Finansal Raporu Dışa Aktar</span>
+              <span style={{ fontSize: 11.5, color: '#64748b' }}>Seçili tarih aralığındaki ({reportStartDate} – {reportEndDate}) gelir, gider ve net kar analizi</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                data-testid="export-cash-report-pdf"
+                className={styles.btnSecondaryAction}
+                disabled={isExporting}
+                onClick={exportCashReportPdf}
+              >
+                📕 PDF Raporu (.pdf)
+              </button>
+              <button
+                type="button"
+                data-testid="export-cash-report-excel"
+                className={styles.btnPrimaryAction}
+                disabled={isExporting}
+                onClick={exportCashReportExcel}
+              >
+                📗 Excel Tablosu (.xlsx)
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2075,6 +2432,193 @@ export default function CashPage() {
                 }}
               >
                 Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: Masraf & Gider Faaliyet Raporu ── */}
+      {showExpenseReportModal && (
+        <div
+          role="presentation"
+          onClick={() => setShowExpenseReportModal(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1000,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 20
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="expense-report-title"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 540,
+              overflow: 'hidden',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px 20px',
+                borderBottom: '1px solid #e2e8f0'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>📊</span>
+                <div>
+                  <h3 id="expense-report-title" style={{ margin: 0, fontSize: 17, color: '#0f172a' }}>
+                    Masraf & Gider Faaliyet Raporu
+                  </h3>
+                  <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                    İşletme giderleri, kategori analizleri ve resmi döküm
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  color: '#94a3b8'
+                }}
+                onClick={() => setShowExpenseReportModal(false)}
+                aria-label="Kapat"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: 20, display: 'grid', gap: 16 }}>
+              {/* 4 Stat Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Toplam Harcama Tutarı</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#dc2626', marginTop: 2 }}>
+                    {formatCurrency(filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                  </div>
+                </div>
+                <div style={{ background: '#f0fdf4', padding: 14, borderRadius: 10, border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: 12, color: '#16a34a' }}>Gider Kaydı Sayısı</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a', marginTop: 2 }}>
+                    {filteredExpenses.length} adet
+                  </div>
+                </div>
+                <div style={{ background: '#eff6ff', padding: 14, borderRadius: 10, border: '1px solid #bfdbfe' }}>
+                  <div style={{ fontSize: 12, color: '#2563eb' }}>En Yüksek Gider Kalemi</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#2563eb', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {highestExpenseCategory.total ? highestExpenseCategory.category : '—'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{formatCurrency(highestExpenseCategory.total)}</div>
+                </div>
+                <div style={{ background: '#fef3c7', padding: 14, borderRadius: 10, border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: 12, color: '#b45309' }}>Ortalama İşlem Tutarı</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#b45309', marginTop: 2 }}>
+                    {formatCurrency(filteredExpenses.length ? Math.round(filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0) / filteredExpenses.length) : 0)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Kategori Dağılım Özeti */}
+              <div style={{ background: '#f8fafc', padding: 14, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Kategori Bazlı Dağılım</span>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>{expenseSelectedBranch}</span>
+                </div>
+                <div style={{ display: 'grid', gap: 6, maxHeight: 130, overflowY: 'auto' }}>
+                  {(() => {
+                    const catMap: Record<string, { count: number; total: number }> = {};
+                    filteredExpenses.forEach(e => {
+                      const c = e.category || 'Diğer';
+                      if (!catMap[c]) catMap[c] = { count: 0, total: 0 };
+                      catMap[c].count += 1;
+                      catMap[c].total += (e.amount || 0);
+                    });
+                    const entries = Object.entries(catMap);
+                    if (entries.length === 0) {
+                      return <div style={{ fontSize: 12, color: '#94a3b8' }}>Gider kaydı bulunmuyor.</div>;
+                    }
+                    const totalSum = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+                    return entries.map(([cat, stat]) => {
+                      const pct = totalSum > 0 ? Math.round((stat.total / totalSum) * 100) : 0;
+                      return (
+                        <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 8px', background: '#fff', borderRadius: 6, border: '1px solid #f1f5f9' }}>
+                          <span style={{ fontWeight: 600, color: '#1e293b' }}>{cat} ({stat.count})</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ color: '#64748b', fontSize: 11 }}>%{pct}</span>
+                            <span style={{ fontWeight: 650, color: '#0f172a' }}>{formatCurrency(stat.total)}</span>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+
+              {/* Rapor İndirme Seçenekleri */}
+              <div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 8 }}>
+                  Raporu İndir
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <button
+                    type="button"
+                    data-testid="export-expense-pdf"
+                    className={styles.btnSecondaryAction}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', justifyContent: 'center', gap: 8, borderColor: '#cbd5e1' }}
+                    onClick={exportExpensePdf}
+                  >
+                    <span style={{ fontSize: 18 }}>📕</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5, color: '#0f172a' }}>PDF Raporu (.pdf)</strong>
+                      <span style={{ fontSize: 10.5, color: '#64748b' }}>Resmi gider ve mali döküm</span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="export-expense-excel"
+                    className={styles.btnPrimaryAction}
+                    disabled={isExporting}
+                    style={{ padding: '12px 14px', justifyContent: 'center', gap: 8 }}
+                    onClick={exportExpenseExcel}
+                  >
+                    <span style={{ fontSize: 18 }}>📗</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong style={{ display: 'block', fontSize: 12.5 }}>Excel Tablosu (.xlsx)</strong>
+                      <span style={{ fontSize: 10.5, opacity: 0.9 }}>Detaylı tablo ve analiz</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <button
+                type="button"
+                className={styles.btnSecondaryAction}
+                onClick={() => setShowExpenseReportModal(false)}
+              >
+                Kapat
               </button>
             </div>
           </div>
