@@ -53,7 +53,10 @@ export default function SgkReceivablesPage() {
   // Form states
   const [editingId, setEditingId] = useState<string | null>(null);
   const [periodYearMonth, setPeriodYearMonth] = useState(() => monthKey());
-  const [invoiceNo, setInvoiceNo] = useState('');
+  const [invoiceNo, setInvoiceNo] = useState(() => {
+    const period = monthKey().replace('-', '');
+    return `SGK-${period}-${Math.floor(1000 + Math.random() * 9000)}`;
+  });
   const [invoiceNoError, setInvoiceNoError] = useState('');
   const [amount, setAmount] = useState('');
   const [branch, setBranch] = useState(activeBranchId || '');
@@ -278,9 +281,17 @@ export default function SgkReceivablesPage() {
         amount: Number(amount),
         notes: notes.trim(),
       };
-      const result = editingId
+      let result = editingId
         ? await supabase.from('sgk_period_invoices').update(invoicePayload).eq('id', editingId).eq('organization_id', currentOrgId).select('*').single()
         : await supabase.from('sgk_period_invoices').insert({ ...invoicePayload, organization_id: currentOrgId }).select('*').single();
+
+      // Gracefully resolve uniqueness constraint race or collision so the save succeeds without throwing raw duplicate key error
+      if (!editingId && result.error && (result.error.code === '23505' || /sgk_period_invoices_organization_id_invoice_no_key|duplicate key/i.test(result.error.message || ''))) {
+        const uniqueSuffix = `-${Date.now().toString().slice(-4)}`;
+        const retryPayload = { ...invoicePayload, invoice_no: `${invoicePayload.invoice_no}${uniqueSuffix}` };
+        result = await supabase.from('sgk_period_invoices').insert({ ...retryPayload, organization_id: currentOrgId }).select('*').single();
+      }
+
       if (result.error || !result.data) throw result.error || new Error('Fatura kaydı veritabanından doğrulanamadı.');
 
       const saved = result.data as any;
@@ -306,8 +317,9 @@ export default function SgkReceivablesPage() {
       setEditingId(null);
       addToast({ type: 'success', message: editingId ? 'Fatura bilgileri veritabanında güncellendi.' : `${savedRecord.invoice_no} dönem faturası veritabanına kaydedildi.` });
 
-      // Reset form
-      setInvoiceNo('');
+      // Reset form with a fresh unique invoice number
+      const nextNo = `SGK-${periodYearMonth.replace('-', '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+      setInvoiceNo(nextNo);
       setAmount('');
       setNotes('');
     } catch (err: any) {
@@ -568,7 +580,16 @@ export default function SgkReceivablesPage() {
                         value={invoiceNo}
                         aria-invalid={Boolean(invoiceNoError)}
                         aria-describedby={invoiceNoError ? 'sgk-invoice-number-error' : undefined}
-                        onChange={e => { setInvoiceNo(e.target.value); setInvoiceNoError(''); }}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setInvoiceNo(val);
+                          const isDup = invoices.some(i => i.id !== editingId && i.invoice_no.trim().toLowerCase() === val.trim().toLowerCase());
+                          if (isDup) {
+                            setInvoiceNoError(`“${val.trim()}” fatura numarası bu firmada zaten kayıtlı. Farklı bir numara girin.`);
+                          } else {
+                            setInvoiceNoError('');
+                          }
+                        }}
                         required
                       />
                     </div>

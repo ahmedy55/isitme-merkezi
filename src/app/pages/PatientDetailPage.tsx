@@ -66,7 +66,8 @@ export default function PatientDetailPage() {
     estimatedDate: dateInputOffset(5),
     notes: '',
     accessories: [] as string[],
-    complaints: [] as string[]
+    complaints: [] as string[],
+    warrantyStatus: 'Garanti Kapsamında' as 'Garanti Kapsamında' | 'Garanti Dışı'
   });
 
   const toggleDetailAccessory = (acc: string) => {
@@ -486,7 +487,7 @@ export default function PatientDetailPage() {
       serialNo: serviceFormData.serialNo, barcode: serviceBarcode,
       receivedDate: new Date().toISOString().slice(0, 10), estimatedDate: serviceFormData.estimatedDate,
       returnedDate: null, problem: serviceFormData.problem || 'Belirtilmedi', operations: [], totalCost: 0,
-      status: 'Alındı' as const, technician: '', warrantyRepair: false, notes: serviceFormData.notes,
+      status: 'Alındı' as const, technician: '', warrantyRepair: serviceFormData.warrantyStatus === 'Garanti Kapsamında', notes: serviceFormData.notes,
       accessoriesTaken: serviceFormData.accessories, complaints: serviceFormData.complaints,
     };
     try { await saveServiceTicket(currentOrgId || '', ticket); }
@@ -512,7 +513,8 @@ export default function PatientDetailPage() {
       estimatedDate: dateInputOffset(5),
       notes: '',
       accessories: [],
-      complaints: []
+      complaints: [],
+      warrantyStatus: 'Garanti Kapsamında'
     });
     addToast({ type: 'success', message: `${patient.firstName} ${patient.lastName} adına yeni teknik servis kaydı oluşturuldu.` });
   };
@@ -2094,6 +2096,18 @@ export default function PatientDetailPage() {
                     value={serviceFormData.serialNo}
                     onChange={(e) => setServiceFormData({ ...serviceFormData, serialNo: e.target.value })}
                   />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Garanti Durumu</label>
+                  <select
+                    className="form-input"
+                    aria-label="Garanti Durumu"
+                    value={serviceFormData.warrantyStatus}
+                    onChange={(e) => setServiceFormData({ ...serviceFormData, warrantyStatus: e.target.value as any })}
+                  >
+                    <option value="Garanti Kapsamında">Garanti Kapsamında</option>
+                    <option value="Garanti Dışı">Garanti Dışı</option>
+                  </select>
                 </div>
               </div>
 

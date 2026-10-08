@@ -760,8 +760,10 @@ export default function AssetsPage() {
 
           <div style={{ position: 'relative' }}>
             <button
+              type="button"
               className={styles.btnCategoryAction}
               aria-label={selectedIds.length ? `Toplu İşlemler (${selectedIds.length} seçili)` : 'Toplu İşlemler'}
+              data-testid="asset-bulk-actions-btn"
               aria-haspopup="menu"
               aria-expanded={showBulkActionsMenu}
               aria-controls="asset-bulk-actions-menu"
@@ -771,12 +773,16 @@ export default function AssetsPage() {
                 <rect x="2" y="4" width="20" height="16" rx="2" />
                 <path d="M7 15h10M7 9h10" />
               </svg>
-              Toplu İşlemler{selectedIds.length ? ` (${selectedIds.length})` : ''}
+              Toplu İşlemler{selectedIds.length ? ` (${selectedIds.length} seçili)` : ''}
             </button>
             {showBulkActionsMenu && (
               <div id="asset-bulk-actions-menu" role="menu" aria-label="Toplu demirbaş işlemleri" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 30, minWidth: 200, padding: 6, background: '#fff', border: '1px solid #dbe3ea', borderRadius: 10, boxShadow: '0 10px 24px rgba(15,23,42,.14)' }}>
-                <button type="button" role="menuitem" className={styles.dropdownItem} style={{ width: '100%', textAlign: 'left' }} onClick={() => { setShowBulkActionsMenu(false); setShowBulkAssignmentModal(true); }}>Toplu Zimmet</button>
-                <button type="button" role="menuitem" className={styles.dropdownItem} style={{ width: '100%', textAlign: 'left' }} onClick={() => { setShowBulkActionsMenu(false); setShowBulkMaintenanceModal(true); }}>Toplu Kalibrasyon</button>
+                <button type="button" role="menuitem" aria-label="Toplu Zimmet" className={styles.dropdownItem} style={{ width: '100%', textAlign: 'left' }} onClick={() => { setShowBulkActionsMenu(false); setShowBulkAssignmentModal(true); }}>
+                  Toplu Zimmet
+                </button>
+                <button type="button" role="menuitem" aria-label="Toplu Kalibrasyon" className={styles.dropdownItem} style={{ width: '100%', textAlign: 'left' }} onClick={() => { setShowBulkActionsMenu(false); setShowBulkMaintenanceModal(true); }}>
+                  Toplu Kalibrasyon
+                </button>
               </div>
             )}
           </div>
@@ -884,6 +890,54 @@ export default function AssetsPage() {
       <div className={styles.contentLayout}>
         {/* Table Section */}
         <div className={styles.tableSection}>
+          {selectedIds.length > 0 && (
+            <div
+              data-testid="asset-bulk-bar"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px',
+                marginBottom: 12,
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 10,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#166534', fontWeight: 600 }}>
+                <span>✓</span>
+                <span>{selectedIds.length} demirbaş seçildi</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  data-testid="bulk-assign-btn"
+                  aria-label="Toplu Zimmet"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#1e293b', cursor: 'pointer' }}
+                  onClick={() => setShowBulkAssignmentModal(true)}
+                >
+                  👤 Toplu Zimmet
+                </button>
+                <button
+                  type="button"
+                  data-testid="bulk-calibration-btn"
+                  aria-label="Toplu Kalibrasyon"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#1e293b', cursor: 'pointer' }}
+                  onClick={() => setShowBulkMaintenanceModal(true)}
+                >
+                  🔧 Toplu Kalibrasyon
+                </button>
+                <button
+                  type="button"
+                  aria-label="Seçimi Temizle"
+                  style={{ fontSize: 12, border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', marginLeft: 8 }}
+                  onClick={() => setSelectedIds([])}
+                >
+                  ✕ Temizle
+                </button>
+              </div>
+            </div>
+          )}
           <div className={styles.tableWrap}>
             <table className={styles.assetTable}>
               <thead>

@@ -806,6 +806,8 @@ export default function ServicePage() {
                               type="button"
                               className={styles.iconBtn}
                               title="Düzenle"
+                              aria-label="Düzenle"
+                              data-testid="edit-service-record-btn"
                               onClick={() => {
                                 setSelectedItem(item);
                                 setShowEditModal(true);
@@ -1556,6 +1558,7 @@ export default function ServicePage() {
               try {
                 await saveServiceTicket(currentOrgId, toServiceRecord(selectedItem));
                 setRecords(previous => previous.map(item => item.id === selectedItem.id ? selectedItem : item));
+                setSelectedItem({ ...selectedItem });
                 setShowEditModal(false);
                 addToast({ type: 'success', message: 'Kayıt bilgileri başarıyla güncellendi.' });
               } catch (error) {
@@ -1568,7 +1571,7 @@ export default function ServicePage() {
                   <input
                     type="text"
                     className={styles.formInput}
-                    defaultValue={selectedItem.deviceName}
+                    value={selectedItem.deviceName || ''}
                     onChange={e => setSelectedItem({ ...selectedItem, deviceName: e.target.value })}
                   />
                 </div>
@@ -1578,7 +1581,7 @@ export default function ServicePage() {
                     <input
                       type="text"
                       className={styles.formInput}
-                      defaultValue={selectedItem.serialNo}
+                      value={selectedItem.serialNo || ''}
                       onChange={e => setSelectedItem({ ...selectedItem, serialNo: e.target.value })}
                     />
                   </div>
@@ -1587,7 +1590,7 @@ export default function ServicePage() {
                     <input
                       type="text"
                       className={styles.formInput}
-                      defaultValue={selectedItem.barcode}
+                      value={selectedItem.barcode || ''}
                       onChange={e => setSelectedItem({ ...selectedItem, barcode: e.target.value })}
                     />
                   </div>
@@ -1597,7 +1600,7 @@ export default function ServicePage() {
                   <input
                     type="text"
                     className={styles.formInput}
-                    defaultValue={selectedItem.problem}
+                    value={selectedItem.problem || ''}
                     onChange={e => setSelectedItem({ ...selectedItem, problem: e.target.value })}
                   />
                 </div>
@@ -1606,8 +1609,9 @@ export default function ServicePage() {
                   <select
                     id="service-edit-warranty"
                     aria-label="Garanti Durumu"
+                    data-testid="service-edit-warranty-select"
                     className={styles.formSelect}
-                    value={selectedItem.warrantyStatus}
+                    value={selectedItem.warrantyStatus || 'Garanti Kapsamında'}
                     onChange={e => setSelectedItem({ ...selectedItem, warrantyStatus: e.target.value as ServiceItem['warrantyStatus'] })}
                   >
                     <option value="Garanti Kapsamında">Garanti Kapsamında</option>
@@ -1619,7 +1623,7 @@ export default function ServicePage() {
                   <textarea
                     rows={2}
                     className={styles.formTextarea}
-                    defaultValue={selectedItem.notes || ''}
+                    value={selectedItem.notes || ''}
                     onChange={e => setSelectedItem({ ...selectedItem, notes: e.target.value })}
                   />
                 </div>

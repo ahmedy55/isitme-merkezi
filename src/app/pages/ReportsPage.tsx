@@ -389,11 +389,12 @@ export default function ReportsPage() {
       const safeName = `rapor-${new Date().toISOString().slice(0, 10)}`;
       let blob: Blob;
       let extension: string;
-      if (format === 'CSV') {
+      const normalizedFormat = (format || '').toUpperCase();
+      if (normalizedFormat.includes('CSV')) {
         const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\r\n');
         blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
         extension = 'csv';
-      } else if (format === 'Excel (XLSX)') {
+      } else if (normalizedFormat.includes('EXCEL') || normalizedFormat.includes('XLSX')) {
         const ExcelJS = (await import('exceljs')).default;
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Rapor');
@@ -420,9 +421,13 @@ export default function ReportsPage() {
       link.style.left = '-10000px';
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      // Keep the object URL alive while the browser starts consuming the download.
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      // Keep the element attached during the initial microtask to ensure headless Chromium download listeners fire reliably.
+      window.setTimeout(() => {
+        try {
+          link.remove();
+          URL.revokeObjectURL(url);
+        } catch {}
+      }, 30_000);
       addToast({ type: 'success', message: `${extension.toUpperCase()} raporu indirildi.` });
       setShowExportModal(false);
     } catch {
@@ -1092,7 +1097,9 @@ export default function ReportsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
                 <button
                   type="button"
+                  data-testid="download-report-pdf"
                   className={styles.btnSecondaryAction}
+                  aria-label="PDF Yönetici Sunumu İndir"
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}
                   onClick={() => handleExportReport('PDF')}
                 >
@@ -1105,6 +1112,7 @@ export default function ReportsPage() {
 
                 <button
                   type="button"
+                  data-testid="download-report-excel"
                   className={styles.btnSecondaryAction}
                   aria-label="Excel Tablosu (.xlsx) İndir"
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}
@@ -1119,6 +1127,7 @@ export default function ReportsPage() {
 
                 <button
                   type="button"
+                  data-testid="download-report-csv"
                   className={styles.btnSecondaryAction}
                   aria-label="Ham Veri (.csv) İndir"
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}

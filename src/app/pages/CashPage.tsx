@@ -70,6 +70,32 @@ export default function CashPage() {
     return toLocalDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
   });
   const [reportEndDate, setReportEndDate] = useState(() => toLocalDateKey(new Date()));
+
+  const handleDatePreset = (preset: string) => {
+    const now = new Date();
+    if (preset === 'today') {
+      const today = toLocalDateKey(now);
+      setReportStartDate(today);
+      setReportEndDate(today);
+    } else if (preset === '7days') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      setReportStartDate(toLocalDateKey(start));
+      setReportEndDate(toLocalDateKey(now));
+    } else if (preset === '30days') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 30);
+      setReportStartDate(toLocalDateKey(start));
+      setReportEndDate(toLocalDateKey(now));
+    } else if (preset === 'month') {
+      setReportStartDate(toLocalDateKey(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setReportEndDate(toLocalDateKey(now));
+    } else if (preset === 'year') {
+      setReportStartDate(toLocalDateKey(new Date(now.getFullYear(), 0, 1)));
+      setReportEndDate(toLocalDateKey(now));
+    }
+  };
+
   useEffect(() => {
     if (currentPage === 'expenses') setMainTab('expenses');
     else if (currentPage === 'cash') setMainTab('cash');
@@ -658,8 +684,10 @@ export default function CashPage() {
         </button>
 
         <button
+          type="button"
           className={`${styles.navTabBtn} ${mainTab === 'reports' ? styles.navTabBtnActive : ''}`}
           aria-label="Kasa raporları"
+          data-testid="cash-reports-tab"
           onClick={() => setMainTab('reports')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -667,7 +695,7 @@ export default function CashPage() {
             <line x1="12" y1="20" x2="12" y2="4" />
             <line x1="6" y1="20" x2="6" y2="14" />
           </svg>
-          Raporlar
+          Kasa raporları
         </button>
       </div>
 
@@ -860,13 +888,31 @@ export default function CashPage() {
             </div>
 
             <div className={styles.filterBar}>
-              <div className={styles.dateRangeBox}>
+              <div className={styles.dateRangeBox} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
                   <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                   <line x1="16" y1="2" x2="16" y2="6" />
                   <line x1="8" y1="2" x2="8" y2="6" />
                 </svg>
-                <span>{new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('tr-TR')} - {new Date().toLocaleDateString('tr-TR')}</span>
+                <label htmlFor="cash-start-date" style={{ fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>Tarih:</label>
+                <input
+                  id="cash-start-date"
+                  aria-label="Tarih"
+                  data-testid="cash-filter-start-date"
+                  type="date"
+                  value={reportStartDate}
+                  onChange={e => setReportStartDate(e.target.value)}
+                  style={{ border: 'none', background: 'transparent', fontSize: 12, outline: 'none', color: '#1e293b' }}
+                />
+                <span>-</span>
+                <input
+                  aria-label="Tarih Bitiş"
+                  data-testid="cash-filter-end-date"
+                  type="date"
+                  value={reportEndDate}
+                  onChange={e => setReportEndDate(e.target.value)}
+                  style={{ border: 'none', background: 'transparent', fontSize: 12, outline: 'none', color: '#1e293b' }}
+                />
               </div>
 
               <select
@@ -1578,14 +1624,69 @@ export default function CashPage() {
           <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
             Erişiminiz olan şubelerin nakit akışı ve gider analizleri; seçilen tarih aralığına göre.
           </p>
-          <div role="group" aria-label="Rapor Tarih Aralığı" data-testid="cash-report-date-range" style={{ display: 'flex', alignItems: 'end', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-            <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#475569' }}>Başlangıç tarihi
-              <input aria-label="Rapor başlangıç tarihi" type="date" value={reportStartDate} max={reportEndDate} onChange={event => setReportStartDate(event.target.value)} className={styles.filterSelect} />
-            </label>
-            <label style={{ display: 'grid', gap: 5, fontSize: 12, color: '#475569' }}>Bitiş tarihi
-              <input aria-label="Rapor bitiş tarihi" type="date" value={reportEndDate} min={reportStartDate} onChange={event => setReportEndDate(event.target.value)} className={styles.filterSelect} />
-            </label>
-            <span style={{ fontSize: 12, color: '#64748b', paddingBottom: 10 }}>Aralık: {reportStartDate} – {reportEndDate}</span>
+          <div
+            role="group"
+            aria-label="Rapor Tarih Aralığı"
+            data-testid="cash-report-date-range"
+            style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap', marginBottom: 20, padding: '14px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}
+          >
+            <div style={{ display: 'grid', gap: 5 }}>
+              <label htmlFor="cash-report-preset" style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>
+                Tarih Aralığı:
+              </label>
+              <select
+                id="cash-report-preset"
+                aria-label="Tarih Aralığı"
+                data-testid="cash-report-preset"
+                className={styles.filterSelect}
+                defaultValue="month"
+                onChange={e => handleDatePreset(e.target.value)}
+              >
+                <option value="month">Bu Ay</option>
+                <option value="today">Bugün</option>
+                <option value="7days">Son 7 Gün</option>
+                <option value="30days">Son 30 Gün</option>
+                <option value="year">Bu Yıl</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'grid', gap: 5 }}>
+              <label htmlFor="cash-report-date-start" style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>
+                Rapor başlangıç tarihi:
+              </label>
+              <input
+                id="cash-report-date-start"
+                aria-label="Rapor başlangıç tarihi"
+                data-testid="cash-report-date-start"
+                type="date"
+                value={reportStartDate}
+                max={reportEndDate}
+                onChange={event => setReportStartDate(event.target.value)}
+                className={styles.filterSelect}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gap: 5 }}>
+              <label htmlFor="cash-report-date-end" style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>
+                Rapor bitiş tarihi:
+              </label>
+              <input
+                id="cash-report-date-end"
+                aria-label="Rapor bitiş tarihi"
+                data-testid="cash-report-date-end"
+                type="date"
+                value={reportEndDate}
+                min={reportStartDate}
+                onChange={event => setReportEndDate(event.target.value)}
+                className={styles.filterSelect}
+              />
+            </div>
+
+            <div style={{ paddingBottom: 6 }}>
+              <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+                📅 Aralık: {reportStartDate} – {reportEndDate}
+              </span>
+            </div>
           </div>
           {!reportDateRangeValid && <div role="alert" style={{ marginBottom: 14, color: '#b91c1c' }}>Başlangıç tarihi bitiş tarihinden sonra olamaz.</div>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
