@@ -5,9 +5,20 @@ import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { formatCurrency } from '../data/mockData';
 import styles from './ReportsPage.module.css';
-import { createReportPdf } from '../lib/reportPdf';
+import { createReportPdf, buildPdfReportLines } from '../lib/reportPdf';
+import { createReportWorkbook, type ReportExportData } from '../lib/reportExcel';
+import { downloadFile } from '../lib/downloadFile';
 import { fetchServiceTickets, type ServiceRecord } from '../repositories/ServiceTicketRepository';
 import { dbFetchCashTransactions } from '../lib/database';
+
+let cachedExcelJS: typeof import('exceljs') | null = null;
+const getExcelJS = async () => {
+  if (!cachedExcelJS) {
+    const mod = await import('exceljs');
+    cachedExcelJS = (mod.default || mod) as unknown as typeof import('exceljs');
+  }
+  return cachedExcelJS;
+};
 
 interface DonutSlice {
   value: number;
@@ -377,61 +388,172 @@ export default function ReportsPage() {
     'Özel Raporlar'
   ];
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    // Pre-warm ExcelJS in background so click gesture is preserved when exporting
+    getExcelJS().catch(() => {});
+  }, []);
+
+  const generateCsvContent = (data: ReportExportData): string => {
+    const sanitize = (val: unknown) => `"${String(val ?? '').replaceAll('"', '""')}"`;
+    const lines: string[] = [];
+
+    lines.push(`${sanitize(`${data.clinicName} - YÖNETİM VE FAALİYET RAPORU`)};;`);
+    lines.push(`${sanitize(`Rapor Tarihi: ${data.generatedAt}`)};${sanitize(`Tarih Aralığı: ${data.dateRange}`)};${sanitize(`Kapsam: ${data.branchName || 'Tüm Şubeler'}`)}`);
+    lines.push('');
+
+    lines.push(`${sanitize('=== TEMEL GÖSTERGELER (KPI) ===')};;`);
+    lines.push(`${sanitize('Metrik')};${sanitize('Değer')};${sanitize('Açıklama')}`);
+    lines.push(`${sanitize('Toplam Ciro')};${sanitize(`₺${data.kpis.totalRevenue.toLocaleString('tr-TR')}`)};${sanitize('Satış, aksesuar ve servis tahsilatları')}`);
+    lines.push(`${sanitize('Toplam Gider')};${sanitize(`₺${data.kpis.totalExpenses.toLocaleString('tr-TR')}`)};${sanitize('Operasyonel ve sabit giderler')}`);
+    lines.push(`${sanitize('Net Faaliyet Kârı')};${sanitize(`₺${data.kpis.netProfit.toLocaleString('tr-TR')}`)};${sanitize('Toplam Ciro - Toplam Gider')}`);
+    lines.push(`${sanitize('Kayıtlı Hasta Sayısı')};${sanitize(data.kpis.patientCount)};${sanitize('Kişi')}`);
+    lines.push(`${sanitize('Toplam Randevu')};${sanitize(data.kpis.appointmentCount)};${sanitize('Adet')}`);
+    lines.push(`${sanitize('Satılan Cihaz Adedi')};${sanitize(data.kpis.deviceSalesCount)};${sanitize('Adet')}`);
+    lines.push(`${sanitize('Teknik Servis Geliri')};${sanitize(`₺${data.kpis.serviceRevenue.toLocaleString('tr-TR')}`)};${sanitize('Bakım, onarım ve parça geliri')}`);
+    lines.push('');
+
+    lines.push(`${sanitize('=== ŞUBE PERFORMANSI ===')};;;`);
+    lines.push(`${sanitize('Şube Adı')};${sanitize('Hasta Sayısı')};${sanitize('Randevu Sayısı')};${sanitize('Toplam Ciro (₺)')}`);
+    data.branchPerformance.forEach(b => {
+      lines.push(`${sanitize(b.branch)};${sanitize(b.patients)};${sanitize(b.appointments)};${sanitize(`₺${b.revenue.toLocaleString('tr-TR')}`)}`);
+    });
+    lines.push('');
+
+    lines.push(`${sanitize('=== SATIŞ DETAYLARI ===')};;;;;;;`);
+    lines.push(`${sanitize('Tarih')};${sanitize('Hasta Adı')};${sanitize('Şube')};${sanitize('Ürün / Kalemler')};${sanitize('Toplam Tutar (₺)')};${sanitize('SGK Katkısı (₺)')};${sanitize('Ödeme Yöntemi')};${sanitize('Durum')}`);
+    data.sales.forEach(s => {
+      lines.push(`${sanitize(s.date)};${sanitize(s.patientName)};${sanitize(s.branchName || 'Merkez')};${sanitize(s.itemsSummary)};${sanitize(s.total)};${sanitize(s.sgkAmount || 0)};${sanitize(s.paymentMethod)};${sanitize(s.status)}`);
+    });
+    lines.push('');
+
+    lines.push(`${sanitize('=== GİDER DETAYLARI ===')};;;;;;`);
+    lines.push(`${sanitize('Tarih')};${sanitize('Kategori')};${sanitize('Açıklama')};${sanitize('Şube')};${sanitize('Tutar (₺)')};${sanitize('Ödeme Türü')};${sanitize('Belge No')}`);
+    data.expenses.forEach(e => {
+      lines.push(`${sanitize(e.date)};${sanitize(e.category)};${sanitize(e.description)};${sanitize(e.branchName || 'Merkez')};${sanitize(e.amount)};${sanitize(e.paymentMethod || 'Nakit')};${sanitize(e.receiptNo || '-')}`);
+    });
+    lines.push('');
+
+    lines.push(`${sanitize('=== RANDEVULAR ===')};;;;;;;`);
+    lines.push(`${sanitize('Tarih')};${sanitize('Saat')};${sanitize('Hasta Adı')};${sanitize('Şube')};${sanitize('Randevu Türü')};${sanitize('Sorumlu')};${sanitize('Durum')};${sanitize('Notlar')}`);
+    data.appointments.forEach(a => {
+      lines.push(`${sanitize(a.date)};${sanitize(a.time)};${sanitize(a.patientName)};${sanitize(a.branchName || 'Merkez')};${sanitize(a.type)};${sanitize(a.audiologist || '-')};${sanitize(a.status)};${sanitize(a.notes || '-')}`);
+    });
+
+    return `\uFEFF${lines.join('\r\n')}`;
+  };
+
   const handleExportReport = async (format: string) => {
+    setIsExporting(true);
     try {
-      const rows = [
-        ['Rapor', 'Değer'], ['Tarih aralığı', dateRange], ['Ciro (₺)', String(dynamicTotalRevenue)],
-        ['Gider (₺)', String(dynamicTotalExpenses)], ['Net (₺)', String(dynamicNetProfit)],
-        ['Hasta', String(dynamicPatientCount)], ['Randevu', String(dynamicAppointmentCount)],
-        ['Satılan cihaz', String(dynamicDeviceSalesCount)], ['Teknik servis geliri (₺)', String(dynamicServiceRevenue)],
-        ...branchPerformance.map(branch => [`Şube: ${branch.branch}`, `Hasta ${branch.patients}; randevu ${branch.appointments}; ciro ${branch.revenue} TL`]),
-      ];
-      const safeName = `rapor-${new Date().toISOString().slice(0, 10)}`;
+      const activeBranchName = branchesList.find(b => matches(b.name, b.id))?.name;
+      const exportData: ReportExportData = {
+        clinicName: 'AudiPro İşitme Merkezi',
+        dateRange,
+        generatedAt: new Date().toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }),
+        branchName: activeBranchName || 'Tüm Şubeler',
+        kpis: {
+          totalRevenue: dynamicTotalRevenue,
+          totalExpenses: dynamicTotalExpenses,
+          netProfit: dynamicNetProfit,
+          patientCount: dynamicPatientCount,
+          appointmentCount: dynamicAppointmentCount,
+          deviceSalesCount: dynamicDeviceSalesCount,
+          serviceRevenue: dynamicServiceRevenue,
+        },
+        branchPerformance: branchPerformance.map(b => ({
+          branch: b.branch,
+          patients: b.patients,
+          appointments: b.appointments,
+          revenue: b.revenue,
+        })),
+        revenueDistribution: revenueDistributionSlices.map(s => ({
+          label: s.label,
+          value: s.value,
+        })),
+        sales: reportSales.map(s => ({
+          date: s.date,
+          patientName: s.patientName || 'İsimsiz Hasta',
+          branchName: branchesList.find(b => b.id === s.branchId)?.name || 'Merkez',
+          itemsSummary: s.items.map(i => `${i.name}${i.quantity > 1 ? ` x${i.quantity}` : ''}`).join(', ') || 'Cihaz / Hizmet',
+          total: s.total || 0,
+          sgkAmount: s.sgkAmount || 0,
+          patientAmount: s.patientAmount || s.total,
+          paymentMethod: s.paymentMethod || 'Nakit',
+          status: s.status || 'Tahsil Edildi',
+        })),
+        expenses: reportExpenses.map(e => ({
+          date: e.date,
+          category: e.category,
+          description: e.description,
+          branchName: branchesList.find(b => b.id === e.branchId)?.name || e.branch || 'Merkez',
+          amount: e.amount || 0,
+          paymentMethod: e.paymentMethod || 'Nakit',
+          receiptNo: e.receiptNo || '-',
+        })),
+        appointments: reportAppointments.map(a => ({
+          date: a.date,
+          time: a.time,
+          patientName: a.patientName || 'İsimsiz',
+          branchName: a.branch || branchesList.find(b => b.id === a.branchId)?.name || 'Merkez',
+          type: a.type,
+          audiologist: a.audiologist || '-',
+          status: a.status,
+          notes: a.notes || '-',
+        })),
+        serviceTickets: serviceRecords
+          .filter(item => matches(undefined, item.branchId) && inRange(item.receivedDate))
+          .map(t => ({
+            receivedDate: t.receivedDate || '-',
+            patientName: t.patientName || 'İsimsiz',
+            branchName: branchesList.find(b => b.id === t.branchId)?.name || 'Merkez',
+            device: `${t.deviceName || 'Cihaz'}`,
+            serialNo: t.serialNo || '-',
+            complaint: t.problem || (t.complaints ? t.complaints.join(', ') : '-'),
+            fee: t.totalCost || 0,
+            status: t.status,
+            technician: t.technician || '-',
+          })),
+        patients: reportPatients.map(p => ({
+          createdAt: p.createdAt || '-',
+          name: `${p.firstName || ''} ${p.lastName || ''}`.trim() || 'İsimsiz',
+          phone: p.phone || '-',
+          branchName: p.branch || branchesList.find(b => b.id === p.branchId)?.name || 'Merkez',
+          source: p.source || '-',
+          hearingLoss: p.hearingLoss || '-',
+          sgkStatus: p.sgkStatus || '-',
+        })),
+      };
+
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const safeName = `AudiPro_Yonetim_Raporu_${dateStamp}`;
       let blob: Blob;
       let extension: string;
       const normalizedFormat = (format || '').toUpperCase();
+
       if (normalizedFormat.includes('CSV')) {
-        const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\r\n');
-        blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+        const csv = generateCsvContent(exportData);
+        blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
         extension = 'csv';
       } else if (normalizedFormat.includes('EXCEL') || normalizedFormat.includes('XLSX')) {
-        const ExcelJS = (await import('exceljs')).default;
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Rapor');
-        worksheet.addRows(rows);
-        worksheet.columns = [{ width: 32 }, { width: 72 }];
-        const data = await workbook.xlsx.writeBuffer();
-        blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const ExcelJS = await getExcelJS();
+        blob = await createReportWorkbook(exportData, ExcelJS);
         extension = 'xlsx';
       } else {
-        blob = createReportPdf([
-          'AudiPro - Raporlama ve Analitik',
-          `Tarih araligi: ${dateRange}`,
-          '',
-          ...rows.slice(2).map(([label, value]) => `${label}: ${value}`),
-        ]);
+        const pdfLines = buildPdfReportLines(exportData);
+        blob = createReportPdf(pdfLines);
         extension = 'pdf';
       }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${safeName}.${extension}`;
-      link.setAttribute('aria-hidden', 'true');
-      link.style.position = 'fixed';
-      link.style.left = '-10000px';
-      document.body.appendChild(link);
-      link.click();
-      // Keep the element attached during the initial microtask to ensure headless Chromium download listeners fire reliably.
-      window.setTimeout(() => {
-        try {
-          link.remove();
-          URL.revokeObjectURL(url);
-        } catch {}
-      }, 30_000);
-      addToast({ type: 'success', message: `${extension.toUpperCase()} raporu indirildi.` });
+
+      downloadFile(blob, `${safeName}.${extension}`);
+      addToast({ type: 'success', message: `${extension.toUpperCase()} raporu başarıyla indirildi.` });
       setShowExportModal(false);
-    } catch {
+    } catch (err) {
+      console.error('Rapor dışa aktarma hatası:', err);
       addToast({ type: 'error', message: 'Rapor dışa aktarılamadı. Lütfen tekrar deneyin.' });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -1068,8 +1190,8 @@ export default function ReportsPage() {
                 onClick={() => {
                   const rows = [['Metrik', 'Mevcut dönem', 'Önceki dönem', 'Değişim'], ...compareRows.map(row => [row.label, row.format(row.current), row.format(row.previous), percentageChange(row.current, row.previous)])];
                   const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
-                  const url = URL.createObjectURL(new Blob(['\\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
-                  const link = document.createElement('a'); link.href = url; link.download = 'donemsel-karsilastirma.csv'; link.click(); URL.revokeObjectURL(url);
+                  const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+                  downloadFile(blob, 'donemsel-karsilastirma.csv');
                   addToast({ type: 'success', message: 'Dönem karşılaştırması CSV olarak indirildi.' });
                   setShowCompareModal(false);
                 }}
@@ -1100,14 +1222,18 @@ export default function ReportsPage() {
                   data-testid="download-report-pdf"
                   className={styles.btnSecondaryAction}
                   aria-label="PDF Yönetici Sunumu İndir"
+                  disabled={isExporting}
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}
                   onClick={() => handleExportReport('PDF')}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 18 }}>📕</span>
-                    <strong>PDF Yönetici Sunumu</strong>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong>PDF Yönetici Raporu (.pdf)</strong>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>Yönetim sunumu, KPI ve operasyonel özet</div>
+                    </div>
                   </div>
-                  <span style={{ color: '#0d9488', fontSize: 12 }}>İndir</span>
+                  <span style={{ color: '#0d9488', fontSize: 12, fontWeight: 600 }}>{isExporting ? 'Hazırlanıyor...' : 'İndir'}</span>
                 </button>
 
                 <button
@@ -1115,14 +1241,18 @@ export default function ReportsPage() {
                   data-testid="download-report-excel"
                   className={styles.btnSecondaryAction}
                   aria-label="Excel Tablosu (.xlsx) İndir"
+                  disabled={isExporting}
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}
                   onClick={() => handleExportReport('Excel (XLSX)')}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 18 }}>📗</span>
-                    <strong>Excel Tablosu (.xlsx)</strong>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong>Detaylı Excel Tablosu (.xlsx)</strong>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>6 Sayfa: Özet, Satışlar, Giderler, Randevular, Servis, Hastalar</div>
+                    </div>
                   </div>
-                  <span style={{ color: '#0d9488', fontSize: 12 }}>İndir</span>
+                  <span style={{ color: '#0d9488', fontSize: 12, fontWeight: 600 }}>{isExporting ? 'Hazırlanıyor...' : 'İndir'}</span>
                 </button>
 
                 <button
@@ -1130,14 +1260,18 @@ export default function ReportsPage() {
                   data-testid="download-report-csv"
                   className={styles.btnSecondaryAction}
                   aria-label="Ham Veri (.csv) İndir"
+                  disabled={isExporting}
                   style={{ justifyContent: 'space-between', padding: '12px 16px' }}
                   onClick={() => handleExportReport('CSV')}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 18 }}>📄</span>
-                    <strong>Ham Veri (.csv)</strong>
+                    <div style={{ textAlign: 'left' }}>
+                      <strong>Ham Veri Tablosu (.csv)</strong>
+                      <div style={{ fontSize: 11, color: '#64748b' }}>Excel uyumlu Türkçe UTF-8 veri dökümü</div>
+                    </div>
                   </div>
-                  <span style={{ color: '#0d9488', fontSize: 12 }}>İndir</span>
+                  <span style={{ color: '#0d9488', fontSize: 12, fontWeight: 600 }}>{isExporting ? 'Hazırlanıyor...' : 'İndir'}</span>
                 </button>
               </div>
             </div>

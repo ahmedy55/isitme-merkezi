@@ -1172,16 +1172,20 @@ test('Review appointment reports and download Excel/CSV files', async ({ page })
   await page.getByRole('button', { name: 'Rapor İndir' }).click();
   const csvDownloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Ham Veri (.csv) İndir' }).click();
-  expect((await csvDownloadPromise).suggestedFilename()).toMatch(/\.csv$/);
+  const csvDownload = await csvDownloadPromise;
+  expect(csvDownload.suggestedFilename()).toMatch(/^AudiPro_Yonetim_Raporu_\d{4}-\d{2}-\d{2}\.csv$/);
 
   await page.getByRole('button', { name: 'Rapor İndir' }).click();
   const xlsxDownloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Excel Tablosu (.xlsx) İndir' }).click();
-  expect((await xlsxDownloadPromise).suggestedFilename()).toMatch(/\.xlsx$/);
+  const xlsxDownload = await xlsxDownloadPromise;
+  expect(xlsxDownload.suggestedFilename()).toMatch(/^AudiPro_Yonetim_Raporu_\d{4}-\d{2}-\d{2}\.xlsx$/);
+
   await page.getByRole('button', { name: 'Rapor İndir' }).click();
   const pdfDownloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: /PDF Yönetici Sunumu/ }).click();
-  expect((await pdfDownloadPromise).suggestedFilename()).toMatch(/\.pdf$/);
+  const pdfDownload = await pdfDownloadPromise;
+  expect(pdfDownload.suggestedFilename()).toMatch(/^AudiPro_Yonetim_Raporu_\d{4}-\d{2}-\d{2}\.pdf$/);
 });
 
 test('service status, inspection note and warranty changes persist', async ({ page }) => {
