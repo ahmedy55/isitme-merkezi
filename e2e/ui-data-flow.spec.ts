@@ -643,7 +643,7 @@ test('randevu formu gecikmeli yüklenen tek aktif şubeyi seçip kaydı takvime 
   };
   await mockTenantData(page, false, appointmentFixture);
   await signIn(page);
-  await page.getByRole('button', { name: 'Randevular' }).click();
+  await page.getByRole('button', { name: 'Randevular', exact: true }).click();
   await page.getByRole('button', { name: /Yeni Randevu/ }).click();
   await page.getByPlaceholder('Hasta seçin veya arayın...').fill('E2E Hasta');
   await page.getByText('E2E Hasta - 05000000001', { exact: true }).click();
