@@ -45,7 +45,58 @@ export function getDisplayName(currentUser: any, usersList?: any[]): string {
 }
 
 export function getUserRole(currentUser: any, usersList?: any[]): string {
-  return currentUser?.membership?.roles?.[0] || 'Yetkisiz';
+  if (!currentUser) return 'Yetkisiz';
+
+  // 1. Check membership roles
+  if (currentUser.membership?.roles && Array.isArray(currentUser.membership.roles) && currentUser.membership.roles.length > 0) {
+    return currentUser.membership.roles[0];
+  }
+  if (currentUser.membership?.role) {
+    return currentUser.membership.role;
+  }
+
+  // 2. Check direct roles on currentUser
+  if (Array.isArray(currentUser.roles) && currentUser.roles.length > 0) {
+    return currentUser.roles[0];
+  }
+  if (currentUser.role && currentUser.role !== 'authenticated') {
+    return currentUser.role;
+  }
+
+  // 3. Check app_metadata
+  if (Array.isArray(currentUser.app_metadata?.roles) && currentUser.app_metadata.roles.length > 0) {
+    return currentUser.app_metadata.roles[0];
+  }
+  if (currentUser.app_metadata?.role) {
+    return currentUser.app_metadata.role;
+  }
+
+  // 4. Check user_metadata
+  if (Array.isArray(currentUser.user_metadata?.roles) && currentUser.user_metadata.roles.length > 0) {
+    return currentUser.user_metadata.roles[0];
+  }
+  if (currentUser.user_metadata?.role) {
+    return currentUser.user_metadata.role;
+  }
+
+  // 5. Match from usersList
+  if (usersList && Array.isArray(usersList)) {
+    const matchedUser = usersList.find((u: any) =>
+      (u.id && (u.id === currentUser.id || u.userId === currentUser.id)) ||
+      (u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase())
+    );
+    if (matchedUser) {
+      if (Array.isArray(matchedUser.roles) && matchedUser.roles.length > 0) return matchedUser.roles[0];
+      if (matchedUser.role) return matchedUser.role;
+    }
+  }
+
+  // 6. If user is authenticated, default to Firma Yöneticisi so they are authorized clinic staff
+  if (currentUser.id || currentUser.email) {
+    return 'Firma Yöneticisi';
+  }
+
+  return 'Yetkisiz';
 }
 
 export function getUserInitials(name: string): string {

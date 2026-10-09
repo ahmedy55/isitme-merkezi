@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 
 export default function LoginPage() {
-  const { setCurrentPage, addToast } = useApp();
+  const { setCurrentPage, setCurrentOrgId, addToast } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +58,8 @@ export default function LoginPage() {
         const orgId = activeOrgs[0].organization_id;
         const orgName = activeOrgs[0].name || 'Klinik';
 
+        setCurrentOrgId(orgId);
+
         // Server-side /api/select-org ile app_metadata.organization_id'yi yaz
         const res = await fetch('/api/select-org', {
           method: 'POST',
@@ -84,8 +86,9 @@ export default function LoginPage() {
         }
 
         addToast({ type: 'success', message: `Hoş geldiniz! ${orgName} oturumu açıldı.` });
-        const requestedPage = new URLSearchParams(window.location.search).get('page');
-        setCurrentPage(requestedPage === 'patients' ? 'patients' : 'dashboard');
+        const hashPage = typeof window !== 'undefined' ? (window.location.hash.replace(/^#/, '') as any) : null;
+        const queryPage = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('page') as any) : null;
+        setCurrentPage(hashPage || queryPage || 'dashboard');
       } else {
         // 2+ aktif organizasyonu varsa seçim ekranına yönlendir
         setCurrentPage('org-select');

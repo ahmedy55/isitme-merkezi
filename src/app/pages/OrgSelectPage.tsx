@@ -13,7 +13,7 @@ interface ActiveMembership {
 }
 
 export default function OrgSelectPage() {
-  const { setCurrentPage, addToast, refreshOrganizationData } = useApp();
+  const { setCurrentPage, setCurrentOrgId, addToast, refreshOrganizationData } = useApp();
   const [orgs, setOrgs] = useState<ActiveMembership[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState<string | null>(null);
@@ -155,8 +155,11 @@ export default function OrgSelectPage() {
         }
       }
 
+      setCurrentOrgId(orgId);
       addToast({ type: 'success', message: `${orgName} şubesi ile giriş yapıldı.` });
-      setCurrentPage('dashboard');
+      const hashPage = typeof window !== 'undefined' ? (window.location.hash.replace(/^#/, '') as any) : null;
+      const queryPage = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('page') as any) : null;
+      setCurrentPage(hashPage || queryPage || 'dashboard');
     } catch (err: any) {
       addToast({
         type: 'error',

@@ -11,6 +11,7 @@ import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import { IconCheck, IconWarning, IconClose } from './components/Icons';
 import { canAccessPage } from './lib/pageAuthorization';
+import { getUserRole } from './lib/userHelpers';
 const pageLoading = () => <p role="status" style={{ padding: 24 }}>Ekran yükleniyor…</p>;
 const DashboardPage = dynamic(() => import('./pages/DashboardPage'), { loading: pageLoading });
 const PatientsPage = dynamic(() => import('./pages/PatientsPage'), { loading: pageLoading });
@@ -43,7 +44,7 @@ function ToastIcon({ type }: { type: string }) {
 }
 
 function AppContent() {
-  const { currentPage, toasts, removeToast, currentUser, currentOrgId, dataLoading, selectedPatientId, setSelectedPatientId, setCurrentPage } = useApp();
+  const { currentPage, toasts, removeToast, currentUser, currentOrgId, dataLoading, selectedPatientId, setSelectedPatientId, setCurrentPage, usersList } = useApp();
   const { activeBranch } = useBranch();
   const previousBranchScope = React.useRef<string | null>(null);
   const branchScopeKey = activeBranch.mode === 'single' ? `single:${activeBranch.branchId}` : activeBranch.mode === 'region' ? `region:${activeBranch.regionId}` : 'all';
@@ -91,9 +92,27 @@ function AppContent() {
   }
 
   const renderPage = () => {
-    if (!currentUser || !currentOrgId) return <p>Oturum ve firma verileri yükleniyor…</p>;
-    const roles: string[] = currentUser.membership?.roles || [];
-    if (!canAccessPage(currentPage, roles)) return <p>Bu modül için yetkiniz yok.</p>;
+    const effectiveOrgId = currentOrgId ||
+      currentUser?.membership?.organization_id ||
+      currentUser?.app_metadata?.organization_id ||
+      currentUser?.user_metadata?.organization_id ||
+      (typeof window !== 'undefined' ? localStorage.getItem('selected_organization_id') || localStorage.getItem('current_org_id') : null);
+
+    if (!currentUser) return <LoginPage />;
+    if (!effectiveOrgId) return <OrgSelectPage />;
+
+    const roles: string[] = (currentUser.membership?.roles && currentUser.membership.roles.length > 0)
+      ? currentUser.membership.roles
+      : (currentUser.roles || currentUser.app_metadata?.roles || currentUser.user_metadata?.roles || [getUserRole(currentUser, usersList)]);
+
+    if (!canAccessPage(currentPage, roles)) {
+      return (
+        <div style={{ padding: '3rem 2rem', textAlign: 'center' }} data-testid="unauthorized-message">
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--gray-800)', marginBottom: '0.5rem' }}>Erişim Yetkisi Yok</h2>
+          <p style={{ color: 'var(--gray-500)', fontSize: '0.95rem' }}>Bu modül için yetkiniz yok.</p>
+        </div>
+      );
+    }
     switch (currentPage) {
       case 'dashboard':         return <DashboardPage />;
       case 'patients':          return <PatientsPage />;

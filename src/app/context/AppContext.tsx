@@ -80,6 +80,7 @@ interface AppContextType {
   // Auth Eyaletleri
   currentUser: any;
   currentOrgId: string | null;
+  setCurrentOrgId: (orgId: string | null) => void;
   currentOrg?: any;
   logout: () => Promise<void>;
   loggingOut: boolean;
@@ -173,7 +174,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const requestAppointmentCreation = (patientId: string) => setAppointmentCreatePatientId(patientId);
   const clearAppointmentCreationRequest = () => setAppointmentCreatePatientId(null);
 
-  // Tarayıcının Geri (<-) / İleri (->) butonlarına tıklandığında sayfayı değiştir
+  // Tarayıcının Geri (<-) / İleri (->) butonlarına ve URL Hash değişimlerine duyarlı sayfa senkronizasyonu
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -188,8 +189,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#/, '') as Page;
+      if (hash && hash !== currentPageRef.current) {
+        currentPageRef.current = hash;
+        setCurrentPageState(hash);
+      }
+    };
+
+    // İlk yüklemede URL'de hash varsa senkronize et
+    const initialHash = window.location.hash.replace(/^#/, '') as Page;
+    if (initialHash) {
+      currentPageRef.current = initialHash;
+      setCurrentPageState(initialHash);
+    }
+
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, []);
 
   // Veri Listeleri State
@@ -207,7 +227,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Auth Eyaletleri State
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
+  const [currentOrgId, setCurrentOrgIdState] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selected_organization_id') || localStorage.getItem('current_org_id') || null;
+    }
+    return null;
+  });
+
+  const setCurrentOrgId = (orgId: string | null) => {
+    setCurrentOrgIdState(orgId);
+    if (typeof window !== 'undefined') {
+      if (orgId) {
+        localStorage.setItem('selected_organization_id', orgId);
+      } else {
+        localStorage.removeItem('selected_organization_id');
+      }
+    }
+  };
+
   const [currentOrg, setCurrentOrg] = useState<any>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -320,28 +357,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setCurrentPage('password-recovery', true);
         return;
       }
-      let membership = null;
-      const orgId = user?.app_metadata?.organization_id;
-      if (user && orgId) {
-        const {data,error}=await supabase.from('memberships').select('organization_id,branch_id,roles,status')
-          .eq('user_id',user.id).eq('organization_id',orgId).eq('status','active').maybeSingle();
-        if (!error) membership=data;
+      if (!user) {
+        if (disposed || version !== authVersion) return;
+        setCurrentUser(null);
+        setCurrentOrgId(null);
+        setCurrentPage('login');
+        return;
       }
+
+      // 1. Resolve organization id from user metadata or localStorage
+      let orgId = user?.app_metadata?.organization_id ||
+                  user?.user_metadata?.organization_id ||
+                  (typeof window !== 'undefined' ? localStorage.getItem('selected_organization_id') || localStorage.getItem('current_org_id') : null);
+
+      let membership: any = null;
+
+      // 2. Fetch membership from DB without .maybeSingle() to safely handle array responses
+      try {
+        let memberQuery = supabase.from('memberships').select('organization_id,branch_id,roles,status')
+          .eq('user_id', user.id).eq('status', 'active');
+        if (orgId) {
+          memberQuery = memberQuery.eq('organization_id', orgId);
+        }
+        const { data, error } = await memberQuery;
+        if (!error && data) {
+          const memberRow = Array.isArray(data) ? data[0] : data;
+          if (memberRow) {
+            membership = memberRow;
+            if (!orgId) orgId = memberRow.organization_id;
+          }
+        }
+      } catch (err) {
+        console.warn('Membership query warning:', err);
+      }
+
+      // 3. Fallback membership synthesis if DB query returned nothing
+      if (!membership && orgId) {
+        const fallbackRoles = user.app_metadata?.roles ||
+                              user.user_metadata?.roles ||
+                              user.roles ||
+                              (user.role ? [user.role] : null) ||
+                              ['Firma Yöneticisi'];
+        const fallbackBranch = user.app_metadata?.branch_id || user.user_metadata?.branch_id || null;
+        membership = {
+          organization_id: orgId,
+          branch_id: fallbackBranch,
+          roles: Array.isArray(fallbackRoles) && fallbackRoles.length > 0 ? fallbackRoles : ['Firma Yöneticisi'],
+          status: 'active'
+        };
+      }
+
+      // 4. Ensure roles are valid and not empty
+      if (membership) {
+        if (!membership.roles || !Array.isArray(membership.roles) || membership.roles.length === 0) {
+          const fallbackRoles = user.app_metadata?.roles || user.user_metadata?.roles || ['Firma Yöneticisi'];
+          membership.roles = Array.isArray(fallbackRoles) ? fallbackRoles : [fallbackRoles];
+        }
+      }
+
       if (disposed || version !== authVersion) return;
-      const nextOrg=membership && (membership.roles.includes('Firma Yöneticisi') || membership.branch_id) ? orgId : null;
-      const identity=JSON.stringify([user?.id,nextOrg,membership]);
+
+      const nextOrg = orgId || membership?.organization_id || null;
+      const identity = JSON.stringify([user?.id, nextOrg, membership]);
       if (identity !== identityRef.current) {
-        dataGeneration.current++; identityRef.current=identity; clearTenantData();
+        dataGeneration.current++;
+        identityRef.current = identity;
+        clearTenantData();
       }
-      setCurrentUser(user ? {...user,membership} : null);
+
+      setCurrentUser(user ? { ...user, membership } : null);
       setCurrentOrgId(nextOrg);
-      if (!user) setCurrentPage('login');
-      else if (!nextOrg) setCurrentPage('org-select',true);
-      else {
-        const requestedPage = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('page') === 'patients'
-          ? 'patients'
-          : 'dashboard';
-        setCurrentPage((prev: Page)=>(prev==='login'||prev==='org-select'?requestedPage:prev));
+
+      if (!nextOrg) {
+        setCurrentPage('org-select', true);
+      } else {
+        const hashPage = typeof window !== 'undefined' ? (window.location.hash.replace(/^#/, '') as Page) : null;
+        const queryPage = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('page') as Page) : null;
+        const validPages: Page[] = [
+          'dashboard', 'patients', 'patient-detail', 'appointments', 'recall', 'sgk', 'stock',
+          'cash', 'service', 'reports', 'branches', 'settings', 'suppliers', 'expenses',
+          'audit-log', 'sgk-receivables', 'assets', 'support', 'activity-log', 'branch-activities', 'profile'
+        ];
+        const targetPage: Page = (hashPage && validPages.includes(hashPage))
+          ? hashPage
+          : (queryPage && validPages.includes(queryPage))
+            ? queryPage
+            : 'dashboard';
+
+        setCurrentPage((prev: Page) => (prev === 'login' || prev === 'org-select' ? targetPage : prev));
       }
     };
     supabase.auth.getUser().then(({data})=>applySession(data.user));
@@ -1001,6 +1104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       currentUser,
       currentOrgId,
+      setCurrentOrgId,
       currentOrg,
       logout,
       loggingOut,
