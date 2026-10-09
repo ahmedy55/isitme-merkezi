@@ -13,26 +13,39 @@ interface ActiveMembership {
 }
 
 export default function OrgSelectPage() {
-  const { setCurrentPage, addToast } = useApp();
+  const { setCurrentPage, addToast, refreshOrganizationData } = useApp();
   const [orgs, setOrgs] = useState<ActiveMembership[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState<string | null>(null);
+  const [activeSession, setActiveSession] = useState<any>(null);
 
   useEffect(() => {
-    fetchMemberships();
+    bootstrapSessionAndMemberships();
   }, []);
 
-  const fetchMemberships = async () => {
+  const bootstrapSessionAndMemberships = async () => {
     try {
+      // 1. Session bootstrap: Ensure session and refresh token are loaded from storage
+      const { data: sessionData } = await supabase.auth.getSession();
+      let session = sessionData?.session || null;
+
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      if (!user && !session) {
         setCurrentPage('login');
         return;
       }
 
-      const {data,error}=await supabase.rpc('my_organizations');
-      if(error) throw error;
-      setOrgs((data || []).map((o: any)=>({organization_id:o.organization_id,roles:o.roles,organizations:{name:o.name,slug:o.slug,logo_url:o.logo_url}})));
+      if (session) {
+        setActiveSession(session);
+      }
+
+      const { data, error } = await supabase.rpc('my_organizations');
+      if (error) throw error;
+      setOrgs((data || []).map((o: any) => ({
+        organization_id: o.organization_id,
+        roles: o.roles,
+        organizations: { name: o.name, slug: o.slug, logo_url: o.logo_url }
+      })));
     } catch (err: any) {
       addToast({ type: 'error', message: 'Klinik listesi alınırken bir hata oluştu.' });
     } finally {
@@ -43,48 +56,104 @@ export default function OrgSelectPage() {
   const handleSelectOrg = async (orgId: string, orgName: string) => {
     setSelectingId(orgId);
     try {
+      // 1. Ensure active session & token
       let { data: { session } } = await supabase.auth.getSession();
-      if (!session || (session.expires_at && session.expires_at * 1000 < Date.now() + 60000)) {
-        const refreshed = await supabase.auth.refreshSession();
-        if (refreshed.data?.session) {
-          session = refreshed.data.session;
+      if (!session && activeSession) {
+        session = activeSession;
+      }
+
+      // If token is expiring and we have a valid refresh token, refresh before exchange
+      if (session?.refresh_token && session.expires_at && session.expires_at * 1000 < Date.now() + 60000) {
+        try {
+          const refreshed = await supabase.auth.refreshSession({ refresh_token: session.refresh_token });
+          if (refreshed.data?.session) {
+            session = refreshed.data.session;
+            setActiveSession(session);
+          }
+        } catch (preErr) {
+          console.warn('Pre-exchange token refresh warning:', preErr);
         }
       }
-      let token = session?.access_token || '';
 
-      // 1. Server-side /api/select-org ile app_metadata.organization_id'yi yaz
+      let token = session?.access_token || '';
+      if (!token) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          addToast({ type: 'error', message: 'Oturum bulunamadı. Lütfen tekrar giriş yapın.' });
+          setCurrentPage('login');
+          return;
+        }
+        const retrySession = await supabase.auth.getSession();
+        token = retrySession.data?.session?.access_token || '';
+      }
+
+      // 2. Server-side /api/select-org ile app_metadata.organization_id'yi yaz
       let res = await fetch('/api/select-org', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ orgId })
       });
 
-      if (res.status === 401) {
-        const refreshed = await supabase.auth.refreshSession();
-        if (refreshed.data?.session) {
-          token = refreshed.data.session.access_token;
-          res = await fetch('/api/select-org', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ orgId })
-          });
+      if (res.status === 401 && session?.refresh_token) {
+        try {
+          const refreshed = await supabase.auth.refreshSession({ refresh_token: session.refresh_token });
+          if (refreshed.data?.session) {
+            session = refreshed.data.session;
+            token = session.access_token;
+            setActiveSession(session);
+            res = await fetch('/api/select-org', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ orgId })
+            });
+          }
+        } catch (retryErr) {
+          console.warn('401 retry token refresh warning:', retryErr);
         }
       }
 
       if (!res.ok) {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Organizasyon seçimi kaydedilemedi.');
       }
 
-      // 2. Token'ı yenile (Bölüm 5.4 - refreshSession)
-      const { error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError) throw refreshError;
+      // 3. Post-exchange: Token ve oturum senkronizasyonu
+      if (session?.refresh_token) {
+        try {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession({
+            refresh_token: session.refresh_token
+          });
+          if (refreshData?.session) {
+            setActiveSession(refreshData.session);
+          } else if (refreshError) {
+            console.warn('Post-exchange refresh warning:', refreshError.message);
+          }
+        } catch (e) {
+          console.warn('Post-exchange refreshSession error ignored:', e);
+        }
+      }
+
+      // Fresh user metadata çekimi
+      try {
+        await supabase.auth.getUser();
+      } catch (e) {
+        // ignore
+      }
+
+      // AppContext'teki organizasyon state'ini ve tenant verilerini yenile
+      if (typeof refreshOrganizationData === 'function') {
+        try {
+          await refreshOrganizationData();
+        } catch (e) {
+          console.warn('refreshOrganizationData error ignored:', e);
+        }
+      }
 
       addToast({ type: 'success', message: `${orgName} şubesi ile giriş yapıldı.` });
       setCurrentPage('dashboard');

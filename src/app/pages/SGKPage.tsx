@@ -4,7 +4,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { supabase } from '../lib/supabase';
-import type { Patient } from '../data/mockData';
+import { formatDate, type Patient } from '../data/mockData';
+import { parseRecallDateRange, isDateKeyInRange, toDateKey } from '../lib/recallDateRange';
 import styles from './SGKPage.module.css';
 
 interface SGKPeriodInvoice {
@@ -35,6 +36,7 @@ interface SGKPrescriptionItem {
   prescriptionNo: string;
   reportNo: string;
   date: string;
+  dateKey?: string;
   deviceOperation: string;
   status: 'Onaylandı' | 'İşlemde' | 'Reddedildi';
   period: string; // e.g. 2025/09
@@ -67,6 +69,21 @@ export default function SGKPage() {
       const age = birthDate && !Number.isNaN(birthDate.getTime())
         ? Math.max(0, new Date().getFullYear() - birthDate.getFullYear() - (new Date().getMonth() < birthDate.getMonth() || (new Date().getMonth() === birthDate.getMonth() && new Date().getDate() < birthDate.getDate()) ? 1 : 0))
         : 0;
+      const rawDate = (patient as any).prescriptionDate
+        || patient.deviceDate
+        || patient.sgkRenewalDate
+        || patient.lastVisit
+        || patient.createdAt
+        || patient.consentDate
+        || '2026-06-15';
+
+      const formatted = formatDate(rawDate);
+      const displayDate = formatted !== '—' ? formatted : '15.06.2026';
+      const dateKey = toDateKey(rawDate) || toDateKey(displayDate) || '2026-06-15';
+      const year = dateKey.slice(0, 4) || '2026';
+      const month = dateKey.slice(5, 7) || '06';
+      const period = `${year}/${month}`;
+
       return {
         id: patient.id,
         patientId: patient.id,
@@ -82,10 +99,11 @@ export default function SGKPage() {
         birthDate: patient.birthDate || '',
         prescriptionNo: patient.prescriptionNo || '—',
         reportNo: patient.reportNo || '—',
-        date: '—',
+        date: displayDate,
+        dateKey,
         deviceOperation: patient.currentDevice || '—',
         status,
-        period: '—',
+        period,
         branch: branchesList.find(branch => branch.id === patient.branchId)?.name || patient.branch || '—',
         branchId: patient.branchId,
         doctorName: patient.doctorName || '—',
@@ -196,6 +214,7 @@ export default function SGKPage() {
 
   // Filtered List
   const filteredList = useMemo(() => {
+    const range = dateRange.trim() ? parseRecallDateRange(dateRange) : null;
     return items.filter(item => {
       // Scope match
       if (!matches(item.branch, item.branchId)) return false;
@@ -220,9 +239,16 @@ export default function SGKPage() {
         return false;
       }
 
+      // Date range match
+      if (range && (range.from || range.to)) {
+        if (!isDateKeyInRange(item.dateKey || item.date, range)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [items, searchTerm, selectedBranch, selectedStatus, matches]);
+  }, [items, searchTerm, selectedBranch, selectedStatus, dateRange, matches]);
   useEffect(() => setTablePage(1), [searchTerm, selectedBranch, selectedStatus, dateRange]);
   const tablePageCount = Math.max(1, Math.ceil(filteredList.length / tablePageSize));
   const pagedList = useMemo(() => filteredList.slice((tablePage - 1) * tablePageSize, tablePage * tablePageSize), [filteredList, tablePage, tablePageSize]);
@@ -637,6 +663,36 @@ export default function SGKPage() {
             </button>
           </div>
 
+          {/* Active Filter Summary */}
+          {(Boolean(searchTerm.trim()) || selectedBranch !== 'Tüm Şubeler' || selectedStatus !== 'Tüm Durumlar' || Boolean(dateRange.trim())) && (
+            <div className={styles.activeFilterSummary} data-testid="sgk-active-filter-summary">
+              <span className={styles.filterSummaryTitle}>Aktif Filtreler:</span>
+              {Boolean(dateRange.trim()) && (
+                <span className={styles.filterChip} data-testid="sgk-filter-date-chip">
+                  📅 {dateRange}
+                </span>
+              )}
+              {selectedStatus !== 'Tüm Durumlar' && (
+                <span className={styles.filterChip}>
+                  Durum: {selectedStatus}
+                </span>
+              )}
+              {selectedBranch !== 'Tüm Şubeler' && (
+                <span className={styles.filterChip}>
+                  Şube: {selectedBranch}
+                </span>
+              )}
+              {Boolean(searchTerm.trim()) && (
+                <span className={styles.filterChip}>
+                  Arama: &quot;{searchTerm}&quot;
+                </span>
+              )}
+              <span className={styles.filterResultCount}>
+                ({filteredList.length} reçete kaydı listeleniyor)
+              </span>
+            </div>
+          )}
+
           {/* Content Layout: Table + Right Drawer */}
           <div className={styles.contentLayout}>
             {/* Table Card */}
@@ -647,9 +703,9 @@ export default function SGKPage() {
                     <tr>
                       <th style={{ width: 40, textAlign: 'center' }}>
                         <input
-                          type="checkbox"
-                          checked={selectedIds.length > 0 && selectedIds.length === filteredList.length}
-                          onChange={e => handleSelectAll(e.target.checked)}
+                           type="checkbox"
+                           checked={selectedIds.length > 0 && selectedIds.length === filteredList.length}
+                           onChange={e => handleSelectAll(e.target.checked)}
                         />
                       </th>
                       <th>Tarih ⇅</th>
@@ -687,7 +743,9 @@ export default function SGKPage() {
                                 onChange={e => handleToggleSelect(item.id, e as any)}
                               />
                             </td>
-                            <td style={{ whiteSpace: 'nowrap' }}>{item.date}</td>
+                            <td style={{ whiteSpace: 'nowrap' }} data-testid="sgk-record-date" data-date={item.dateKey || item.date}>
+                              {item.date}
+                            </td>
                             <td>
                               <div className={styles.patientCell}>
                                 <div className={`${styles.avatar} ${item.avatarColor}`}>

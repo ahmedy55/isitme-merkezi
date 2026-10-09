@@ -397,6 +397,46 @@
   border-color: #cbd5e1;
 }
 
+/* ── Active Filter Summary ── */
+.activeFilterSummary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #166534;
+}
+
+.filterSummaryTitle {
+  font-weight: 600;
+  color: #14532d;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+.filterResultCount {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: #166534;
+}
+
 /* ── Content Layout (Table + Right Drawer) ── */
 .contentLayout {
   display: flex;

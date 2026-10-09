@@ -74,8 +74,14 @@ export default function LoginPage() {
         }
 
         // Token cache'ini yenile (Bölüm 5.4 - refreshSession)
-        const { error: refreshError } = await supabase.auth.refreshSession();
-        if(refreshError) throw refreshError;
+        if (session.refresh_token) {
+          try {
+            const { error: refreshError } = await supabase.auth.refreshSession({ refresh_token: session.refresh_token });
+            if (refreshError) console.warn('Login refresh warning:', refreshError.message);
+          } catch (e) {
+            console.warn('Login refreshSession error ignored:', e);
+          }
+        }
 
         addToast({ type: 'success', message: `Hoş geldiniz! ${orgName} oturumu açıldı.` });
         const requestedPage = new URLSearchParams(window.location.search).get('page');

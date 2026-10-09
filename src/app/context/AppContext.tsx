@@ -277,7 +277,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDataLoading(false);
     }
   };
+  const applySessionRef = useRef<((user: any) => Promise<void>) | null>(null);
+
   const refreshOrganizationData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && applySessionRef.current) {
+        await applySessionRef.current(user);
+      }
+    } catch (e) {
+      console.warn('refreshOrganizationData session sync warning:', e);
+    }
     if (currentOrgId) await loadAllData();
   };
 
@@ -297,6 +307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let disposed = false;
     let authVersion = 0;
     const applySession = async (user: any) => {
+      applySessionRef.current = applySession;
       const version = ++authVersion;
       const recoveryRequested = typeof window !== 'undefined' && (
         new URLSearchParams(window.location.search).get('mode') === 'reset' ||
