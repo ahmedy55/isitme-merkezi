@@ -192,10 +192,11 @@ export default function RecallPage() {
   const allRecalls = useMemo<ShowcaseRecall[]>(() => {
     const liveConverted: ShowcaseRecall[] = recallList.map(item => {
       const p = patientsList.find(pt => pt.id === item.patientId || `${pt.firstName} ${pt.lastName}` === item.patientName);
+      const displayName = item.patientName || (p ? `${p.firstName} ${p.lastName}`.trim() : 'Bilinmeyen Hasta');
       return {
         id: item.id,
         patientId: item.patientId,
-        patientName: item.patientName,
+        patientName: displayName,
         patientAge: p?.birthDate ? calculateAge(p.birthDate) : 0,
         patientGender: p?.gender || 'Belirtilmemiş',
         patientPhone: p?.phone || '—',
@@ -204,19 +205,19 @@ export default function RecallPage() {
         patientAddress: p?.address || '—',
         patientDevice: p?.currentDevice || '—',
         patientDeviceSn: '—',
-        patientInitials: getInitials(item.patientName, ''),
-        avatarColor: getAvatarColor(item.patientName),
+        patientInitials: getInitials(displayName, ''),
+        avatarColor: getAvatarColor(displayName),
         typeTitle: item.reason,
         typeSub: `(${item.probability || 'Planlandı'})`,
         planDate: item.dueDate || '—',
         planTime: '10:00',
         status: item.status as ShowcaseRecall['status'],
-        branchName: p?.branch || '',
+        branchName: p?.branch || branchesList.find(b => b.id === p?.branchId)?.name || '',
         lastAction: item.lastContact ? `Son temas: ${item.lastContact}` : '—',
       };
     });
     return liveConverted;
-  }, [recallList, patientsList]);
+  }, [recallList, patientsList, branchesList]);
 
   // Filtered rows
   const filteredRecalls = useMemo(() => {
@@ -1066,16 +1067,24 @@ export default function RecallPage() {
                     addToast({ type: 'warning', message: 'Lütfen hasta adı girin.' });
                     return;
                   }
-                  const matchedPat = patientsList.find(p => p.id === newPatientId || `${p.firstName} ${p.lastName}`.toLowerCase() === newPatientName.trim().toLowerCase());
+                  const cleanInput = newPatientName.trim().toLocaleLowerCase('tr-TR');
+                  const matchedPat = patientsList.find(p =>
+                    (newPatientId && p.id === newPatientId) ||
+                    `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR') === cleanInput ||
+                    `${p.firstName} ${p.lastName}`.toLowerCase() === cleanInput ||
+                    (p.tc && p.tc === newPatientName.trim()) ||
+                    `${p.firstName} ${p.lastName}`.toLocaleLowerCase('tr-TR').includes(cleanInput)
+                  );
                   if (!matchedPat) {
                     addToast({ type: 'warning', message: 'Hatırlatma eklemek için kayıtlı bir hasta seçin.' });
                     return;
                   }
+                  const resolvedPatientName = `${matchedPat.firstName} ${matchedPat.lastName}`.trim();
                   const newRecall: RecallItem = {
                     id: 'pending',
                     patientId: matchedPat.id,
-                    patientName: newPatientName.trim(),
-                    reason: (newRecallType === 'SGK Yenileme' ? 'SGK Yenileme' : 'Yıllık Kontrol') as any,
+                    patientName: resolvedPatientName,
+                    reason: (newRecallType.trim() || 'Kontrol muayenesi') as RecallItem['reason'],
                     dueDate: newDueDate || new Date().toISOString().split('T')[0],
                     status: 'Bekliyor',
                     estimatedRevenue: 15000,
@@ -1090,6 +1099,13 @@ export default function RecallPage() {
                     setNewPatientName('');
                     setNewDueDate('');
                     setNewNotes('');
+                    // Reset filters so the new reminder is immediately visible at the top of the list
+                    setRecallPageNumber(1);
+                    setActiveTab('Tümü');
+                    setFilterType('Tümü');
+                    setFilterBranch('Tümü');
+                    setFilterDateRange('');
+                    setSearchQuery('');
                   } catch (err: any) {
                     addToast({ type: 'error', message: err?.message || 'Hatırlatma kaydedilemedi.' });
                   }

@@ -177,7 +177,11 @@ export const dbInsertPatient = async (patient: any) => {
       .select();
     if (error) throw error;
     const result = toCamel<any>(data?.[0]);
-    if (result) result.tc = plaintextTc || '';
+    if (result) {
+      result.tc = plaintextTc || patient.tc || '';
+      if (!result.branch && patient.branch) result.branch = patient.branch;
+      if (!result.branchId && patient.branchId) result.branchId = patient.branchId;
+    }
     return result;
   }, 'dbInsertPatient');
 };
@@ -547,15 +551,16 @@ export const dbInsertRecallItem = async (item: any) => {
     // Patient names are display data resolved through patient_id, not columns
     // on recall_items. Strip the snake-cased property before inserting.
     const { id: _id, patient_name: _patientName, ...payload } = toSnake(item);
+    const sanitized = await writePayload('recall_items', payload);
     const { data, error } = await supabase
       .from('recall_items')
-      .insert({ ...payload, organization_id: organizationId })
+      .insert({ ...sanitized, organization_id: organizationId })
       .select('*, patients(first_name,last_name)')
       .single();
     if (error) throw error;
     const mapped = toCamel<any>(data);
-    const patientName = [data.patients?.first_name, data.patients?.last_name].filter(Boolean).join(' ');
-    return { ...mapped, patientName };
+    const patientName = [data.patients?.first_name, data.patients?.last_name].filter(Boolean).join(' ') || item.patientName || '';
+    return { ...mapped, patientName, patientTC: item.patientTC || '' };
   }, 'dbInsertRecallItem');
 };
 

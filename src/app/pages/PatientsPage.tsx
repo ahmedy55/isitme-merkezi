@@ -13,6 +13,7 @@ import {
   getAvatarColor, getInitials, formatDate, calculateAge,
   type Patient,
 } from '../data/mockData';
+import { parseRecallDateRange, isDateKeyInRange } from '../lib/recallDateRange';
 import {
   IconPlus, IconSearch, IconArrowRight, IconClose, IconPatients, IconCalendar,
   IconRecall, IconDevice, IconRefresh, IconUsers, IconPhone, IconMail, IconMapPin, IconCash
@@ -70,6 +71,7 @@ export default function PatientsPage() {
   const { activeBranch } = useBranch();
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [filterLoss, setFilterLoss] = useState('Tümü');
   const [filterStatus, setFilterStatus] = useState('Tümü');
   const [filterSource, setFilterSource] = useState('Tümü');
@@ -381,6 +383,17 @@ export default function PatientsPage() {
     catch { return; }
     setShowAddModal(false);
     setFormBranchId(activeBranch.mode === 'single' ? activeBranch.branchId : '');
+    // Reset filters so the newly created patient is visible immediately
+    setFilterBranch('Tümü');
+    setFilterLoss('Tümü');
+    setFilterStatus('Tümü');
+    setFilterSource('Tümü');
+    setFilterDevice('Tümü');
+    setFilterAppointment('Tümü');
+    setQuickFilter('Tümü');
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setSearch('');
     // Reset form
     setFormData({
       tc: '',
@@ -405,9 +418,15 @@ export default function PatientsPage() {
     });
   };
 
-  const branchFilteredPatients = useMemo(() => patientsList.filter(patient =>
-    BranchService.matchesBranch(patient.branch, patient.branchId, activeBranch)
-  ), [patientsList, activeBranch]);
+  const branchFilteredPatients = useMemo(() => {
+    // When a search term is entered, search across the entire patient directory so new or cross-branch records are found
+    if (debouncedSearch.trim()) {
+      return patientsList;
+    }
+    return patientsList.filter(patient =>
+      BranchService.matchesBranch(patient.branch, patient.branchId, activeBranch)
+    );
+  }, [patientsList, activeBranch, debouncedSearch]);
 
   const branchAppointments = useMemo(() => appointmentsList.filter(appointment =>
     BranchService.matchesBranch(appointment.branch, appointment.branchId, activeBranch)
@@ -543,8 +562,6 @@ export default function PatientsPage() {
     }
   };
 
-  const debouncedSearch = useDebounce(search, 300);
-
   const filtered = useMemo(() => {
     const searchLower = debouncedSearch.toLowerCase().trim();
     const matchesPhoneSearch = createTurkishPhoneSearchMatcher(debouncedSearch.trim());
@@ -552,8 +569,8 @@ export default function PatientsPage() {
       const matchSearch =
         !searchLower ||
         `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchLower) ||
-        p.tc.includes(searchLower) ||
-        p.phone.toLowerCase().includes(searchLower) ||
+        (p.tc || '').includes(searchLower) ||
+        (p.phone || '').toLowerCase().includes(searchLower) ||
         matchesPhoneSearch(p.phone) ||
         (p.address || '').toLowerCase().includes(searchLower) ||
         stockList.some(item => item.assignedPatientId === p.id && `${item.serialNo} ${item.barcode || ''}`.toLowerCase().includes(searchLower));
@@ -561,7 +578,7 @@ export default function PatientsPage() {
       const matchLoss = filterLoss === 'Tümü' || p.hearingLoss === filterLoss;
       const matchStatus = filterStatus === 'Tümü' || (p.patientStatus || 'Potansiyel') === filterStatus;
       const matchSource = filterSource === 'Tümü' || (p.source || 'Tavsiye') === filterSource;
-      const matchBranch = filterBranch === 'Tümü' || p.branchId === filterBranch;
+      const matchBranch = !searchLower ? (filterBranch === 'Tümü' || p.branchId === filterBranch) : true;
       const hasDevice = patientHasDevice(p);
       const matchDevice = filterDevice === 'Tümü' || (filterDevice === 'Cihaz kullanıyor' ? hasDevice : !hasDevice);
       
@@ -605,20 +622,30 @@ export default function PatientsPage() {
         (quickFilter === 'Pasif' && (p.sgkStatus === 'Pasif' || statusStr === 'Pasif'));
       
       let matchDate = true;
-      if (filterStartDate || filterEndDate) {
+      if (filterStartDate.trim() || filterEndDate.trim()) {
+        const rawStart = filterStartDate.trim();
+        const rawEnd = filterEndDate.trim();
+        const hasRangeDelimiter = /\s*(?:→|–|—|\s-\s)\s*/.test(rawStart);
+        const parsed = parseRecallDateRange(rawStart);
+        
+        let rangeFrom = parsed.from;
+        let rangeTo = parsed.to;
+        
+        if (!hasRangeDelimiter) {
+          if (rawEnd) {
+            rangeTo = parseRecallDateRange(rawEnd).from || rawEnd;
+          } else if (rangeFrom) {
+            // Single date: match appointments on that exact date
+            rangeTo = rangeFrom;
+          }
+        } else if (rawEnd && !rangeTo) {
+          rangeTo = parseRecallDateRange(rawEnd).from || rawEnd;
+        }
+
         const hasMatchingAptDate = patientAppointments.some(a => {
           const aptDate = a.date || (a as any).date;
           if (!aptDate) return false;
-          if (filterStartDate && filterEndDate) {
-            return aptDate >= filterStartDate && aptDate <= filterEndDate;
-          }
-          if (filterStartDate) {
-            return aptDate === filterStartDate || aptDate.startsWith(filterStartDate);
-          }
-          if (filterEndDate) {
-            return aptDate <= filterEndDate;
-          }
-          return true;
+          return isDateKeyInRange(aptDate.slice(0, 10), { from: rangeFrom, to: rangeTo });
         });
         matchDate = hasMatchingAptDate;
       }
@@ -832,12 +859,13 @@ export default function PatientsPage() {
               <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#7c8991', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Randevu Tarihi</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <input
-                  type="date"
+                  type="text"
                   className="form-input"
-                  style={{ padding: '5px 6px', fontSize: '0.78rem', height: 36, flex: 1, minWidth: 0 }}
+                  style={{ padding: '5px 8px', fontSize: '0.78rem', height: 36, flex: 1, minWidth: 0 }}
+                  placeholder="YYYY-MM-DD veya aralık"
                   value={filterStartDate}
                   onChange={(e) => setFilterStartDate(e.target.value)}
-                  title="Tarih aralığı"
+                  title="Tarih veya tarih aralığı (Örn: 2026-10-06 - 2026-10-08)"
                   aria-label="Randevu Tarihi"
                 />
               </div>

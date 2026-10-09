@@ -408,7 +408,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let created: Patient;
       try {
         created = await dbInsertPatient(patient);
-        setPatientsList(prev => [created, ...prev]);
+        const branchName = created.branch || patient.branch || branchesList.find(b => b.id === (created.branchId || patient.branchId))?.name || '';
+        const fullCreated: Patient = {
+          ...patient,
+          ...created,
+          branch: branchName,
+          branchId: created.branchId || patient.branchId,
+          tc: patient.tc || created.tc || '',
+        };
+        try {
+          const fresh = await dbFetchPatients();
+          const exists = fresh.some(p => p.id === created.id);
+          const merged = exists
+            ? fresh.map(p => p.id === created.id ? { ...p, branch: p.branch || branchName, tc: patient.tc || p.tc } : p)
+            : [fullCreated, ...fresh];
+          setPatientsList(merged);
+        } catch {
+          setPatientsList(prev => [fullCreated, ...prev]);
+        }
         addToast({ type: 'success', message: 'Hasta başarıyla eklendi.' });
       } catch (err: any) {
         addToast({ type: 'error', message: `Hasta eklenemedi: ${err.message}` });
@@ -762,10 +779,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!currentOrgId) throw new Error('Hatırlatma oluşturmak için aktif firma oturumu gerekli.');
     try {
       const created = await dbInsertRecallItem(item);
-      setRecallList(prev => [created, ...prev.filter(recall => recall.id !== created.id)]);
-      addToast({ type: 'success', message: `${created.patientName} için hatırlatma kaydedildi.` });
+      const fullCreated: RecallItem = {
+        ...item,
+        ...created,
+        patientName: created.patientName || item.patientName,
+        reason: item.reason || created.reason,
+      };
       try {
-        await dbInsertAuditLog({ action: 'Hatırlatma Ekleme', module: 'Recall', description: `${created.patientName} için ${created.reason} hatırlatması planlandı (${created.dueDate}).` });
+        const fresh = await dbFetchRecallItems();
+        const merged = [fullCreated, ...fresh.filter((r: RecallItem) => r.id !== fullCreated.id)];
+        setRecallList(merged);
+      } catch {
+        setRecallList(prev => [fullCreated, ...prev.filter(recall => recall.id !== fullCreated.id)]);
+      }
+      addToast({ type: 'success', message: `${fullCreated.patientName} için hatırlatma kaydedildi.` });
+      try {
+        await dbInsertAuditLog({ action: 'Hatırlatma Ekleme', module: 'Recall', description: `${fullCreated.patientName} için ${fullCreated.reason} hatırlatması planlandı (${fullCreated.dueDate}).` });
       } catch (auditError: any) {
         logger.warn(`Hatırlatma denetim kaydı yazılamadı: ${auditError.message}`, 'AppContext');
       }

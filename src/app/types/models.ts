@@ -31,7 +31,7 @@ export interface Patient {
   source?: 'Doktor' | 'Sosyal Medya' | 'Tavsiye' | 'Yürüyerek' | 'Web';
   salesStage?: 'İlk Görüşme' | 'Test Yapıldı' | 'Cihaz Denendi' | 'Teklif Verildi' | 'Satış Yapıldı' | 'Kaybedildi';
   doctorName?: string;
-  prescriptionStatus?: 'Yok' | 'Reçete Yazıldı' | 'SGK Onaylı';
+  prescriptionStatus?: 'Yok' | 'Reçete Yazıldı' | 'SGK Onaylı' | 'Reçete Reddedildi';
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelation?: string;

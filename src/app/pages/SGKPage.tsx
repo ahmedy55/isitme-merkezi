@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { supabase } from '../lib/supabase';
+import type { Patient } from '../data/mockData';
 import styles from './SGKPage.module.css';
 
 interface SGKPeriodInvoice {
@@ -49,14 +50,19 @@ interface SGKPrescriptionItem {
 
 
 export default function SGKPage() {
-  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, currentOrgId, approveSGKPrescription } = useApp();
+  const { addToast, setCurrentPage, patientsList: allPatients, branchesList, setSelectedPatientId, currentOrgId, approveSGKPrescription, updatePatient } = useApp();
   const { matches } = useBranchScope();
 
   const items = useMemo<SGKPrescriptionItem[]>(() => allPatients
-    .filter(patient => Boolean(patient.prescriptionNo?.trim()) || ['Reçete Yazıldı', 'SGK Onaylı'].includes(patient.prescriptionStatus || ''))
+    .filter(patient => Boolean(patient.prescriptionNo?.trim()) || ['Reçete Yazıldı', 'SGK Onaylı', 'Reçete Reddedildi'].includes(patient.prescriptionStatus || ''))
     .map(patient => {
       const name = `${patient.firstName} ${patient.lastName}`.trim();
-      const status: SGKPrescriptionItem['status'] = patient.prescriptionStatus === 'SGK Onaylı' ? 'Onaylandı' : 'İşlemde';
+      const status: SGKPrescriptionItem['status'] =
+        patient.prescriptionStatus === 'SGK Onaylı'
+          ? 'Onaylandı'
+          : patient.prescriptionStatus === 'Reçete Reddedildi'
+            ? 'Reddedildi'
+            : 'İşlemde';
       const birthDate = patient.birthDate ? new Date(`${patient.birthDate.slice(0, 10)}T12:00:00`) : null;
       const age = birthDate && !Number.isNaN(birthDate.getTime())
         ? Math.max(0, new Date().getFullYear() - birthDate.getFullYear() - (new Date().getMonth() < birthDate.getMonth() || (new Date().getMonth() === birthDate.getMonth() && new Date().getDate() < birthDate.getDate()) ? 1 : 0))
@@ -293,17 +299,64 @@ export default function SGKPage() {
     }
   };
 
-  const handleUpdateStatus = (id: string, newStatus: SGKPrescriptionItem['status']) => {
-    void id;
-    void newStatus;
+  const handleUpdateStatus = async (id: string, newStatus: SGKPrescriptionItem['status']) => {
     setActiveActionMenuId(null);
-    addToast({ type: 'error', message: 'SGK reçete tablosu yapılandırılmadığı için durum değişikliği kaydedilmedi.' });
+    const patient = allPatients.find(p => p.id === id);
+    if (!patient) {
+      addToast({ type: 'error', message: 'Hasta kaydı bulunamadı.' });
+      return;
+    }
+    const mappedPrescriptionStatus =
+      newStatus === 'Onaylandı'
+        ? 'SGK Onaylı'
+        : newStatus === 'Reddedildi'
+          ? 'Reçete Reddedildi'
+          : 'Reçete Yazıldı';
+
+    const nowDotted = new Intl.DateTimeFormat('tr-TR').format(new Date());
+    const updatedPatient: Patient = {
+      ...patient,
+      prescriptionStatus: mappedPrescriptionStatus as any,
+      timeline: [
+        {
+          date: nowDotted,
+          action: `SGK reçete durumu "${newStatus}" olarak güncellendi.`,
+          icon: newStatus === 'Onaylandı' ? 'Check' : newStatus === 'Reddedildi' ? 'AlertCircle' : 'Clock',
+        },
+        ...(patient.timeline || []),
+      ],
+    };
+
+    try {
+      await updatePatient(updatedPatient);
+      setActiveItem(prev => (prev && prev.id === id ? { ...prev, status: newStatus } : prev));
+      addToast({ type: 'success', message: 'Reçete durumu güncellendi.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Durum değişikliği kaydedilemedi: ${err?.message || 'Bilinmeyen hata'}` });
+    }
   };
 
-  const handleDeleteItem = (id: string) => {
-    void id;
+  const handleDeleteItem = async (id: string) => {
     setActiveActionMenuId(null);
-    addToast({ type: 'error', message: 'SGK reçete tablosu yapılandırılmadığı için kayıt silinmedi.' });
+    const patient = allPatients.find(p => p.id === id);
+    if (!patient) {
+      addToast({ type: 'error', message: 'Hasta kaydı bulunamadı.' });
+      return;
+    }
+    const updatedPatient: Patient = {
+      ...patient,
+      prescriptionNo: '',
+      reportNo: '',
+      prescriptionStatus: 'Yok',
+    };
+    try {
+      await updatePatient(updatedPatient);
+      setActiveItem(prev => (prev && prev.id === id ? null : prev));
+      setSelectedIds(prev => prev.filter(x => x !== id));
+      addToast({ type: 'success', message: 'Reçete kaydı kaldırıldı.' });
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Kayıt silinemedi: ${err?.message || 'Bilinmeyen hata'}` });
+    }
   };
 
   const handleQueryMedula = (item: SGKPrescriptionItem) => {
