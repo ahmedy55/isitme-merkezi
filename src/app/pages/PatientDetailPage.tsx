@@ -39,6 +39,7 @@ export default function PatientDetailPage() {
     appointmentsList,
     addAppointment,
     salesList,
+    recallList,
     currentOrgId,
     refreshOrganizationData
   } = useApp();
@@ -556,8 +557,12 @@ export default function PatientDetailPage() {
     });
   };
 
-  const patientAppointments = appointmentsList.filter(a => a.patientId === patient.id);
-  const patientSales = salesList.filter(s => s.patientId === patient.id);
+  const patientAppointments = appointmentsList.filter(a => a.patientId === patient?.id);
+  const patientSales = salesList.filter(s => s.patientId === patient?.id);
+  const patientRecalls = (recallList || []).filter(item =>
+    (patient?.id && item.patientId === patient.id) ||
+    (patient && item.patientName && `${patient.firstName} ${patient.lastName}`.trim().toLowerCase() === item.patientName.trim().toLowerCase())
+  );
 
   return (
     <div className="page">
@@ -942,6 +947,36 @@ export default function PatientDetailPage() {
                  </div>
                </div>
              </div>
+
+                  {/* Hatırlatmalar / Recall Listesi */}
+                  <div className="card">
+                    <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="card-title">Geri Çağırma & Hatırlatmalar ({patientRecalls.length})</span>
+                      <button className="btn btn-sm btn-secondary" onClick={() => setCurrentPage('recall')}>
+                        Tüm Hatırlatmalar
+                      </button>
+                    </div>
+                    <div className="card-body">
+                      {patientRecalls.length === 0 ? (
+                        <div style={{ color: 'var(--gray-500)', fontSize: '0.84rem' }}>Bu hasta için kayıtlı hatırlatma bulunmuyor.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {patientRecalls.map((recall) => (
+                            <div key={recall.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--gray-50)', borderRadius: 6, border: '1px solid var(--gray-200)' }}>
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: '0.84rem' }}>{recall.reason}</div>
+                                {recall.notes && <div style={{ fontSize: '0.76rem', color: 'var(--gray-600)' }}>Not: {recall.notes}</div>}
+                                <div style={{ fontSize: '0.72rem', color: 'var(--gray-500)' }}>Planlanan: {recall.dueDate}</div>
+                              </div>
+                              <span style={{ fontSize: '0.72rem', padding: '3px 8px', borderRadius: 4, fontWeight: 600, background: recall.status === 'Tamamlandı' ? '#dcfce7' : '#fef3c7', color: recall.status === 'Tamamlandı' ? '#166534' : '#92400e' }}>
+                                {recall.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
              {/* Alt Kısım: Zaman Tüneli / Timeline */}
              <div className="card">

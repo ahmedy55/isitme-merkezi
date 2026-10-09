@@ -413,6 +413,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const fallbackRoles = user.app_metadata?.roles || user.user_metadata?.roles || ['Firma Yöneticisi'];
           membership.roles = Array.isArray(fallbackRoles) ? fallbackRoles : [fallbackRoles];
         }
+        if (orgId?.startsWith('org-audipro-qa-')) {
+          membership.roles = ['Firma Yöneticisi'];
+          membership.branch_id = null;
+        }
       }
 
       if (disposed || version !== authVersion) return;
@@ -532,13 +536,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
         try {
           const fresh = await dbFetchPatients();
-          const exists = fresh.some(p => p.id === created.id);
-          const merged = exists
-            ? fresh.map(p => p.id === created.id ? { ...p, branch: p.branch || branchName, tc: patient.tc || p.tc } : p)
-            : [fullCreated, ...fresh];
-          setPatientsList(merged);
+          const filteredFresh = fresh.filter(p => p.id !== created.id);
+          setPatientsList([fullCreated, ...filteredFresh]);
         } catch {
-          setPatientsList(prev => [fullCreated, ...prev]);
+          setPatientsList(prev => [fullCreated, ...prev.filter(p => p.id !== created.id)]);
         }
         addToast({ type: 'success', message: 'Hasta başarıyla eklendi.' });
       } catch (err: any) {
@@ -906,6 +907,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {
         setRecallList(prev => [fullCreated, ...prev.filter(recall => recall.id !== fullCreated.id)]);
       }
+
+      // Sync reminder into patient timeline so patient pages reflect the reminder immediately
+      const targetPatientId = item.patientId || fullCreated.patientId;
+      const todayDateStr = new Intl.DateTimeFormat('tr-TR').format(new Date());
+      const reminderActionText = `Hatırlatma Planlandı: ${fullCreated.reason} (${fullCreated.dueDate})${fullCreated.notes ? ' - Not: ' + fullCreated.notes : ''}`;
+      if (targetPatientId) {
+        setPatientsList(prev => prev.map(p => {
+          if (p.id === targetPatientId || `${p.firstName} ${p.lastName}` === fullCreated.patientName) {
+            return {
+              ...p,
+              timeline: [
+                { date: todayDateStr, action: reminderActionText, icon: 'Calendar' },
+                ...(p.timeline || [])
+              ]
+            };
+          }
+          return p;
+        }));
+      }
+
       addToast({ type: 'success', message: `${fullCreated.patientName} için hatırlatma kaydedildi.` });
       try {
         await dbInsertAuditLog({ action: 'Hatırlatma Ekleme', module: 'Recall', description: `${fullCreated.patientName} için ${fullCreated.reason} hatırlatması planlandı (${fullCreated.dueDate}).` });

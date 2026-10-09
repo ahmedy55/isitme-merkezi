@@ -194,29 +194,26 @@ export default function AppointmentsPage() {
     };
   }, [activeSlotMenu]);
 
+  const currentDateRef = useRef<Date>(currentDate);
+  useEffect(() => {
+    currentDateRef.current = currentDate;
+  }, [currentDate]);
+
   // Navigation handlers
-  const handlePrevDay = () => {
+  const changeDay = (delta: number) => {
     hasUserSelectedDate.current = true;
-    setCurrentDate(prev => {
-      const next = new Date(prev);
-      next.setDate(next.getDate() - 1);
-      setDateInputVal(formatCalendarDate(next));
-      setCalendarViewMonth(next.getMonth());
-      setCalendarViewYear(next.getFullYear());
-      return next;
-    });
+    const base = new Date(currentDateRef.current || currentDate);
+    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate() + delta);
+    currentDateRef.current = next;
+    setCurrentDate(next);
+    setDateInputVal(formatCalendarDate(next));
+    setCalendarViewMonth(next.getMonth());
+    setCalendarViewYear(next.getFullYear());
   };
-  const handleNextDay = () => {
-    hasUserSelectedDate.current = true;
-    setCurrentDate(prev => {
-      const next = new Date(prev);
-      next.setDate(next.getDate() + 1);
-      setDateInputVal(formatCalendarDate(next));
-      setCalendarViewMonth(next.getMonth());
-      setCalendarViewYear(next.getFullYear());
-      return next;
-    });
-  };
+
+  const handlePrevDay = () => changeDay(-1);
+  const handleNextDay = () => changeDay(1);
+
   const handleToday = async () => {
     hasUserSelectedDate.current = true;
     let today = getIstanbulDate();

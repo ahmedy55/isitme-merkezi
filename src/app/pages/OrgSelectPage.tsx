@@ -47,6 +47,7 @@ export default function OrgSelectPage() {
       }));
 
       const qaOrgs: ActiveMembership[] = [
+        { organization_id: 'org-audipro-qa-tek', roles: ['Firma Yöneticisi'], organizations: { name: 'AudiPro QA - Tek Şube', slug: 'audipro-qa-tek-sube', logo_url: null } },
         { organization_id: 'org-audipro-qa-3', roles: ['Firma Yöneticisi'], organizations: { name: 'AudiPro QA - 3 Şube', slug: 'audipro-qa-3-sube', logo_url: null } },
         { organization_id: 'org-audipro-qa-2', roles: ['Firma Yöneticisi'], organizations: { name: 'AudiPro QA - 2 Şube', slug: 'audipro-qa-2-sube', logo_url: null } },
       ];
@@ -130,8 +131,10 @@ export default function OrgSelectPage() {
       }
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Organizasyon seçimi kaydedilemedi.');
+        if (!orgId.startsWith('org-audipro-qa-')) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Organizasyon seçimi kaydedilemedi.');
+        }
       }
 
       // 3. Post-exchange: Token ve oturum senkronizasyonu

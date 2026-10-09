@@ -567,12 +567,34 @@ export default function PatientsPage() {
     const searchLower = rawSearch;
     const matchesPhoneSearch = createTurkishPhoneSearchMatcher(search.trim() || debouncedSearch.trim());
     return branchFilteredPatients.filter((p) => {
+      const tcQuery = searchLower.replace(/^tc\s*/i, '').trim();
+      const tcDigits = tcQuery.replace(/\D/g, '');
+      const patientTcDigits = (p.tc || '').replace(/\D/g, '');
+      const phoneDigits = searchLower.replace(/\D/g, '');
+      const patientPhoneDigits = (p.phone || '').replace(/\D/g, '');
+
+      const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
+      const normalizedFullName = fullName.replace(/[-_]/g, ' ');
+      const normalizedSearch = searchLower.replace(/[-_]/g, ' ');
+      const searchTokens = searchLower.split(/[\s-_]+/).filter(Boolean);
+      const tokensMatch = searchTokens.length > 0 && searchTokens.every(tok =>
+        (p.firstName || '').toLowerCase().includes(tok) ||
+        (p.lastName || '').toLowerCase().includes(tok) ||
+        fullName.includes(tok) ||
+        (p.tc && p.tc.includes(tok))
+      );
+
       const matchSearch =
         !searchLower ||
-        `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchLower) ||
+        fullName.includes(searchLower) ||
+        normalizedFullName.includes(normalizedSearch) ||
+        (p.firstName || '').toLowerCase().includes(searchLower) ||
+        (p.lastName || '').toLowerCase().includes(searchLower) ||
+        tokensMatch ||
         (p.tc || '').toLowerCase().includes(searchLower) ||
-        (p.tc && searchLower.replace(/\D/g, '').length >= 3 && p.tc.replace(/\D/g, '').includes(searchLower.replace(/\D/g, ''))) ||
+        (tcDigits.length >= 3 && (patientTcDigits.includes(tcDigits) || tcDigits.includes(patientTcDigits))) ||
         (p.phone || '').toLowerCase().includes(searchLower) ||
+        (phoneDigits.length >= 3 && (patientPhoneDigits.includes(phoneDigits) || phoneDigits.includes(patientPhoneDigits))) ||
         matchesPhoneSearch(p.phone) ||
         (p.address || '').toLowerCase().includes(searchLower) ||
         stockList.some(item => item.assignedPatientId === p.id && `${item.serialNo} ${item.barcode || ''}`.toLowerCase().includes(searchLower));

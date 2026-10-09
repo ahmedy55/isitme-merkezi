@@ -34,11 +34,29 @@ export default function Header() {
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [selectedSearchIndex, setSelectedSearchIndex] = useState(-1);
 
   // Dropdown outside click handler
   const branchDropdownRef = useRef<HTMLDivElement | null>(null);
   const notifDropdownRef = useRef<HTMLDivElement | null>(null);
   const profileDropdownRef = useRef<HTMLDivElement | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Ctrl + K global keyboard shortcut to focus search
+  useEffect(() => {
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        setShowSearchDropdown(true);
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -51,37 +69,152 @@ export default function Header() {
       if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target as Node)) {
         setShowProfileMenu(false);
       }
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSearchDropdown(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Navigation pages and areas
+  const navSuggestions = useMemo(() => [
+    { id: 'nav-appointments', title: 'Randevular', subtitle: 'Randevu takvimi ve ajanda', page: 'appointments' as const, keywords: ['randevu', 'randevular', 'takvim', 'ajanda', 'program'] },
+    { id: 'nav-patients', title: 'Hastalar', subtitle: 'Hasta yönetimi ve rehberi', page: 'patients' as const, keywords: ['hasta', 'hastalar', 'dizin', 'rehber'] },
+    { id: 'nav-recall', title: 'Geri Çağırma (Recall)', subtitle: 'Periyodik kontrol ve hatırlatmalar', page: 'recall' as const, keywords: ['recall', 'geri çağırma', 'hatırlatma', 'takip', 'pil'] },
+    { id: 'nav-cash', title: 'Kasa & Finans', subtitle: 'Gelir, gider ve nakit hareketleri', page: 'cash' as const, keywords: ['kasa', 'finans', 'nakit', 'ödeme', 'tahsilat'] },
+    { id: 'nav-stock', title: 'Stok & Envanter', subtitle: 'Cihaz, pil ve aksesuar stoğu', page: 'stock' as const, keywords: ['stok', 'ürün', 'cihaz', 'envanter', 'depo'] },
+    { id: 'nav-service', title: 'Teknik Servis', subtitle: 'Cihaz tamir ve arıza takibi', page: 'service' as const, keywords: ['servis', 'tamir', 'onarım', 'teknik servis', 'bakım'] },
+    { id: 'nav-sgk', title: 'SGK Reçete Takibi', subtitle: 'Medula ve SGK reçeteleri', page: 'sgk' as const, keywords: ['sgk', 'reçete', 'medula', 'rapor'] },
+    { id: 'nav-reports', title: 'Raporlar', subtitle: 'Klinik analiz ve veri indirme', page: 'reports' as const, keywords: ['rapor', 'raporlar', 'analiz', 'istatistik', 'download'] },
+    { id: 'nav-dashboard', title: 'Genel Bakış (Dashboard)', subtitle: 'Klinik ana paneli', page: 'dashboard' as const, keywords: ['dashboard', 'özet', 'metrik', 'genel bakış', 'ana sayfa'] },
+    { id: 'nav-branches', title: 'Şubeler', subtitle: 'Şube listesi ve yönetimi', page: 'branches' as const, keywords: ['şube', 'şubeler', 'klinik', 'lokasyon'] },
+    { id: 'nav-settings', title: 'Ayarlar', subtitle: 'Sistem ve klinik ayarları', page: 'settings' as const, keywords: ['ayar', 'ayarlar', 'profil', 'yetki'] },
+  ], []);
+
+  // Filtered search suggestions
+  const filteredSuggestions = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return [];
+    const matchedNav = navSuggestions.filter(item =>
+      item.title.toLowerCase().includes(q) ||
+      item.subtitle.toLowerCase().includes(q) ||
+      item.keywords.some(k => k.includes(q) || q.includes(k))
+    ).map(item => ({
+      type: 'page' as const,
+      id: item.id,
+      title: item.title,
+      subtitle: item.subtitle,
+      page: item.page,
+      action: () => {
+        setCurrentPage(item.page);
+        setSearchTerm('');
+        setShowSearchDropdown(false);
+      }
+    }));
+
+    const cleanDigits = q.replace(/\D/g, '');
+    const matchedPatients = allPatients.filter(p => {
+      const pName = `${p.firstName} ${p.lastName}`.toLowerCase();
+      const pTc = (p.tc || '').replace(/\D/g, '');
+      const pPhone = (p.phone || '').replace(/\D/g, '');
+      return pName.includes(q) ||
+        (p.tc && p.tc.toLowerCase().includes(q)) ||
+        (cleanDigits.length >= 3 && (pTc.includes(cleanDigits) || pPhone.includes(cleanDigits)));
+    }).slice(0, 5).map(p => ({
+      type: 'patient' as const,
+      id: `pat-${p.id}`,
+      title: `${p.firstName} ${p.lastName}`,
+      subtitle: `TC: ${p.tc || '—'} · Tel: ${p.phone || '—'} · ${p.branch || ''}`,
+      page: 'patient-detail' as const,
+      action: () => {
+        setSelectedPatientId(p.id);
+        setCurrentPage('patient-detail');
+        setSearchTerm('');
+        setShowSearchDropdown(false);
+      }
+    }));
+
+    return [...matchedNav, ...matchedPatients];
+  }, [searchTerm, navSuggestions, allPatients, setCurrentPage, setSelectedPatientId]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setShowSearchDropdown(true);
+      setSelectedSearchIndex(prev => (prev + 1 < filteredSuggestions.length ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSearchIndex(prev => (prev - 1 >= 0 ? prev - 1 : filteredSuggestions.length - 1));
+    } else if (e.key === 'Enter') {
+      if (selectedSearchIndex >= 0 && selectedSearchIndex < filteredSuggestions.length) {
+        e.preventDefault();
+        filteredSuggestions[selectedSearchIndex].action();
+      } else {
+        const q = searchTerm.trim().toLowerCase();
+        const navMatch = navSuggestions.find(n =>
+          n.title.toLowerCase().includes(q) || n.keywords.some(k => k.includes(q) || q.includes(k))
+        );
+        if (navMatch) {
+          e.preventDefault();
+          setCurrentPage(navMatch.page);
+          setSearchTerm('');
+          setShowSearchDropdown(false);
+        }
+      }
+    } else if (e.key === 'Escape') {
+      setShowSearchDropdown(false);
+      setSelectedSearchIndex(-1);
+    }
+  };
+
   // Search submit handler
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
+    if (selectedSearchIndex >= 0 && selectedSearchIndex < filteredSuggestions.length) {
+      filteredSuggestions[selectedSearchIndex].action();
+      return;
+    }
+    const q = searchTerm.trim().toLowerCase();
+    const navMatch = navSuggestions.find(n =>
+      n.title.toLowerCase().includes(q) || n.keywords.some(k => k.includes(q) || q.includes(k))
+    );
+    if (navMatch) {
+      setCurrentPage(navMatch.page);
+      setSearchTerm('');
+      setShowSearchDropdown(false);
+      return;
+    }
+
     const phoneQuery = searchTerm.replace(/\D/g, '');
-    const foundPatient = patientsList.find(p => 
-      `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.tc.includes(searchTerm) || (phoneQuery.length >= 3 && p.phone.replace(/\D/g, '').includes(phoneQuery))
+    const foundPatient = allPatients.find(p =>
+      `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+      (p.tc && p.tc.includes(q)) || (phoneQuery.length >= 3 && p.phone && p.phone.replace(/\D/g, '').includes(phoneQuery))
     );
 
     if (foundPatient) {
       setSelectedPatientId(foundPatient.id);
       setCurrentPage('patient-detail');
       setSearchTerm('');
+      setShowSearchDropdown(false);
     } else {
       setCurrentPage('patients');
+      setShowSearchDropdown(false);
     }
   };
 
   // Dynamic branch label
   const branchButtonLabel = useMemo(() => {
-    if (activeBranch.mode === 'all') return 'Tüm Şubeler (Konsolide)';
     if (activeBranch.mode === 'single') {
-      const b = branchesList.find(x => x.id === activeBranch.branchId);
-      return b ? b.name : 'Seçili Şube';
+      const b = branchesList.find(x => x.id === activeBranch.branchId || x.slug === activeBranch.slug);
+      return b ? b.name : (activeBranch.branch?.name || 'Seçili Şube');
     }
+    const activeBranches = branchesList.filter(b => b.status === 'Aktif' || (b.status as string) === 'active');
+    if (activeBranches.length === 1) {
+      return activeBranches[0].name;
+    }
+    if (activeBranch.mode === 'all') return 'Tüm Şubeler (Konsolide)';
     return 'Şube Seçin';
   }, [activeBranch, branchesList]);
 
@@ -131,22 +264,56 @@ export default function Header() {
           </svg>
         </button>
 
-        <form className={styles.searchForm} onSubmit={handleSearchSubmit}>
-          <span className={styles.searchIcon}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-          </span>
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder="Hasta, TC veya telefon ara..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <kbd className={styles.shortcutKbd}>Ctrl + K</kbd>
-        </form>
+        <div ref={searchContainerRef} style={{ flex: 1, position: 'relative' }}>
+          <form className={styles.searchForm} onSubmit={handleSearchSubmit}>
+            <span className={styles.searchIcon}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              className={styles.searchInput}
+              placeholder="Hasta, TC, telefon veya sayfa ara (Randevular, Stok...)"
+              value={searchTerm}
+              onFocus={() => setShowSearchDropdown(true)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setShowSearchDropdown(true);
+                setSelectedSearchIndex(-1);
+              }}
+              onKeyDown={handleSearchKeyDown}
+            />
+            <kbd className={styles.shortcutKbd}>Ctrl + K</kbd>
+          </form>
+
+          {showSearchDropdown && filteredSuggestions.length > 0 && (
+            <div className={styles.searchDropdown}>
+              {filteredSuggestions.map((item, index) => {
+                const isActive = index === selectedSearchIndex;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`${styles.searchSuggestionItem} ${isActive ? styles.searchSuggestionItemActive : ''}`}
+                    onClick={item.action}
+                    onMouseEnter={() => setSelectedSearchIndex(index)}
+                  >
+                    <div>
+                      <div className={styles.searchSuggestionTitle}>{item.title}</div>
+                      <div className={styles.searchSuggestionSubtitle}>{item.subtitle}</div>
+                    </div>
+                    <span className={styles.searchSuggestionBadge}>
+                      {item.type === 'page' ? 'Sayfa' : 'Hasta'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Right Side Controls ── */}

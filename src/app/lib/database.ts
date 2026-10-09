@@ -865,6 +865,7 @@ export const dbFetchBranches = async () => {
 
     // Seed and expose QA clinic session branches if not already in database
     const qaBranches = [
+      { id: 'branch-audipro-qa-tek', name: 'AudiPro QA - Tek Şube', status: 'Aktif', slug: 'audipro-qa-tek-sube', address: 'AudiPro QA Tek Şube', phone: '0555 111 1111' },
       { id: 'branch-audipro-qa-3', name: 'AudiPro QA - 3 Şube', status: 'Aktif', slug: 'audipro-qa-3-sube', address: 'AudiPro QA 3', phone: '0555 333 3333' },
       { id: 'branch-audipro-qa-2', name: 'AudiPro QA - 2 Şube', status: 'Aktif', slug: 'audipro-qa-2-sube', address: 'AudiPro QA 2', phone: '0555 222 2222' }
     ];

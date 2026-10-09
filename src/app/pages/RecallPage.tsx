@@ -550,6 +550,9 @@ export default function RecallPage() {
                       <td>
                         <div className={styles.recallTypeTitle}>{recall.typeTitle}</div>
                         <div className={styles.recallTypeSub}>{recall.typeSub}</div>
+                        {recall.notes && (
+                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2 }}>Not: {recall.notes}</div>
+                        )}
                       </td>
 
                       {/* Planlanan Tarih */}
