@@ -630,7 +630,7 @@ export default function PatientsPage() {
         const hasRangeDelimiter = /\s*(?:→|–|—|\s-\s)\s*/.test(rawStart);
         const parsed = parseRecallDateRange(rawStart);
         
-        let rangeFrom = parsed.from;
+        const rangeFrom = parsed.from;
         let rangeTo = parsed.to;
         
         if (!hasRangeDelimiter) {

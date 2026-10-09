@@ -27,7 +27,7 @@ export default function OrgSelectPage() {
     try {
       // 1. Session bootstrap: Ensure session and refresh token are loaded from storage
       const { data: sessionData } = await supabase.auth.getSession();
-      let session = sessionData?.session || null;
+      const session = sessionData?.session || null;
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user && !session) {

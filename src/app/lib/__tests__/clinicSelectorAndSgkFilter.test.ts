@@ -32,8 +32,8 @@ describe('Clinic Selector Bootstrap & Session Exchange', () => {
     expect(activeSession).toBeDefined();
 
     // Context exchange phase: simulates handleSelectOrg
-    let session = activeSession;
-    let token = session?.access_token || '';
+    const session = activeSession;
+    const token = session?.access_token || '';
     expect(token).toBe('valid-test-access-token');
 
     // Simulate /api/select-org call
