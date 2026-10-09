@@ -134,7 +134,12 @@ export class BranchService {
 
     // 3. Fallback to defaultBranch / first allowed branch
     const fallback = this.getFallbackBranch(branchesList, allowedBranchIds, defaultBranchId);
-    return { branchContext: fallback, isFallback: false };
+    const isUnknownSlug = Boolean(urlSlug && urlSlug !== 'all');
+    return {
+      branchContext: fallback,
+      isFallback: isUnknownSlug,
+      ...(isUnknownSlug ? { fallbackReason: `"${urlSlug}" şubesi bulunamadığı için varsayılan şubeye yönlendirildiniz.` } : {})
+    };
   }
 
   /**

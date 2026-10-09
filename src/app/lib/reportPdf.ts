@@ -81,8 +81,9 @@ export function buildPdfReportLines(data: ReportExportData): string[] {
     `  ${'-'.repeat(72)}`,
   ];
 
-  if (data.branchPerformance.length > 0) {
-    data.branchPerformance.forEach(b => {
+  const branchPerformance = data.branchPerformance || [];
+  if (branchPerformance.length > 0) {
+    branchPerformance.forEach(b => {
       lines.push(`  ${pad(b.branch, 28)} ${padR(String(b.patients), 10)} ${padR(String(b.appointments), 12)} ${padR(b.revenue.toLocaleString('tr-TR'), 18)}`);
     });
   } else {
@@ -93,12 +94,13 @@ export function buildPdfReportLines(data: ReportExportData): string[] {
   lines.push(`  ${pad('Tarih', 12)} ${pad('Hasta', 22)} ${pad('Kalem / Urun', 24)} ${padR('Tutar (TRY)', 14)}`);
   lines.push(`  ${'-'.repeat(76)}`);
 
-  if (data.sales.length > 0) {
-    data.sales.slice(0, 30).forEach(s => {
+  const sales = data.sales || [];
+  if (sales.length > 0) {
+    sales.slice(0, 30).forEach(s => {
       lines.push(`  ${pad(s.date, 12)} ${pad(s.patientName, 22)} ${pad(s.itemsSummary, 24)} ${padR(s.total.toLocaleString('tr-TR'), 14)}`);
     });
-    if (data.sales.length > 30) {
-      lines.push(`  ... ve ${data.sales.length - 30} diger satis kaydi`);
+    if (sales.length > 30) {
+      lines.push(`  ... ve ${sales.length - 30} diger satis kaydi`);
     }
   } else {
     lines.push('  Secili donemde satis kaydi bulunamadi.');
@@ -108,12 +110,13 @@ export function buildPdfReportLines(data: ReportExportData): string[] {
   lines.push(`  ${pad('Tarih', 12)} ${pad('Kategori', 20)} ${pad('Aciklama', 26)} ${padR('Tutar (TRY)', 14)}`);
   lines.push(`  ${'-'.repeat(76)}`);
 
-  if (data.expenses.length > 0) {
-    data.expenses.slice(0, 30).forEach(e => {
+  const expenses = data.expenses || [];
+  if (expenses.length > 0) {
+    expenses.slice(0, 30).forEach(e => {
       lines.push(`  ${pad(e.date, 12)} ${pad(e.category, 20)} ${pad(e.description, 26)} ${padR(e.amount.toLocaleString('tr-TR'), 14)}`);
     });
-    if (data.expenses.length > 30) {
-      lines.push(`  ... ve ${data.expenses.length - 30} diger gider kaydi`);
+    if (expenses.length > 30) {
+      lines.push(`  ... ve ${expenses.length - 30} diger gider kaydi`);
     }
   } else {
     lines.push('  Secili donemde gider kaydi bulunamadi.');
@@ -123,12 +126,13 @@ export function buildPdfReportLines(data: ReportExportData): string[] {
   lines.push(`  ${pad('Tarih', 12)} ${pad('Saat', 8)} ${pad('Hasta Adi', 24)} ${pad('Tur', 18)} ${pad('Durum', 10)}`);
   lines.push(`  ${'-'.repeat(76)}`);
 
-  if (data.appointments.length > 0) {
-    data.appointments.slice(0, 30).forEach(a => {
+  const appointments = data.appointments || [];
+  if (appointments.length > 0) {
+    appointments.slice(0, 30).forEach(a => {
       lines.push(`  ${pad(a.date, 12)} ${pad(a.time, 8)} ${pad(a.patientName, 24)} ${pad(a.type, 18)} ${pad(a.status, 10)}`);
     });
-    if (data.appointments.length > 30) {
-      lines.push(`  ... ve ${data.appointments.length - 30} diger randevu kaydi`);
+    if (appointments.length > 30) {
+      lines.push(`  ... ve ${appointments.length - 30} diger randevu kaydi`);
     }
   } else {
     lines.push('  Secili donemde randevu kaydi bulunamadi.');
@@ -138,8 +142,9 @@ export function buildPdfReportLines(data: ReportExportData): string[] {
   lines.push(`  ${pad('Tarih', 12)} ${pad('Hasta', 20)} ${pad('Cihaz', 22)} ${pad('Durum', 12)} ${padR('Ucret', 10)}`);
   lines.push(`  ${'-'.repeat(80)}`);
 
-  if (data.serviceTickets.length > 0) {
-    data.serviceTickets.slice(0, 20).forEach(t => {
+  const serviceTickets = data.serviceTickets || [];
+  if (serviceTickets.length > 0) {
+    serviceTickets.slice(0, 20).forEach(t => {
       lines.push(`  ${pad(t.receivedDate || '-', 12)} ${pad(t.patientName, 20)} ${pad(t.device, 22)} ${pad(t.status, 12)} ${padR(t.fee.toLocaleString('tr-TR'), 10)}`);
     });
   } else {
