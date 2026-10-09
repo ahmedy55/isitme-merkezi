@@ -1615,13 +1615,31 @@ export function NewAppointmentModal({
     if (isAddingNewPatient) {
       try {
         const parts = patientNameFinal.split(/\s+/);
-        const created = await addPatient({ firstName: parts.slice(0, -1).join(' ') || parts[0], lastName: parts.length > 1 ? parts[parts.length - 1] : '', tc: '', phone: newPatientPhone.trim(), branchId: assignedBranchId, branch: assignedBranch.name, patientStatus: 'Potansiyel' });
+        const created = await addPatient({
+          firstName: parts.slice(0, -1).join(' ') || parts[0],
+          lastName: parts.length > 1 ? parts[parts.length - 1] : '',
+          tc: '',
+          phone: newPatientPhone.trim(),
+          branchId: assignedBranchId,
+          branch: assignedBranch.name,
+          patientStatus: 'Potansiyel'
+        });
         patientIdFinal = created.id;
         setSelectedPatient({ id: created.id, name: patientNameFinal, phone: created.phone || '' });
         setIsAddingNewPatient(false);
       } catch {
-        setSavingAppointment(false);
-        return;
+        const existing = patientsList.find(p =>
+          `${p.firstName} ${p.lastName}`.trim().toLowerCase() === patientNameFinal.toLowerCase() ||
+          (newPatientPhone.trim() && p.phone && p.phone.replace(/\D/g, '') === newPatientPhone.trim().replace(/\D/g, ''))
+        );
+        if (existing) {
+          patientIdFinal = existing.id;
+          setSelectedPatient({ id: existing.id, name: `${existing.firstName} ${existing.lastName}`.trim(), phone: existing.phone || '' });
+          setIsAddingNewPatient(false);
+        } else {
+          setSavingAppointment(false);
+          return;
+        }
       }
     }
     const newApt = {

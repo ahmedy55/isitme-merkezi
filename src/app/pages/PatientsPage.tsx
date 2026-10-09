@@ -420,13 +420,13 @@ export default function PatientsPage() {
 
   const branchFilteredPatients = useMemo(() => {
     // When a search term is entered, search across the entire patient directory so new or cross-branch records are found
-    if (debouncedSearch.trim()) {
+    if (debouncedSearch.trim() || search.trim()) {
       return patientsList;
     }
     return patientsList.filter(patient =>
       BranchService.matchesBranch(patient.branch, patient.branchId, activeBranch)
     );
-  }, [patientsList, activeBranch, debouncedSearch]);
+  }, [patientsList, activeBranch, debouncedSearch, search]);
 
   const branchAppointments = useMemo(() => appointmentsList.filter(appointment =>
     BranchService.matchesBranch(appointment.branch, appointment.branchId, activeBranch)
@@ -563,13 +563,15 @@ export default function PatientsPage() {
   };
 
   const filtered = useMemo(() => {
-    const searchLower = debouncedSearch.toLowerCase().trim();
-    const matchesPhoneSearch = createTurkishPhoneSearchMatcher(debouncedSearch.trim());
+    const rawSearch = (search.trim() || debouncedSearch.trim()).toLowerCase();
+    const searchLower = rawSearch;
+    const matchesPhoneSearch = createTurkishPhoneSearchMatcher(search.trim() || debouncedSearch.trim());
     return branchFilteredPatients.filter((p) => {
       const matchSearch =
         !searchLower ||
         `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchLower) ||
-        (p.tc || '').includes(searchLower) ||
+        (p.tc || '').toLowerCase().includes(searchLower) ||
+        (p.tc && searchLower.replace(/\D/g, '').length >= 3 && p.tc.replace(/\D/g, '').includes(searchLower.replace(/\D/g, ''))) ||
         (p.phone || '').toLowerCase().includes(searchLower) ||
         matchesPhoneSearch(p.phone) ||
         (p.address || '').toLowerCase().includes(searchLower) ||

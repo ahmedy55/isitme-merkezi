@@ -116,6 +116,7 @@ interface ShowcaseRecall {
   status: 'Tarihi Geçti' | 'Bekliyor' | 'Gönderildi' | 'Randevu Alındı' | 'Tamamlandı' | 'İptal Edildi';
   branchName?: string;
   lastAction: string;
+  notes?: string;
 }
 
 
@@ -214,6 +215,7 @@ export default function RecallPage() {
         status: item.status as ShowcaseRecall['status'],
         branchName: p?.branch || branchesList.find(b => b.id === p?.branchId)?.name || '',
         lastAction: item.lastContact ? `Son temas: ${item.lastContact}` : '—',
+        notes: item.notes || '',
       };
     });
     return liveConverted;
@@ -241,7 +243,9 @@ export default function RecallPage() {
         const normalizedQuery = q.replace(/\D/g, '');
         const matchTC = normalizedQuery.length > 0 && item.patientTC.replace(/\D/g, '').includes(normalizedQuery);
         const matchDevice = item.patientDevice.toLowerCase().includes(q) || item.patientDeviceSn.toLowerCase().includes(q);
-        if (!matchName && !matchPhone && !matchTC && !matchDevice) return false;
+        const matchNotes = (item.notes || '').toLowerCase().includes(q);
+        const matchType = item.typeTitle.toLowerCase().includes(q) || (item.typeSub || '').toLowerCase().includes(q);
+        if (!matchName && !matchPhone && !matchTC && !matchDevice && !matchNotes && !matchType) return false;
       }
 
       // Type filter

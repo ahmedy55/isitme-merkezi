@@ -4,6 +4,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBranchScope } from '../hooks/useBranchScope';
 import { supabase } from '../lib/supabase';
+import { dbInsertAuditLog } from '../lib/database';
+import { createActivity } from '../repositories/OperationsRepository';
 import { formatDate, type Patient } from '../data/mockData';
 import { parseRecallDateRange, isDateKeyInRange, toDateKey } from '../lib/recallDateRange';
 import styles from './SGKPage.module.css';
@@ -56,13 +58,14 @@ export default function SGKPage() {
   const { matches } = useBranchScope();
 
   const items = useMemo<SGKPrescriptionItem[]>(() => allPatients
-    .filter(patient => Boolean(patient.prescriptionNo?.trim()) || ['Reçete Yazıldı', 'SGK Onaylı', 'Reçete Reddedildi'].includes(patient.prescriptionStatus || ''))
+    .filter(patient => Boolean(patient.prescriptionNo?.trim()) || Boolean(patient.reportNo?.trim()) || ['Reçete Yazıldı', 'SGK Onaylı', 'Reçete Reddedildi', 'İşlemde', 'Onaylandı', 'Reddedildi', 'Bekliyor'].includes(patient.prescriptionStatus || ''))
     .map(patient => {
       const name = `${patient.firstName} ${patient.lastName}`.trim();
+      const prescStatus = (patient.prescriptionStatus as string) || '';
       const status: SGKPrescriptionItem['status'] =
-        patient.prescriptionStatus === 'SGK Onaylı'
+        prescStatus === 'SGK Onaylı' || prescStatus === 'Onaylandı'
           ? 'Onaylandı'
-          : patient.prescriptionStatus === 'Reçete Reddedildi'
+          : prescStatus === 'Reçete Reddedildi' || prescStatus === 'Reddedildi'
             ? 'Reddedildi'
             : 'İşlemde';
       const birthDate = patient.birthDate ? new Date(`${patient.birthDate.slice(0, 10)}T12:00:00`) : null;
@@ -337,12 +340,13 @@ export default function SGKPage() {
         ? 'SGK Onaylı'
         : newStatus === 'Reddedildi'
           ? 'Reçete Reddedildi'
-          : 'Reçete Yazıldı';
+          : 'İşlemde';
 
     const nowDotted = new Intl.DateTimeFormat('tr-TR').format(new Date());
     const updatedPatient: Patient = {
       ...patient,
       prescriptionStatus: mappedPrescriptionStatus as any,
+      prescriptionNo: patient.prescriptionNo?.trim() || `REC-${patient.id.slice(-6)}`,
       timeline: [
         {
           date: nowDotted,
@@ -356,6 +360,32 @@ export default function SGKPage() {
     try {
       await updatePatient(updatedPatient);
       setActiveItem(prev => (prev && prev.id === id ? { ...prev, status: newStatus } : prev));
+      
+      const branchId = patient.branchId || branchesList[0]?.id || '';
+      const fullName = `${patient.firstName} ${patient.lastName}`.trim();
+      try {
+        if (branchId) {
+          await createActivity({
+            branchId,
+            patientName: fullName,
+            patientId: patient.id,
+            type: 'Cihaz İşlemi',
+            description: `SGK Reçete durumu "${newStatus}" olarak güncellendi.`,
+          });
+        }
+      } catch (actErr) {
+        console.warn('Aktivite kaydı oluşturulamadı:', actErr);
+      }
+      try {
+        await dbInsertAuditLog({
+          action: 'Reçete Güncelleme',
+          module: 'SGK',
+          description: `${fullName} reçete durumu "${newStatus}" olarak güncellendi.`,
+        });
+      } catch (auditErr) {
+        console.warn('Denetim kaydı oluşturulamadı:', auditErr);
+      }
+
       addToast({ type: 'success', message: 'Reçete durumu güncellendi.' });
     } catch (err: any) {
       addToast({ type: 'error', message: `Durum değişikliği kaydedilemedi: ${err?.message || 'Bilinmeyen hata'}` });

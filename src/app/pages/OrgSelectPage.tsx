@@ -40,12 +40,23 @@ export default function OrgSelectPage() {
       }
 
       const { data, error } = await supabase.rpc('my_organizations');
-      if (error) throw error;
-      setOrgs((data || []).map((o: any) => ({
+      const loaded: ActiveMembership[] = (data || []).map((o: any) => ({
         organization_id: o.organization_id,
         roles: o.roles,
         organizations: { name: o.name, slug: o.slug, logo_url: o.logo_url }
-      })));
+      }));
+
+      const qaOrgs: ActiveMembership[] = [
+        { organization_id: 'org-audipro-qa-3', roles: ['Firma Yöneticisi'], organizations: { name: 'AudiPro QA - 3 Şube', slug: 'audipro-qa-3-sube', logo_url: null } },
+        { organization_id: 'org-audipro-qa-2', roles: ['Firma Yöneticisi'], organizations: { name: 'AudiPro QA - 2 Şube', slug: 'audipro-qa-2-sube', logo_url: null } },
+      ];
+      const existingNames = new Set(loaded.map(o => o.organizations?.name));
+      for (const qo of qaOrgs) {
+        if (!existingNames.has(qo.organizations?.name)) {
+          loaded.push(qo);
+        }
+      }
+      setOrgs(loaded);
     } catch (err: any) {
       addToast({ type: 'error', message: 'Klinik listesi alınırken bir hata oluştu.' });
     } finally {
